@@ -1,7 +1,9 @@
 <script setup>
 import filterIcon from '@mdi/svg/svg/chevron-down.svg?raw'
+import closeIcon from '@mdi/svg/svg/close.svg?raw'
 import penIcon from '@mdi/svg/svg/draw.svg?raw'
 import searchIcon from '@mdi/svg/svg/magnify.svg?raw'
+import attachIcon from '@mdi/svg/svg/paperclip.svg?raw'
 import sendIcon from '@mdi/svg/svg/send.svg?raw'
 import sortIcon from '@mdi/svg/svg/sort.svg?raw'
 import { n, t } from '@nextcloud/l10n'
@@ -52,6 +54,24 @@ const error = ref(null)
 const input = ref(null)
 const reviewerName = ref('')
 const reviewerEmail = ref('')
+/** Files to attach to the next Comment (story 92) */
+const files = ref([])
+const fileInput = ref(null)
+const MAX_FILES = 5
+const MAX_BYTES = 25 * 1024 * 1024
+
+/**
+ * @param {Event} event - the file input's change
+ */
+function pickFiles(event) {
+	const picked = [...event.target.files]
+	event.target.value = ''
+	const tooLarge = picked.filter((file) => file.size > MAX_BYTES)
+	if (tooLarge.length) {
+		error.value = t('deliver', 'An attachment is at most 25 MB: {names}', { names: tooLarge.map((file) => file.name).join(', ') })
+	}
+	files.value = [...files.value, ...picked.filter((file) => file.size <= MAX_BYTES)].slice(0, MAX_FILES)
+}
 /** The mention being typed, and the Members it could mean */
 const typedMention = ref(null)
 const highlighted = ref(0)
@@ -149,8 +169,9 @@ async function submit() {
 	busy.value = true
 	error.value = null
 	try {
-		await store.add({ ...props.anchor, body: body.value, annotation: props.draft.length ? props.draft : null })
+		await store.add({ ...props.anchor, body: body.value, annotation: props.draft.length ? props.draft : null, files: files.value })
 		body.value = ''
+		files.value = []
 		emit('posted')
 	} catch (e) {
 		error.value = errorMessage(e)
@@ -313,6 +334,14 @@ function claim() {
 						@input="onInput"
 						@click="onInput" />
 				</div>
+				<ul v-if="files.length" class="deliver-comments__files">
+					<li v-for="(file, index) in files" :key="index">
+						<span>{{ file.name }}</span>
+						<button type="button" :aria-label="t('deliver', 'Remove {name}', { name: file.name })" @click="files.splice(index, 1)">
+							<NcIconSvgWrapper :svg="closeIcon" :size="14" inline />
+						</button>
+					</li>
+				</ul>
 				<ul v-if="suggestions.length" class="deliver-comments__mentions" role="listbox">
 					<li
 						v-for="(member, index) in suggestions"
@@ -342,6 +371,22 @@ function claim() {
 							<NcIconSvgWrapper :svg="penIcon" />
 						</template>
 					</NcButton>
+					<NcButton
+						variant="tertiary"
+						:disabled="files.length >= MAX_FILES"
+						:aria-label="t('deliver', 'Attach files')"
+						:title="t('deliver', 'Attach files, up to five of 25 MB each')"
+						@click="fileInput.click()">
+						<template #icon>
+							<NcIconSvgWrapper :svg="attachIcon" />
+						</template>
+					</NcButton>
+					<input
+						ref="fileInput"
+						type="file"
+						multiple
+						hidden
+						@change="pickFiles">
 					<span v-if="draft.length" class="deliver-comments__drawn">{{ n('deliver', '%n shape drawn', '%n shapes drawn', draft.length) }}</span>
 					<span class="deliver-comments__hint">{{ t('deliver', 'C comments on the Frame, I and O set a Range') }}</span>
 					<NcButton
@@ -509,6 +554,41 @@ function claim() {
 	display: flex;
 	align-items: center;
 	gap: calc(2 * var(--default-grid-baseline, 4px));
+}
+
+.deliver-comments__files {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.deliver-comments__files li {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	max-width: 100%;
+	padding: 2px 4px 2px 10px;
+	border-radius: var(--border-radius-pill, 20px);
+	background: var(--color-primary-element-light);
+	font-size: 12px;
+}
+
+.deliver-comments__files span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.deliver-comments__files button {
+	display: flex;
+	min-height: 0;
+	margin: 0;
+	padding: 2px;
+	border: none;
+	border-radius: 50%;
+	background: none;
+	color: inherit;
+	cursor: pointer;
 }
 
 .deliver-comments__drawn {

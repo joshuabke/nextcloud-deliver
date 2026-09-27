@@ -110,6 +110,30 @@ class CommentApiTest extends TestCase {
 		self::assertSame(400, $react($this->nc, '🦄', true)['status'], 'only the emojis on offer');
 	}
 
+	public function testAttachmentsLiveInTheProjectFolder(): void {
+		$comment = $this->comment($this->nc, ['inFrame' => 7, 'body' => 'like this']);
+		$attached = $this->nc->upload("/comments/{$comment['id']}/attachments", 'reference.png', 'not really a picture');
+		self::assertSame(201, $attached['status'], json_encode($attached['data']));
+		self::assertSame(['reference.png', 20], [$attached['data']['attachments'][0]['name'], $attached['data']['attachments'][0]['size']]);
+		$id = $attached['data']['attachments'][0]['id'];
+
+		// The file sits in the Project folder, and is no Asset even with Auto Intake
+		$again = $this->nc->upload("/comments/{$comment['id']}/attachments", 'reference.png', 'a second one');
+		self::assertSame('reference (2).png', $again['data']['attachments'][1]['name']);
+		self::assertSame(['cut'], array_column($this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'], 'name'));
+		$downloaded = $this->nc->request('GET', "/index.php/apps/deliver/attachments/$id");
+		self::assertSame([200, 'not really a picture'], [$downloaded['status'], $downloaded['body']]);
+
+		// Someone else's Comment takes no attachments from me
+		$reader = $this->member(1);
+		self::assertSame(403, $reader->upload("/comments/{$comment['id']}/attachments", 'x.txt', 'x')['status']);
+		self::assertSame(200, $reader->request('GET', "/index.php/apps/deliver/attachments/$id")['status'], 'but it may read them');
+
+		// Deleting the Comment deletes its files
+		$this->nc->ocs('DELETE', "/comments/{$comment['id']}");
+		self::assertSame(404, $this->nc->request('GET', "/index.php/apps/deliver/attachments/$id")['status']);
+	}
+
 	public function testCommentsAnchorToFramesAndRanges(): void {
 		$frame = $this->comment($this->nc, ['inFrame' => 120, 'body' => 'colour is off here']);
 		self::assertSame([120, null], [$frame['inFrame'], $frame['outFrame']]);

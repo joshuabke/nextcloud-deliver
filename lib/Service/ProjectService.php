@@ -203,7 +203,7 @@ class ProjectService {
 		if ($file === null) {
 			throw new NotFoundException('File not found');
 		}
-		if (!$file instanceof File || !$this->isMedia($file)) {
+		if (!$file instanceof File || !Reviewable::file($file)) {
 			throw new ProjectConflictException('Only a video or audio file can be enabled for review');
 		}
 		$this->assertWritable($file);
@@ -484,10 +484,6 @@ class ProjectService {
 		return null;
 	}
 
-	private function isMedia(Node $node): bool {
-		return preg_match('#^(video|audio)/#', $node->getMimeType()) === 1;
-	}
-
 	/**
 	 * The Project and its folder as this user sees it; the folder's
 	 * permissions are the Project's permissions (ADR 0002).
@@ -610,10 +606,10 @@ class ProjectService {
 	private function mediaFiles(Folder $folder): \Generator {
 		foreach ($folder->getDirectoryListing() as $node) {
 			if ($node instanceof Folder) {
-				if ($this->projects->findByFolderId($node->getId()) === null) {
+				if ($node->getName() !== Reviewable::ATTACHMENTS && $this->projects->findByFolderId($node->getId()) === null) {
 					yield from $this->mediaFiles($node);
 				}
-			} elseif ($node instanceof File && $this->isMedia($node)) {
+			} elseif ($node instanceof File && Reviewable::file($node)) {
 				yield $node;
 			}
 		}

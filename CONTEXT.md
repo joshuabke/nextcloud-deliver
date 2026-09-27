@@ -60,6 +60,10 @@ _Avoid_: Annotation (in the UI), sketch, markup
 A Member named in a Comment with `@`, who is notified even from a muted Project. Reviewers can be read but not mentioned, as they have no account.
 _Avoid_: Tag, ping
 
+**Attachment**:
+A file added to a Comment, up to five of 25 MB. It lives in the Project folder under `.deliver-attachments/<Comment id>/`, is never an Asset, and goes with its Comment.
+_Avoid_: Upload, file (alone)
+
 **Reaction**:
 One person's emoji on a Comment or Reply, from a small fixed set; agreement without a Reply.
 _Avoid_: Like, vote
@@ -136,4 +140,5 @@ The German translation (`l10n/de` with "du", `l10n/de_DE` with "Sie") uses these
 | Drawing | Zeichnung |
 | Reaction | Reaktion |
 | Mention | Erwähnung |
+| Attachment | Anhang |
 | Approval (approved, changes requested) | Abnahme (abgenommen, Änderungen gewünscht) |

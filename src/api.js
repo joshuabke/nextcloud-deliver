@@ -42,6 +42,27 @@ export const createComment = (versionId, fields) => axios.post(url(`/versions/${
 export const updateComment = (id, body) => axios.put(url(`/comments/${id}`), { body }).then(data)
 export const deleteComment = (id) => axios.delete(url(`/comments/${id}`))
 export const reactComment = (id, emoji, on) => axios.put(url(`/comments/${id}/reactions`), { emoji, on }).then(data)
+/**
+ * @param {number} id - the Comment
+ * @param {File} file - the file to attach
+ * @return {Promise<object>} the Comment with its attachments
+ */
+export function attachFile(id, file) {
+	const form = new FormData()
+	form.append('file', file)
+	return axios.post(url(`/comments/${id}/attachments`), form).then(data)
+}
+
+/**
+ * @param {number} id - an attachment
+ * @return {string} where the browser gets it, through the Share Link on the public page
+ */
+export function attachmentUrl(id) {
+	return publicBase === null
+		? generateUrl('/apps/deliver/attachments/{id}', { id })
+		: publicBase.replace(/\/api$/, '') + `/attachments/${id}`
+}
+
 export const resolveComment = (id, resolved) => axios.put(url(`/comments/${id}/resolved`), { resolved }).then(data)
 export const decideVersion = (versionId, status) => axios.put(url(`/versions/${versionId}/approval`), { status }).then(data)
 export const markSeen = (versionId, at) => axios.post(url(`/versions/${versionId}/seen`), { at }).then(data)

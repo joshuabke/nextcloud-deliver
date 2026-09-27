@@ -154,6 +154,15 @@ test.describe('Review view', () => {
 		await page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
 		await expect(page.locator('.deliver-comment__mention').first()).toHaveText('@Mara Mate')
 
+		// An attached picture shows under its Comment (story 92)
+		const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64')
+		await page.locator('.deliver-comments__actions input[type=file]').setInputFiles({ name: 'reference.png', mimeType: 'image/png', buffer: pixel })
+		await expect(page.locator('.deliver-comments__files li')).toHaveText('reference.png')
+		await page.locator('#deliver-comment-body').fill('like this')
+		await page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
+		const picture = page.locator('.deliver-comment').filter({ hasText: 'like this' }).locator('.deliver-comment__attachments img')
+		await expect(picture).toHaveJSProperty('naturalWidth', 1)
+
 		// A drawing goes with the Comment and shows while the player stands on it (story 89)
 		await page.getByRole('button', { name: 'Draw on the picture' }).click()
 		const stage = await page.locator('.deliver-player__stage').boundingBox()

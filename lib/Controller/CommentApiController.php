@@ -78,6 +78,12 @@ class CommentApiController extends OCSController {
 		return $this->onComment($id, fn ($viewer, $version) => $this->service->react($viewer, $version, $id, $emoji, $on));
 	}
 
+	/** Attaches the uploaded `file` to my Comment (story 92) */
+	#[NoAdminRequired]
+	public function attach(int $id): Response {
+		return $this->onComment($id, fn ($viewer, $version) => $this->service->attach($viewer, $version, $id, $this->request->getUploadedFile('file')), Http::STATUS_CREATED);
+	}
+
 	#[NoAdminRequired]
 	public function resolve(int $id, bool $resolved): Response {
 		return $this->onComment($id, fn ($viewer, $version) => $this->service->setResolved($viewer, $version, $id, $resolved));
@@ -90,13 +96,13 @@ class CommentApiController extends OCSController {
 		}, $status);
 	}
 
-	private function onComment(int $id, callable $action): Response {
+	private function onComment(int $id, callable $action, int $status = Http::STATUS_OK): Response {
 		return $this->guard(function () use ($id, $action) {
 			[$viewer, $version] = $this->projects->viewerForVersion(
 				(string)$this->userId,
 				$this->service->versionIdOf($id),
 			);
 			return $action($viewer, $version);
-		});
+		}, $status);
 	}
 }

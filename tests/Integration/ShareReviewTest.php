@@ -90,6 +90,20 @@ class ShareReviewTest extends TestCase {
 		self::assertSame(200, $this->reviewer()->page());
 	}
 
+	public function testAReviewerAttachesToTheirComment(): void {
+		$asReviewer = $this->reviewer();
+		$asReviewer->call('POST', '/api/reviewer', ['name' => 'Mara']);
+		$comment = $this->comment($asReviewer, ['inFrame' => 3, 'body' => 'like this frame']);
+
+		$attached = $asReviewer->raw("/api/comments/{$comment['id']}/attachments", 'mood.jpg', 'jpeg bytes');
+		self::assertSame(201, $attached['status'], $attached['body']);
+		$id = json_decode($attached['body'], true)['attachments'][0]['id'];
+
+		$fetched = $asReviewer->raw("/attachments/$id");
+		self::assertSame([200, 'jpeg bytes'], [$fetched['status'], $fetched['body']]);
+		self::assertSame(404, $asReviewer->raw('/attachments/999999999')['status']);
+	}
+
 	public function testReviewerNamesThemselvesBeforeCommenting(): void {
 		$asReviewer = $this->reviewer();
 
