@@ -7,6 +7,7 @@ return [
 		['name' => 'page#index', 'url' => '/', 'verb' => 'GET'],
 		['name' => 'page#index', 'url' => '/projects/{id}', 'verb' => 'GET', 'postfix' => 'project'],
 		['name' => 'page#index', 'url' => '/versions/{id}', 'verb' => 'GET', 'postfix' => 'version'],
+		['name' => 'page#index', 'url' => '/compare/{a}/{b}', 'verb' => 'GET', 'postfix' => 'compare'],
 		['name' => 'media#show', 'url' => '/versions/{id}/media/{kind}', 'verb' => 'GET'],
 		['name' => 'export#download', 'url' => '/versions/{id}/export/{format}', 'verb' => 'GET'],
 		['name' => 'export#liveSet', 'url' => '/versions/{id}/export/ableton', 'verb' => 'POST'],

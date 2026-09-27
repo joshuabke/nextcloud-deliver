@@ -1,5 +1,6 @@
 <script setup>
 import backIcon from '@mdi/svg/svg/arrow-left.svg?raw'
+import compareIcon from '@mdi/svg/svg/compare.svg?raw'
 import shareIcon from '@mdi/svg/svg/share-variant-outline.svg?raw'
 import uploadIcon from '@mdi/svg/svg/tray-arrow-up.svg?raw'
 import { t } from '@nextcloud/l10n'
@@ -54,6 +55,12 @@ const assets = computed(() => {
 	return project ? groupByFolder(project.assets).flatMap((group) => group.assets) : []
 })
 const assetIndex = computed(() => assets.value.findIndex((asset) => asset.id === context.value?.asset.id))
+/** The Version to compare with: the one before this, or the newest when this is the first */
+const compareWith = computed(() => {
+	const stack = context.value?.versions ?? []
+	const index = stack.findIndex((each) => each.id === props.id)
+	return (stack[index + 1] ?? stack[0])?.id
+})
 const folderUrl = computed(() => uploadFolder(context.value?.versions ?? []))
 
 /** Nextcloud's own share dialog, on the file of this Version */
@@ -155,6 +162,16 @@ async function upload(event) {
 		</template>
 		<template #end>
 			<ApprovalControl />
+			<NcButton
+				v-if="context.versions.length > 1"
+				variant="tertiary"
+				:to="`/compare/${compareWith}/${id}`"
+				:aria-label="t('deliver', 'Compare with another Version')"
+				:title="t('deliver', 'Compare with another Version')">
+				<template #icon>
+					<NcIconSvgWrapper :svg="compareIcon" />
+				</template>
+			</NcButton>
 			<VersionPicker :versions="context.versions" :current="id" @select="$router.push(`/versions/${$event}`)" />
 			<template v-if="context.project.canWrite">
 				<NcButton
