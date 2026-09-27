@@ -176,6 +176,7 @@ OC.L10N.register(
 		"Take my decision back": "Meine Entscheidung zurücknehmen",
 		"Take out": "Herausnehmen",
 		"Take this file out of Deliver?": "Diese Datei aus Deliver herausnehmen?",
+		"The Comment is posted, but {name} could not be attached: {reason}": "Der Kommentar ist gesendet, aber {name} konnte nicht angehängt werden: {reason}",
 		"The file of this Version is gone from the Project folder. Its Comments are kept.": "Die Datei dieser Version ist nicht mehr im Projektordner. Ihre Kommentare bleiben erhalten.",
 		"The file of {asset}, Version {number}, is missing": "Die Datei von {asset}, Version {number}, fehlt",
 		"The pencil points at a spot on the picture": "Mit dem Stift zeigen Sie auf eine Stelle im Bild",

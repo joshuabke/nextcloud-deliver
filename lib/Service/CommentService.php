@@ -30,6 +30,8 @@ class CommentService {
 	/** Attachments per Comment, and the size of each (story 92) */
 	public const MAX_ATTACHMENTS = 5;
 	public const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+	/** What one person may attach on one Version in all, so an open link cannot fill the owner's storage */
+	public const MAX_BYTES_PER_PERSON = 100 * 1024 * 1024;
 
 	public function __construct(
 		private CommentMapper $comments,
@@ -45,6 +47,8 @@ class CommentService {
 		private AttachmentStore $store,
 		private ProjectMapper $projects,
 		private LiveUpdates $live,
+		private CommentWindow $window,
+		private Members $members,
 	) {
 	}
 
@@ -75,7 +79,7 @@ class CommentService {
 		if (!$viewer->canComment) {
 			throw new AccessDeniedException('Commenting is switched off here');
 		}
-		if (!$this->opensForComments($viewer, $version)) {
+		if (!$this->window->open($viewer, $version)) {
 			throw new ProjectConflictException('Only the newest Version takes Comments here');
 		}
 		$body = trim($body);
@@ -181,6 +185,9 @@ class CommentService {
 		if (!$viewer->canComment || ($viewer->uid === null && $viewer->reviewerId === null)) {
 			throw new AccessDeniedException('Only who may comment reacts');
 		}
+		if (!$this->window->open($viewer, $version)) {
+			throw new ProjectConflictException('Only the newest Version takes reactions here');
+		}
 		if (!in_array($emoji, self::REACTIONS, true)) {
 			throw new InvalidRequestException('Reactions are ' . implode(' ', self::REACTIONS));
 		}
@@ -232,6 +239,9 @@ class CommentService {
 		$size = (int)($upload['size'] ?? 0);
 		if ($size > self::MAX_ATTACHMENT_BYTES) {
 			throw new InvalidRequestException('An attachment is at most 25 MB');
+		}
+		if ($this->attachments->bytesBy($version->getId(), $viewer->uid, $viewer->reviewerId) + $size > self::MAX_BYTES_PER_PERSON) {
+			throw new InvalidRequestException('Attachments of one person on a Version add up to at most 100 MB');
 		}
 		if (count($this->attachments->findByComments([$id])[$id] ?? []) >= self::MAX_ATTACHMENTS) {
 			throw new InvalidRequestException('A Comment carries at most ' . self::MAX_ATTACHMENTS . ' attachments');
@@ -354,16 +364,6 @@ class CommentService {
 			: $this->seen->findForReviewer($versionId, $viewer->reviewerId);
 	}
 
-	/** The newest Version of a Stack takes Comments; older ones only where allowed (story 41) */
-	private function opensForComments(Viewer $viewer, Version $version): bool {
-		if ($viewer->canCommentOnOlder) {
-			return true;
-		}
-		$stack = $this->versions->findByAsset($version->getAssetId());
-		$newest = end($stack);
-		return $newest === false || $newest->getId() === $version->getId();
-	}
-
 	/**
 	 * @param Comment[] $comments
 	 * @return array<string, mixed>
@@ -374,7 +374,7 @@ class CommentService {
 			'versionId' => $version->getId(),
 			'state' => $version->getState(),
 			'canWrite' => $viewer->canWrite,
-			'canComment' => ($viewer->canComment || $viewer->canCommentOnceNamed) && $this->opensForComments($viewer, $version),
+			'canComment' => ($viewer->canComment || $viewer->canCommentOnceNamed) && $this->window->open($viewer, $version),
 			'seenUntil' => $seen?->getSeenUntil() ?? 0,
 			// In the same shape as a Comment's author, so the client can spot its own
 			'me' => $viewer->identity(),
@@ -383,6 +383,25 @@ class CommentService {
 			// Few and small, so every answer carries them all
 			'approvals' => $this->approvals->list($version),
 		];
+	}
+
+	/** @var array<int, list<string>> Members per Version, for this request */
+	private array $membersByVersion = [];
+
+	/**
+	 * Only Members can be mentioned, and only their names are shown: a
+	 * Reviewer typing @someone learns nothing about other accounts.
+	 *
+	 * @return list<string>
+	 */
+	private function membersOf(int $versionId): array {
+		if (!isset($this->membersByVersion[$versionId])) {
+			$version = $this->versions->find($versionId);
+			$this->membersByVersion[$versionId] = $version === null
+				? []
+				: $this->members->of($this->projects->find($version->getProjectId())->getFolderId());
+		}
+		return $this->membersByVersion[$versionId];
 	}
 
 	/**
@@ -418,7 +437,10 @@ class CommentService {
 			'resolved' => (bool)$comment->getResolved(),
 			'annotation' => Annotation::decode($comment->getAnnotation()),
 			// Display names of the users it @mentions (story 90); JSON object even when empty
-			'mentions' => (object)$this->authors->names(Mentions::parse((string)$comment->getBody())),
+			'mentions' => (object)$this->authors->names(array_values(array_intersect(
+				Mentions::parse((string)$comment->getBody()),
+				$this->membersOf($comment->getVersionId()),
+			))),
 			'attachments' => array_map(static fn (Attachment $attachment) => [
 				'id' => $attachment->getId(),
 				'name' => $attachment->getName(),

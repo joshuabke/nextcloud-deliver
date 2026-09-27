@@ -174,7 +174,14 @@ async function submit() {
 		files.value = []
 		emit('posted')
 	} catch (e) {
-		error.value = errorMessage(e)
+		if (e.commentPosted) {
+			body.value = ''
+			files.value = []
+			emit('posted')
+			error.value = t('deliver', 'The Comment is posted, but {name} could not be attached: {reason}', { name: e.fileName, reason: errorMessage(e) })
+		} else {
+			error.value = errorMessage(e)
+		}
 	} finally {
 		busy.value = false
 	}

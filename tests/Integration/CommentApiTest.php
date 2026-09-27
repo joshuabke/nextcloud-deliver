@@ -124,6 +124,9 @@ class CommentApiTest extends TestCase {
 		$downloaded = $this->nc->request('GET', "/index.php/apps/deliver/attachments/$id");
 		self::assertSame([200, 'not really a picture'], [$downloaded['status'], $downloaded['body']]);
 
+		$odd = $this->nc->upload("/comments/{$comment['id']}/attachments", '..', 'x');
+		self::assertSame([201, 'attachment'], [$odd['status'], $odd['data']['attachments'][2]['name']], 'a name that is only dots becomes a plain one');
+
 		// Someone else's Comment takes no attachments from me
 		$reader = $this->member(1);
 		self::assertSame(403, $reader->upload("/comments/{$comment['id']}/attachments", 'x.txt', 'x')['status']);

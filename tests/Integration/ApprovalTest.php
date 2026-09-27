@@ -78,6 +78,12 @@ class ApprovalTest extends TestCase {
 
 		self::assertSame(400, $this->decide($this->nc, 'maybe')['status']);
 
+		// An older Version takes no decisions and no reactions where it takes no Comments (story 41)
+		$comment = $this->nc->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 1, 'body' => 'on v1'])['data'];
+		$this->nc->put("{$this->root}/cut_v2.mp4", 'not really a video');
+		self::assertSame(409, $this->decide($member, 'approved')['status']);
+		self::assertSame(409, $member->ocs('PUT', "/comments/{$comment['id']}/reactions", ['emoji' => '👍'])['status']);
+
 		$notifications = $member->ocsForm('GET', '/ocs/v2.php/apps/notifications/api/v2/notifications')['data'];
 		self::assertContains('admin approved cut, Version 1', array_column($notifications, 'subject'));
 	}

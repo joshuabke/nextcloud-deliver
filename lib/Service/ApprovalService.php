@@ -24,6 +24,7 @@ class ApprovalService {
 		private ITimeFactory $time,
 		private NotificationService $notifications,
 		private LiveUpdates $live,
+		private CommentWindow $window,
 	) {
 	}
 
@@ -45,6 +46,9 @@ class ApprovalService {
 	public function decide(Viewer $viewer, Version $version, ?string $status): array {
 		if (!$viewer->canComment || ($viewer->uid === null && $viewer->reviewerId === null)) {
 			throw new AccessDeniedException('Only who may comment approves');
+		}
+		if (!$this->window->open($viewer, $version)) {
+			throw new ProjectConflictException('Only the newest Version is decided on here');
 		}
 		if ($status !== null && !in_array($status, [self::APPROVED, self::CHANGES], true)) {
 			throw new InvalidRequestException('A decision is approved or changes');
