@@ -37,10 +37,28 @@ export function useReview({ version, projectMode, refresh }) {
 	/** Whether typing set the pin, so emptying the field lets go of it again */
 	let pinnedByTyping = false
 	const anchor = computed(() => pinned.value ?? { inFrame: player.value?.frame ?? 0, outFrame: null })
+	/** Drawing on the picture, and the shapes drawn so far for the next Comment (story 89) */
+	const drawing = ref(false)
+	const draft = ref([])
 	watch(() => version.value?.id, () => {
 		pinned.value = null
 		pinnedByTyping = false
+		drawing.value = false
+		draft.value = []
 	})
+
+	/** Drawing stops the picture and fixes the Frame the Comment goes to */
+	function draw() {
+		if (drawing.value) {
+			drawing.value = false
+			return
+		}
+		player.value?.pause()
+		if (pinned.value === null) {
+			pinned.value = { inFrame: player.value?.frame ?? 0, outFrame: null }
+		}
+		drawing.value = true
+	}
 
 	/**
 	 * @param {{inFrame: number, outFrame: ?number}} where - the Frame or Range to comment on
@@ -81,6 +99,8 @@ export function useReview({ version, projectMode, refresh }) {
 	function posted() {
 		pinnedByTyping = false
 		pinned.value = null
+		drawing.value = false
+		draft.value = []
 	}
 
 	let recheck = null
@@ -93,5 +113,5 @@ export function useReview({ version, projectMode, refresh }) {
 	}, { immediate: true })
 	onBeforeUnmount(() => clearTimeout(recheck))
 
-	return { player, panel, mode, clock, anchor, pin, hold, release, jump, posted }
+	return { player, panel, mode, clock, anchor, pin, hold, release, jump, posted, drawing, draft, draw }
 }

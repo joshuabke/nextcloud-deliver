@@ -72,7 +72,7 @@ test.describe('Review view', () => {
 		await page.keyboard.press('c')
 		await expect(page.locator('.deliver-comments__anchor')).toHaveText(/00:00:00:05/)
 		await page.locator('#deliver-comment-body').fill('sound starts too early')
-		await page.locator('.deliver-comments__form button').click()
+		await page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
 
 		const first = page.locator('.deliver-comment').first()
 		await expect(first).toContainText('sound starts too early')
@@ -91,7 +91,7 @@ test.describe('Review view', () => {
 		await page.keyboard.press('c')
 		await expect(page.locator('.deliver-comments__anchor')).toHaveText(/–/)
 		await page.locator('#deliver-comment-body').fill('shorten this passage')
-		await page.locator('.deliver-comments__form button').click()
+		await page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
 		await expect(page.locator('.deliver-player__marker')).toHaveCount(2)
 
 		// Resolving hides it from the unresolved filter, a Reply stays with its parent
@@ -132,8 +132,21 @@ test.describe('Review view', () => {
 		await expect(page.locator('.deliver-player__timecode')).not.toContainText('00:00:00:05')
 		await expect(page.locator('.deliver-comments__anchor')).toHaveText(/00:00:00:05/)
 		await page.locator('#deliver-comment-body').fill('typed while the player moved on')
-		await page.locator('.deliver-comments__form button').click()
+		await page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
 		await expect(page.locator('.deliver-comment').filter({ hasText: 'typed while the player moved on' }).locator('.deliver-comment__anchor')).toHaveText('00:00:00:05')
+
+		// A drawing goes with the Comment and shows while the player stands on it (story 89)
+		await page.getByRole('button', { name: 'Draw on the picture' }).click()
+		const stage = await page.locator('.deliver-player__stage').boundingBox()
+		await page.mouse.move(stage.x + stage.width * 0.3, stage.y + stage.height * 0.3)
+		await page.mouse.down()
+		await page.mouse.move(stage.x + stage.width * 0.6, stage.y + stage.height * 0.5, { steps: 8 })
+		await page.mouse.up()
+		await expect(page.locator('.deliver-comments__drawn')).toHaveText('1 shape drawn')
+		await page.locator('#deliver-comment-body').fill('this corner')
+		await page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
+		await expect(page.locator('.deliver-comment').filter({ hasText: 'this corner' })).toBeVisible()
+		await expect(page.locator('.deliver-drawing path')).toHaveCount(1)
 
 		// Approving shows the decision next to the menu (story 88)
 		await page.locator('.deliver-approval__menu button').click()

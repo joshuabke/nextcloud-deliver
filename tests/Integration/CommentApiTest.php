@@ -72,6 +72,20 @@ class CommentApiTest extends TestCase {
 		return $created['data'];
 	}
 
+	public function testACommentCarriesADrawing(): void {
+		$shapes = [['tool' => 'arrow', 'color' => '#ff0000', 'points' => [[0.1, 0.1], [0.5, 0.4]]]];
+		$drawn = $this->comment($this->nc, ['inFrame' => 12, 'body' => 'this logo', 'annotation' => $shapes]);
+		self::assertSame($shapes, $drawn['annotation']);
+		$listed = $this->nc->ocs('GET', "/versions/{$this->versionId}/comments")['data']['comments'];
+		self::assertSame($shapes, $listed[0]['annotation']);
+
+		$broken = $this->nc->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 1, 'body' => 'x', 'annotation' => [['tool' => 'spray']]]);
+		self::assertSame(400, $broken['status']);
+		$reply = $this->nc->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 1, 'body' => 'x', 'parentId' => $drawn['id'], 'annotation' => $shapes]);
+		self::assertSame(400, $reply['status'], 'a Reply carries no drawing');
+		self::assertNull($this->comment($this->nc, ['inFrame' => 3, 'body' => 'plain'])['annotation']);
+	}
+
 	public function testCommentsAnchorToFramesAndRanges(): void {
 		$frame = $this->comment($this->nc, ['inFrame' => 120, 'body' => 'colour is off here']);
 		self::assertSame([120, null], [$frame['inFrame'], $frame['outFrame']]);

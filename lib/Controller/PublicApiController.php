@@ -161,10 +161,10 @@ class PublicApiController extends PublicShareController {
 
 	#[PublicPage]
 	#[NoCSRFRequired]
-	public function create(int $versionId, int $inFrame, ?int $outFrame = null, string $body = '', ?int $parentId = null): Response {
+	public function create(int $versionId, int $inFrame, ?int $outFrame = null, string $body = '', ?int $parentId = null, mixed $annotation = null): Response {
 		return $this->onVersion(
 			$versionId,
-			fn ($viewer, $version) => $this->comments->create($viewer, $version, $inFrame, $outFrame, $body, $parentId),
+			fn ($viewer, $version) => $this->comments->create($viewer, $version, $inFrame, $outFrame, $body, $parentId, $annotation),
 			Http::STATUS_CREATED,
 		);
 	}

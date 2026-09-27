@@ -35,7 +35,7 @@ const newest = ref([])
 const version = computed(() => context.value?.versions.find((each) => each.id === current.value) ?? null)
 const assetIndex = computed(() => newest.value.findIndex((each) => each.assetId === context.value?.asset?.id))
 
-const { player, panel, mode, clock, anchor, pin, hold, release, jump, posted } = useReview({
+const { player, panel, mode, clock, anchor, pin, hold, release, jump, posted, drawing, draft, draw } = useReview({
 	version,
 	projectMode: computed(() => context.value?.project.timecodeMode ?? 'smpte'),
 	refresh: reload,
@@ -149,6 +149,8 @@ async function claim({ name, email }) {
 				v-if="version"
 				ref="player"
 				v-model:mode="mode"
+				v-model:draft="draft"
+				v-model:drawing="drawing"
 				:version="version"
 				:comments="store.threads"
 				:clock="clock"
@@ -161,6 +163,10 @@ async function claim({ name, email }) {
 					ref="panel"
 					:clock="clock"
 					:anchor="anchor"
+					:draft="draft"
+					:drawing="drawing"
+					:canDraw="!!version && !version.audioOnly"
+					@draw="draw"
 					@claim="claim"
 					@jump="jump"
 					@posted="posted"

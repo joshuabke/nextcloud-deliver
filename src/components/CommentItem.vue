@@ -4,6 +4,7 @@ import resolvedIcon from '@mdi/svg/svg/check-circle.svg?raw'
 import expandedIcon from '@mdi/svg/svg/chevron-down.svg?raw'
 import collapsedIcon from '@mdi/svg/svg/chevron-right.svg?raw'
 import clockIcon from '@mdi/svg/svg/clock-outline.svg?raw'
+import penIcon from '@mdi/svg/svg/draw.svg?raw'
 import { n, t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -155,6 +156,12 @@ function saveReply() {
 				@click="emit('jump', comment)">
 				<NcIconSvgWrapper :svg="clockIcon" :size="14" inline />
 				{{ anchor }}
+				<NcIconSvgWrapper
+					v-if="comment.annotation?.length"
+					:svg="penIcon"
+					:size="14"
+					inline
+					:name="t('deliver', 'With a drawing')" />
 			</button>
 
 			<template v-if="editing">

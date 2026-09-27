@@ -55,7 +55,7 @@ class CommentService {
 	 * @throws InvalidRequestException the body is empty, the anchor is backwards, or a Reply would nest
 	 * @throws ProjectConflictException the Version is an older one and Comments on older Versions are off
 	 */
-	public function create(Viewer $viewer, Version $version, int $inFrame, ?int $outFrame, string $body, ?int $parentId): array {
+	public function create(Viewer $viewer, Version $version, int $inFrame, ?int $outFrame, string $body, ?int $parentId, mixed $annotation = null): array {
 		if (!$viewer->canComment) {
 			throw new AccessDeniedException('Commenting is switched off here');
 		}
@@ -66,12 +66,16 @@ class CommentService {
 		if ($body === '') {
 			throw new InvalidRequestException('A Comment needs a body');
 		}
+		$drawing = Annotation::encode($annotation);
 		$parent = $parentId === null ? null : $this->comments->find($parentId);
 		if ($parentId !== null && ($parent === null || $parent->getVersionId() !== $version->getId())) {
 			throw new NotFoundException('Comment not found');
 		}
 		if ($parent !== null && $parent->getParentId() !== null) {
 			throw new InvalidRequestException('A Reply cannot carry Replies');
+		}
+		if ($parent !== null && $drawing !== null) {
+			throw new InvalidRequestException('A Reply carries no drawing; draw in a Comment of its own');
 		}
 		if ($parent !== null) {
 			// A Reply takes its parent's anchor, whatever the client sent
@@ -90,6 +94,7 @@ class CommentService {
 		$comment->setInFrame($inFrame);
 		$comment->setOutFrame($outFrame);
 		$comment->setBody($body);
+		$comment->setAnnotation($drawing);
 		$comment->setCreatedAt($now);
 		$comment->setUpdatedAt($now);
 		$comment = $this->comments->insert($comment);
@@ -251,6 +256,7 @@ class CommentService {
 			'outFrame' => $comment->getOutFrame(),
 			'body' => $comment->getBody(),
 			'resolved' => (bool)$comment->getResolved(),
+			'annotation' => Annotation::decode($comment->getAnnotation()),
 			'createdAt' => $comment->getCreatedAt(),
 			'updatedAt' => $comment->getUpdatedAt(),
 		];
