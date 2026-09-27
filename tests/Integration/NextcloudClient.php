@@ -36,6 +36,23 @@ class NextcloudClient {
 		return ['status' => $status, 'body' => (string)$response];
 	}
 
+	/**
+	 * Uploads one file as the form field `file` to an OCS path.
+	 *
+	 * @return array{status: int, data: mixed}
+	 */
+	public function upload(string $path, string $name, string $content): array {
+		$ch = curl_init($this->baseUrl . '/ocs/v2.php/apps/deliver/api/v1' . $path . '?format=json');
+		curl_setopt_array($ch, [
+			CURLOPT_RETURNTRANSFER => true,
+			CURLOPT_USERPWD => $this->user . ':' . $this->password,
+			CURLOPT_HTTPHEADER => ['OCS-APIREQUEST: true', 'Accept: application/json'],
+			CURLOPT_POSTFIELDS => ['file' => new \CURLStringFile($content, $name)],
+		]);
+		$decoded = json_decode((string)curl_exec($ch), true);
+		return ['status' => (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE), 'data' => $decoded['ocs']['data'] ?? $decoded];
+	}
+
 	/** @return array{status: int, data: mixed} the OCS status and unwrapped data */
 	public function ocs(string $method, string $path, array $json = []): array {
 		$response = $this->request(

@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Service;
 
+use OCA\Deliver\Db\Attachment;
+use OCA\Deliver\Db\AttachmentMapper;
 use OCA\Deliver\Db\Comment;
 use OCA\Deliver\Db\CommentMapper;
+use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\Reaction;
 use OCA\Deliver\Db\ReactionMapper;
 use OCA\Deliver\Db\Seen;
@@ -24,6 +27,9 @@ use OCP\Files\NotFoundException;
 class CommentService {
 	/** The reactions on offer, in the order they are shown (story 91) */
 	public const REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '🙏'];
+	/** Attachments per Comment, and the size of each (story 92) */
+	public const MAX_ATTACHMENTS = 5;
+	public const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
 	public function __construct(
 		private CommentMapper $comments,
@@ -35,6 +41,9 @@ class CommentService {
 		private Authors $authors,
 		private ApprovalService $approvals,
 		private ReactionMapper $reactions,
+		private AttachmentMapper $attachments,
+		private AttachmentStore $store,
+		private ProjectMapper $projects,
 	) {
 	}
 
@@ -146,7 +155,9 @@ class CommentService {
 				}
 			}
 		}
-		$this->reactions->deleteByComments(array_map(static fn (Comment $each) => $each->getId(), [...$replies, $comment]));
+		$goneIds = array_map(static fn (Comment $each) => $each->getId(), [...$replies, $comment]);
+		$this->reactions->deleteByComments($goneIds);
+		$this->forgetAttachments($version, $goneIds);
 		foreach ([...$replies, $comment] as $gone) {
 			$this->comments->delete($gone);
 			$this->notifications->commentDeleted($gone->getId());
@@ -194,6 +205,73 @@ class CommentService {
 		}
 		$comment->setUpdatedAt($this->time->getTime());
 		return $this->serialize($this->comments->update($comment));
+	}
+
+	/**
+	 * Attaches an uploaded file to my Comment (story 92).
+	 *
+	 * @param array{name?: mixed, tmp_name?: mixed, size?: mixed, error?: mixed}|null $upload as PHP hands it over
+	 * @throws AccessDeniedException only the author attaches, where they may comment
+	 * @throws InvalidRequestException no file, too large, or too many
+	 */
+	public function attach(Viewer $viewer, Version $version, int $id, ?array $upload): array {
+		$comment = $this->reach($version, $id);
+		if (!$viewer->canComment || !$viewer->owns($comment)) {
+			throw new AccessDeniedException('Only the author attaches files to a Comment');
+		}
+		if ($upload === null || ($upload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_string($upload['tmp_name'] ?? null)) {
+			throw new InvalidRequestException('No file arrived');
+		}
+		$size = (int)($upload['size'] ?? 0);
+		if ($size > self::MAX_ATTACHMENT_BYTES) {
+			throw new InvalidRequestException('An attachment is at most 25 MB');
+		}
+		if (count($this->attachments->findByComments([$id])[$id] ?? []) >= self::MAX_ATTACHMENTS) {
+			throw new InvalidRequestException('A Comment carries at most ' . self::MAX_ATTACHMENTS . ' attachments');
+		}
+		$content = fopen($upload['tmp_name'], 'rb') ?: throw new InvalidRequestException('The upload could not be read');
+		// Nextcloud closes the stream once it has written it
+		$file = $this->store->store($this->projects->find($version->getProjectId()), $id, (string)($upload['name'] ?? ''), $content);
+		$attachment = new Attachment();
+		$attachment->setCommentId($id);
+		$attachment->setFileId($file->getId());
+		$attachment->setName($file->getName());
+		$attachment->setMimeType($file->getMimeType());
+		$attachment->setSize($file->getSize());
+		$this->attachments->insert($attachment);
+		$comment->setUpdatedAt($this->time->getTime());
+		return $this->serialize($this->comments->update($comment));
+	}
+
+	/**
+	 * @return array{0: \OCP\Files\File, 1: Attachment} the file of an attachment on a Comment of this Version
+	 * @throws NotFoundException no such attachment here, or its file is gone
+	 */
+	public function attachment(Version $version, int $attachmentId): array {
+		$attachment = $this->attachments->find($attachmentId);
+		if ($attachment === null) {
+			throw new NotFoundException('Attachment not found');
+		}
+		$this->reach($version, $attachment->getCommentId());
+		$file = $this->store->file($this->projects->find($version->getProjectId()), $attachment->getFileId());
+		return [$file ?? throw new NotFoundException('The attached file is gone'), $attachment];
+	}
+
+	/** @throws NotFoundException no such attachment */
+	public function versionIdOfAttachment(int $attachmentId): int {
+		$attachment = $this->attachments->find($attachmentId) ?? throw new NotFoundException('Attachment not found');
+		return $this->versionIdOf($attachment->getCommentId());
+	}
+
+	/** Deletes Comments' attachments, files and rows */
+	public function forgetAttachments(Version $version, array $commentIds): void {
+		$project = $this->projects->find($version->getProjectId());
+		foreach ($this->attachments->findByComments($commentIds) as $commentId => $attachments) {
+			foreach ($attachments as $attachment) {
+				$this->attachments->delete($attachment);
+			}
+			$this->store->forget($project, $commentId);
+		}
 	}
 
 	/** @throws AccessDeniedException only write access resolves */
@@ -301,13 +379,19 @@ class CommentService {
 	 * @return list<array<string, mixed>>
 	 */
 	private function serializeAll(array $comments): array {
-		$reactions = $this->reactions->findByComments(array_map(static fn (Comment $comment) => $comment->getId(), $comments));
-		return array_values(array_map(fn (Comment $comment) => $this->serialize($comment, $reactions[$comment->getId()] ?? []), $comments));
+		$ids = array_map(static fn (Comment $comment) => $comment->getId(), $comments);
+		$reactions = $this->reactions->findByComments($ids);
+		$attachments = $this->attachments->findByComments($ids);
+		return array_values(array_map(fn (Comment $comment) => $this->serialize($comment, $reactions[$comment->getId()] ?? [], $attachments[$comment->getId()] ?? []), $comments));
 	}
 
-	/** @param ?list<Reaction> $reactions the Comment's, when already loaded */
-	private function serialize(Comment $comment, ?array $reactions = null): array {
+	/**
+	 * @param ?list<Reaction> $reactions the Comment's, when already loaded
+	 * @param ?list<Attachment> $attachments the Comment's, when already loaded
+	 */
+	private function serialize(Comment $comment, ?array $reactions = null, ?array $attachments = null): array {
 		$reactions ??= $this->reactions->findByComments([$comment->getId()])[$comment->getId()] ?? [];
+		$attachments ??= $this->attachments->findByComments([$comment->getId()])[$comment->getId()] ?? [];
 		$byEmoji = [];
 		foreach ($reactions as $reaction) {
 			$byEmoji[$reaction->getEmoji()][] = $this->authors->of($reaction->getUserId(), $reaction->getReviewerId());
@@ -324,6 +408,12 @@ class CommentService {
 			'annotation' => Annotation::decode($comment->getAnnotation()),
 			// Display names of the users it @mentions (story 90); JSON object even when empty
 			'mentions' => (object)$this->authors->names(Mentions::parse((string)$comment->getBody())),
+			'attachments' => array_map(static fn (Attachment $attachment) => [
+				'id' => $attachment->getId(),
+				'name' => $attachment->getName(),
+				'mimeType' => $attachment->getMimeType(),
+				'size' => $attachment->getSize(),
+			], $attachments),
 			'reactions' => array_map(
 				static fn (string $emoji) => ['emoji' => $emoji, 'authors' => $byEmoji[$emoji]],
 				array_values(array_filter(self::REACTIONS, static fn (string $emoji) => isset($byEmoji[$emoji]))),

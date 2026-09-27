@@ -45,6 +45,29 @@ class PublicClient {
 		return ['status' => $status, 'data' => json_decode($body, true)];
 	}
 
+	/**
+	 * Uploads one file as the form field `file`, or fetches a path raw.
+	 *
+	 * @return array{status: int, body: string, type: string}
+	 */
+	public function raw(string $path, ?string $name = null, ?string $content = null): array {
+		$ch = curl_init($this->baseUrl . '/apps/deliver/s/' . $this->token . $path);
+		curl_setopt_array($ch, [
+			CURLOPT_RETURNTRANSFER => true,
+			CURLOPT_COOKIEJAR => $this->jar,
+			CURLOPT_COOKIEFILE => $this->jar,
+		]);
+		if ($name !== null) {
+			curl_setopt($ch, CURLOPT_POSTFIELDS, ['file' => new \CURLStringFile((string)$content, $name)]);
+		}
+		$body = (string)curl_exec($ch);
+		return [
+			'status' => (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE),
+			'body' => $body,
+			'type' => (string)curl_getinfo($ch, CURLINFO_CONTENT_TYPE),
+		];
+	}
+
 	/** The review page itself, as a browser would ask for it */
 	public function page(string $path = ''): int {
 		$ch = curl_init($this->baseUrl . '/apps/deliver/s/' . $this->token . $path);

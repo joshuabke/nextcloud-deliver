@@ -6,6 +6,8 @@ import collapsedIcon from '@mdi/svg/svg/chevron-right.svg?raw'
 import clockIcon from '@mdi/svg/svg/clock-outline.svg?raw'
 import penIcon from '@mdi/svg/svg/draw.svg?raw'
 import reactIcon from '@mdi/svg/svg/emoticon-plus-outline.svg?raw'
+import fileIcon from '@mdi/svg/svg/file-outline.svg?raw'
+import { formatFileSize } from '@nextcloud/files'
 import { n, t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -14,7 +16,7 @@ import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDateTime from '@nextcloud/vue/components/NcDateTime'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
-import { errorMessage } from '../api.js'
+import { attachmentUrl, errorMessage } from '../api.js'
 import { linkify } from '../lib/links.js'
 import { splitMentions } from '../lib/mentions.js'
 import { formatAt } from '../lib/timecode.js'
@@ -200,6 +202,27 @@ function saveReply() {
 			<!-- One line on purpose: the body keeps its line breaks (pre-wrap), so any template whitespace would show -->
 			<!-- eslint-disable-next-line vue/singleline-html-element-content-newline, vue/max-attributes-per-line -->
 			<p v-else class="deliver-comment__body"><template v-for="(piece, index) in pieces" :key="index"><a v-if="piece.href" :href="piece.href" target="_blank" rel="noopener noreferrer">{{ piece.text }}</a><span v-else-if="piece.mention" class="deliver-comment__mention" :title="piece.mention">{{ piece.text }}</span><template v-else>{{ piece.text }}</template></template></p>
+
+			<ul v-if="comment.attachments?.length" class="deliver-comment__attachments">
+				<li v-for="attachment in comment.attachments" :key="attachment.id">
+					<a
+						:href="attachmentUrl(attachment.id)"
+						target="_blank"
+						rel="noopener noreferrer"
+						:title="attachment.name">
+						<img
+							v-if="/^image\/(png|jpeg|gif|webp)$/.test(attachment.mimeType)"
+							:src="attachmentUrl(attachment.id)"
+							:alt="attachment.name"
+							loading="lazy">
+						<template v-else>
+							<NcIconSvgWrapper :svg="fileIcon" :size="16" inline />
+							<span>{{ attachment.name }}</span>
+							<span class="deliver-comment__size">{{ formatFileSize(attachment.size) }}</span>
+						</template>
+					</a>
+				</li>
+			</ul>
 
 			<div v-if="comment.reactions?.length || canReact" class="deliver-comment__reactions">
 				<button
@@ -409,6 +432,48 @@ function saveReply() {
 
 .deliver-comment__link:hover {
 	color: var(--color-main-text);
+}
+
+.deliver-comment__attachments {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-self: stretch;
+}
+
+.deliver-comment__attachments a {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	max-width: 100%;
+	padding: 4px 8px;
+	border: 1px solid var(--color-border-dark);
+	border-radius: var(--border-radius, 6px);
+	color: var(--color-main-text);
+	font-size: 13px;
+}
+
+.deliver-comment__attachments a:has(img) {
+	padding: 0;
+	overflow: hidden;
+}
+
+.deliver-comment__attachments img {
+	display: block;
+	max-width: 160px;
+	max-height: 110px;
+	object-fit: cover;
+}
+
+.deliver-comment__attachments span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.deliver-comment__size {
+	flex-shrink: 0;
+	color: var(--color-text-maxcontrast);
 }
 
 .deliver-comment__reactions {

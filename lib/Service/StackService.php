@@ -7,6 +7,7 @@ namespace OCA\Deliver\Service;
 use OCA\Deliver\Db\ApprovalMapper;
 use OCA\Deliver\Db\Asset;
 use OCA\Deliver\Db\AssetMapper;
+use OCA\Deliver\Db\AttachmentMapper;
 use OCA\Deliver\Db\CommentMapper;
 use OCA\Deliver\Db\MuteMapper;
 use OCA\Deliver\Db\Project;
@@ -38,6 +39,7 @@ class StackService {
 		private SeenMapper $seen,
 		private ApprovalMapper $approvals,
 		private ReactionMapper $reactions,
+		private AttachmentMapper $attachments,
 		private ReviewerMapper $reviewers,
 		private DerivedMedia $media,
 		private NotificationService $notifications,
@@ -236,7 +238,10 @@ class StackService {
 	 */
 	public function purge(Version $version): void {
 		$this->media->forget($version->getId());
-		$this->reactions->deleteByComments(array_map(static fn ($comment) => $comment->getId(), $this->comments->findByVersion($version->getId())));
+		$commentIds = array_map(static fn ($comment) => $comment->getId(), $this->comments->findByVersion($version->getId()));
+		$this->reactions->deleteByComments($commentIds);
+		// Attached files stay in the folder, like every file when Deliver lets go
+		$this->attachments->deleteByComments($commentIds);
 		$this->comments->deleteByVersion($version->getId());
 		$this->seen->deleteByVersion($version->getId());
 		$this->approvals->deleteByVersion($version->getId());

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import {
+	attachFile,
 	commentChanges,
 	createComment,
 	decideVersion,
@@ -126,9 +127,25 @@ export const useCommentsStore = defineStore('comments', {
 				markSeen(this.versionId, this.now).catch(() => {})
 			}
 		},
-		async add({ inFrame, outFrame = null, body, parentId = null, annotation = null }) {
-			const comment = await createComment(this.versionId, { inFrame, outFrame, body, parentId, annotation })
+		/**
+		 * Posts a Comment, then attaches its files one by one (story 92)
+		 *
+		 * @param {object} fields - anchor, body, parent, drawing, and the files to attach
+		 * @param fields.inFrame
+		 * @param fields.outFrame
+		 * @param fields.body
+		 * @param fields.parentId
+		 * @param fields.annotation
+		 * @param fields.files
+		 * @return {Promise<object>} the Comment as it ended up
+		 */
+		async add({ inFrame, outFrame = null, body, parentId = null, annotation = null, files = [] }) {
+			let comment = await createComment(this.versionId, { inFrame, outFrame, body, parentId, annotation })
 			this.comments = mergeComments(this.comments, [comment], null)
+			for (const file of files) {
+				comment = await attachFile(comment.id, file)
+				this.comments = mergeComments(this.comments, [comment], null)
+			}
 			return comment
 		},
 		async edit(id, body) {

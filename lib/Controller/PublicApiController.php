@@ -195,6 +195,26 @@ class PublicApiController extends PublicShareController {
 
 	#[PublicPage]
 	#[NoCSRFRequired]
+	public function attach(int $id): Response {
+		return $this->onComment($id, fn ($viewer, $version) => $this->comments->attach($viewer, $version, $id, $this->request->getUploadedFile('file')), Http::STATUS_CREATED);
+	}
+
+	/** An attached file, shown in the browser where it can be */
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function attachment(int $id): Response {
+		try {
+			$share = $this->share();
+			$version = $this->sharing->version($share, $this->comments->versionIdOfAttachment($id));
+			[$file, $attachment] = $this->comments->attachment($version, $id);
+			return AttachmentResponse::of($file, $attachment);
+		} catch (NotFoundException) {
+			return new Response(Http::STATUS_NOT_FOUND);
+		}
+	}
+
+	#[PublicPage]
+	#[NoCSRFRequired]
 	public function destroy(int $id): Response {
 		return $this->onComment($id, function (Viewer $viewer, Version $version) use ($id) {
 			$this->comments->remove($viewer, $version, $id);
@@ -259,10 +279,10 @@ class PublicApiController extends PublicShareController {
 		}, $status);
 	}
 
-	private function onComment(int $id, callable $action): Response {
+	private function onComment(int $id, callable $action, int $status = Http::STATUS_OK): Response {
 		return $this->guard(function () use ($id, $action) {
 			$share = $this->share();
 			return $action($this->viewer($share), $this->sharing->version($share, $this->comments->versionIdOf($id)));
-		});
+		}, $status);
 	}
 }

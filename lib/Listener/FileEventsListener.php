@@ -8,6 +8,7 @@ use OCA\Deliver\Db\Project;
 use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\Version;
 use OCA\Deliver\Db\VersionMapper;
+use OCA\Deliver\Service\Reviewable;
 use OCA\Deliver\Service\StackService;
 use OCA\Files_Trashbin\Events\MoveToTrashEvent;
 use OCA\Files_Trashbin\Events\NodeRestoredEvent;
@@ -58,7 +59,7 @@ class FileEventsListener implements IEventListener {
 	/** With Auto Intake a new media file becomes an Asset; without it a Member enables files one by one */
 	private function arrived(Node $node): void {
 		$project = $this->projectOf($node);
-		if ($node instanceof File && $project?->getAutoIntake() === true && $this->isMedia($node)) {
+		if ($node instanceof File && $project?->getAutoIntake() === true && Reviewable::file($node)) {
 			$this->stacks->intake($project, $node);
 		}
 	}
@@ -139,9 +140,5 @@ class FileEventsListener implements IEventListener {
 			}
 		}
 		return null;
-	}
-
-	private function isMedia(Node $node): bool {
-		return preg_match('#^(video|audio)/#', $node->getMimeType()) === 1;
 	}
 }
