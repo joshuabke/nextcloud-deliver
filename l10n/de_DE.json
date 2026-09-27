@@ -14,10 +14,12 @@
 		"Approve": "Abnehmen",
 		"Approve this Version": "Diese Version abnehmen",
 		"Approved": "Abgenommen",
+		"Arrow": "Pfeil",
 		"Auto Intake: review every media file in this folder": "Automatische Aufnahme: jede Mediendatei in diesem Ordner reviewen",
 		"Back to the Review": "Zurück zum Review",
 		"Back to {project}": "Zurück zu {project}",
 		"Bookmark your Personal Link. It makes you \"{name}\" again on any device:": "Speichern Sie Ihren Persönlichen Link als Lesezeichen. Mit ihm sind Sie auf jedem Gerät wieder „{name}“:",
+		"Box": "Rahmen",
 		"C comments on the Frame, I and O set a Range": "C kommentiert den Frame, I und O setzen einen Bereich",
 		"CSV": "CSV",
 		"CSV: Nuendo, spreadsheets": "CSV: Nuendo, Tabellen",
@@ -34,7 +36,9 @@
 		"Deliver is preparing a version of this file that the browser can play: {percent} %": "Deliver bereitet eine Fassung dieser Datei vor, die der Browser abspielen kann: {percent} %",
 		"Deliver makes Proxies, Thumbnail Strips and Waveforms with ffmpeg in the background. Without ffmpeg, files the browser plays natively still work.": "Deliver erzeugt Proxies, Vorschauleisten und Wellenformen mit ffmpeg im Hintergrund. Ohne ffmpeg funktionieren Dateien weiter, die der Browser selbst abspielt.",
 		"Derived media": "Abgeleitete Medien",
+		"Done": "Fertig",
 		"Download the original": "Original herunterladen",
+		"Draw on the picture": "Aufs Bild zeichnen",
 		"Drop a file here to upload it next to the newest Version and stack it on top.": "Ziehen Sie eine Datei hierher, um sie neben die neueste Version hochzuladen und oben auf den Versionsstapel zu legen.",
 		"EDL for DaVinci Resolve": "EDL für DaVinci Resolve",
 		"Edit": "Bearbeiten",
@@ -110,6 +114,7 @@
 		"Path to ffmpeg": "Pfad zu ffmpeg",
 		"Path to ffprobe": "Pfad zu ffprobe",
 		"Pause (Space)": "Pause (Leertaste)",
+		"Pen": "Stift",
 		"People with this link get a Review button and can leave frame-accurate Comments.": "Wer diesen Link hat, bekommt einen Review-Knopf und kann framegenau kommentieren.",
 		"Pick a Project": "Wählen Sie ein Projekt",
 		"Play (Space)": "Abspielen (Leertaste)",
@@ -188,6 +193,7 @@
 		"WAV with markers: Logic, Cubase, Nuendo, Sequoia, Pyramix": "WAV mit Markern: Logic, Cubase, Nuendo, Sequoia, Pyramix",
 		"Where the Comment goes": "Wohin der Kommentar kommt",
 		"Wipe": "Wischen",
+		"With a drawing": "Mit Zeichnung",
 		"Write a Reply": "Antwort schreiben",
 		"Write permission on the file is required to enable it for review.": "Um die Datei zum Review freizugeben, ist Schreibrecht auf die Datei nötig.",
 		"Write permission on the folder is required to turn it into a Project.": "Um den Ordner zum Projekt zu machen, ist Schreibrecht auf den Ordner nötig.",
@@ -205,6 +211,10 @@
 		"_%n requests changes_::_%n request changes_": [
 			"%n wünscht Änderungen",
 			"%n wünschen Änderungen"
+		],
+		"_%n shape drawn_::_%n shapes drawn_": [
+			"%n Form gezeichnet",
+			"%n Formen gezeichnet"
 		],
 		"_Approved by %n_::_Approved by %n_": [
 			"Von %n abgenommen",

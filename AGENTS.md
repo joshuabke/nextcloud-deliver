@@ -20,6 +20,7 @@ Deliver is a Nextcloud app for frame-accurate video review (a Frame.io / Clapsho
 
 - Commands and the test setup are in `README.md` and the `Makefile` (`make up`, `make build`, `make test-integration`). The dev image (`docker-image/Dockerfile`) is Nextcloud 34 plus ffmpeg and the VAAPI drivers; change it there, never in the running container. `docker/` is the bind-mounted instance and gitignored.
 - `dev/opcache.ini` is mounted into the container so PHP edits apply immediately. Built bundles are cached by the browser under Nextcloud's `?v=` parameter: hard-reload after `npm run build`.
+- A new migration runs only when `appinfo/info.xml` carries a higher version: bump the patch number with it, then `occ upgrade`.
 - Changing the shipped migration during development: the migration never drops a v2 table, so either reset the instance (`make down`, delete `docker/`, `make up`) or drop the `oc_deliver_*` tables and the `deliver` rows in `oc_migrations` (psql in the `db` container) and run `occ app:disable deliver && occ app:enable deliver`.
 - Routes are cached per PHP process: after editing `appinfo/routes.php`, `docker compose restart nextcloud`, otherwise new verbs answer 405 and new paths 404.
 - File actions in `@nextcloud/files` 4 take **one context object** (`{ nodes, view, folder }`) in both `enabled` and `exec`; a `(nodes)` signature silently never shows the action. There is no `FileAction` class any more, `registerFileAction()` takes a plain object.

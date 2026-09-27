@@ -125,8 +125,8 @@ export const useCommentsStore = defineStore('comments', {
 				markSeen(this.versionId, this.now).catch(() => {})
 			}
 		},
-		async add({ inFrame, outFrame = null, body, parentId = null }) {
-			const comment = await createComment(this.versionId, { inFrame, outFrame, body, parentId })
+		async add({ inFrame, outFrame = null, body, parentId = null, annotation = null }) {
+			const comment = await createComment(this.versionId, { inFrame, outFrame, body, parentId, annotation })
 			this.comments = mergeComments(this.comments, [comment], null)
 			return comment
 		},

@@ -1,9 +1,10 @@
 <script setup>
 import filterIcon from '@mdi/svg/svg/chevron-down.svg?raw'
+import penIcon from '@mdi/svg/svg/draw.svg?raw'
 import searchIcon from '@mdi/svg/svg/magnify.svg?raw'
 import sendIcon from '@mdi/svg/svg/send.svg?raw'
 import sortIcon from '@mdi/svg/svg/sort.svg?raw'
-import { t } from '@nextcloud/l10n'
+import { n, t } from '@nextcloud/l10n'
 import { computed, ref, watch } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
@@ -21,9 +22,14 @@ const props = defineProps({
 	clock: { type: Object, required: true },
 	/** Where a new Comment lands: { inFrame, outFrame } */
 	anchor: { type: Object, required: true },
+	/** Shapes drawn on the picture for this Comment (story 89) */
+	draft: { type: Array, default: () => [] },
+	drawing: { type: Boolean, default: false },
+	/** Whether this Version has a picture to draw on */
+	canDraw: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['jump', 'claim', 'posted', 'typing', 'cleared'])
+const emit = defineEmits(['jump', 'claim', 'posted', 'typing', 'cleared', 'draw'])
 
 const store = useCommentsStore()
 const body = ref('')
@@ -105,7 +111,7 @@ async function submit() {
 	busy.value = true
 	error.value = null
 	try {
-		await store.add({ ...props.anchor, body: body.value })
+		await store.add({ ...props.anchor, body: body.value, annotation: props.draft.length ? props.draft : null })
 		body.value = ''
 		emit('posted')
 	} catch (e) {
@@ -250,6 +256,18 @@ function claim() {
 						@keydown="onKeydown" />
 				</div>
 				<div class="deliver-comments__actions">
+					<NcButton
+						v-if="canDraw"
+						variant="tertiary"
+						:pressed="drawing"
+						:aria-label="t('deliver', 'Draw on the picture')"
+						:title="t('deliver', 'Draw on the picture')"
+						@click="emit('draw')">
+						<template #icon>
+							<NcIconSvgWrapper :svg="penIcon" />
+						</template>
+					</NcButton>
+					<span v-if="draft.length" class="deliver-comments__drawn">{{ n('deliver', '%n shape drawn', '%n shapes drawn', draft.length) }}</span>
 					<span class="deliver-comments__hint">{{ t('deliver', 'C comments on the Frame, I and O set a Range') }}</span>
 					<NcButton
 						variant="primary"
@@ -386,6 +404,12 @@ function claim() {
 	display: flex;
 	align-items: center;
 	gap: calc(2 * var(--default-grid-baseline, 4px));
+}
+
+.deliver-comments__drawn {
+	color: #f5c518;
+	font-size: 12px;
+	white-space: nowrap;
 }
 
 .deliver-comments__hint {

@@ -68,7 +68,7 @@ const shareUrl = computed(() => version.value?.url
 	? generateUrl('/apps/files/files/{fileId}', { fileId: version.value.fileId }) + '?' + new URLSearchParams({ dir: filesDir(version.value.url), opendetails: 'true' })
 	: null)
 
-const { player, panel, mode, clock, anchor, pin, hold, release, jump, posted } = useReview({
+const { player, panel, mode, clock, anchor, pin, hold, release, jump, posted, drawing, draft, draw } = useReview({
 	version,
 	projectMode: computed(() => context.value?.project.timecodeMode ?? 'smpte'),
 	refresh: reload,
@@ -213,6 +213,8 @@ async function upload(event) {
 			v-if="version"
 			ref="player"
 			v-model:mode="mode"
+			v-model:draft="draft"
+			v-model:drawing="drawing"
 			:version="version"
 			:comments="store.threads"
 			:clock="clock"
@@ -227,6 +229,10 @@ async function upload(event) {
 				ref="panel"
 				:clock="clock"
 				:anchor="anchor"
+				:draft="draft"
+				:drawing="drawing"
+				:canDraw="!!version && !version.audioOnly"
+				@draw="draw"
 				@jump="jump"
 				@posted="posted"
 				@typing="hold"
