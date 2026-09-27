@@ -25,8 +25,10 @@ use OCP\Files\NotFoundException;
  * permissions or Share Link allow.
  */
 class CommentService {
-	/** The reactions on offer, in the order they are shown (story 91) */
+	/** The usual reactions, shown first; any other single emoji is welcome too (story 91) */
 	public const REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '🙏'];
+	/** One emoji, skin tones, flags and joined families included; no letters, digits or markup */
+	private const EMOJI = '/^(?=.*\p{Extended_Pictographic}|.*\p{Regional_Indicator})[^\p{L}\p{N}\s<>&"\']{1,16}$/u';
 	/** Attachments per Comment, and the size of each (story 92) */
 	public const MAX_ATTACHMENTS = 5;
 	public const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
@@ -189,8 +191,8 @@ class CommentService {
 		if (!$this->window->open($viewer, $version)) {
 			throw new ProjectConflictException('Only the newest Version takes reactions here');
 		}
-		if (!in_array($emoji, self::REACTIONS, true)) {
-			throw new InvalidRequestException('Reactions are ' . implode(' ', self::REACTIONS));
+		if (preg_match(self::EMOJI, $emoji) !== 1) {
+			throw new InvalidRequestException('A reaction is one emoji');
 		}
 		$mine = array_values(array_filter(
 			$this->reactions->findByComments([$id])[$id] ?? [],
@@ -448,9 +450,10 @@ class CommentService {
 				'mimeType' => $attachment->getMimeType(),
 				'size' => $attachment->getSize(),
 			], $attachments),
+			// The usual ones in their order, then the rest as they were first given
 			'reactions' => array_map(
 				static fn (string $emoji) => ['emoji' => $emoji, 'authors' => $byEmoji[$emoji]],
-				array_values(array_filter(self::REACTIONS, static fn (string $emoji) => isset($byEmoji[$emoji]))),
+				array_values(array_unique([...array_intersect(self::REACTIONS, array_keys($byEmoji)), ...array_keys($byEmoji)])),
 			),
 			'createdAt' => $comment->getCreatedAt(),
 			'updatedAt' => $comment->getUpdatedAt(),

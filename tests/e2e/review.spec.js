@@ -63,7 +63,7 @@ test.describe('Review view', () => {
 
 	test('comments on a Frame and on a Range, resolves and replies', async () => {
 		await page.goto(`/apps/deliver/versions/${versionId}`)
-		await expect(page.locator('video')).toHaveJSProperty('readyState', 4)
+		await expect(page.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
 
 		// Frame stepping is exact: five steps at 25 fps land on 00:00:00:05
 		// Focus the page without touching the player
@@ -142,8 +142,9 @@ test.describe('Review view', () => {
 		// A reaction shows as a pill with its count, mine highlighted (story 91)
 		const reacted = page.locator('.deliver-comment').filter({ hasText: 'shorten this passage' }).first()
 		await reacted.getByRole('button', { name: 'React' }).click()
-		await page.getByRole('menuitem', { name: '👍' }).click()
-		await expect(reacted.locator('.deliver-comment__reaction--mine')).toHaveText('👍 1')
+		await page.locator('.emoji-mart input').fill('tooth')
+		await page.locator('.emoji-mart .emoji-mart-scroll .emoji-mart-emoji').first().click()
+		await expect(reacted.locator('.deliver-comment__reaction--mine')).toHaveText('🦷 1')
 
 		// Typing @ offers the Members; the Comment shows the name (story 90)
 		await page.locator('#deliver-comment-body').fill('')
