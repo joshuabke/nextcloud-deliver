@@ -56,6 +56,10 @@ _Avoid_: Done, closed, completed
 Pen strokes, arrows and boxes on the Frame a Comment anchors to, in coordinates across the picture; shown whenever the player stands still on that Comment.
 _Avoid_: Annotation (in the UI), sketch, markup
 
+**Mention**:
+A Member named in a Comment with `@`, who is notified even from a muted Project. Reviewers can be read but not mentioned, as they have no account.
+_Avoid_: Tag, ping
+
 **Reaction**:
 One person's emoji on a Comment or Reply, from a small fixed set; agreement without a Reply.
 _Avoid_: Like, vote
@@ -131,4 +135,5 @@ The German translation (`l10n/de` with "du", `l10n/de_DE` with "Sie") uses these
 | Export | Export |
 | Drawing | Zeichnung |
 | Reaction | Reaktion |
+| Mention | Erwähnung |
 | Approval (approved, changes requested) | Abnahme (abgenommen, Änderungen gewünscht) |

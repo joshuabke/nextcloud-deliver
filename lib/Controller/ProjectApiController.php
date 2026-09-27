@@ -40,6 +40,11 @@ class ProjectApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	public function members(int $id): Response {
+		return $this->guard(fn () => $this->service->members((string)$this->userId, $id));
+	}
+
+	#[NoAdminRequired]
 	public function create(int $folderId, bool $autoIntake = true): Response {
 		return $this->guard(fn () => $this->service->create((string)$this->userId, $folderId, $autoIntake), Http::STATUS_CREATED);
 	}

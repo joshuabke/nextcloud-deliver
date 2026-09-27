@@ -13,11 +13,9 @@ use OCA\Deliver\Db\ReviewerMapper;
 use OCA\Deliver\Db\Version;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Utility\ITimeFactory;
-use OCP\Files\IRootFolder;
 use OCP\IUserManager;
 use OCP\IUserSession;
 use OCP\Notification\IManager as INotificationManager;
-use OCP\Share\IManager as IShareManager;
 
 /**
  * Nextcloud notifications for Members (spec: Notifications): new Comments
@@ -33,11 +31,11 @@ class NotificationService {
 	public const MISSING = 'missing';
 	public const APPROVED = 'approved';
 	public const CHANGES = 'changes';
+	public const MENTION = 'mention';
 
 	public function __construct(
 		private INotificationManager $notifications,
-		private IShareManager $shares,
-		private IRootFolder $root,
+		private Members $members,
 		private ProjectMapper $projects,
 		private AssetMapper $assets,
 		private MuteMapper $mutes,
@@ -48,20 +46,32 @@ class NotificationService {
 	) {
 	}
 
-	/** A new Comment or Reply (story 62) */
+	/**
+	 * A new Comment or Reply (story 62). Members it @mentions hear of it as a
+	 * mention, even from a Project they muted (story 90), and not twice.
+	 */
 	public function commented(Comment $comment, Version $version): void {
 		$uid = $comment->getUserId();
 		$author = $uid !== null
 			? ($this->users->get($uid)?->getDisplayName() ?? $uid)
 			: ($this->reviewers->find((int)$comment->getReviewerId())?->getName() ?? '');
-		$this->notify(
-			$version,
-			$comment->getParentId() === null ? self::COMMENT : self::REPLY,
-			'comment',
-			(string)$comment->getId(),
-			['author' => $author, 'body' => mb_substr($comment->getBody(), 0, 200)],
-			$comment->getUserId(),
-		);
+		$parameters = ['author' => $author, 'body' => mb_substr($comment->getBody(), 0, 200)];
+		$mentioned = $this->mentioned($comment, $version);
+		$this->notify($version, $comment->getParentId() === null ? self::COMMENT : self::REPLY, 'comment', (string)$comment->getId(), $parameters, $comment->getUserId(), $mentioned);
+		$this->send($version, self::MENTION, 'comment', (string)$comment->getId(), $parameters, $mentioned);
+	}
+
+	/** @return list<string> the Members a Comment mentions, not its author */
+	private function mentioned(Comment $comment, Version $version): array {
+		try {
+			$project = $this->projects->find($version->getProjectId());
+		} catch (DoesNotExistException) {
+			return [];
+		}
+		return array_values(array_diff(
+			array_intersect(Mentions::parse($comment->getBody()), $this->members->of($project->getFolderId())),
+			[$comment->getUserId()],
+		));
 	}
 
 	/** A Comment is gone, and so are the notifications about it */
@@ -98,18 +108,27 @@ class NotificationService {
 	 * ponytail: one notification per Member and event, sent in the request; batch or defer to a job if Projects get large
 	 *
 	 * @param array<string, string> $parameters shown by the Notifier
+	 * @param list<string> $exclude who hears of it otherwise
 	 */
-	private function notify(Version $version, string $subject, string $objectType, string $objectId, array $parameters, ?string $actor): void {
+	private function notify(Version $version, string $subject, string $objectType, string $objectId, array $parameters, ?string $actor, array $exclude = []): void {
 		try {
 			$project = $this->projects->find($version->getProjectId());
 		} catch (DoesNotExistException) {
 			return;
 		}
-		$asset = $this->assets->find($version->getAssetId());
-		$recipients = array_diff($this->members($project->getFolderId()), $this->mutes->mutedBy($project->getId()), [$actor]);
+		$recipients = array_diff($this->members->of($project->getFolderId()), $this->mutes->mutedBy($project->getId()), [$actor], $exclude);
+		$this->send($version, $subject, $objectType, $objectId, $parameters, array_values($recipients));
+	}
+
+	/**
+	 * @param array<string, string> $parameters shown by the Notifier
+	 * @param list<string> $recipients user ids
+	 */
+	private function send(Version $version, string $subject, string $objectType, string $objectId, array $parameters, array $recipients): void {
 		if ($recipients === []) {
 			return;
 		}
+		$asset = $this->assets->find($version->getAssetId());
 		$notification = $this->notifications->createNotification();
 		$notification->setApp(Application::APP_ID)
 			->setDateTime(new \DateTime('@' . $this->time->getTime()))
@@ -123,20 +142,5 @@ class NotificationService {
 			$notification->setUser($uid);
 			$this->notifications->notify($notification);
 		}
-	}
-
-	/** @return list<string> the users who can reach the folder, its owner included */
-	private function members(int $folderId): array {
-		$folder = $this->root->getFirstNodeById($folderId);
-		if ($folder === null) {
-			return [];
-		}
-		$access = $this->shares->getAccessList($folder, true, true);
-		$members = array_map('strval', array_keys($access['users'] ?? []));
-		$owner = $folder->getOwner()?->getUID();
-		if ($owner !== null) {
-			$members[] = $owner;
-		}
-		return array_values(array_unique($members));
 	}
 }

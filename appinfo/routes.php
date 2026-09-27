@@ -37,6 +37,7 @@ return [
 		['name' => 'project_api#show', 'url' => '/api/v1/projects/{id}', 'verb' => 'GET'],
 		['name' => 'project_api#update', 'url' => '/api/v1/projects/{id}', 'verb' => 'PUT'],
 		['name' => 'project_api#destroy', 'url' => '/api/v1/projects/{id}', 'verb' => 'DELETE'],
+		['name' => 'project_api#members', 'url' => '/api/v1/projects/{id}/members', 'verb' => 'GET'],
 		['name' => 'project_api#mute', 'url' => '/api/v1/projects/{id}/mute', 'verb' => 'PUT'],
 		['name' => 'project_api#assetForFile', 'url' => '/api/v1/files/{fileId}/asset', 'verb' => 'GET'],
 		['name' => 'project_api#enableFile', 'url' => '/api/v1/assets', 'verb' => 'POST'],

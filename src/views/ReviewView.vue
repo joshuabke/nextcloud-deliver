@@ -21,7 +21,7 @@ import ReviewLayout from '../components/ReviewLayout.vue'
 import VersionPicker from '../components/VersionPicker.vue'
 import VersionStack from '../components/VersionStack.vue'
 import VideoPlayer from '../components/VideoPlayer.vue'
-import { errorMessage, getVersion, uploadNextVersion } from '../api.js'
+import { errorMessage, getVersion, listMembers, uploadNextVersion } from '../api.js'
 import { usePanelOpen } from '../composables/panel.js'
 import { useReview } from '../composables/review.js'
 import { filesDir, groupByFolder, uploadFolder } from '../lib/folders.js'
@@ -40,6 +40,8 @@ const context = ref(null)
 const error = ref(null)
 const uploading = ref(false)
 const fileInput = ref(null)
+/** Who can be mentioned in this Project */
+const members = ref([])
 /** The right panel shows the Comments or the Version Stack */
 const tab = ref('comments')
 
@@ -79,6 +81,9 @@ watch(() => props.id, async (id) => {
 	try {
 		context.value = await getVersion(id)
 		await store.open(id)
+		listMembers(context.value.project.id).then((list) => {
+			members.value = list
+		}).catch(() => {})
 		if (!projects.details[context.value.project.id]) {
 			projects.fetch(context.value.project.id).catch(() => {})
 		}
@@ -229,6 +234,7 @@ async function upload(event) {
 				ref="panel"
 				:clock="clock"
 				:anchor="anchor"
+				:members="members"
 				:draft="draft"
 				:drawing="drawing"
 				:canDraw="!!version && !version.audioOnly"

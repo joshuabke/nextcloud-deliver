@@ -16,6 +16,7 @@ import NcDateTime from '@nextcloud/vue/components/NcDateTime'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import { errorMessage } from '../api.js'
 import { linkify } from '../lib/links.js'
+import { splitMentions } from '../lib/mentions.js'
 import { formatAt } from '../lib/timecode.js'
 import { useCommentsStore } from '../store/comments.js'
 
@@ -67,7 +68,8 @@ function toggle(emoji) {
 	const given = props.comment.reactions?.find((reaction) => reaction.emoji === emoji)
 	return run(() => store.react(props.comment.id, emoji, !(given && reactedByMe(given))))
 }
-const pieces = computed(() => linkify(props.comment.body))
+const pieces = computed(() => linkify(props.comment.body)
+	.flatMap((piece) => piece.href ? [piece] : splitMentions(piece.text, props.comment.mentions ?? {})))
 const anchor = computed(() => {
 	const from = formatAt(props.comment.inFrame, props.clock)
 	return props.comment.outFrame === null ? from : from + ' – ' + formatAt(props.comment.outFrame, props.clock)
@@ -197,7 +199,7 @@ function saveReply() {
 			</template>
 			<!-- One line on purpose: the body keeps its line breaks (pre-wrap), so any template whitespace would show -->
 			<!-- eslint-disable-next-line vue/singleline-html-element-content-newline, vue/max-attributes-per-line -->
-			<p v-else class="deliver-comment__body"><template v-for="(piece, index) in pieces" :key="index"><a v-if="piece.href" :href="piece.href" target="_blank" rel="noopener noreferrer">{{ piece.text }}</a><template v-else>{{ piece.text }}</template></template></p>
+			<p v-else class="deliver-comment__body"><template v-for="(piece, index) in pieces" :key="index"><a v-if="piece.href" :href="piece.href" target="_blank" rel="noopener noreferrer">{{ piece.text }}</a><span v-else-if="piece.mention" class="deliver-comment__mention" :title="piece.mention">{{ piece.text }}</span><template v-else>{{ piece.text }}</template></template></p>
 
 			<div v-if="comment.reactions?.length || canReact" class="deliver-comment__reactions">
 				<button
@@ -374,6 +376,13 @@ function saveReply() {
 
 .deliver-comment__anchor:hover {
 	text-decoration: underline;
+}
+
+.deliver-comment__mention {
+	padding: 0 4px;
+	border-radius: var(--border-radius, 4px);
+	background: color-mix(in srgb, var(--color-primary-element) 30%, transparent);
+	font-weight: bold;
 }
 
 .deliver-comment__body {

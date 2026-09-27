@@ -106,7 +106,7 @@ class ExportService {
 		$replies = [];
 		foreach ($comments as $comment) {
 			if ($comment['parentId'] !== null) {
-				$replies[$comment['parentId']][] = ['author' => $comment['author']['name'], 'body' => $comment['body']];
+				$replies[$comment['parentId']][] = ['author' => $comment['author']['name'], 'body' => self::readable($comment)];
 			}
 		}
 		$markers = [];
@@ -118,13 +118,18 @@ class ExportService {
 				'in' => $comment['inFrame'],
 				'out' => $comment['outFrame'],
 				'author' => $comment['author']['name'],
-				'body' => $comment['body'],
+				'body' => self::readable($comment),
 				'resolved' => (bool)$comment['resolved'],
 				'replies' => $replies[$comment['id']] ?? [],
 			];
 		}
 		usort($markers, static fn (array $a, array $b) => $a['in'] <=> $b['in']);
 		return $markers;
+	}
+
+	/** A Comment's body with its @mentions as display names */
+	private static function readable(array $comment): string {
+		return Mentions::render((string)$comment['body'], (array)($comment['mentions'] ?? []));
 	}
 
 	/** The marker text: author, body and Replies on one line, as marker notes are single lines */

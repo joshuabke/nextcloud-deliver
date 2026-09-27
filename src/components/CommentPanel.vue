@@ -9,11 +9,13 @@ import { computed, ref, watch } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
+import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import CommentItem from './CommentItem.vue'
 import { errorMessage } from '../api.js'
+import { insertMention, mentionAt } from '../lib/mentions.js'
 import { formatAt } from '../lib/timecode.js'
 import { useCommentsStore } from '../store/comments.js'
 
@@ -25,6 +27,8 @@ const props = defineProps({
 	/** Shapes drawn on the picture for this Comment (story 89) */
 	draft: { type: Array, default: () => [] },
 	drawing: { type: Boolean, default: false },
+	/** Who can be mentioned: [{ id, name }]; empty where nobody can (story 90) */
+	members: { type: Array, default: () => [] },
 	/** Whether this Version has a picture to draw on */
 	canDraw: { type: Boolean, default: false },
 })
@@ -48,6 +52,40 @@ const error = ref(null)
 const input = ref(null)
 const reviewerName = ref('')
 const reviewerEmail = ref('')
+/** The mention being typed, and the Members it could mean */
+const typedMention = ref(null)
+const highlighted = ref(0)
+const suggestions = computed(() => {
+	if (typedMention.value === null) {
+		return []
+	}
+	const query = typedMention.value.query.toLowerCase()
+	return props.members
+		.filter((member) => store.me?.id !== member.id)
+		.filter((member) => member.name.toLowerCase().includes(query) || member.id.toLowerCase().includes(query))
+		.slice(0, 6)
+})
+
+/** Looks for a mention before the caret after every change of the field */
+function onInput() {
+	const field = input.value
+	typedMention.value = props.members.length && field ? mentionAt(body.value, field.selectionStart) : null
+	highlighted.value = 0
+}
+
+/**
+ * @param {{id: string}} member - the one picked from the list
+ */
+function pickMention(member) {
+	const field = input.value
+	const { text, caret } = insertMention(body.value, typedMention.value, field.selectionStart, member.id)
+	body.value = text
+	typedMention.value = null
+	requestAnimationFrame(() => {
+		field.focus()
+		field.setSelectionRange(caret, caret)
+	})
+}
 
 /** On a Share Link that takes Comments, a Reviewer gives a name first (story 54) */
 const needsName = computed(() => store.me?.type === 'unnamed' && store.canComment !== false)
@@ -127,6 +165,24 @@ async function submit() {
  * @param {KeyboardEvent} event - the keystroke in the field
  */
 function onKeydown(event) {
+	if (suggestions.value.length) {
+		const moves = { ArrowDown: 1, ArrowUp: -1 }
+		if (event.key in moves) {
+			event.preventDefault()
+			highlighted.value = (highlighted.value + moves[event.key] + suggestions.value.length) % suggestions.value.length
+			return
+		}
+		if (event.key === 'Enter' || event.key === 'Tab') {
+			event.preventDefault()
+			pickMention(suggestions.value[highlighted.value])
+			return
+		}
+		if (event.key === 'Escape') {
+			event.stopPropagation()
+			typedMention.value = null
+			return
+		}
+	}
 	if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
 		event.preventDefault()
 		submit()
@@ -253,8 +309,27 @@ function claim() {
 						v-model="body"
 						rows="1"
 						:placeholder="t('deliver', 'Leave a Comment…')"
-						@keydown="onKeydown" />
+						@keydown="onKeydown"
+						@input="onInput"
+						@click="onInput" />
 				</div>
+				<ul v-if="suggestions.length" class="deliver-comments__mentions" role="listbox">
+					<li
+						v-for="(member, index) in suggestions"
+						:key="member.id"
+						role="option"
+						:aria-selected="index === highlighted"
+						@mousedown.prevent="pickMention(member)">
+						<NcAvatar
+							:user="member.id"
+							:displayName="member.name"
+							:size="22"
+							hideStatus
+							disableMenu
+							disableTooltip />
+						<span>{{ member.name }}</span>
+					</li>
+				</ul>
 				<div class="deliver-comments__actions">
 					<NcButton
 						v-if="canDraw"
@@ -398,6 +473,36 @@ function claim() {
 	resize: none;
 	field-sizing: content;
 	line-height: 24px;
+}
+
+.deliver-comments__form {
+	position: relative;
+}
+
+/* The Members a typed @ could mean, over the field */
+.deliver-comments__mentions {
+	position: absolute;
+	bottom: calc(100% + 4px);
+	inset-inline: 0;
+	z-index: 2;
+	padding: 4px;
+	border: 1px solid var(--color-border-dark);
+	border-radius: var(--border-radius-large, 12px);
+	background: var(--color-background-darker, #27272c);
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.deliver-comments__mentions li {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 8px;
+	border-radius: var(--border-radius, 6px);
+	cursor: pointer;
+}
+
+.deliver-comments__mentions li[aria-selected='true'] {
+	background: var(--color-primary-element-light);
 }
 
 .deliver-comments__actions {
