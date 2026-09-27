@@ -15,6 +15,7 @@ import NcActions from '@nextcloud/vue/components/NcActions'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDateTime from '@nextcloud/vue/components/NcDateTime'
+import NcEmojiPicker from '@nextcloud/vue/components/NcEmojiPicker'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import { attachmentUrl, errorMessage } from '../api.js'
 import { linkify } from '../lib/links.js'
@@ -53,7 +54,6 @@ const canReply = computed(() => !props.isReply && store.canComment === true && s
 const canDelete = computed(() => mine.value || store.canWrite)
 /** Reactions need a name to put on them, like Comments (story 91) */
 const canReact = computed(() => store.canComment === true && store.me?.type !== 'unnamed')
-const REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '🙏']
 
 /**
  * @param {{authors: Array<object>}} reaction - one emoji with who gave it
@@ -246,22 +246,18 @@ function saveReply() {
 					@click="toggle(reaction.emoji)">
 					{{ reaction.emoji }} {{ reaction.authors.length }}
 				</button>
-				<NcActions
-					v-if="canReact"
-					class="deliver-comment__react"
-					variant="tertiary"
-					:aria-label="t('deliver', 'React')">
-					<template #icon>
-						<NcIconSvgWrapper :svg="reactIcon" :size="16" />
-					</template>
-					<NcActionButton
-						v-for="emoji in REACTIONS"
-						:key="emoji"
-						closeAfterClick
-						@click="toggle(emoji)">
-						{{ emoji }}
-					</NcActionButton>
-				</NcActions>
+				<NcEmojiPicker v-if="canReact" @select="toggle">
+					<NcButton
+						class="deliver-comment__react"
+						variant="tertiary"
+						size="small"
+						:aria-label="t('deliver', 'React')"
+						:title="t('deliver', 'React')">
+						<template #icon>
+							<NcIconSvgWrapper :svg="reactIcon" :size="16" />
+						</template>
+					</NcButton>
+				</NcEmojiPicker>
 			</div>
 
 			<p v-if="error" class="deliver-comment__error">
@@ -511,6 +507,7 @@ function saveReply() {
 	background: color-mix(in srgb, var(--color-primary-element) 25%, transparent);
 }
 
+.deliver-comment__react,
 .deliver-comment__react :deep(.button-vue) {
 	min-height: 26px;
 	min-width: 26px;

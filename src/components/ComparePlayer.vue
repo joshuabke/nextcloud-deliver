@@ -378,11 +378,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 	min-width: 0;
 	height: 10px;
 	min-height: 0;
-	margin: 0 0 0 -5px;
+	margin: 0;
 	padding: 0;
 	border: none;
 	border-radius: 50%;
 	cursor: pointer;
+	transform: translateX(-50%);
 }
 
 .deliver-compare__marker--a {

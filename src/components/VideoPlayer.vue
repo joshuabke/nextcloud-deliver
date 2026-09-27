@@ -210,6 +210,68 @@ function onHover(event) {
 	const at = frameAt(event)
 	const box = event.currentTarget.getBoundingClientRect()
 	hover.value = { frame: at, left: event.clientX - box.left, tile: tileFor(at) }
+	peekFrame(at)
+}
+
+/*
+ * The exact Frame under the pointer, as Frame.io shows it: a hidden second
+ * video, the lighter Proxy where there is one, seeks there and is copied
+ * into a canvas. One seek at a time; the pointer's latest Frame goes next.
+ * Until the first copy, the Thumbnail Strip's nearest picture stands in.
+ */
+const scrubVideo = ref(null)
+const scrubCanvas = ref(null)
+const scrubSource = computed(() => props.version.audioOnly ? null : (proxy.value ?? source.value))
+/** Whether the canvas holds a Frame from this hover */
+const scrubDrawn = ref(false)
+const scrubSize = ref({ width: 176, height: 99 })
+let scrubBusy = false
+let scrubWanted = null
+
+/**
+ * @param {number} at - the Frame to show
+ */
+function peekFrame(at) {
+	scrubWanted = at
+	if (!scrubBusy) {
+		nextScrub()
+	}
+}
+
+/** Sends the hidden video to the Frame asked for last */
+function nextScrub() {
+	const element = scrubVideo.value
+	if (scrubWanted === null || !element || element.readyState < 1) {
+		scrubBusy = false
+		return
+	}
+	scrubBusy = true
+	element.currentTime = frameToTime(scrubWanted, fps.value)
+	scrubWanted = null
+}
+
+/** The hidden video knows its size: the canvas takes its shape */
+function onScrubLoaded() {
+	const element = scrubVideo.value
+	if (element.videoWidth) {
+		scrubSize.value = { width: 176, height: Math.round(176 * element.videoHeight / element.videoWidth) }
+	}
+	nextScrub()
+}
+
+/** The hidden video stands on the Frame: copy it and go on to the next */
+function onScrubSeeked() {
+	scrubCanvas.value?.getContext('2d')?.drawImage(scrubVideo.value, 0, 0, scrubSize.value.width, scrubSize.value.height)
+	scrubDrawn.value = true
+	nextScrub()
+}
+
+/** The pointer left the bar */
+function leaveScrubber() {
+	hover.value = null
+	peek.value = null
+	scrubDrawn.value = false
+	scrubWanted = null
 }
 
 /**
@@ -241,7 +303,8 @@ const waveformPoints = computed(() => {
 	if (peaks.value.length === 0) {
 		return ''
 	}
-	const loudest = Math.max(0.05, ...peaks.value)
+	// Scaled to its loudest peak, but near-silence stays a thin line rather than a band
+	const loudest = Math.max(0.15, ...peaks.value)
 	const step = 100 / peaks.value.length
 	const height = (peak) => (peak / loudest) * 48
 	const top = peaks.value.map((peak, i) => `${(i * step).toFixed(3)},${(50 - height(peak)).toFixed(2)}`)
@@ -548,19 +611,21 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 		</div>
 
 		<!-- The bar, its Comments and, on hover, its Waveform and a thicker bar to follow thumbnails -->
-		<div ref="scrubber" class="deliver-player__scrubber" @mouseleave="hover = null; peek = null">
+		<div ref="scrubber" class="deliver-player__scrubber" @mouseleave="leaveScrubber">
+			<video
+				v-if="scrubSource"
+				ref="scrubVideo"
+				class="deliver-player__scrub-video"
+				:src="scrubSource"
+				muted
+				preload="metadata"
+				aria-hidden="true"
+				@loadedmetadata="onScrubLoaded"
+				@seeked="onScrubSeeked" />
 			<div
 				class="deliver-player__timeline"
 				@click="scrub"
 				@mousemove="onHover">
-				<svg
-					v-if="peaks.length && !version.audioOnly"
-					class="deliver-player__waveform"
-					viewBox="0 0 100 100"
-					preserveAspectRatio="none"
-					aria-hidden="true">
-					<polygon :points="waveformPoints" />
-				</svg>
 				<div class="deliver-player__track">
 					<div class="deliver-player__progress" :style="{ width: progress + '%' }" />
 					<div
@@ -574,14 +639,28 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 						:style="{ left: leftOf(each) + '%', width: widthOf(each) + '%' }" />
 				</div>
 				<div class="deliver-player__playhead" :style="{ left: progress + '%' }" />
-				<div v-if="hover" class="deliver-player__hover" :style="{ left: hover.left + 'px' }">
-					<div v-if="hover.tile" class="deliver-player__tile" :style="hover.tile" />
-					<span class="deliver-player__hover-time">{{ formatAt(hover.frame, clock) }}</span>
+				<div v-show="hover" class="deliver-player__hover" :style="{ left: (hover?.left ?? 0) + 'px' }">
+					<canvas
+						v-show="scrubDrawn"
+						ref="scrubCanvas"
+						class="deliver-player__tile"
+						:width="scrubSize.width"
+						:height="scrubSize.height" />
+					<div v-if="hover?.tile && !scrubDrawn" class="deliver-player__tile" :style="hover.tile" />
+					<span v-if="hover" class="deliver-player__hover-time">{{ formatAt(hover.frame, clock) }}</span>
 				</div>
 			</div>
 
 			<!-- One avatar per Comment, centred under its Frame; hovering shows the Comment -->
 			<div class="deliver-player__markers">
+				<svg
+					v-if="peaks.length && !version.audioOnly"
+					class="deliver-player__waveform"
+					viewBox="0 0 100 100"
+					preserveAspectRatio="none"
+					aria-hidden="true">
+					<polygon :points="waveformPoints" />
+				</svg>
 				<button
 					v-for="each in comments"
 					:key="each.id"
@@ -591,6 +670,7 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 					:style="{ left: leftOf(each) + '%' }"
 					:aria-label="each.author.name + ': ' + each.body"
 					@mouseenter="showPeek(each, $event)"
+					@mouseleave="peek = null"
 					@focus="showPeek(each, $event)"
 					@blur="peek = null"
 					@click="seekTo(each.inFrame); emit('jump', each)">
@@ -841,24 +921,17 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	pointer-events: none;
 }
 
-/* The Waveform over the picture's bottom edge, only while the pointer is on the bar */
+/* The Waveform, faint, behind the avatars */
 .deliver-player__waveform {
 	position: absolute;
-	inset-inline: 0;
-	bottom: 100%;
+	inset: 2px 0;
 	width: 100%;
-	height: 44px;
-	opacity: 0;
+	height: calc(100% - 4px);
 	pointer-events: none;
-	transition: opacity 0.15s;
-}
-
-.deliver-player__scrubber:hover .deliver-player__waveform {
-	opacity: 1;
 }
 
 .deliver-player__waveform polygon {
-	fill: rgba(255, 255, 255, 0.35);
+	fill: rgba(255, 255, 255, 0.16);
 }
 
 .deliver-player__progress {
@@ -892,6 +965,14 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	z-index: 1;
 }
 
+.deliver-player__scrub-video {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+	pointer-events: none;
+}
+
 .deliver-player__tile {
 	border: 2px solid #fff;
 	border-radius: var(--border-radius, 4px);
@@ -910,7 +991,6 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 .deliver-player__markers {
 	position: relative;
 	height: 28px;
-	border-bottom: 1px solid var(--color-border);
 }
 
 /* The resets keep Nextcloud's button style away */
@@ -918,18 +998,21 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	position: absolute;
 	top: 2px;
 	min-height: 0;
+	z-index: 1;
 	width: 24px;
 	height: 24px;
-	margin: 0 0 0 -12px;
+	margin: 0;
 	padding: 0;
 	border: 2px solid var(--color-main-background);
 	border-radius: 50%;
 	background: none;
 	cursor: pointer;
+	/* Centred on its Frame; a negative margin loses against Nextcloud's button style */
+	transform: translateX(-50%);
 }
 
 .deliver-player__marker:hover {
-	z-index: 1;
+	z-index: 2;
 	border-color: var(--color-main-text);
 }
 

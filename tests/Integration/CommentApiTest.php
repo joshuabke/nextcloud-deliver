@@ -107,7 +107,11 @@ class CommentApiTest extends TestCase {
 		$left = $react($this->nc, '👍', false)['data']['reactions'];
 		self::assertCount(1, $left[0]['authors']);
 		self::assertNotSame('admin', $left[0]['authors'][0]['id']);
-		self::assertSame(400, $react($this->nc, '🦄', true)['status'], 'only the emojis on offer');
+		self::assertSame(200, $react($this->nc, '🦷', true)['status'], 'any emoji');
+		$given = $react($this->nc, '👍🏽', true)['data']['reactions'];
+		self::assertSame(['👍', '🦷', '👍🏽'], array_column($given, 'emoji'), 'the usual ones first, then as they were given');
+		self::assertSame(400, $react($this->nc, 'ok', true)['status'], 'text is no reaction');
+		self::assertSame(400, $react($this->nc, '<b>👍</b>', true)['status']);
 	}
 
 	public function testAttachmentsLiveInTheProjectFolder(): void {
