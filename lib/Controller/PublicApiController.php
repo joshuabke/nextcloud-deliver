@@ -1,0 +1,254 @@
+<?php
+
+declare(strict_types=1);
+
+namespace OCA\Deliver\Controller;
+
+use OCA\Deliver\Db\Reviewer;
+use OCA\Deliver\Db\Version;
+use OCA\Deliver\Http\RangeFileResponse;
+use OCA\Deliver\Service\CommentService;
+use OCA\Deliver\Service\DerivedMedia;
+use OCA\Deliver\Service\ProjectService;
+use OCA\Deliver\Service\ReviewerService;
+use OCA\Deliver\Service\ShareReviewService;
+use OCA\Deliver\Service\StackService;
+use OCA\Deliver\Service\Viewer;
+use OCP\AppFramework\Http;
+use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
+use OCP\AppFramework\Http\Attribute\PublicPage;
+use OCP\AppFramework\Http\JSONResponse;
+use OCP\AppFramework\Http\Response;
+use OCP\AppFramework\PublicShareController;
+use OCP\Files\File;
+use OCP\Files\Folder;
+use OCP\Files\NotFoundException;
+use OCP\IRequest;
+use OCP\ISession;
+use OCP\IURLGenerator;
+use OCP\IUserSession;
+use OCP\Share\IShare;
+
+/**
+ * The API behind a Share Link. Token, password and expiry are checked by the
+ * framework before an action runs (ADR 0004); what is left here is who the
+ * Reviewer is and what the share's Deliver flags allow.
+ */
+class PublicApiController extends PublicShareController {
+	use GuardsErrors;
+	use ReviewShareToken;
+
+	public function __construct(
+		string $appName,
+		IRequest $request,
+		ISession $session,
+		private ShareReviewService $sharing,
+		private ReviewerService $reviewers,
+		private CommentService $comments,
+		private DerivedMedia $media,
+		private ProjectService $projects,
+		private StackService $stacks,
+		private IURLGenerator $urls,
+		private IUserSession $userSession,
+	) {
+		parent::__construct($appName, $request, $session);
+	}
+
+	/** One Version with its Version Stack, as far as the share shows it */
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function context(?int $versionId = null, ?int $fileId = null): Response {
+		return $this->guard(function () use ($versionId, $fileId) {
+			$share = $this->share();
+			$version = match (true) {
+				$versionId !== null => $this->sharing->version($share, $versionId),
+				$fileId !== null => $this->sharing->versionForFile($share, $fileId),
+				default => throw new NotFoundException('Version not found'),
+			};
+			$project = $this->sharing->project($share);
+			$flags = $this->sharing->flags($share);
+			$stack = $this->sharing->assets($share)[$version->getAssetId()] ?? null;
+			return [
+				'versionId' => $version->getId(),
+				'flags' => $flags,
+				'project' => [
+					'name' => $share->getNode()->getName(),
+					'fps' => ['num' => $project->getFpsNum(), 'den' => $project->getFpsDen()],
+					'timecodeMode' => $project->getTimecodeMode(),
+				],
+				'asset' => $stack === null ? null : ['id' => $stack['asset']->getId(), 'name' => $this->stacks->nameOf($stack['asset'])],
+				'versions' => $stack === null ? [] : array_map(
+					fn (Version $each) => $this->describe($share, $each, $flags['canDownload']),
+					$stack['versions'],
+				),
+				'me' => $this->me(),
+			];
+		});
+	}
+
+	/**
+	 * Every file the share shows that is an Asset, for the Review button in
+	 * the shared file list. The button opens the newest Version (story 61).
+	 */
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function assets(): Response {
+		return $this->guard(function () {
+			$result = [];
+			foreach ($this->sharing->assets($this->share()) as ['asset' => $asset, 'versions' => $versions]) {
+				foreach ($versions as $version) {
+					$result[] = ['fileId' => $version->getFileId(), 'versionId' => $versions[0]->getId(), 'assetId' => $asset->getId()];
+				}
+			}
+			return $result;
+		});
+	}
+
+	/**
+	 * Derived media, or the original when it has to play without a Proxy.
+	 * With downloads hidden, the original is not served once a Proxy exists
+	 * or is on its way (story 50).
+	 */
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function media(int $versionId, string $kind): Response {
+		try {
+			$share = $this->share();
+			$version = $this->sharing->version($share, $versionId);
+			if ($kind !== 'original') {
+				return DerivedMediaResponse::of($this->media, $version, $kind, $this->request->getHeader('Range'));
+			}
+			$file = $this->originalFile($share, $version);
+			if ($file === null || !$this->mayPlayOriginal($version, $this->sharing->flags($share)['canDownload'])) {
+				return new Response(Http::STATUS_NOT_FOUND);
+			}
+			return RangeFileResponse::ofFile($file, $this->request->getHeader('Range'));
+		} catch (NotFoundException) {
+			return new Response(Http::STATUS_NOT_FOUND);
+		}
+	}
+
+	/** A Reviewer names themselves once; the answer carries their Personal Link (story 54) */
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function claim(string $name, ?string $email = null): Response {
+		return $this->guard(function () use ($name, $email) {
+			$share = $this->share();
+			$reviewer = $this->reviewers->claim($this->sharing->project($share), $name, $email);
+			// A JSONResponse, because a DataResponse loses its cookies on the way out
+			$response = new JSONResponse(
+				$this->reviewers->serialize($reviewer) + ['link' => $this->sharing->personalLink($share, $reviewer)],
+				Http::STATUS_CREATED,
+			);
+			$this->rememberReviewer($response, $reviewer->getSecretKey());
+			return $response;
+		});
+	}
+
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function index(int $versionId): Response {
+		return $this->onVersion($versionId, fn ($viewer, $version) => $this->comments->list($viewer, $version));
+	}
+
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function changes(int $versionId, int $since = 0): Response {
+		return $this->onVersion($versionId, fn ($viewer, $version) => $this->comments->changes($viewer, $version, $since));
+	}
+
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function create(int $versionId, int $inFrame, ?int $outFrame = null, string $body = '', ?int $parentId = null): Response {
+		return $this->onVersion(
+			$versionId,
+			fn ($viewer, $version) => $this->comments->create($viewer, $version, $inFrame, $outFrame, $body, $parentId),
+			Http::STATUS_CREATED,
+		);
+	}
+
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function seen(int $versionId, ?int $at = null): Response {
+		return $this->onVersion($versionId, fn ($viewer, $version) => $this->comments->markSeen($viewer, $version, $at));
+	}
+
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function update(int $id, string $body): Response {
+		return $this->onComment($id, fn ($viewer, $version) => $this->comments->update($viewer, $version, $id, $body));
+	}
+
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function destroy(int $id): Response {
+		return $this->onComment($id, function (Viewer $viewer, Version $version) use ($id) {
+			$this->comments->remove($viewer, $version, $id);
+			return [];
+		});
+	}
+
+	/** A Version as the Review view shows it, with the original only where the share allows */
+	private function describe(IShare $share, Version $version, bool $canDownload): array {
+		$media = $this->urls->linkToRoute('deliver.PublicApi.media', [
+			'token' => $this->getToken(),
+			'versionId' => $version->getId(),
+			'kind' => '__kind__',
+		]);
+		$url = match (true) {
+			$canDownload => $this->sharing->mediaUrl($share, $version),
+			$this->mayPlayOriginal($version, false) => str_replace('__kind__', 'original', $media),
+			default => null,
+		};
+		return $this->projects->describeVersion($version, $this->sharing->project($share), $url, $media);
+	}
+
+	/** Without downloads, the original plays only while no Proxy is made for it */
+	private function mayPlayOriginal(Version $version, bool $canDownload): bool {
+		return $canDownload || in_array($version->getProxyState(), [DerivedMedia::STATE_NONE, DerivedMedia::STATE_FAILED], true);
+	}
+
+	private function originalFile(IShare $share, Version $version): ?File {
+		$node = $share->getNode();
+		$found = $node instanceof Folder ? $node->getFirstNodeById($version->getFileId()) : $node;
+		return $found instanceof File && $found->getId() === $version->getFileId() ? $found : null;
+	}
+
+	/** Who is writing: the Reviewer this browser carries, or someone without a name yet */
+	private function me(): array {
+		$reviewer = $this->reviewer();
+		return $reviewer === null
+			// A logged-in visitor gets their display name offered (story 58)
+			? ['type' => 'unnamed', 'name' => $this->userSession->getUser()?->getDisplayName() ?? '']
+			: ['type' => 'reviewer', 'id' => $reviewer->getId(), 'name' => $reviewer->getName()];
+	}
+
+	private function reviewer(): ?Reviewer {
+		$key = $this->request->getCookie(self::cookieName($this->getToken())) ?? $this->request->getParam('r');
+		return $this->reviewers->byKey(is_string($key) ? $key : null, $this->sharing->project($this->share()));
+	}
+
+	/** A Reviewer comments while the share allows it, and never resolves */
+	private function viewer(IShare $share): Viewer {
+		$reviewer = $this->reviewer();
+		if ($reviewer === null) {
+			return Viewer::unnamed();
+		}
+		$flags = $this->sharing->flags($share);
+		return Viewer::reviewer($reviewer->getId(), $flags['canComment'], $flags['allowOlder']);
+	}
+
+	private function onVersion(int $versionId, callable $action, int $status = Http::STATUS_OK): Response {
+		return $this->guard(function () use ($versionId, $action) {
+			$share = $this->share();
+			return $action($this->viewer($share), $this->sharing->version($share, $versionId));
+		}, $status);
+	}
+
+	private function onComment(int $id, callable $action): Response {
+		return $this->guard(function () use ($id, $action) {
+			$share = $this->share();
+			return $action($this->viewer($share), $this->sharing->version($share, $this->comments->versionIdOf($id)));
+		});
+	}
+}

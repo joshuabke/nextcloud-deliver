@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+		 xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/12.0/phpunit.xsd"
+		 bootstrap="vendor/autoload.php"
+		 colors="true"
+		 failOnRisky="true"
+		 failOnWarning="true"
+		 cacheResult="false">
+	<testsuites>
+		<testsuite name="Unit">
+			<directory suffix="Test.php">tests/Unit</directory>
+		</testsuite>
+		<testsuite name="Integration">
+			<directory suffix="Test.php">tests/Integration</directory>
+		</testsuite>
+	</testsuites>
+	<php>
+		<env name="DELIVER_TEST_URL" value="http://localhost"/>
+		<env name="DELIVER_TEST_USER" value="admin"/>
+		<env name="DELIVER_TEST_PASSWORD" value="adminadmin123"/>
+	</php>
+</phpunit>

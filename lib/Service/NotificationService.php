@@ -1,0 +1,134 @@
+<?php
+
+declare(strict_types=1);
+
+namespace OCA\Deliver\Service;
+
+use OCA\Deliver\AppInfo\Application;
+use OCA\Deliver\Db\AssetMapper;
+use OCA\Deliver\Db\Comment;
+use OCA\Deliver\Db\MuteMapper;
+use OCA\Deliver\Db\ProjectMapper;
+use OCA\Deliver\Db\ReviewerMapper;
+use OCA\Deliver\Db\Version;
+use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\Files\IRootFolder;
+use OCP\IUserManager;
+use OCP\IUserSession;
+use OCP\Notification\IManager as INotificationManager;
+use OCP\Share\IManager as IShareManager;
+
+/**
+ * Nextcloud notifications for Members (spec: Notifications): new Comments
+ * and Replies, new Versions, automatic stacks, Missing files. Members are
+ * whoever can reach the Project folder, minus the person who caused the
+ * event and anyone who muted the Project.
+ */
+class NotificationService {
+	public const COMMENT = 'comment';
+	public const REPLY = 'reply';
+	public const VERSION = 'version';
+	public const AUTO_STACK = 'autostack';
+	public const MISSING = 'missing';
+
+	public function __construct(
+		private INotificationManager $notifications,
+		private IShareManager $shares,
+		private IRootFolder $root,
+		private ProjectMapper $projects,
+		private AssetMapper $assets,
+		private MuteMapper $mutes,
+		private ReviewerMapper $reviewers,
+		private IUserManager $users,
+		private IUserSession $userSession,
+		private ITimeFactory $time,
+	) {
+	}
+
+	/** A new Comment or Reply (story 62) */
+	public function commented(Comment $comment, Version $version): void {
+		$uid = $comment->getUserId();
+		$author = $uid !== null
+			? ($this->users->get($uid)?->getDisplayName() ?? $uid)
+			: ($this->reviewers->find((int)$comment->getReviewerId())?->getName() ?? '');
+		$this->notify(
+			$version,
+			$comment->getParentId() === null ? self::COMMENT : self::REPLY,
+			'comment',
+			(string)$comment->getId(),
+			['author' => $author, 'body' => mb_substr($comment->getBody(), 0, 200)],
+			$comment->getUserId(),
+		);
+	}
+
+	/** A Comment is gone, and so are the notifications about it */
+	public function commentDeleted(int $commentId): void {
+		$notification = $this->notifications->createNotification();
+		$notification->setApp(Application::APP_ID)->setObject('comment', (string)$commentId);
+		$this->notifications->markProcessed($notification);
+	}
+
+	/** A new Version, or one the filename convention stacked on its own (story 63) */
+	public function versionArrived(Version $version): void {
+		$this->notify(
+			$version,
+			$version->getAutoStacked() ? self::AUTO_STACK : self::VERSION,
+			'version',
+			(string)$version->getId(),
+			['file' => $version->getName()],
+			$this->userSession->getUser()?->getUID(),
+		);
+	}
+
+	/** The file of a Version left the Project folder or went to the trash (stories 18 and 63) */
+	public function versionMissing(Version $version): void {
+		$this->notify($version, self::MISSING, 'version', (string)$version->getId(), ['file' => $version->getName()], $this->userSession->getUser()?->getUID());
+	}
+
+	/**
+	 * ponytail: one notification per Member and event, sent in the request; batch or defer to a job if Projects get large
+	 *
+	 * @param array<string, string> $parameters shown by the Notifier
+	 */
+	private function notify(Version $version, string $subject, string $objectType, string $objectId, array $parameters, ?string $actor): void {
+		try {
+			$project = $this->projects->find($version->getProjectId());
+		} catch (DoesNotExistException) {
+			return;
+		}
+		$asset = $this->assets->find($version->getAssetId());
+		$recipients = array_diff($this->members($project->getFolderId()), $this->mutes->mutedBy($project->getId()), [$actor]);
+		if ($recipients === []) {
+			return;
+		}
+		$notification = $this->notifications->createNotification();
+		$notification->setApp(Application::APP_ID)
+			->setDateTime(new \DateTime('@' . $this->time->getTime()))
+			->setObject($objectType, $objectId)
+			->setSubject($subject, $parameters + [
+				'versionId' => (string)$version->getId(),
+				'number' => (string)$version->getNumber(),
+				'asset' => $asset === null ? $version->getName() : ($asset->getNameOverride() ?? VersionNaming::assetName($version->getName())),
+			]);
+		foreach ($recipients as $uid) {
+			$notification->setUser($uid);
+			$this->notifications->notify($notification);
+		}
+	}
+
+	/** @return list<string> the users who can reach the folder, its owner included */
+	private function members(int $folderId): array {
+		$folder = $this->root->getFirstNodeById($folderId);
+		if ($folder === null) {
+			return [];
+		}
+		$access = $this->shares->getAccessList($folder, true, true);
+		$members = array_map('strval', array_keys($access['users'] ?? []));
+		$owner = $folder->getOwner()?->getUID();
+		if ($owner !== null) {
+			$members[] = $owner;
+		}
+		return array_values(array_unique($members));
+	}
+}

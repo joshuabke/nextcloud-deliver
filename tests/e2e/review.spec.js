@@ -1,0 +1,183 @@
+import { chromium, expect, test } from '@playwright/test'
+import { randomBytes } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { CLIP } from './fixtures.js'
+
+const URL = process.env.DELIVER_TEST_URL ?? 'http://localhost:8080'
+const ADMIN = process.env.DELIVER_TEST_USER ?? 'admin'
+const ADMIN_PASSWORD = process.env.DELIVER_TEST_PASSWORD ?? 'adminadmin123'
+/** A user of its own, in English: the tests find buttons by their names, whatever language the admin speaks */
+const USER = 'deliver-e2e'
+const PASSWORD = 'deliver-e2e-' + randomBytes(12).toString('hex')
+const CDP = process.env.DELIVER_CDP ?? 'http://127.0.0.1:9222'
+/** The browser may sit in its own container, where localhost is not Nextcloud */
+const BROWSER_URL = process.env.DELIVER_BROWSER_URL ?? URL
+
+const auth = { username: USER, password: PASSWORD, send: 'always' }
+const ocsHeaders = { 'OCS-APIREQUEST': 'true', Accept: 'application/json' }
+
+test.describe('Review view', () => {
+	let browser
+	let context
+	let page
+	let folder
+	let versionId
+	let projectId
+
+	test.beforeAll(async ({ playwright }) => {
+		await testUser(playwright)
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		folder = 'deliver-e2e-' + randomBytes(4).toString('hex')
+		const dav = `/remote.php/dav/files/${USER}/${folder}`
+		expect((await api.fetch(dav, { method: 'MKCOL' })).status()).toBe(201)
+		expect((await api.fetch(`${dav}/clip.webm`, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(201)
+
+		const created = await api.post('/ocs/v2.php/apps/deliver/api/v1/projects?format=json', {
+			data: { folderId: await fileId(api, dav), autoIntake: true },
+		})
+		projectId = (await created.json()).ocs.data.id
+		const project = await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)
+		versionId = (await project.json()).ocs.data.assets[0].versions[0].id
+		await api.dispose()
+
+		browser = await chromium.connectOverCDP(CDP)
+		context = await browser.newContext({ baseURL: BROWSER_URL })
+		page = await context.newPage()
+		await login(page)
+	})
+
+	test.afterAll(async () => {
+		const api = await test.request?.newContext?.({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		await context?.close()
+		await browser?.close()
+		if (api) {
+			await api.delete(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)
+			await api.fetch(`/remote.php/dav/files/${USER}/${folder}`, { method: 'DELETE' })
+			await api.dispose()
+		}
+	})
+
+	test('comments on a Frame and on a Range, resolves and replies', async () => {
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		await expect(page.locator('video')).toHaveJSProperty('readyState', 4)
+
+		// Frame stepping is exact: five steps at 25 fps land on 00:00:00:05
+		// Focus the page without touching the player
+		await page.locator('.deliver-review__title').click()
+		for (let i = 0; i < 5; i++) {
+			await page.keyboard.press('ArrowRight')
+		}
+		await expect(page.locator('.deliver-player__timecode')).toContainText('00:00:00:05')
+
+		await page.keyboard.press('c')
+		await expect(page.locator('.deliver-comments__anchor')).toHaveText(/00:00:00:05/)
+		await page.locator('#deliver-comment-body').fill('sound starts too early')
+		await page.locator('.deliver-comments__form button').click()
+
+		const first = page.locator('.deliver-comment').first()
+		await expect(first).toContainText('sound starts too early')
+		await expect(first.locator('.deliver-comment__time')).not.toBeEmpty()
+		await expect(page.locator('.deliver-comment__anchor').first()).toHaveText('00:00:00:05')
+		await expect(page.locator('.deliver-player__marker')).toHaveCount(1)
+
+		// A Range, set with I and O
+		// Focus the page without touching the player
+		await page.locator('.deliver-review__title').click()
+		await page.keyboard.press('i')
+		for (let i = 0; i < 20; i++) {
+			await page.keyboard.press('ArrowRight')
+		}
+		await page.keyboard.press('o')
+		await page.keyboard.press('c')
+		await expect(page.locator('.deliver-comments__anchor')).toHaveText(/–/)
+		await page.locator('#deliver-comment-body').fill('shorten this passage')
+		await page.locator('.deliver-comments__form button').click()
+		await expect(page.locator('.deliver-player__marker')).toHaveCount(2)
+
+		// Resolving hides it from the unresolved filter, a Reply stays with its parent
+		await page.locator('.deliver-comment').first().getByRole('button', { name: 'Mark as resolved' }).click()
+		await expect(page.locator('.deliver-comment').first()).toHaveClass(/deliver-comment--resolved/)
+		await page.locator('.deliver-comments__show button').click()
+		await page.getByRole('menuitemradio', { name: 'Unresolved' }).click()
+		await expect(page.locator('.deliver-comments__list > .deliver-comment')).toHaveCount(1)
+		await page.locator('.deliver-comments__show button').click()
+		await page.getByRole('menuitemradio', { name: 'All Comments' }).click()
+		await expect(page.locator('.deliver-comments__list > .deliver-comment')).toHaveCount(2)
+
+		const target = page.locator('.deliver-comment').filter({ hasText: 'sound starts too early' }).first()
+		await target.getByRole('button', { name: 'Reply', exact: true }).click()
+		await target.locator('textarea').fill('agreed, from frame 5')
+		await target.locator('.deliver-comment__reply-form').getByRole('button', { name: 'Reply' }).click()
+		await expect(page.locator('.deliver-comment--reply')).toContainText('agreed, from frame 5')
+
+		// The export carries both Comments as markers, the Reply folded into its parent's note.
+		// The browser may run in another container where its downloads are out of reach,
+		// so the test fetches the link the menu offers with the page's own session.
+		await page.getByRole('button', { name: 'Export' }).click()
+		const link = page.getByRole('menuitem', { name: 'EDL for DaVinci Resolve' })
+		const response = await page.request.get(await link.getAttribute('href'))
+		expect(response.headers()['content-disposition']).toMatch(/\.edl"/)
+		const edl = await response.text()
+		expect(edl.match(/\|M:/g)).toHaveLength(2)
+		expect(edl).toContain(`sound starts too early / ${USER}: agreed, from frame 5`)
+
+		// Typing fixes the Frame: moving the player afterwards does not move the Comment
+		await page.keyboard.press('Escape')
+		await page.locator('.deliver-comments__list').getByRole('button', { name: '00:00:00:05', exact: true }).click()
+		await page.locator('#deliver-comment-body').fill('t')
+		await expect(page.locator('.deliver-comments__anchor')).toHaveText(/00:00:00:05/)
+		const timeline = page.locator('.deliver-player__timeline')
+		const box = await timeline.boundingBox()
+		await timeline.click({ position: { x: box.width * 0.8, y: box.height / 2 } })
+		await expect(page.locator('.deliver-player__timecode')).not.toContainText('00:00:00:05')
+		await expect(page.locator('.deliver-comments__anchor')).toHaveText(/00:00:00:05/)
+		await page.locator('#deliver-comment-body').fill('typed while the player moved on')
+		await page.locator('.deliver-comments__form button').click()
+		await expect(page.locator('.deliver-comment').filter({ hasText: 'typed while the player moved on' }).locator('.deliver-comment__anchor')).toHaveText('00:00:00:05')
+	})
+})
+
+/**
+ * Creates the test user, or sets a fresh password on it, and keeps it in English
+ *
+ * @param {import('@playwright/test').PlaywrightWorkerArgs['playwright']} playwright - to talk to the API as admin
+ */
+async function testUser(playwright) {
+	const admin = await playwright.request.newContext({
+		baseURL: URL,
+		httpCredentials: { username: ADMIN, password: ADMIN_PASSWORD, send: 'always' },
+		extraHTTPHeaders: ocsHeaders,
+	})
+	const users = '/ocs/v2.php/cloud/users'
+	const created = await admin.post(`${users}?format=json`, { form: { userid: USER, password: PASSWORD } })
+	if (!created.ok()) {
+		expect((await admin.put(`${users}/${USER}?format=json`, { form: { key: 'password', value: PASSWORD } })).ok()).toBe(true)
+	}
+	expect((await admin.put(`${users}/${USER}?format=json`, { form: { key: 'language', value: 'en' } })).ok()).toBe(true)
+	await admin.dispose()
+}
+
+/**
+ * @param {import('@playwright/test').APIRequestContext} api - request context
+ * @param {string} dav - WebDAV path of the folder
+ * @return {Promise<number>} the Nextcloud file id
+ */
+async function fileId(api, dav) {
+	const response = await api.fetch(dav, {
+		method: 'PROPFIND',
+		headers: { Depth: '0', 'Content-Type': 'application/xml' },
+		data: '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><d:prop><oc:fileid/></d:prop></d:propfind>',
+	})
+	return Number(/<oc:fileid>(\d+)<\/oc:fileid>/.exec(await response.text())[1])
+}
+
+/**
+ * @param {import('@playwright/test').Page} page - the page to log in
+ */
+async function login(page) {
+	await page.goto('/index.php/login')
+	await page.locator('#user').fill(USER)
+	await page.locator('#password').fill(PASSWORD)
+	await page.getByRole('button', { name: 'Log in', exact: true }).click()
+	await page.waitForURL(/apps|dashboard/)
+}

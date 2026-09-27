@@ -1,0 +1,260 @@
+<script setup>
+import backIcon from '@mdi/svg/svg/arrow-left.svg?raw'
+import shareIcon from '@mdi/svg/svg/share-variant-outline.svg?raw'
+import uploadIcon from '@mdi/svg/svg/tray-arrow-up.svg?raw'
+import { t } from '@nextcloud/l10n'
+import { generateUrl } from '@nextcloud/router'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import NcButton from '@nextcloud/vue/components/NcButton'
+import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
+import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
+import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
+import AssetStepper from '../components/AssetStepper.vue'
+import CommentPanel from '../components/CommentPanel.vue'
+import ExportMenu from '../components/ExportMenu.vue'
+import PanelTabs from '../components/PanelTabs.vue'
+import ReviewLayout from '../components/ReviewLayout.vue'
+import VersionPicker from '../components/VersionPicker.vue'
+import VersionStack from '../components/VersionStack.vue'
+import VideoPlayer from '../components/VideoPlayer.vue'
+import { errorMessage, getVersion, uploadNextVersion } from '../api.js'
+import { usePanelOpen } from '../composables/panel.js'
+import { useReview } from '../composables/review.js'
+import { filesDir, groupByFolder, uploadFolder } from '../lib/folders.js'
+import { useCommentsStore } from '../store/comments.js'
+import { useProjectsStore } from '../store/projects.js'
+
+const props = defineProps({
+	id: { type: Number, required: true },
+})
+
+const router = useRouter()
+const store = useCommentsStore()
+const projects = useProjectsStore()
+const panelOpen = usePanelOpen()
+const context = ref(null)
+const error = ref(null)
+const uploading = ref(false)
+const fileInput = ref(null)
+/** The right panel shows the Comments or the Version Stack */
+const tab = ref('comments')
+
+const version = computed(() => context.value?.versions.find((each) => each.id === props.id) ?? null)
+const tabs = computed(() => [
+	{ id: 'comments', label: t('deliver', 'Comments') },
+	{ id: 'versions', label: t('deliver', 'Versions ({count})', { count: context.value?.versions.length ?? 0 }) },
+])
+
+/** The Project's Assets in the order the Project view shows them, to step through */
+const assets = computed(() => {
+	const project = projects.details[context.value?.project.id]
+	return project ? groupByFolder(project.assets).flatMap((group) => group.assets) : []
+})
+const assetIndex = computed(() => assets.value.findIndex((asset) => asset.id === context.value?.asset.id))
+const folderUrl = computed(() => uploadFolder(context.value?.versions ?? []))
+
+/** Nextcloud's own share dialog, on the file of this Version */
+const shareUrl = computed(() => version.value?.url
+	? generateUrl('/apps/files/files/{fileId}', { fileId: version.value.fileId }) + '?' + new URLSearchParams({ dir: filesDir(version.value.url), opendetails: 'true' })
+	: null)
+
+const { player, panel, mode, clock, anchor, pin, hold, release, jump, posted } = useReview({
+	version,
+	projectMode: computed(() => context.value?.project.timecodeMode ?? 'smpte'),
+	refresh: reload,
+})
+
+watch(() => props.id, async (id) => {
+	error.value = null
+	try {
+		context.value = await getVersion(id)
+		await store.open(id)
+		if (!projects.details[context.value.project.id]) {
+			projects.fetch(context.value.project.id).catch(() => {})
+		}
+	} catch (e) {
+		error.value = errorMessage(e)
+	}
+}, { immediate: true })
+
+onBeforeUnmount(() => store.stop())
+
+/** Reloads the Version Stack after stacking, renumbering, a drop upload or new derived media */
+async function reload() {
+	context.value = await getVersion(props.id)
+}
+
+/**
+ * @param {number} by - -1 for the previous Asset, 1 for the next
+ */
+function step(by) {
+	const asset = assets.value[assetIndex.value + by]
+	if (asset) {
+		router.push(`/versions/${asset.versions[0].id}`)
+	}
+}
+
+/**
+ * Uploads the picked file as the next Version and opens it
+ *
+ * @param {Event} event - the file input's change event
+ */
+async function upload(event) {
+	const file = event.target.files?.[0]
+	event.target.value = ''
+	if (!file) {
+		return
+	}
+	uploading.value = true
+	error.value = null
+	try {
+		const versionId = await uploadNextVersion(folderUrl.value, file, context.value.asset.id)
+		projects.fetch(context.value.project.id).catch(() => {})
+		router.push(`/versions/${versionId}`)
+	} catch (e) {
+		error.value = errorMessage(e)
+	} finally {
+		uploading.value = false
+	}
+}
+</script>
+
+<template>
+	<NcNoteCard v-if="error && !context" type="error" class="deliver-review__error">
+		{{ error }}
+	</NcNoteCard>
+	<NcEmptyContent v-else-if="!context" :name="t('deliver', 'Loading Version…')">
+		<template #icon>
+			<NcLoadingIcon />
+		</template>
+	</NcEmptyContent>
+	<ReviewLayout
+		v-else
+		v-model:panelOpen="panelOpen"
+		navToggle
+		class="deliver-review">
+		<template #start>
+			<NcButton
+				variant="tertiary"
+				:to="`/projects/${context.project.id}`"
+				:aria-label="t('deliver', 'Back to {project}', { project: context.project.name })"
+				:title="t('deliver', 'Back to {project}', { project: context.project.name })">
+				<template #icon>
+					<NcIconSvgWrapper :svg="backIcon" />
+				</template>
+			</NcButton>
+			<h2 class="deliver-review__title" tabindex="-1">
+				{{ context.asset.name }}
+			</h2>
+		</template>
+		<template #center>
+			<AssetStepper :index="assetIndex" :count="assets.length" @step="step" />
+		</template>
+		<template #end>
+			<VersionPicker :versions="context.versions" :current="id" @select="$router.push(`/versions/${$event}`)" />
+			<template v-if="context.project.canWrite">
+				<NcButton
+					v-if="folderUrl"
+					:disabled="uploading"
+					:title="t('deliver', 'Upload a new cut and stack it on top')"
+					@click="fileInput.click()">
+					<template #icon>
+						<NcLoadingIcon v-if="uploading" />
+						<NcIconSvgWrapper v-else :svg="uploadIcon" />
+					</template>
+					{{ t('deliver', 'New Version') }}
+				</NcButton>
+				<input
+					ref="fileInput"
+					type="file"
+					accept="video/*,audio/*"
+					hidden
+					@change="upload">
+				<NcButton v-if="shareUrl" :href="shareUrl" :title="t('deliver', 'Share in Files; switch on review in the link settings')">
+					<template #icon>
+						<NcIconSvgWrapper :svg="shareIcon" />
+					</template>
+					{{ t('deliver', 'Share') }}
+				</NcButton>
+			</template>
+		</template>
+
+		<template #notice>
+			<NcNoteCard v-if="error" type="error" class="deliver-review__notice">
+				{{ error }}
+			</NcNoteCard>
+			<NcNoteCard v-if="version?.state === 'missing'" type="warning" class="deliver-review__notice">
+				{{ t('deliver', 'The file of this Version is gone from the Project folder. Its Comments are kept.') }}
+			</NcNoteCard>
+		</template>
+
+		<VideoPlayer
+			v-if="version"
+			ref="player"
+			v-model:mode="mode"
+			:version="version"
+			:comments="store.threads"
+			:clock="clock"
+			:canComment="store.canComment === true"
+			@comment="pin($event); tab = 'comments'; panelOpen = true"
+			@jump="jump" />
+
+		<template #panel>
+			<PanelTabs v-model="tab" :tabs="tabs" />
+			<CommentPanel
+				v-show="tab === 'comments'"
+				ref="panel"
+				:clock="clock"
+				:anchor="anchor"
+				@jump="jump"
+				@posted="posted"
+				@typing="hold"
+				@cleared="release">
+				<template #tools>
+					<ExportMenu
+						v-if="context.project.canWrite"
+						:versionId="id"
+						:audioOnly="version?.audioOnly ?? false" />
+				</template>
+			</CommentPanel>
+			<VersionStack
+				v-if="tab === 'versions'"
+				class="deliver-review__stack"
+				:versions="context.versions"
+				:current="id"
+				:assetId="context.asset.id"
+				:canWrite="context.project.canWrite"
+				@open="$router.push(`/versions/${$event}`)"
+				@changed="reload" />
+		</template>
+	</ReviewLayout>
+</template>
+
+<style scoped>
+.deliver-review__title {
+	margin: 0;
+	font-size: 16px;
+	font-weight: bold;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	outline: none;
+}
+
+.deliver-review__notice {
+	margin: calc(2 * var(--default-grid-baseline, 4px)) calc(3 * var(--default-grid-baseline, 4px)) 0;
+}
+
+.deliver-review__error {
+	margin: calc(var(--default-clickable-area, 34px) + 4 * var(--default-grid-baseline, 4px)) calc(4 * var(--default-grid-baseline, 4px));
+}
+
+.deliver-review__stack {
+	flex: 1;
+	min-height: 0;
+	padding: calc(3 * var(--default-grid-baseline, 4px));
+	overflow-y: auto;
+}
+</style>

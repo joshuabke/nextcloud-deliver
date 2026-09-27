@@ -1,0 +1,9 @@
+# The dev instance for CI runners: no GPU, no tailnet, only this machine.
+services:
+  nextcloud:
+    ports: !override
+      - 127.0.0.1:8080:80
+    devices: !reset []
+    group_add: !reset []
+  mail:
+    ports: !reset []

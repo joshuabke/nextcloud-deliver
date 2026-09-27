@@ -1,0 +1,22 @@
+node_modules/
+vendor/
+composer.lock
+
+# Built assets (vite)
+js/
+css/
+
+# Docker instance data and local compose settings
+docker/
+.env
+
+# Browser test output and generated media fixtures
+test-results/
+playwright-report/
+tests/e2e/media/
+
+# Tool caches
+.phpunit.cache/
+.phpunit.result.cache
+build/
+.php-cs-fixer.cache

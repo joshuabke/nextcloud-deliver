@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	  xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+	<id>deliver</id>
+	<name>Deliver</name>
+	<summary>Frame-accurate video review inside Nextcloud Files</summary>
+	<summary lang="de">Framegenaues Video-Review direkt in Nextcloud Dateien</summary>
+	<description><![CDATA[Frame-accurate video review where the files already are.
+
+Enable a video or audio file for review from the Files sidebar and it becomes an Asset; the folder it lies in becomes a Project, and a whole folder can be switched to Auto Intake so that everything in it counts. Members — whoever Files lets into the folder — and Reviewers, who arrive through an ordinary Nextcloud share link, leave Comments anchored to frames or ranges. Iterations of a cut stack up as Versions, and the feedback goes back into the editing application as markers.
+
+Deliver never copies your media: Files stays the source of truth, and review runs on the share links you already hand out.]]></description>
+	<description lang="de"><![CDATA[Framegenaues Video-Review dort, wo die Dateien schon liegen.
+
+Gib eine Video- oder Audiodatei in der Dateien-Seitenleiste zum Review frei, und sie wird zum Asset; ihr Ordner wird zum Projekt, und ein ganzer Ordner lässt sich auf Automatische Aufnahme stellen, sodass alles darin zählt. Mitglieder – alle, die Dateien in den Ordner lässt – und Reviewer, die über einen gewöhnlichen Nextcloud-Freigabelink kommen, hinterlassen Kommentare auf Frames oder Bereichen. Neue Schnittfassungen stapeln sich als Versionen, und das Feedback geht als Marker zurück in den Schnitt.
+
+Deliver kopiert deine Medien nie: Dateien bleibt die Quelle der Wahrheit, und das Review läuft über die Freigabelinks, die du ohnehin verschickst.]]></description>
+	<version>0.2.0</version>
+	<licence>agpl</licence>
+	<author mail="joshua@boeke.dev">Joshua Böke</author>
+	<namespace>Deliver</namespace>
+	<category>multimedia</category>
+	<bugs>https://github.com/joshuabke/nextcloud-deliver/issues</bugs>
+	<repository>https://github.com/joshuabke/nextcloud-deliver</repository>
+	<dependencies>
+		<php min-version="8.2"/>
+		<nextcloud min-version="33" max-version="34"/>
+	</dependencies>
+	<!-- The schema fixes the order: background jobs, commands, settings, navigations -->
+	<background-jobs>
+		<job>OCA\Deliver\BackgroundJob\ProcessDerivedMedia</job>
+		<job>OCA\Deliver\BackgroundJob\ScanProjects</job>
+	</background-jobs>
+	<commands>
+		<command>OCA\Deliver\Command\Worker</command>
+		<command>OCA\Deliver\Command\Regenerate</command>
+	</commands>
+	<settings>
+		<admin>OCA\Deliver\Settings\Admin</admin>
+		<admin-section>OCA\Deliver\Settings\AdminSection</admin-section>
+	</settings>
+	<navigations>
+		<navigation>
+			<name>Deliver</name>
+			<route>deliver.page.index</route>
+			<icon>app.svg</icon>
+			<order>10</order>
+		</navigation>
+	</navigations>
+</info>

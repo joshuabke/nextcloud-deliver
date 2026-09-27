@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test:unit
+      - run: npm run build
+
+  php:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+      - run: composer install --no-interaction --no-progress
+      - run: composer cs:check
+      - run: composer psalm
+      - run: vendor/bin/phpunit --testsuite Unit
+
+  # The HTTP API and the browser flows against a real Nextcloud, the same
+  # instance `make up` starts on a developer machine
+  integration:
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE: docker compose -f docker-compose.yml -f .github/compose.ci.yml
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: make up COMPOSE="$COMPOSE"
+      - run: make test-integration COMPOSE="$COMPOSE"
+      - name: Browser tests
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+          docker run -d --name chrome --network host --shm-size=1g chromedp/headless-shell
+          until curl -sf http://127.0.0.1:9222/json/version >/dev/null; do sleep 1; done
+          npm run test:e2e
+      - name: Nextcloud log on failure
+        if: failure()
+        run: $COMPOSE exec -T nextcloud tail -n 100 data/nextcloud.log || true

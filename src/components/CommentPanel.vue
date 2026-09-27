@@ -1,0 +1,401 @@
+<script setup>
+import filterIcon from '@mdi/svg/svg/chevron-down.svg?raw'
+import searchIcon from '@mdi/svg/svg/magnify.svg?raw'
+import sendIcon from '@mdi/svg/svg/send.svg?raw'
+import sortIcon from '@mdi/svg/svg/sort.svg?raw'
+import { t } from '@nextcloud/l10n'
+import { computed, ref, watch } from 'vue'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActions from '@nextcloud/vue/components/NcActions'
+import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
+import NcButton from '@nextcloud/vue/components/NcButton'
+import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
+import CommentItem from './CommentItem.vue'
+import { errorMessage } from '../api.js'
+import { formatAt } from '../lib/timecode.js'
+import { useCommentsStore } from '../store/comments.js'
+
+const props = defineProps({
+	/** How time is shown: { fps, mode, startFrame, dropFrame } */
+	clock: { type: Object, required: true },
+	/** Where a new Comment lands: { inFrame, outFrame } */
+	anchor: { type: Object, required: true },
+})
+
+const emit = defineEmits(['jump', 'claim', 'posted', 'typing', 'cleared'])
+
+const store = useCommentsStore()
+const body = ref('')
+const newest = ref(false)
+/** Which Comments the list shows: all, open or resolved */
+const show = ref('all')
+const SHOW = {
+	all: t('deliver', 'All Comments'),
+	open: t('deliver', 'Unresolved'),
+	resolved: t('deliver', 'Resolved'),
+}
+const searching = ref(false)
+const query = ref('')
+const busy = ref(false)
+const error = ref(null)
+const input = ref(null)
+const reviewerName = ref('')
+const reviewerEmail = ref('')
+
+/** On a Share Link that takes Comments, a Reviewer gives a name first (story 54) */
+const needsName = computed(() => store.me?.type === 'unnamed' && store.canComment !== false)
+const readOnly = computed(() => store.canComment === false)
+
+// A logged-in visitor finds their display name already filled in (story 58)
+watch(() => store.me, (me) => {
+	if (me?.type === 'unnamed' && me.name && reviewerName.value === '') {
+		reviewerName.value = me.name
+	}
+}, { immediate: true })
+
+// The first keystroke fixes where the Comment goes; emptying the field undoes that
+watch(() => body.value.trim() === '', (empty, wasEmpty) => {
+	if (wasEmpty && !empty) {
+		emit('typing')
+	} else if (empty && !wasEmpty) {
+		emit('cleared')
+	}
+})
+
+const anchorLabel = computed(() => {
+	const from = formatAt(props.anchor.inFrame, props.clock)
+	return props.anchor.outFrame === null ? from : from + ' – ' + formatAt(props.anchor.outFrame, props.clock)
+})
+
+/** Comment id → its place in the order Comments were written */
+const numbers = computed(() => new Map([...store.threads]
+	.sort((a, b) => a.createdAt - b.createdAt || a.id - b.id)
+	.map((thread, index) => [thread.id, index + 1])))
+
+/**
+ * @param {object} thread - a Comment with its Replies
+ * @return {boolean} whether it, or a Reply, holds the search words
+ */
+function matches(thread) {
+	const words = query.value.trim().toLowerCase()
+	return words === '' || [thread, ...(thread.replies ?? [])]
+		.some((each) => (each.body + ' ' + each.author.name).toLowerCase().includes(words))
+}
+
+const threads = computed(() => {
+	const list = store.threads.filter((thread) => (show.value === 'all' || thread.resolved === (show.value === 'resolved')) && matches(thread))
+	return newest.value ? [...list].sort((a, b) => b.createdAt - a.createdAt) : list
+})
+
+watch(() => store.versionId, () => {
+	error.value = null
+})
+
+defineExpose({ focus: () => input.value?.focus() })
+
+/** Focuses the search field as it opens */
+const vFocus = { mounted: (element) => element.focus() }
+
+/** Posts the Comment at the anchor */
+async function submit() {
+	if (!body.value.trim()) {
+		return
+	}
+	busy.value = true
+	error.value = null
+	try {
+		await store.add({ ...props.anchor, body: body.value })
+		body.value = ''
+		emit('posted')
+	} catch (e) {
+		error.value = errorMessage(e)
+	} finally {
+		busy.value = false
+	}
+}
+
+/**
+ * Enter sends, Shift+Enter starts a new line
+ *
+ * @param {KeyboardEvent} event - the keystroke in the field
+ */
+function onKeydown(event) {
+	if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+		event.preventDefault()
+		submit()
+	}
+}
+
+/** Hands the Reviewer's name to the view, which registers it */
+function claim() {
+	if (reviewerName.value.trim()) {
+		emit('claim', { name: reviewerName.value, email: reviewerEmail.value })
+	}
+}
+</script>
+
+<template>
+	<section class="deliver-comments">
+		<div class="deliver-comments__head">
+			<NcActions
+				variant="tertiary"
+				class="deliver-comments__show"
+				:menuName="SHOW[show]"
+				:aria-label="t('deliver', 'Filter')">
+				<template #icon>
+					<NcIconSvgWrapper :svg="filterIcon" />
+				</template>
+				<NcActionButton
+					v-for="(label, id) in SHOW"
+					:key="id"
+					:modelValue="show === id"
+					type="radio"
+					closeAfterClick
+					@click="show = id">
+					{{ label }}
+				</NcActionButton>
+				<template v-if="store.unseenCount">
+					<NcActionSeparator />
+					<NcActionButton @click="store.clearUnseen()">
+						{{ t('deliver', 'Mark all as seen') }}
+					</NcActionButton>
+				</template>
+			</NcActions>
+			<span v-if="store.unseenCount" class="deliver-comments__unseen" :title="t('deliver', '{count} unseen', { count: store.unseenCount })">
+				{{ store.unseenCount }}
+			</span>
+			<span class="deliver-comments__spacer" />
+			<NcButton
+				variant="tertiary"
+				:pressed="newest"
+				:aria-label="newest ? t('deliver', 'Newest first') : t('deliver', 'In timeline order')"
+				:title="newest ? t('deliver', 'Newest first') : t('deliver', 'In timeline order')"
+				@click="newest = !newest">
+				<template #icon>
+					<NcIconSvgWrapper :svg="sortIcon" />
+				</template>
+			</NcButton>
+			<NcButton
+				variant="tertiary"
+				:pressed="searching"
+				:aria-label="t('deliver', 'Search Comments')"
+				:title="t('deliver', 'Search Comments')"
+				@click="searching = !searching; query = ''">
+				<template #icon>
+					<NcIconSvgWrapper :svg="searchIcon" />
+				</template>
+			</NcButton>
+			<slot name="tools" />
+		</div>
+		<input
+			v-if="searching"
+			v-model="query"
+			v-focus
+			class="deliver-comments__search"
+			type="search"
+			:placeholder="t('deliver', 'Search Comments')"
+			@keydown.esc="searching = false; query = ''">
+
+		<ul v-if="threads.length" class="deliver-comments__list">
+			<CommentItem
+				v-for="thread in threads"
+				:key="thread.id"
+				:comment="thread"
+				:clock="clock"
+				:number="numbers.get(thread.id)"
+				@jump="emit('jump', $event)" />
+		</ul>
+		<p v-else class="deliver-comments__empty">
+			{{ store.threads.length
+				? (query ? t('deliver', 'No Comment matches.') : (show === 'open' ? t('deliver', 'Everything is resolved.') : t('deliver', 'Nothing resolved yet.')))
+				: (readOnly ? t('deliver', 'No Comments yet.') : t('deliver', 'No Comments yet. Press C while playing to comment on the current Frame.')) }}
+		</p>
+
+		<div class="deliver-comments__composer">
+			<NcNoteCard v-if="error" type="error">
+				{{ error }}
+			</NcNoteCard>
+
+			<form v-if="needsName" class="deliver-comments__claim" @submit.prevent="claim">
+				<label for="deliver-reviewer-name">
+					{{ t('deliver', 'Your name, so the editor knows whose feedback this is') }}
+				</label>
+				<input
+					id="deliver-reviewer-name"
+					v-model="reviewerName"
+					type="text"
+					:placeholder="t('deliver', 'Name')">
+				<input v-model="reviewerEmail" type="email" :placeholder="t('deliver', 'Email for replies (optional)')">
+				<NcButton variant="primary" :disabled="!reviewerName.trim()" @click="claim">
+					{{ t('deliver', 'Start reviewing') }}
+				</NcButton>
+			</form>
+
+			<p v-else-if="readOnly" class="deliver-comments__readonly">
+				{{ t('deliver', 'You can read the feedback on this Version, but not add to it.') }}
+			</p>
+
+			<form v-else class="deliver-comments__form" @submit.prevent="submit">
+				<div class="deliver-comments__box" @click="input?.focus()">
+					<label class="deliver-comments__anchor" for="deliver-comment-body" :title="t('deliver', 'Where the Comment goes')">
+						{{ anchorLabel }}
+					</label>
+					<textarea
+						id="deliver-comment-body"
+						ref="input"
+						v-model="body"
+						rows="1"
+						:placeholder="t('deliver', 'Leave a Comment…')"
+						@keydown="onKeydown" />
+				</div>
+				<div class="deliver-comments__actions">
+					<span class="deliver-comments__hint">{{ t('deliver', 'C comments on the Frame, I and O set a Range') }}</span>
+					<NcButton
+						variant="primary"
+						:disabled="busy || !body.trim()"
+						:aria-label="t('deliver', 'Send (Enter)')"
+						:title="t('deliver', 'Send (Enter)')"
+						@click="submit">
+						<template #icon>
+							<NcIconSvgWrapper :svg="sendIcon" />
+						</template>
+					</NcButton>
+				</div>
+			</form>
+		</div>
+	</section>
+</template>
+
+<style scoped>
+.deliver-comments {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+}
+
+.deliver-comments__head {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: var(--default-grid-baseline, 4px) calc(2 * var(--default-grid-baseline, 4px));
+}
+
+.deliver-comments__show :deep(.button-vue__wrapper) {
+	flex-direction: row-reverse;
+}
+
+.deliver-comments__show :deep(.button-vue) {
+	font-weight: normal;
+}
+
+.deliver-comments__unseen {
+	padding: 0 7px;
+	border-radius: var(--border-radius-pill, 20px);
+	background: var(--color-primary-element);
+	color: var(--color-primary-element-text);
+	font-size: 12px;
+	font-weight: bold;
+}
+
+.deliver-comments__spacer {
+	flex: 1;
+}
+
+.deliver-comments__search {
+	margin: 0 calc(3 * var(--default-grid-baseline, 4px)) calc(2 * var(--default-grid-baseline, 4px));
+}
+
+.deliver-comments__list {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	gap: calc(3 * var(--default-grid-baseline, 4px));
+	padding: var(--default-grid-baseline, 4px) calc(3 * var(--default-grid-baseline, 4px)) calc(3 * var(--default-grid-baseline, 4px));
+}
+
+.deliver-comments__empty {
+	flex: 1;
+	padding: calc(4 * var(--default-grid-baseline, 4px));
+	color: var(--color-text-maxcontrast);
+	text-align: center;
+}
+
+.deliver-comments__composer {
+	display: flex;
+	flex-direction: column;
+	gap: calc(2 * var(--default-grid-baseline, 4px));
+	padding: calc(3 * var(--default-grid-baseline, 4px));
+	border-top: 1px solid var(--color-border);
+}
+
+.deliver-comments__form,
+.deliver-comments__claim {
+	display: flex;
+	flex-direction: column;
+	gap: calc(2 * var(--default-grid-baseline, 4px));
+}
+
+/* Timecode and text in one box, as one sentence: "at 00:00:04:12, …" */
+.deliver-comments__box {
+	display: flex;
+	align-items: flex-start;
+	gap: calc(2 * var(--default-grid-baseline, 4px));
+	padding: calc(2 * var(--default-grid-baseline, 4px)) calc(3 * var(--default-grid-baseline, 4px));
+	border: 1px solid var(--color-border-dark);
+	border-radius: var(--border-radius-large, 12px);
+	background: var(--color-background-dark);
+	cursor: text;
+}
+
+.deliver-comments__box:focus-within {
+	border-color: var(--color-primary-element);
+}
+
+.deliver-comments__anchor {
+	flex-shrink: 0;
+	margin-top: 3px;
+	padding: 1px 6px;
+	border-radius: var(--border-radius-small, 4px);
+	background: rgba(245, 197, 24, 0.16);
+	color: #f5c518;
+	font-family: var(--font-face-monospace, monospace);
+	font-size: 12px;
+	line-height: 18px;
+}
+
+.deliver-comments__box textarea {
+	flex: 1;
+	min-height: 24px;
+	max-height: 160px;
+	margin: 0;
+	padding: 0;
+	border: none !important;
+	outline: none;
+	box-shadow: none !important;
+	background: none;
+	resize: none;
+	field-sizing: content;
+	line-height: 24px;
+}
+
+.deliver-comments__actions {
+	display: flex;
+	align-items: center;
+	gap: calc(2 * var(--default-grid-baseline, 4px));
+}
+
+.deliver-comments__hint {
+	flex: 1;
+	color: var(--color-text-maxcontrast);
+	font-size: 12px;
+}
+
+.deliver-comments__readonly {
+	margin: 0;
+	color: var(--color-text-maxcontrast);
+}
+</style>

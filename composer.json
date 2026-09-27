@@ -1,0 +1,37 @@
+{
+	"name": "joshuabke/deliver",
+	"description": "Frame-accurate video review inside Nextcloud Files",
+	"type": "project",
+	"license": "AGPL-3.0-or-later",
+	"require": {
+		"php": ">=8.2"
+	},
+	"require-dev": {
+		"nextcloud/coding-standard": "^1.5",
+		"nextcloud/ocp": "dev-stable33",
+		"phpunit/phpunit": "^12.0",
+		"vimeo/psalm": "^6.18"
+	},
+	"autoload": {
+		"psr-4": {
+			"OCA\\Deliver\\": "lib/"
+		}
+	},
+	"autoload-dev": {
+		"psr-4": {
+			"OCA\\Deliver\\Tests\\": "tests/"
+		}
+	},
+	"config": {
+		"optimize-autoloader": true,
+		"platform": {
+			"php": "8.3.20"
+		},
+		"sort-packages": true
+	},
+	"scripts": {
+		"cs:check": "php-cs-fixer fix --dry-run --diff",
+		"cs:fix": "php-cs-fixer fix",
+		"psalm": "psalm --no-cache --threads=1"
+	}
+}
