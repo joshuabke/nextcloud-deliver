@@ -110,6 +110,9 @@ class ShareReviewTest extends TestCase {
 		$context = $asReviewer->call('GET', '/api/context?versionId=' . $this->versionId);
 		self::assertSame(200, $context['status'], json_encode($context['data']));
 		self::assertSame('unnamed', $context['data']['me']['type'], 'nobody has said who they are yet');
+		// The Review view asks for the name, rather than saying commenting is off
+		$listed = $asReviewer->call('GET', "/api/versions/{$this->versionId}/comments");
+		self::assertTrue($listed['data']['canComment'], 'commenting is on, once there is a name');
 		self::assertSame('cut', $context['data']['asset']['name']);
 
 		$refused = $asReviewer->call('POST', "/api/versions/{$this->versionId}/comments", ['inFrame' => 10, 'body' => 'who am I']);
