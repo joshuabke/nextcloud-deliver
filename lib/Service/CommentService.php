@@ -124,6 +124,7 @@ class CommentService {
 		if ($parent !== null) {
 			$this->mail->replied($comment, $version, $serialized['author']['name']);
 		}
+		$this->mail->commented($comment, $version, $serialized['author']['name']);
 		return $serialized;
 	}
 

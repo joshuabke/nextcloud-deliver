@@ -158,10 +158,11 @@ class ShareReviewService {
 	}
 
 	/**
-	 * A Personal Link through some review Share Link that shows the Version,
-	 * for the mail about a Reply; null when none does any more.
+	 * The Review view of the Version through some review Share Link that shows
+	 * it, with the Reviewer's key, for mails; null when none does any more.
+	 * It opens the player straight away rather than the shared file list.
 	 */
-	public function personalLinkFor(Version $version, Reviewer $reviewer): ?string {
+	public function reviewLinkFor(Version $version, Reviewer $reviewer): ?string {
 		try {
 			$project = $this->projects->find($version->getProjectId());
 		} catch (\OCP\AppFramework\Db\DoesNotExistException) {
@@ -174,7 +175,8 @@ class ShareReviewService {
 		for (; $node !== null && $owner !== null; $node = $node->getId() === $folder->getId() ? null : $node->getParent()) {
 			foreach ($this->shares->getSharesBy($owner, IShare::TYPE_LINK, $node, true, -1) as $share) {
 				if ($this->isReview($share)) {
-					return $this->personalLink($share, $reviewer);
+					return $this->urls->linkToRouteAbsolute('deliver.Public.showVersion', ['token' => $share->getToken(), 'versionId' => $version->getId()])
+						. '?r=' . rawurlencode($reviewer->getSecretKey());
 				}
 			}
 		}

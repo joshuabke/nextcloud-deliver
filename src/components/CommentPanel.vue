@@ -13,6 +13,7 @@ import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import CommentItem from './CommentItem.vue'
@@ -54,6 +55,8 @@ const error = ref(null)
 const input = ref(null)
 const reviewerName = ref('')
 const reviewerEmail = ref('')
+/** What the Reviewer wants mailed, once they give an address */
+const wishes = ref({ replies: true, comments: false, versions: false })
 /** Files to attach to the next Comment (story 92) */
 const files = ref([])
 const fileInput = ref(null)
@@ -220,13 +223,43 @@ function onKeydown(event) {
 /** Hands the Reviewer's name to the view, which registers it */
 function claim() {
 	if (reviewerName.value.trim()) {
-		emit('claim', { name: reviewerName.value, email: reviewerEmail.value })
+		emit('claim', { name: reviewerName.value, email: reviewerEmail.value, mail: wishes.value })
 	}
 }
 </script>
 
 <template>
 	<section class="deliver-comments">
+		<!-- Without a name there is nothing to do here, so the name comes first, over the Comments -->
+		<div v-if="needsName" class="deliver-comments__gate">
+			<form class="deliver-comments__claim" @submit.prevent="claim">
+				<h3>{{ t('deliver', 'Who is reviewing?') }}</h3>
+				<label for="deliver-reviewer-name">
+					{{ t('deliver', 'Your name, so the editor knows whose feedback this is') }}
+				</label>
+				<input
+					id="deliver-reviewer-name"
+					v-model="reviewerName"
+					type="text"
+					:placeholder="t('deliver', 'Name')">
+				<input v-model="reviewerEmail" type="email" :placeholder="t('deliver', 'Email (optional)')">
+				<fieldset class="deliver-comments__wishes" :disabled="!reviewerEmail.trim()">
+					<legend>{{ reviewerEmail.trim() ? t('deliver', 'Mail me about') : t('deliver', 'With an email address, Deliver can mail you about') }}</legend>
+					<NcCheckboxRadioSwitch v-model="wishes.replies" :disabled="!reviewerEmail.trim()">
+						{{ t('deliver', 'Replies to my Comments') }}
+					</NcCheckboxRadioSwitch>
+					<NcCheckboxRadioSwitch v-model="wishes.comments" :disabled="!reviewerEmail.trim()">
+						{{ t('deliver', 'Every new Comment') }}
+					</NcCheckboxRadioSwitch>
+					<NcCheckboxRadioSwitch v-model="wishes.versions" :disabled="!reviewerEmail.trim()">
+						{{ t('deliver', 'New Versions') }}
+					</NcCheckboxRadioSwitch>
+				</fieldset>
+				<NcButton variant="primary" type="submit" :disabled="!reviewerName.trim()">
+					{{ t('deliver', 'Start reviewing') }}
+				</NcButton>
+			</form>
+		</div>
 		<div class="deliver-comments__head">
 			<NcActions
 				variant="tertiary"
@@ -307,20 +340,9 @@ function claim() {
 				{{ error }}
 			</NcNoteCard>
 
-			<form v-if="needsName" class="deliver-comments__claim" @submit.prevent="claim">
-				<label for="deliver-reviewer-name">
-					{{ t('deliver', 'Your name, so the editor knows whose feedback this is') }}
-				</label>
-				<input
-					id="deliver-reviewer-name"
-					v-model="reviewerName"
-					type="text"
-					:placeholder="t('deliver', 'Name')">
-				<input v-model="reviewerEmail" type="email" :placeholder="t('deliver', 'Email for replies (optional)')">
-				<NcButton variant="primary" :disabled="!reviewerName.trim()" @click="claim">
-					{{ t('deliver', 'Start reviewing') }}
-				</NcButton>
-			</form>
+			<p v-if="needsName" class="deliver-comments__readonly">
+				{{ t('deliver', 'Give your name above to comment.') }}
+			</p>
 
 			<p v-else-if="readOnly" class="deliver-comments__readonly">
 				{{ t('deliver', 'You can read the feedback on this Version, but not add to it.') }}
@@ -418,10 +440,64 @@ function claim() {
 
 <style scoped>
 .deliver-comments {
+	position: relative;
 	display: flex;
 	flex-direction: column;
 	flex: 1;
 	min-height: 0;
+}
+
+/* The Comments stay visible, dimmed, under the name form */
+.deliver-comments__gate {
+	position: absolute;
+	inset: 0;
+	z-index: 3;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: calc(3 * var(--default-grid-baseline, 4px));
+	background: rgba(20, 20, 22, 0.78);
+	backdrop-filter: blur(2px);
+}
+
+.deliver-comments__gate .deliver-comments__claim {
+	width: 100%;
+	max-width: 360px;
+	padding: calc(4 * var(--default-grid-baseline, 4px));
+	border: 1px solid var(--color-border-dark);
+	border-radius: var(--border-radius-large, 12px);
+	background: var(--deliver-card, var(--color-main-background));
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.deliver-comments__claim h3 {
+	margin: 0;
+	font-size: 18px;
+}
+
+.deliver-comments__claim label {
+	color: var(--color-text-maxcontrast);
+}
+
+.deliver-comments__claim input {
+	width: 100%;
+	margin: 0;
+}
+
+.deliver-comments__wishes {
+	margin: 0;
+	padding: 0;
+	border: none;
+}
+
+.deliver-comments__wishes legend {
+	margin-bottom: 2px;
+	color: var(--color-text-maxcontrast);
+	font-size: 13px;
+}
+
+.deliver-comments__wishes:disabled {
+	opacity: 0.55;
 }
 
 .deliver-comments__head {

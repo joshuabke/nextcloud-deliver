@@ -12,6 +12,7 @@ import AssetStepper from '../components/AssetStepper.vue'
 import CommentPanel from '../components/CommentPanel.vue'
 import DueDate from '../components/DueDate.vue'
 import ImageViewer from '../components/ImageViewer.vue'
+import ReviewerMailSettings from '../components/ReviewerMailSettings.vue'
 import ReviewLayout from '../components/ReviewLayout.vue'
 import VersionPicker from '../components/VersionPicker.vue'
 import VideoPlayer from '../components/VideoPlayer.vue'
@@ -30,15 +31,16 @@ const panelOpen = usePanelOpen()
 const context = ref(null)
 const error = ref(null)
 const personalLink = ref(null)
-/** The name the Reviewer gave; the Comment answers only carry who they are, not their name */
-const reviewerName = ref('')
+/** The Reviewer with name, address and mail wishes; the Comment answers only carry who they are */
+const reviewer = ref(null)
+const reviewerName = computed(() => reviewer.value?.name ?? '')
 const current = ref(props.versionId)
 /** The newest Version of every Asset the share shows, to step through */
 const newest = ref([])
 
 /** Who watches, and when: the Reviewer's name once they gave one (story 94) */
 const watermarkText = computed(() => [
-	store.me?.type === 'reviewer' ? (reviewerName.value || context.value?.me?.name || '') : t('deliver', 'Guest'),
+	store.me?.type === 'reviewer' ? reviewerName.value : t('deliver', 'Guest'),
 	new Date().toLocaleDateString(getLanguage()),
 ].join(' · '))
 const version = computed(() => context.value?.versions.find((each) => each.id === current.value) ?? null)
@@ -75,6 +77,9 @@ onBeforeUnmount(() => store.stop())
 /** Reloads what the share shows of this Version, for instance once its Proxy is ready */
 async function reload() {
 	context.value = await getPublicContext({ versionId: current.value })
+	if (context.value.me?.type === 'reviewer') {
+		reviewer.value = context.value.me
+	}
 }
 
 /**
@@ -93,12 +98,12 @@ function step(by) {
  *
  * @param {{name: string, email: string}} identity - what they typed
  */
-async function claim({ name, email }) {
+async function claim({ name, email, mail }) {
 	error.value = null
 	try {
-		const reviewer = await claimReviewer(name, email || null)
-		personalLink.value = reviewer.link
-		reviewerName.value = reviewer.name
+		const claimed = await claimReviewer(name, email || null, mail)
+		personalLink.value = claimed.link
+		reviewer.value = claimed
 		await store.reload()
 	} catch (e) {
 		error.value = errorMessage(e)
@@ -194,7 +199,11 @@ async function claim({ name, email }) {
 					@jump="jump"
 					@posted="posted"
 					@typing="hold"
-					@cleared="release" />
+					@cleared="release">
+					<template #tools>
+						<ReviewerMailSettings v-if="reviewer" v-model:reviewer="reviewer" />
+					</template>
+				</CommentPanel>
 			</template>
 		</ReviewLayout>
 	</div>

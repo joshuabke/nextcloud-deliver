@@ -127,6 +127,32 @@ class NotificationTest extends TestCase {
 		exec("php /var/www/html/occ background-job:execute $job --force-execute 2>&1");
 	}
 
+	public function testAReviewerChoosesWhatIsMailed(): void {
+		$link = $this->nc->ocs('POST', "/files/{$this->nc->fileId($this->root)}/shares")['data'];
+		$email = 'reviewer-' . bin2hex(random_bytes(4)) . '@example.test';
+		$reviewer = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $link['token']);
+		$claimed = $reviewer->call('POST', '/api/reviewer', ['name' => 'Kim', 'email' => $email, 'mailComments' => true]);
+		self::assertSame(['replies' => true, 'comments' => true, 'versions' => false], $claimed['data']['mail']);
+
+		$this->nc->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 1, 'body' => 'grade is final']);
+		self::assertSame(["{$this->owner} commented on cut.mp4"], $this->subjectsTo($email), 'every Comment, as asked');
+
+		$changed = $reviewer->call('PUT', '/api/reviewer', ['email' => $email, 'mailComments' => false, 'mailVersions' => true]);
+		self::assertSame(['replies' => true, 'comments' => false, 'versions' => true], $changed['data']['mail']);
+		$this->nc->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 2, 'body' => 'one more']);
+		$this->nc->put("{$this->root}/cut_v2.mp4", 'not really a video');
+		$this->nc->ocs('GET', "/projects/{$this->projectId}");
+		self::assertSame(['Version 2 of cut_v2.mp4 is ready for review', "{$this->owner} commented on cut.mp4"], $this->subjectsTo($email));
+		self::assertSame(403, (new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $link['token']))->call('PUT', '/api/reviewer', ['mailVersions' => false])['status'], 'only as the Reviewer');
+		$this->nc->ocsForm('DELETE', "/ocs/v2.php/apps/files_sharing/api/v1/shares/{$link['id']}");
+	}
+
+	/** @return list<string> subjects of the mails to one address, newest first */
+	private function subjectsTo(string $email): array {
+		$found = json_decode((string)file_get_contents('http://mail:8025/api/v1/search?query=' . rawurlencode("to:$email")), true);
+		return array_column($found['messages'] ?? [], 'Subject');
+	}
+
 	public function testAMutedProjectStaysQuiet(): void {
 		self::assertTrue($this->nc->ocs('PUT', "/projects/{$this->projectId}/mute", ['muted' => true])['data']['muted']);
 		self::assertTrue($this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['muted']);
@@ -154,7 +180,7 @@ class NotificationTest extends TestCase {
 		// In the language of whoever replied
 		self::assertSame("{$this->owner} replied to your Comment", $mail['Subject']);
 		self::assertStringContainsString('yes, final', $mail['Text']);
-		self::assertStringContainsString("/s/{$link['data']['token']}?r=", $mail['Text'], 'with the Personal Link');
+		self::assertStringContainsString("/apps/deliver/s/{$link['data']['token']}/versions/{$this->versionId}?r=", $mail['Text'], 'straight into the Review view, as that Reviewer');
 		$this->nc->ocsForm('DELETE', "/ocs/v2.php/apps/files_sharing/api/v1/shares/{$link['data']['id']}");
 	}
 }

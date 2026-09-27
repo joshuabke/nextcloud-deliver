@@ -29,22 +29,57 @@ class ReviewerService {
 	 *
 	 * @throws InvalidRequestException the name is empty or the email is not one
 	 */
-	public function claim(Project $project, string $name, ?string $email): Reviewer {
+	/**
+	 * @param array{replies?: ?bool, comments?: ?bool, versions?: ?bool} $mail what they want mailed
+	 */
+	public function claim(Project $project, string $name, ?string $email, array $mail = []): Reviewer {
 		$name = trim($name);
 		if ($name === '') {
 			throw new InvalidRequestException('A Reviewer needs a name');
 		}
-		$email = $email === null || trim($email) === '' ? null : trim($email);
-		if ($email !== null && filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
-			throw new InvalidRequestException('That is not an email address');
-		}
+		$email = self::email($email);
 		$reviewer = new Reviewer();
 		$reviewer->setProjectId($project->getId());
 		$reviewer->setName(mb_substr($name, 0, 255));
 		$reviewer->setEmail($email);
 		$reviewer->setSecretKey($this->random->generate(self::KEY_LENGTH, ISecureRandom::CHAR_ALPHANUMERIC));
 		$reviewer->setCreatedAt($this->time->getTime());
+		self::wish($reviewer, $mail);
 		return $this->reviewers->insert($reviewer);
+	}
+
+	/**
+	 * A Reviewer changes their address or what they want mailed.
+	 *
+	 * @param array{replies?: ?bool, comments?: ?bool, versions?: ?bool} $mail
+	 * @throws InvalidRequestException the email is not one
+	 */
+	public function updateSettings(Reviewer $reviewer, ?string $email, array $mail): Reviewer {
+		$reviewer->setEmail(self::email($email));
+		self::wish($reviewer, $mail);
+		return $this->reviewers->update($reviewer);
+	}
+
+	/** @throws InvalidRequestException not an email address */
+	private static function email(?string $email): ?string {
+		$email = $email === null || trim($email) === '' ? null : trim($email);
+		if ($email !== null && filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+			throw new InvalidRequestException('That is not an email address');
+		}
+		return $email;
+	}
+
+	/** @param array{replies?: ?bool, comments?: ?bool, versions?: ?bool} $mail */
+	private static function wish(Reviewer $reviewer, array $mail): void {
+		if (isset($mail['replies'])) {
+			$reviewer->setMailReplies($mail['replies']);
+		}
+		if (isset($mail['comments'])) {
+			$reviewer->setMailComments($mail['comments']);
+		}
+		if (isset($mail['versions'])) {
+			$reviewer->setMailVersions($mail['versions']);
+		}
 	}
 
 	/** The Reviewer with this key, if they belong to this Project */
@@ -67,6 +102,7 @@ class ReviewerService {
 			'name' => $reviewer->getName(),
 			'email' => $reviewer->getEmail(),
 			'key' => $reviewer->getSecretKey(),
+			'mail' => $reviewer->mailWishes(),
 		];
 	}
 }
