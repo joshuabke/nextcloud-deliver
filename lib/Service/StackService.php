@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Service;
 
+use OCA\Deliver\Db\ApprovalMapper;
 use OCA\Deliver\Db\Asset;
 use OCA\Deliver\Db\AssetMapper;
 use OCA\Deliver\Db\CommentMapper;
@@ -34,6 +35,7 @@ class StackService {
 		private VersionMapper $versions,
 		private CommentMapper $comments,
 		private SeenMapper $seen,
+		private ApprovalMapper $approvals,
 		private ReviewerMapper $reviewers,
 		private DerivedMedia $media,
 		private NotificationService $notifications,
@@ -227,13 +229,14 @@ class StackService {
 	}
 
 	/**
-	 * Deletes a Version with its Comments, Unseen marks and derived media, and
+	 * Deletes a Version with its Comments, Unseen marks, Approvals and derived media, and
 	 * its Asset if that was the last Version (stories 4 and 19). The file stays.
 	 */
 	public function purge(Version $version): void {
 		$this->media->forget($version->getId());
 		$this->comments->deleteByVersion($version->getId());
 		$this->seen->deleteByVersion($version->getId());
+		$this->approvals->deleteByVersion($version->getId());
 		$assetId = $version->getAssetId();
 		$this->versions->delete($version);
 		$this->dropIfEmpty($assetId);

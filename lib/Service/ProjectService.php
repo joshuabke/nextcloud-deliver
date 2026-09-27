@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Service;
 
+use OCA\Deliver\Db\ApprovalMapper;
 use OCA\Deliver\Db\AssetMapper;
 use OCA\Deliver\Db\CommentMapper;
 use OCA\Deliver\Db\MuteMapper;
@@ -35,6 +36,7 @@ class ProjectService {
 		private AssetMapper $assets,
 		private VersionMapper $versions,
 		private CommentMapper $comments,
+		private ApprovalMapper $approvals,
 		private MuteMapper $mutes,
 		private StackService $stacks,
 		private DerivedMedia $media,
@@ -612,6 +614,7 @@ class ProjectService {
 			$versionIds[] = $version->getId();
 		}
 		$commentCounts = $this->comments->countByVersions($versionIds);
+		$approvalCounts = $this->approvals->countByVersions($versionIds);
 		$result = [];
 		foreach ($this->assets->findByProject($project->getId()) as $asset) {
 			$stack = $versionsByAsset[$asset->getId()] ?? [];
@@ -635,6 +638,7 @@ class ProjectService {
 					'size' => $file?->getSize(),
 					'autoStacked' => (bool)$version->getAutoStacked(),
 					'comments' => $commentCounts[$version->getId()] ?? 0,
+					'approvals' => $approvalCounts[$version->getId()] ?? ['approved' => 0, 'changes' => 0],
 					// Queued or running derived media, with the running job's progress
 					'processing' => array_intersect(
 						[$version->getProxyState(), $version->getThumbsState(), $version->getWaveformState()],

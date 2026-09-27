@@ -6,8 +6,6 @@ namespace OCA\Deliver\Service;
 
 use OCA\Deliver\Db\Comment;
 use OCA\Deliver\Db\CommentMapper;
-use OCA\Deliver\Db\Reviewer;
-use OCA\Deliver\Db\ReviewerMapper;
 use OCA\Deliver\Db\Seen;
 use OCA\Deliver\Db\SeenMapper;
 use OCA\Deliver\Db\Version;
@@ -15,7 +13,6 @@ use OCA\Deliver\Db\VersionMapper;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\DB\Exception as DbException;
 use OCP\Files\NotFoundException;
-use OCP\IUserManager;
 
 /**
  * Comments on one Version, anchored to Frames. Who may do what is decided
@@ -27,11 +24,11 @@ class CommentService {
 		private CommentMapper $comments,
 		private SeenMapper $seen,
 		private VersionMapper $versions,
-		private ReviewerMapper $reviewers,
 		private ITimeFactory $time,
-		private IUserManager $users,
 		private NotificationService $notifications,
 		private ReviewerMail $mail,
+		private Authors $authors,
+		private ApprovalService $approvals,
 	) {
 	}
 
@@ -239,6 +236,8 @@ class CommentService {
 			'me' => $viewer->identity(),
 			'now' => $this->time->getTime(),
 			'comments' => array_map(fn (Comment $comment) => $this->serialize($comment), $comments),
+			// Few and small, so every answer carries them all
+			'approvals' => $this->approvals->list($version),
 		];
 	}
 
@@ -258,16 +257,6 @@ class CommentService {
 	}
 
 	private function author(Comment $comment): array {
-		$reviewerId = $comment->getReviewerId();
-		if ($reviewerId !== null) {
-			$reviewer = $this->reviewers->find($reviewerId);
-			return ['type' => 'reviewer', 'id' => $reviewerId, 'name' => $reviewer?->getName() ?? ''];
-		}
-		$uid = (string)$comment->getUserId();
-		return [
-			'type' => 'user',
-			'id' => $uid,
-			'name' => $this->users->get($uid)?->getDisplayName() ?? $uid,
-		];
+		return $this->authors->of($comment->getUserId(), $comment->getReviewerId());
 	}
 }

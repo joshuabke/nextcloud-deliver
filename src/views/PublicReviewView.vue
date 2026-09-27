@@ -7,6 +7,7 @@ import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
+import ApprovalControl from '../components/ApprovalControl.vue'
 import AssetStepper from '../components/AssetStepper.vue'
 import CommentPanel from '../components/CommentPanel.vue'
 import ReviewLayout from '../components/ReviewLayout.vue'
@@ -119,6 +120,7 @@ async function claim({ name, email }) {
 				<AssetStepper :index="assetIndex" :count="newest.length" @step="step" />
 			</template>
 			<template #end>
+				<ApprovalControl />
 				<VersionPicker :versions="context.versions" :current="current" @select="current = $event" />
 				<NcButton
 					v-if="context.flags.canDownload && version?.url"

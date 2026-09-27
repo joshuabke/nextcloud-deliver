@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Controller;
 
+use OCA\Deliver\Service\ApprovalService;
 use OCA\Deliver\Service\CommentService;
 use OCA\Deliver\Service\ProjectService;
 use OCA\Deliver\Service\Viewer;
@@ -22,6 +23,7 @@ class CommentApiController extends OCSController {
 		IRequest $request,
 		private CommentService $service,
 		private ProjectService $projects,
+		private ApprovalService $approvals,
 		private ?string $userId,
 	) {
 		parent::__construct($appName, $request);
@@ -49,6 +51,12 @@ class CommentApiController extends OCSController {
 	#[NoAdminRequired]
 	public function seen(int $versionId, ?int $at = null): Response {
 		return $this->onVersion($versionId, fn ($viewer, $version) => $this->service->markSeen($viewer, $version, $at));
+	}
+
+	/** Approves the Version, requests changes, or takes the decision back with no status (story 88) */
+	#[NoAdminRequired]
+	public function approve(int $versionId, ?string $status = null): Response {
+		return $this->onVersion($versionId, fn ($viewer, $version) => $this->approvals->decide($viewer, $version, $status));
 	}
 
 	#[NoAdminRequired]

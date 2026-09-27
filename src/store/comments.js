@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import {
 	commentChanges,
 	createComment,
+	decideVersion,
 	deleteComment,
 	listComments,
 	markSeen,
@@ -29,6 +30,8 @@ export const useCommentsStore = defineStore('comments', {
 		 * the person clears the badges, so a badge does not vanish while it is read.
 		 */
 		seenUntil: 0,
+		/** Who approved or requested changes: [{ author, status, updatedAt }] */
+		approvals: [],
 		/**
 		 * Server time of the last answer, and the `since` of the next poll.
 		 * Inclusive, because timestamps count whole seconds: "newer than"
@@ -55,6 +58,9 @@ export const useCommentsStore = defineStore('comments', {
 		 * @param {object} state - the store state
 		 * @return {number} how many Comments by others are Unseen
 		 */
+		myDecision(state) {
+			return state.approvals.find((approval) => this.mine(approval))?.status ?? null
+		},
 		unseenCount(state) {
 			return state.comments.filter((comment) => comment.createdAt > state.seenUntil && !this.mine(comment)).length
 		},
@@ -64,6 +70,7 @@ export const useCommentsStore = defineStore('comments', {
 			this.stop()
 			this.versionId = versionId
 			this.comments = []
+			this.approvals = []
 			await this.reload()
 			if (this.versionId !== versionId) {
 				// Another Version was opened while this one loaded
@@ -93,6 +100,7 @@ export const useCommentsStore = defineStore('comments', {
 			this.canComment = answer.canComment
 			this.me = answer.me
 			this.seenUntil = answer.seenUntil
+			this.approvals = answer.approvals ?? []
 			this.now = answer.now
 			this.onScreen()
 		},
@@ -104,6 +112,7 @@ export const useCommentsStore = defineStore('comments', {
 					return
 				}
 				this.comments = mergeComments(this.comments, answer.comments, answer.ids)
+				this.approvals = answer.approvals ?? this.approvals
 				this.now = answer.now
 				this.onScreen()
 			} catch {
@@ -131,6 +140,12 @@ export const useCommentsStore = defineStore('comments', {
 		},
 		async setResolved(id, resolved) {
 			this.comments = mergeComments(this.comments, [await resolveComment(id, resolved)], null)
+		},
+		/**
+		 * @param {string|null} status - approved, changes, or null to take my decision back
+		 */
+		async decide(status) {
+			this.approvals = await decideVersion(this.versionId, status)
 		},
 		/** Clears the Unseen badges on screen */
 		clearUnseen() {

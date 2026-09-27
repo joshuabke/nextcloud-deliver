@@ -21,7 +21,7 @@ use OCP\Share\IManager as IShareManager;
 
 /**
  * Nextcloud notifications for Members (spec: Notifications): new Comments
- * and Replies, new Versions, automatic stacks, Missing files. Members are
+ * and Replies, new Versions, automatic stacks, Missing files, approvals. Members are
  * whoever can reach the Project folder, minus the person who caused the
  * event and anyone who muted the Project.
  */
@@ -31,6 +31,8 @@ class NotificationService {
 	public const VERSION = 'version';
 	public const AUTO_STACK = 'autostack';
 	public const MISSING = 'missing';
+	public const APPROVED = 'approved';
+	public const CHANGES = 'changes';
 
 	public function __construct(
 		private INotificationManager $notifications,
@@ -79,6 +81,12 @@ class NotificationService {
 			['file' => $version->getName()],
 			$this->userSession->getUser()?->getUID(),
 		);
+	}
+
+	/** Someone approved a Version or requested changes (story 88) */
+	public function decided(Version $version, string $status, ?string $actor, string $author): void {
+		$subject = $status === ApprovalService::APPROVED ? self::APPROVED : self::CHANGES;
+		$this->notify($version, $subject, 'approval', $version->getId() . ':' . $author, ['author' => $author], $actor);
 	}
 
 	/** The file of a Version left the Project folder or went to the trash (stories 18 and 63) */
