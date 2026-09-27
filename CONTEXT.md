@@ -60,6 +60,10 @@ _Avoid_: Annotation (in the UI), sketch, markup
 A Member named in a Comment with `@`, who is notified even from a muted Project. Reviewers can be read but not mentioned, as they have no account.
 _Avoid_: Tag, ping
 
+**Watermark**:
+The Reviewer's name and the date, repeated across the picture on a Share Link that asks for it. An overlay in the player, not burned into the media.
+_Avoid_: Stamp, overlay (alone)
+
 **Due Date**:
 The calendar day an Asset should be through by. Members are reminded the day before and on the day, unless its newest Version is approved with nobody asking for changes.
 _Avoid_: Deadline
@@ -146,4 +150,5 @@ The German translation (`l10n/de` with "du", `l10n/de_DE` with "Sie") uses these
 | Mention | Erwähnung |
 | Attachment | Anhang |
 | Due Date | Fälligkeitsdatum |
+| Watermark | Wasserzeichen |
 | Approval (approved, changes requested) | Abnahme (abgenommen, Änderungen gewünscht) |

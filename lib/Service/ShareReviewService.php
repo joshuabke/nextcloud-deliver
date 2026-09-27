@@ -33,6 +33,7 @@ class ShareReviewService {
 	public const FLAG_REVIEW = 'review';
 	public const FLAG_COMMENT = 'comment';
 	public const FLAG_OLDER = 'older';
+	public const FLAG_WATERMARK = 'watermark';
 
 	public function __construct(
 		private IShareManager $shares,
@@ -64,12 +65,14 @@ class ShareReviewService {
 		return $this->flag($share, self::FLAG_REVIEW, false);
 	}
 
-	/** @return array{review: bool, canComment: bool, allowOlder: bool, canDownload: bool} */
+	/** @return array{review: bool, canComment: bool, allowOlder: bool, watermark: bool, canDownload: bool} */
 	public function flags(IShare $share): array {
 		return [
 			'review' => $this->isReview($share),
 			'canComment' => $this->flag($share, self::FLAG_COMMENT, true),
 			'allowOlder' => $this->flag($share, self::FLAG_OLDER, false),
+			// The Reviewer's name over the picture (story 94)
+			'watermark' => $this->flag($share, self::FLAG_WATERMARK, false),
 			'canDownload' => $share->canSeeContent() && !$share->getHideDownload(),
 		];
 	}
@@ -79,10 +82,10 @@ class ShareReviewService {
 	 *
 	 * @throws AccessDeniedException the user may not change this share
 	 */
-	public function setFlags(string $uid, int $shareId, ?bool $review, ?bool $canComment, ?bool $allowOlder): IShare {
+	public function setFlags(string $uid, int $shareId, ?bool $review, ?bool $canComment, ?bool $allowOlder, ?bool $watermark = null): IShare {
 		$share = $this->ownShare($uid, $shareId);
 		$attributes = $share->getAttributes() ?? $share->newAttributes();
-		foreach ([self::FLAG_REVIEW => $review, self::FLAG_COMMENT => $canComment, self::FLAG_OLDER => $allowOlder] as $key => $value) {
+		foreach ([self::FLAG_REVIEW => $review, self::FLAG_COMMENT => $canComment, self::FLAG_OLDER => $allowOlder, self::FLAG_WATERMARK => $watermark] as $key => $value) {
 			if ($value !== null) {
 				$attributes->setAttribute(self::SCOPE, $key, $value);
 			}

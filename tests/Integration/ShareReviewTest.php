@@ -90,6 +90,15 @@ class ShareReviewTest extends TestCase {
 		self::assertSame(200, $this->reviewer()->page());
 	}
 
+	public function testTheWatermarkIsAFlagOfTheLink(): void {
+		$context = fn () => $this->reviewer()->call('GET', '/api/context?versionId=' . $this->versionId)['data']['flags'];
+		self::assertFalse($context()['watermark'], 'off unless asked for');
+		$this->setFlags(['watermark' => true]);
+		self::assertTrue($context()['watermark']);
+		$listed = $this->nc->ocs('GET', "/files/{$this->nc->fileId($this->root)}/shares")['data'];
+		self::assertTrue($listed[0]['watermark'], 'the sidebar shows the switch on');
+	}
+
 	public function testAReviewerAttachesToTheirComment(): void {
 		$asReviewer = $this->reviewer();
 		$asReviewer->call('POST', '/api/reviewer', ['name' => 'Mara']);
@@ -110,6 +119,9 @@ class ShareReviewTest extends TestCase {
 		$context = $asReviewer->call('GET', '/api/context?versionId=' . $this->versionId);
 		self::assertSame(200, $context['status'], json_encode($context['data']));
 		self::assertSame('unnamed', $context['data']['me']['type'], 'nobody has said who they are yet');
+		// The Review view asks for the name, rather than saying commenting is off
+		$listed = $asReviewer->call('GET', "/api/versions/{$this->versionId}/comments");
+		self::assertTrue($listed['data']['canComment'], 'commenting is on, once there is a name');
 		self::assertSame('cut', $context['data']['asset']['name']);
 
 		$refused = $asReviewer->call('POST', "/api/versions/{$this->versionId}/comments", ['inFrame' => 10, 'body' => 'who am I']);

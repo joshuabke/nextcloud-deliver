@@ -35,9 +35,9 @@ class ShareApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
-	public function update(int $shareId, ?bool $review = null, ?bool $canComment = null, ?bool $allowOlder = null): Response {
+	public function update(int $shareId, ?bool $review = null, ?bool $canComment = null, ?bool $allowOlder = null, ?bool $watermark = null): Response {
 		return $this->guard(fn () => $this->sharing->serialize(
-			$this->sharing->setFlags((string)$this->userId, $shareId, $review, $canComment, $allowOlder),
+			$this->sharing->setFlags((string)$this->userId, $shareId, $review, $canComment, $allowOlder, $watermark),
 		));
 	}
 

@@ -1,6 +1,6 @@
 <script setup>
 import downloadIcon from '@mdi/svg/svg/download.svg?raw'
-import { t } from '@nextcloud/l10n'
+import { getLanguage, t } from '@nextcloud/l10n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
@@ -33,6 +33,11 @@ const current = ref(props.versionId)
 /** The newest Version of every Asset the share shows, to step through */
 const newest = ref([])
 
+/** Who watches, and when: the Reviewer's name once they gave one (story 94) */
+const watermarkText = computed(() => [
+	store.me?.type === 'reviewer' ? store.me.name : t('deliver', 'Guest'),
+	new Date().toLocaleDateString(getLanguage()),
+].join(' · '))
 const version = computed(() => context.value?.versions.find((each) => each.id === current.value) ?? null)
 const assetIndex = computed(() => newest.value.findIndex((each) => each.assetId === context.value?.asset?.id))
 
@@ -157,6 +162,7 @@ async function claim({ name, email }) {
 				:comments="store.threads"
 				:clock="clock"
 				:canComment="store.canComment === true && store.me?.type !== 'unnamed'"
+				:watermark="context.flags.watermark ? watermarkText : null"
 				@comment="pin($event); panelOpen = true"
 				@jump="jump" />
 
