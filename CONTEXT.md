@@ -56,6 +56,10 @@ _Avoid_: Done, closed, completed
 Pen strokes, arrows and boxes on the Frame a Comment anchors to, in coordinates across the picture; shown whenever the player stands still on that Comment.
 _Avoid_: Annotation (in the UI), sketch, markup
 
+**Reaction**:
+One person's emoji on a Comment or Reply, from a small fixed set; agreement without a Reply.
+_Avoid_: Like, vote
+
 **Approval**:
 One person's decision on a Version: approved, or changes requested. Whoever may comment decides; a decision can be changed or taken back.
 _Avoid_: Sign-off, status, vote
@@ -126,4 +130,5 @@ The German translation (`l10n/de` with "du", `l10n/de_DE` with "Sie") uses these
 | Missing | Fehlt |
 | Export | Export |
 | Drawing | Zeichnung |
+| Reaction | Reaktion |
 | Approval (approved, changes requested) | Abnahme (abgenommen, Änderungen gewünscht) |

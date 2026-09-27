@@ -5,6 +5,7 @@ import expandedIcon from '@mdi/svg/svg/chevron-down.svg?raw'
 import collapsedIcon from '@mdi/svg/svg/chevron-right.svg?raw'
 import clockIcon from '@mdi/svg/svg/clock-outline.svg?raw'
 import penIcon from '@mdi/svg/svg/draw.svg?raw'
+import reactIcon from '@mdi/svg/svg/emoticon-plus-outline.svg?raw'
 import { n, t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -47,6 +48,25 @@ const unseen = computed(() => props.comment.createdAt > store.seenUntil && !mine
 const fresh = computed(() => store.now - props.comment.createdAt < FRESH)
 const canReply = computed(() => !props.isReply && store.canComment === true && store.me?.type !== 'unnamed')
 const canDelete = computed(() => mine.value || store.canWrite)
+/** Reactions need a name to put on them, like Comments (story 91) */
+const canReact = computed(() => store.canComment === true && store.me?.type !== 'unnamed')
+const REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '🙏']
+
+/**
+ * @param {{authors: Array<object>}} reaction - one emoji with who gave it
+ * @return {boolean} whether one of them is me
+ */
+function reactedByMe(reaction) {
+	return reaction.authors.some((author) => store.mine({ author }))
+}
+
+/**
+ * @param {string} emoji - the reaction to switch
+ */
+function toggle(emoji) {
+	const given = props.comment.reactions?.find((reaction) => reaction.emoji === emoji)
+	return run(() => store.react(props.comment.id, emoji, !(given && reactedByMe(given))))
+}
 const pieces = computed(() => linkify(props.comment.body))
 const anchor = computed(() => {
 	const from = formatAt(props.comment.inFrame, props.clock)
@@ -178,6 +198,36 @@ function saveReply() {
 			<!-- One line on purpose: the body keeps its line breaks (pre-wrap), so any template whitespace would show -->
 			<!-- eslint-disable-next-line vue/singleline-html-element-content-newline, vue/max-attributes-per-line -->
 			<p v-else class="deliver-comment__body"><template v-for="(piece, index) in pieces" :key="index"><a v-if="piece.href" :href="piece.href" target="_blank" rel="noopener noreferrer">{{ piece.text }}</a><template v-else>{{ piece.text }}</template></template></p>
+
+			<div v-if="comment.reactions?.length || canReact" class="deliver-comment__reactions">
+				<button
+					v-for="reaction in comment.reactions"
+					:key="reaction.emoji"
+					type="button"
+					class="deliver-comment__reaction"
+					:class="{ 'deliver-comment__reaction--mine': reactedByMe(reaction) }"
+					:disabled="!canReact || busy"
+					:title="reaction.authors.map((author) => author.name).join(', ')"
+					@click="toggle(reaction.emoji)">
+					{{ reaction.emoji }} {{ reaction.authors.length }}
+				</button>
+				<NcActions
+					v-if="canReact"
+					class="deliver-comment__react"
+					variant="tertiary"
+					:aria-label="t('deliver', 'React')">
+					<template #icon>
+						<NcIconSvgWrapper :svg="reactIcon" :size="16" />
+					</template>
+					<NcActionButton
+						v-for="emoji in REACTIONS"
+						:key="emoji"
+						closeAfterClick
+						@click="toggle(emoji)">
+						{{ emoji }}
+					</NcActionButton>
+				</NcActions>
+			</div>
 
 			<p v-if="error" class="deliver-comment__error">
 				{{ error }}
@@ -350,6 +400,38 @@ function saveReply() {
 
 .deliver-comment__link:hover {
 	color: var(--color-main-text);
+}
+
+.deliver-comment__reactions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px;
+}
+
+.deliver-comment__reaction {
+	min-height: 0;
+	margin: 0;
+	padding: 1px 8px;
+	border: 1px solid var(--color-border-dark);
+	border-radius: var(--border-radius-pill, 20px);
+	background: none;
+	color: var(--color-main-text);
+	font-size: 13px;
+	font-weight: normal;
+	cursor: pointer;
+}
+
+.deliver-comment__reaction--mine {
+	border-color: var(--color-primary-element);
+	background: color-mix(in srgb, var(--color-primary-element) 25%, transparent);
+}
+
+.deliver-comment__react :deep(.button-vue) {
+	min-height: 26px;
+	min-width: 26px;
+	height: 26px;
+	width: 26px;
 }
 
 .deliver-comment__replies {

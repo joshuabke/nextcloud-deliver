@@ -135,6 +135,12 @@ test.describe('Review view', () => {
 		await page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
 		await expect(page.locator('.deliver-comment').filter({ hasText: 'typed while the player moved on' }).locator('.deliver-comment__anchor')).toHaveText('00:00:00:05')
 
+		// A reaction shows as a pill with its count, mine highlighted (story 91)
+		const reacted = page.locator('.deliver-comment').filter({ hasText: 'shorten this passage' }).first()
+		await reacted.getByRole('button', { name: 'React' }).click()
+		await page.getByRole('menuitem', { name: '👍' }).click()
+		await expect(reacted.locator('.deliver-comment__reaction--mine')).toHaveText('👍 1')
+
 		// A drawing goes with the Comment and shows while the player stands on it (story 89)
 		await page.getByRole('button', { name: 'Draw on the picture' }).click()
 		const stage = await page.locator('.deliver-player__stage').boundingBox()

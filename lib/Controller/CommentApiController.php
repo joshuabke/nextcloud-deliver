@@ -72,6 +72,12 @@ class CommentApiController extends OCSController {
 		});
 	}
 
+	/** My reaction on a Comment, on or off (story 91) */
+	#[NoAdminRequired]
+	public function react(int $id, string $emoji, bool $on = true): Response {
+		return $this->onComment($id, fn ($viewer, $version) => $this->service->react($viewer, $version, $id, $emoji, $on));
+	}
+
 	#[NoAdminRequired]
 	public function resolve(int $id, bool $resolved): Response {
 		return $this->onComment($id, fn ($viewer, $version) => $this->service->setResolved($viewer, $version, $id, $resolved));

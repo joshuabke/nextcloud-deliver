@@ -11,6 +11,7 @@ use OCA\Deliver\Db\CommentMapper;
 use OCA\Deliver\Db\MuteMapper;
 use OCA\Deliver\Db\Project;
 use OCA\Deliver\Db\ProjectMapper;
+use OCA\Deliver\Db\ReactionMapper;
 use OCA\Deliver\Db\ReviewerMapper;
 use OCA\Deliver\Db\SeenMapper;
 use OCA\Deliver\Db\Version;
@@ -36,6 +37,7 @@ class StackService {
 		private CommentMapper $comments,
 		private SeenMapper $seen,
 		private ApprovalMapper $approvals,
+		private ReactionMapper $reactions,
 		private ReviewerMapper $reviewers,
 		private DerivedMedia $media,
 		private NotificationService $notifications,
@@ -234,6 +236,7 @@ class StackService {
 	 */
 	public function purge(Version $version): void {
 		$this->media->forget($version->getId());
+		$this->reactions->deleteByComments(array_map(static fn ($comment) => $comment->getId(), $this->comments->findByVersion($version->getId())));
 		$this->comments->deleteByVersion($version->getId());
 		$this->seen->deleteByVersion($version->getId());
 		$this->approvals->deleteByVersion($version->getId());

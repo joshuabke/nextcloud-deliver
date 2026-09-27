@@ -27,6 +27,7 @@ return [
 		['name' => 'PublicApi#approve', 'url' => '/s/{token}/api/versions/{versionId}/approval', 'verb' => 'PUT'],
 		['name' => 'PublicApi#seen', 'url' => '/s/{token}/api/versions/{versionId}/seen', 'verb' => 'POST'],
 		['name' => 'PublicApi#update', 'url' => '/s/{token}/api/comments/{id}', 'verb' => 'PUT'],
+		['name' => 'PublicApi#react', 'url' => '/s/{token}/api/comments/{id}/reactions', 'verb' => 'PUT'],
 		['name' => 'PublicApi#destroy', 'url' => '/s/{token}/api/comments/{id}', 'verb' => 'DELETE'],
 	],
 	'ocs' => [
@@ -52,6 +53,7 @@ return [
 		['name' => 'comment_api#seen', 'url' => '/api/v1/versions/{versionId}/seen', 'verb' => 'POST'],
 		['name' => 'comment_api#update', 'url' => '/api/v1/comments/{id}', 'verb' => 'PUT'],
 		['name' => 'comment_api#destroy', 'url' => '/api/v1/comments/{id}', 'verb' => 'DELETE'],
+		['name' => 'comment_api#react', 'url' => '/api/v1/comments/{id}/reactions', 'verb' => 'PUT'],
 		['name' => 'comment_api#resolve', 'url' => '/api/v1/comments/{id}/resolved', 'verb' => 'PUT'],
 		['name' => 'admin_settings#show', 'url' => '/api/v1/admin/settings', 'verb' => 'GET'],
 		['name' => 'admin_settings#update', 'url' => '/api/v1/admin/settings', 'verb' => 'PUT'],

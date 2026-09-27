@@ -40,6 +40,7 @@ export const commentChanges = (versionId, since) => axios.get(url(`/versions/${v
 export const createComment = (versionId, fields) => axios.post(url(`/versions/${versionId}/comments`), fields).then(data)
 export const updateComment = (id, body) => axios.put(url(`/comments/${id}`), { body }).then(data)
 export const deleteComment = (id) => axios.delete(url(`/comments/${id}`))
+export const reactComment = (id, emoji, on) => axios.put(url(`/comments/${id}/reactions`), { emoji, on }).then(data)
 export const resolveComment = (id, resolved) => axios.put(url(`/comments/${id}/resolved`), { resolved }).then(data)
 export const decideVersion = (versionId, status) => axios.put(url(`/versions/${versionId}/approval`), { status }).then(data)
 export const markSeen = (versionId, at) => axios.post(url(`/versions/${versionId}/seen`), { at }).then(data)

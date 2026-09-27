@@ -131,6 +131,7 @@ OC.L10N.register(
 		"Quality": "Qualität",
 		"Queue": "Warteschlange",
 		"REAPER marker list": "REAPER-Markerliste",
+		"React": "Reagieren",
 		"Regenerate Proxy, Thumbnail Strip and Waveform": "Proxy, Vorschauleiste und Wellenform neu erzeugen",
 		"Remove Project": "Projekt entfernen",
 		"Remove Project?": "Projekt entfernen?",
