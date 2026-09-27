@@ -52,6 +52,10 @@ _Avoid_: Thread, child comment
 A state on a top-level Comment meaning the editor considers it handled. Replies are not resolved individually.
 _Avoid_: Done, closed, completed
 
+**Approval**:
+One person's decision on a Version: approved, or changes requested. Whoever may comment decides; a decision can be changed or taken back.
+_Avoid_: Sign-off, status, vote
+
 ### People
 
 **Member**:
@@ -117,3 +121,4 @@ The German translation (`l10n/de` with "du", `l10n/de_DE` with "Sie") uses these
 | Proxy, Thumbnail Strip, Waveform | Proxy, Vorschauleiste, Wellenform |
 | Missing | Fehlt |
 | Export | Export |
+| Approval (approved, changes requested) | Abnahme (abgenommen, Änderungen gewünscht) |

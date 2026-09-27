@@ -41,6 +41,8 @@ class Notifier implements INotifier {
 			NotificationService::VERSION => $l->t('New Version {number} of {asset}'),
 			NotificationService::AUTO_STACK => $l->t('{file} was stacked as Version {number} of {asset}, going by its name'),
 			NotificationService::MISSING => $l->t('The file of {asset}, Version {number}, is missing'),
+			NotificationService::APPROVED => $l->t('{author} approved {asset}, Version {number}'),
+			NotificationService::CHANGES => $l->t('{author} requested changes on {asset}, Version {number}'),
 			default => throw new UnknownNotificationException(),
 		};
 		$notification->setParsedSubject(strtr($subject, $where + [

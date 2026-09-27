@@ -134,6 +134,12 @@ test.describe('Review view', () => {
 		await page.locator('#deliver-comment-body').fill('typed while the player moved on')
 		await page.locator('.deliver-comments__form button').click()
 		await expect(page.locator('.deliver-comment').filter({ hasText: 'typed while the player moved on' }).locator('.deliver-comment__anchor')).toHaveText('00:00:00:05')
+
+		// Approving shows the decision next to the menu (story 88)
+		await page.locator('.deliver-approval__menu button').click()
+		await page.getByRole('menuitemradio', { name: 'Approve this Version' }).click()
+		await expect(page.locator('.deliver-approval__people li')).toHaveCount(1)
+		await expect(page.locator('.deliver-approval__menu button')).toContainText('Approved')
 	})
 })
 

@@ -7,6 +7,9 @@ OCC = $(COMPOSE) exec -u www-data nextcloud php occ
 up:
 	$(COMPOSE) up -d --build
 	@until $(OCC) status 2>/dev/null | grep -q 'installed: true'; do echo "waiting for Nextcloud install…"; sleep 5; done
+	# The image's entrypoint writes config.php until it hands over to Apache;
+	# settings made before that can be overwritten, so wait for Apache to answer
+	@until $(COMPOSE) exec -T nextcloud php -r 'exit(@file_get_contents("http://localhost/status.php") === false ? 1 : 0);'; do echo "waiting for Apache…"; sleep 2; done
 	$(OCC) app:disable firstrunwizard
 	# Integration tests knock on invalid Share Link tokens on purpose; the
 	# bruteforce protection would answer 429 from the tenth knock on. Reset first:

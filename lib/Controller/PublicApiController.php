@@ -7,6 +7,7 @@ namespace OCA\Deliver\Controller;
 use OCA\Deliver\Db\Reviewer;
 use OCA\Deliver\Db\Version;
 use OCA\Deliver\Http\RangeFileResponse;
+use OCA\Deliver\Service\ApprovalService;
 use OCA\Deliver\Service\CommentService;
 use OCA\Deliver\Service\DerivedMedia;
 use OCA\Deliver\Service\ProjectService;
@@ -50,6 +51,7 @@ class PublicApiController extends PublicShareController {
 		private StackService $stacks,
 		private IURLGenerator $urls,
 		private IUserSession $userSession,
+		private ApprovalService $approvals,
 	) {
 		parent::__construct($appName, $request, $session);
 	}
@@ -165,6 +167,12 @@ class PublicApiController extends PublicShareController {
 			fn ($viewer, $version) => $this->comments->create($viewer, $version, $inFrame, $outFrame, $body, $parentId),
 			Http::STATUS_CREATED,
 		);
+	}
+
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function approve(int $versionId, ?string $status = null): Response {
+		return $this->onVersion($versionId, fn ($viewer, $version) => $this->approvals->decide($viewer, $version, $status));
 	}
 
 	#[PublicPage]

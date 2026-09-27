@@ -1,8 +1,10 @@
 <script setup>
+import changesIcon from '@mdi/svg/svg/alert-circle-outline.svg?raw'
+import approvedIcon from '@mdi/svg/svg/check-decagram.svg?raw'
 import commentIcon from '@mdi/svg/svg/comment-outline.svg?raw'
 import assetIcon from '@mdi/svg/svg/filmstrip.svg?raw'
 import audioIcon from '@mdi/svg/svg/waveform.svg?raw'
-import { t } from '@nextcloud/l10n'
+import { n, t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
@@ -21,6 +23,14 @@ const newest = computed(() => props.asset.versions[0])
 const audio = computed(() => newest.value.mimeType?.startsWith('audio/'))
 /** Set when the server could not render a still; the icon stands in */
 const noPreview = ref(false)
+/** Requested changes outweigh approvals: the newest Version is not through while anyone wants changes (story 88) */
+const decision = computed(() => {
+	const { approved = 0, changes = 0 } = newest.value.approvals ?? {}
+	if (changes > 0) {
+		return { kind: 'changes', icon: changesIcon, text: n('deliver', '%n requests changes', '%n request changes', changes) }
+	}
+	return approved > 0 ? { kind: 'approved', icon: approvedIcon, text: n('deliver', 'Approved by %n', 'Approved by %n', approved) } : null
+})
 const status = computed(() => {
 	if (newest.value.state === 'missing') {
 		return { text: t('deliver', 'Missing'), kind: 'warning' }
@@ -51,6 +61,13 @@ const status = computed(() => {
 				<span v-if="newest.comments" class="deliver-card__comments">
 					<NcIconSvgWrapper :svg="commentIcon" :size="14" />
 					{{ newest.comments }}
+				</span>
+				<span
+					v-if="decision"
+					class="deliver-card__decision"
+					:class="`deliver-card__decision--${decision.kind}`"
+					:title="decision.text">
+					<NcIconSvgWrapper :svg="decision.icon" :size="14" />
 				</span>
 				<span v-if="status" class="deliver-card__status" :class="`deliver-card__status--${status.kind}`">{{ status.text }}</span>
 			</div>
@@ -129,6 +146,24 @@ const status = computed(() => {
 	color: #fff;
 	font-size: 12px;
 	font-weight: bold;
+}
+
+.deliver-card__decision {
+	position: absolute;
+	top: 6px;
+	inset-inline-end: 6px;
+	display: flex;
+	padding: 3px;
+	border-radius: 50%;
+	color: #fff;
+}
+
+.deliver-card__decision--approved {
+	background: #2e7d32;
+}
+
+.deliver-card__decision--changes {
+	background: #c77800;
 }
 
 .deliver-card__version {

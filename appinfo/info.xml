@@ -15,7 +15,7 @@ Deliver never copies your media: Files stays the source of truth, and review run
 Gib eine Video- oder Audiodatei in der Dateien-Seitenleiste zum Review frei, und sie wird zum Asset; ihr Ordner wird zum Projekt, und ein ganzer Ordner lässt sich auf Automatische Aufnahme stellen, sodass alles darin zählt. Mitglieder – alle, die Dateien in den Ordner lässt – und Reviewer, die über einen gewöhnlichen Nextcloud-Freigabelink kommen, hinterlassen Kommentare auf Frames oder Bereichen. Neue Schnittfassungen stapeln sich als Versionen, und das Feedback geht als Marker zurück in den Schnitt.
 
 Deliver kopiert deine Medien nie: Dateien bleibt die Quelle der Wahrheit, und das Review läuft über die Freigabelinks, die du ohnehin verschickst.]]></description>
-	<version>0.2.0</version>
+	<version>0.9.0</version>
 	<licence>agpl</licence>
 	<author mail="joshua@boeke.dev">Joshua Böke</author>
 	<namespace>Deliver</namespace>
