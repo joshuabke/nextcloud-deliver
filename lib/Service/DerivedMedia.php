@@ -111,7 +111,7 @@ class DerivedMedia {
 			}
 			$this->running = ['job' => $job, 'seconds' => $this->durationSeconds($version), 'percent' => 0, 'written' => 0];
 			match ($job->getKind()) {
-				Job::KIND_PROBE => $this->runProbe($version, $path),
+				Job::KIND_PROBE => Reviewable::image($file->getMimeType()) ? $this->measureImage($version, $path) : $this->runProbe($version, $path),
 				Job::KIND_PROXY => $this->runProxy($version, $path),
 				Job::KIND_THUMBS => $this->runThumbs($version, $path),
 				Job::KIND_WAVEFORM => $this->runWaveform($version, $path),
@@ -152,6 +152,21 @@ class DerivedMedia {
 		if ($version->getHasAudio()) {
 			$this->enqueue($version->getId(), Job::KIND_WAVEFORM);
 		}
+	}
+
+	/**
+	 * A still needs no ffprobe and no derived media: its size is all there is
+	 * to know, and it is one Frame long, so every Comment anchors to Frame 0.
+	 */
+	private function measureImage(Version $version, string $path): void {
+		$size = @getimagesize($path);
+		$version->setWidth($size === false ? 0 : $size[0]);
+		$version->setHeight($size === false ? 0 : $size[1]);
+		$version->setDurationFrames(1);
+		$version->setHasVideo(false);
+		$version->setHasAudio(false);
+		$version->setPlayable(true);
+		$this->versions->update($version);
 	}
 
 	/**

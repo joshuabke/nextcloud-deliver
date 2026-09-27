@@ -7,11 +7,12 @@ import { defineCustomElement } from 'vue'
 import ShareReviewAction from './views/ShareReviewAction.vue'
 import icon from '../img/app.svg?raw'
 import { errorMessage, getAssetForFile } from './api.js'
+import { reviewable } from './lib/media.js'
 
 // Deliver in the Files app: the sidebar tab, the "Open in Deliver" action, and the review switch in the link settings
 
 const tagName = 'deliver-files-sidebar-tab'
-const isMedia = (node) => /^(video|audio)\//.test(node?.mime ?? '')
+const isMedia = (node) => reviewable(node?.mime)
 
 getSidebar().registerTab({
 	id: 'deliver',

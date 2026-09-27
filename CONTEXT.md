@@ -15,8 +15,12 @@ A Project setting that makes every media file in the folder an Asset, including 
 _Avoid_: Watch mode, auto scan, sync
 
 **Asset**:
-A media file inside a Project that has been enabled for review, by a Member or by Auto Intake. A single Asset may have several Versions.
+A video, audio or picture file inside a Project that has been enabled for review, by a Member or by Auto Intake. A single Asset may have several Versions.
 _Avoid_: Video, clip, item, media
+
+**Still**:
+An Asset that is a picture (PNG, JPEG, WebP, GIF, AVIF). It has one Frame, so every Comment anchors to Frame 0 and Drawings do the pointing; no timecode, no derived media.
+_Avoid_: Image asset, photo
 
 **Version**:
 One concrete file that represents one iteration of an Asset, carrying a Version Number chosen by a Member. Comments belong to a Version, never to the Asset as a whole.
@@ -151,4 +155,5 @@ The German translation (`l10n/de` with "du", `l10n/de_DE` with "Sie") uses these
 | Attachment | Anhang |
 | Due Date | Fälligkeitsdatum |
 | Watermark | Wasserzeichen |
+| Still | Standbild |
 | Approval (approved, changes requested) | Abnahme (abgenommen, Änderungen gewünscht) |

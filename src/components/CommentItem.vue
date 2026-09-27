@@ -173,7 +173,7 @@ function saveReply() {
 			</div>
 
 			<button
-				v-if="!isReply"
+				v-if="!isReply && !clock.still"
 				type="button"
 				class="deliver-comment__anchor"
 				:title="t('deliver', 'Go to this Frame')"
@@ -186,6 +186,16 @@ function saveReply() {
 					:size="14"
 					inline
 					:name="t('deliver', 'With a drawing')" />
+			</button>
+
+			<!-- A still has no Frame to jump to; its Drawing shows on request -->
+			<button
+				v-if="!isReply && clock.still && comment.annotation?.length"
+				type="button"
+				class="deliver-comment__anchor"
+				@click="emit('jump', comment)">
+				<NcIconSvgWrapper :svg="penIcon" :size="14" inline />
+				{{ t('deliver', 'Show the drawing') }}
 			</button>
 
 			<template v-if="editing">
