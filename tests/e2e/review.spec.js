@@ -135,6 +135,24 @@ test.describe('Review view', () => {
 		await page.locator('.deliver-comments__form button').click()
 		await expect(page.locator('.deliver-comment').filter({ hasText: 'typed while the player moved on' }).locator('.deliver-comment__anchor')).toHaveText('00:00:00:05')
 	})
+
+	test('a Reviewer names themselves and comments through a Share Link', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const folderId = await fileId(api, `/remote.php/dav/files/${USER}/${folder}`)
+		const link = (await (await api.post(`/ocs/v2.php/apps/deliver/api/v1/files/${folderId}/shares?format=json`)).json()).ocs.data
+		await api.dispose()
+
+		// A browser that has never been here
+		const visitor = await browser.newContext({ baseURL: BROWSER_URL })
+		const reviewer = await visitor.newPage()
+		await reviewer.goto(`/apps/deliver/s/${link.token}/versions/${versionId}`)
+		await reviewer.locator('#deliver-reviewer-name').fill('Mara')
+		await reviewer.getByRole('button', { name: 'Start reviewing' }).click()
+		await reviewer.locator('#deliver-comment-body').fill('from the client')
+		await reviewer.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
+		await expect(reviewer.locator('.deliver-comment').filter({ hasText: 'from the client' })).toContainText('Mara')
+		await visitor.close()
+	})
 })
 
 /**

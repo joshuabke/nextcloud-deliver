@@ -233,7 +233,7 @@ class CommentService {
 			'versionId' => $version->getId(),
 			'state' => $version->getState(),
 			'canWrite' => $viewer->canWrite,
-			'canComment' => $viewer->canComment && $this->opensForComments($viewer, $version),
+			'canComment' => ($viewer->canComment || $viewer->canCommentOnceNamed) && $this->opensForComments($viewer, $version),
 			'seenUntil' => $seen?->getSeenUntil() ?? 0,
 			// In the same shape as a Comment's author, so the client can spot its own
 			'me' => $viewer->identity(),

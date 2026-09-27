@@ -231,11 +231,10 @@ class PublicApiController extends PublicShareController {
 	/** A Reviewer comments while the share allows it, and never resolves */
 	private function viewer(IShare $share): Viewer {
 		$reviewer = $this->reviewer();
-		if ($reviewer === null) {
-			return Viewer::unnamed();
-		}
 		$flags = $this->sharing->flags($share);
-		return Viewer::reviewer($reviewer->getId(), $flags['canComment'], $flags['allowOlder']);
+		return $reviewer === null
+			? Viewer::unnamed($flags['canComment'], $flags['allowOlder'])
+			: Viewer::reviewer($reviewer->getId(), $flags['canComment'], $flags['allowOlder']);
 	}
 
 	private function onVersion(int $versionId, callable $action, int $status = Http::STATUS_OK): Response {
