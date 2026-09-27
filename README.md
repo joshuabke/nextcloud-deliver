@@ -33,6 +33,8 @@ CI (`.github/workflows/ci.yml`) runs the same checks on every pull request, then
 
 The instance carries a known admin password and Nextcloud's trusted-domain check falls to a forged `Host` header, so the port is bound to `127.0.0.1` and to the machine's tailnet address instead of being published to the whole network. Another address means another bind in `docker-compose.yml` — and then it is reachable by whoever can route there.
 
+Links in mails and from background jobs use `DELIVER_URL` (default `http://localhost:8080`); set it in `.env` to the address people open, e.g. `DELIVER_URL=http://factory.example.ts.net:8080`, and `docker compose up -d`.
+
 To reach the dev instance under another host name or address, put it into a gitignored `.env` next to `docker-compose.yml` before the first `make up` (space-separated, e.g. `DELIVER_EXTRA_TRUSTED_DOMAINS=192.168.1.20 dev.example.test`). Nextcloud reads trusted domains only at install time; on an existing instance use `make occ ARGS="config:system:set trusted_domains 2 --value=192.168.1.20"` instead.
 
 ### Tests
