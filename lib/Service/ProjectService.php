@@ -404,6 +404,8 @@ class ProjectService {
 				'den' => $version->getFpsDen() ?? $project->getFpsDen(),
 			],
 			'startFrame' => $version->getStartFrame() ?? 0,
+			// Known once probed; the player uses it before the media element has loaded
+			'durationFrames' => $version->getDurationFrames(),
 			'dropFrame' => (bool)$version->getDropFrame(),
 			// False when browsers cannot play the original, null while nobody knows yet
 			'playable' => $version->getPlayable(),

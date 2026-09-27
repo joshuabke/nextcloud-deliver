@@ -15,6 +15,7 @@ import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcDateTime from '@nextcloud/vue/components/NcDateTime'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DrawingLayer from './DrawingLayer.vue'
 import DrawToolbar from './DrawToolbar.vue'
@@ -78,6 +79,27 @@ const strip = ref(null)
 /** The Waveform, one value per slice of the timeline */
 const peaks = ref([])
 const hover = ref(null)
+const scrubber = ref(null)
+/** The Comment whose card shows over the bar, and where */
+const peek = ref(null)
+/** Comment id → its place in the order Comments were written, as the panel numbers them */
+const numbers = computed(() => new Map([...props.comments]
+	.sort((a, b) => a.createdAt - b.createdAt || a.id - b.id)
+	.map((comment, index) => [comment.id, index + 1])))
+
+/** Half the card's width, to keep it inside the player */
+const PEEK_HALF = 160
+
+/**
+ * @param {object} comment - the Comment under the pointer
+ * @param {Event} event - hovering or focusing its avatar
+ */
+function showPeek(comment, event) {
+	const box = scrubber.value.getBoundingClientRect()
+	const marker = event.currentTarget.getBoundingClientRect()
+	const centre = marker.left + marker.width / 2 - box.left
+	peek.value = { comment, left: Math.min(box.width - PEEK_HALF - 4, Math.max(PEEK_HALF + 4, centre)) }
+}
 const tool = ref('pen')
 const color = ref(COLORS[0])
 /** The picture's own size, for placing drawings on it */
@@ -99,6 +121,8 @@ watch(() => props.version.id, async (id) => {
 	useProxy.value = false
 	resumeAt = null
 	frame.value = 0
+	// The server knows the length already; the media element confirms it once it loads
+	durationFrames.value = props.version.durationFrames ?? 0
 	inPoint.value = null
 	outPoint.value = null
 	loop.value = false
@@ -523,59 +547,85 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 			</p>
 		</div>
 
-		<div
-			class="deliver-player__timeline"
-			@click="scrub"
-			@mousemove="onHover"
-			@mouseleave="hover = null">
-			<div class="deliver-player__track">
-				<div class="deliver-player__progress" :style="{ width: progress + '%' }" />
-				<div
-					v-if="range"
-					class="deliver-player__range"
-					:style="{ left: leftOf(range) + '%', width: widthOf(range) + '%' }" />
-				<div
-					v-for="each in comments.filter((c) => c.outFrame !== null)"
-					:key="'r' + each.id"
-					class="deliver-player__span"
-					:style="{ left: leftOf(each) + '%', width: widthOf(each) + '%' }" />
+		<!-- The bar, its Comments and, on hover, its Waveform and a thicker bar to follow thumbnails -->
+		<div ref="scrubber" class="deliver-player__scrubber" @mouseleave="hover = null; peek = null">
+			<div
+				class="deliver-player__timeline"
+				@click="scrub"
+				@mousemove="onHover">
+				<svg
+					v-if="peaks.length && !version.audioOnly"
+					class="deliver-player__waveform"
+					viewBox="0 0 100 100"
+					preserveAspectRatio="none"
+					aria-hidden="true">
+					<polygon :points="waveformPoints" />
+				</svg>
+				<div class="deliver-player__track">
+					<div class="deliver-player__progress" :style="{ width: progress + '%' }" />
+					<div
+						v-if="range"
+						class="deliver-player__range"
+						:style="{ left: leftOf(range) + '%', width: widthOf(range) + '%' }" />
+					<div
+						v-for="each in comments.filter((c) => c.outFrame !== null)"
+						:key="'r' + each.id"
+						class="deliver-player__span"
+						:style="{ left: leftOf(each) + '%', width: widthOf(each) + '%' }" />
+				</div>
+				<div class="deliver-player__playhead" :style="{ left: progress + '%' }" />
+				<div v-if="hover" class="deliver-player__hover" :style="{ left: hover.left + 'px' }">
+					<div v-if="hover.tile" class="deliver-player__tile" :style="hover.tile" />
+					<span class="deliver-player__hover-time">{{ formatAt(hover.frame, clock) }}</span>
+				</div>
 			</div>
-			<div v-if="hover" class="deliver-player__hover" :style="{ left: hover.left + 'px' }">
-				<div v-if="hover.tile" class="deliver-player__tile" :style="hover.tile" />
-				<span class="deliver-player__hover-time">{{ formatAt(hover.frame, clock) }}</span>
+
+			<!-- One avatar per Comment, centred under its Frame; hovering shows the Comment -->
+			<div class="deliver-player__markers">
+				<button
+					v-for="each in comments"
+					:key="each.id"
+					type="button"
+					class="deliver-player__marker"
+					:class="{ 'deliver-player__marker--resolved': each.resolved }"
+					:style="{ left: leftOf(each) + '%' }"
+					:aria-label="each.author.name + ': ' + each.body"
+					@mouseenter="showPeek(each, $event)"
+					@focus="showPeek(each, $event)"
+					@blur="peek = null"
+					@click="seekTo(each.inFrame); emit('jump', each)">
+					<NcAvatar
+						:user="each.author.type === 'user' ? each.author.id : undefined"
+						:displayName="each.author.name"
+						:isNoUser="each.author.type !== 'user'"
+						:size="20"
+						hideStatus
+						disableMenu
+						disableTooltip />
+				</button>
+				<div v-if="peek" class="deliver-player__peek" :style="{ left: peek.left + 'px' }">
+					<NcAvatar
+						:user="peek.comment.author.type === 'user' ? peek.comment.author.id : undefined"
+						:displayName="peek.comment.author.name"
+						:isNoUser="peek.comment.author.type !== 'user'"
+						:size="32"
+						hideStatus
+						disableMenu
+						disableTooltip />
+					<div class="deliver-player__peek-content">
+						<div class="deliver-player__peek-head">
+							<strong>{{ peek.comment.author.name }}</strong>
+							<NcDateTime :timestamp="peek.comment.createdAt * 1000" relativeTime="short" />
+							<span class="deliver-player__peek-number">#{{ numbers.get(peek.comment.id) }}</span>
+						</div>
+						<p>
+							<span class="deliver-player__peek-time">{{ formatAt(peek.comment.inFrame, clock) }}</span>
+							{{ peek.comment.body }}
+						</p>
+					</div>
+				</div>
 			</div>
 		</div>
-
-		<!-- One avatar per Comment, where it sits on the timeline -->
-		<div class="deliver-player__markers">
-			<button
-				v-for="each in comments"
-				:key="each.id"
-				type="button"
-				class="deliver-player__marker"
-				:class="{ 'deliver-player__marker--resolved': each.resolved }"
-				:style="{ left: leftOf(each) + '%' }"
-				:title="each.author.name + ': ' + each.body"
-				@click="seekTo(each.inFrame); emit('jump', each)">
-				<NcAvatar
-					:user="each.author.type === 'user' ? each.author.id : undefined"
-					:displayName="each.author.name"
-					:isNoUser="each.author.type !== 'user'"
-					:size="20"
-					hideStatus
-					disableMenu
-					disableTooltip />
-			</button>
-		</div>
-
-		<svg
-			v-if="peaks.length && !version.audioOnly"
-			class="deliver-player__waveform"
-			viewBox="0 0 100 100"
-			preserveAspectRatio="none"
-			aria-hidden="true">
-			<polygon :points="waveformPoints" />
-		</svg>
 
 		<div class="deliver-player__controls">
 			<div class="deliver-player__group">
@@ -754,25 +804,61 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	color: var(--color-text-maxcontrast);
 }
 
-/* A thin line across the whole width; taller to the pointer than to the eye */
+/* A thin line across the whole width; on hover it grows, to follow thumbnails */
+.deliver-player__scrubber {
+	position: relative;
+}
+
 .deliver-player__timeline {
 	position: relative;
-	height: 12px;
+	height: 16px;
 	cursor: pointer;
 }
 
 .deliver-player__track {
 	position: absolute;
 	inset-inline: 0;
-	top: 4px;
+	top: 6px;
 	height: 4px;
 	background: rgba(255, 255, 255, 0.14);
-	transition: height 0.1s, top 0.1s;
+	transition: height 0.12s, top 0.12s;
 }
 
-.deliver-player__timeline:hover .deliver-player__track {
-	top: 3px;
-	height: 6px;
+.deliver-player__scrubber:hover .deliver-player__track {
+	top: 2px;
+	height: 12px;
+}
+
+/* Where the player stands: a white line, right above the centre of an avatar on that Frame */
+.deliver-player__playhead {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 2px;
+	margin-inline-start: -1px;
+	border-radius: 1px;
+	background: #fff;
+	pointer-events: none;
+}
+
+/* The Waveform over the picture's bottom edge, only while the pointer is on the bar */
+.deliver-player__waveform {
+	position: absolute;
+	inset-inline: 0;
+	bottom: 100%;
+	width: 100%;
+	height: 44px;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.15s;
+}
+
+.deliver-player__scrubber:hover .deliver-player__waveform {
+	opacity: 1;
+}
+
+.deliver-player__waveform polygon {
+	fill: rgba(255, 255, 255, 0.35);
 }
 
 .deliver-player__progress {
@@ -851,15 +937,66 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	opacity: 0.45;
 }
 
-.deliver-player__waveform {
-	display: block;
-	width: 100%;
-	height: 28px;
-	border-bottom: 1px solid var(--color-border);
+/* The Comment under the pointer, as a card over the bar */
+.deliver-player__peek {
+	position: absolute;
+	bottom: calc(100% + 22px);
+	z-index: 2;
+	display: flex;
+	gap: 10px;
+	width: 320px;
+	padding: 12px 14px;
+	border: 1px solid var(--color-border-dark);
+	border-radius: var(--border-radius-large, 12px);
+	background: var(--deliver-card, #19191c);
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+	transform: translateX(-50%);
+	pointer-events: none;
 }
 
-.deliver-player__waveform polygon {
-	fill: rgba(255, 255, 255, 0.3);
+.deliver-player__peek-content {
+	flex: 1;
+	min-width: 0;
+}
+
+.deliver-player__peek-head {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	color: var(--color-text-maxcontrast);
+	font-size: 13px;
+}
+
+.deliver-player__peek-head strong {
+	overflow: hidden;
+	color: var(--color-main-text);
+	font-size: 15px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.deliver-player__peek-number {
+	margin-inline-start: auto;
+}
+
+.deliver-player__peek p {
+	display: -webkit-box;
+	margin: 6px 0 0;
+	overflow: hidden;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 3;
+	line-height: 1.6;
+	overflow-wrap: anywhere;
+}
+
+.deliver-player__peek-time {
+	margin-inline-end: 4px;
+	padding: 2px 6px;
+	border-radius: var(--border-radius, 6px);
+	background: rgba(245, 197, 24, 0.16);
+	color: #f5c518;
+	font-family: var(--font-face-monospace, monospace);
+	font-size: 13px;
 }
 
 .deliver-player__controls {
