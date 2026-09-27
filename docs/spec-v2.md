@@ -126,6 +126,21 @@ Deliver becomes a proper Nextcloud app, rebuilt from scratch, in which media fil
 83. As a German-speaking user, I want the UI in German, so that my team is comfortable.
 84. As a contributor, I want CI to run linting, PHP unit and integration tests, component tests and browser tests on every push, so that regressions are caught.
 
+### Milestone 1.0
+
+After 0.2.0 the feature set grows to what a hosted review tool offers (FreeFrame is the benchmark), on the same principles: Files stays the source of truth, Frames are the anchor.
+
+87. As a Member, I want to compare two Versions of an Asset side by side or under a wipe, playing in sync with a Frame offset for re-edited cuts and the sound of one side, so that I see exactly what changed.
+88. As a Member or Reviewer who may comment, I want to approve a Version or request changes, and everyone to see who decided what, so that sign-off is part of the review rather than an email.
+89. As a Member or Reviewer, I want to draw on the Frame I comment on (pen, arrow, box) and see the drawing whenever the player stands on that Comment, so that "this logo" needs no description.
+90. As a Member, I want to @mention another Member in a Comment and have them notified, so that the right person sees it.
+91. As a Member or Reviewer, I want to react to a Comment with an emoji, so that agreement costs no Reply.
+92. As a Member or Reviewer who may comment, I want to attach a file to a Comment, so that a reference picture or a document travels with the feedback.
+93. As a Member with write access, I want to set a Due Date on an Asset and have Members reminded the day before and on the day, so that deadlines stay visible.
+94. As a Member with write access, I want a Share Link to show a Watermark with the Reviewer's name over the picture, so that a leaked screen recording names its source.
+95. As a Member or Reviewer, I want images to be Assets with Comments, drawings, Versions and comparison, so that stills and design frames get the same review.
+96. As a Member or Reviewer, I want new Comments, Replies, reactions and approvals to appear without reloading, promptly where the server offers push, so that a review session feels live.
+
 ## Implementation Decisions
 
 ### Repository and stack
@@ -222,14 +237,11 @@ CI runs php-cs-fixer, psalm, PHPUnit (unit and integration), Vitest and Playwrig
 
 ## Out of Scope
 
-- Approval status per Version (later).
-- Drawing annotations on frames (never).
-- A/B or side-by-side Version comparison.
-- @mentions, digest emails.
-- Images and PDFs as Assets.
+- Digest emails.
+- PDFs as Assets.
+- Watermarks burned into the picture (the Watermark is an overlay in the player).
 - Adaptive streaming, multiple Proxy renditions, 4K Proxies.
 - External or GPU-farm transcoding workers over HTTP (job table is ready for it).
-- Push via notify_push (polling endpoint is designed to be replaced).
 - Direct push of markers into DaVinci Resolve.
 - Signed App Store release workflow and the certificate.
 - Deploying Nextcloud on the Proxmox NAS; the repo ships only a generic `deploy/` compose example with ffmpeg and `/dev/dri`.
