@@ -38,7 +38,7 @@ const newest = ref([])
 
 /** Who watches, and when: the Reviewer's name once they gave one (story 94) */
 const watermarkText = computed(() => [
-	store.me?.type === 'reviewer' ? store.me.name : t('deliver', 'Guest'),
+	store.me?.type === 'reviewer' ? (reviewerName.value || context.value?.me?.name || '') : t('deliver', 'Guest'),
 	new Date().toLocaleDateString(getLanguage()),
 ].join(' · '))
 const version = computed(() => context.value?.versions.find((each) => each.id === current.value) ?? null)
