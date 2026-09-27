@@ -141,6 +141,30 @@ test.describe('Review view', () => {
 		await expect(page.locator('.deliver-approval__people li')).toHaveCount(1)
 		await expect(page.locator('.deliver-approval__menu button')).toContainText('Approved')
 	})
+
+	test('compares two Versions in step', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		expect((await api.fetch(`/remote.php/dav/files/${USER}/${folder}/clip_v2.webm`, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(201)
+		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
+		await api.dispose()
+		const stack = project.ocs.data.assets[0].versions
+		expect(stack).toHaveLength(2)
+
+		await page.goto(`/apps/deliver/compare/${stack[1].id}/${stack[0].id}`)
+		const videos = page.locator('.deliver-compare video')
+		await expect(videos).toHaveCount(2)
+		await expect(videos.first()).toHaveJSProperty('readyState', 4)
+		await page.locator('.deliver-layout__bar h2').click()
+		await page.keyboard.press('ArrowRight')
+		await page.keyboard.press('ArrowRight')
+		await expect(page.locator('.deliver-compare__timecode')).toContainText('00:00:00:02')
+		// B follows A to the same Frame
+		const times = await videos.evaluateAll((all) => all.map((video) => video.currentTime))
+		expect(times[1]).toBeCloseTo(times[0], 3)
+
+		await page.getByRole('radio', { name: 'Wipe' }).click()
+		await expect(page.locator('.deliver-compare__handle')).toBeVisible()
+	})
 })
 
 /**
