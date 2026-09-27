@@ -34,6 +34,7 @@ export const regenerateVersion = (id) => axios.post(url(`/versions/${id}/regener
 
 export const getAssetForFile = (fileId) => axios.get(url(`/files/${fileId}/asset`)).then(data)
 export const enableFile = (fileId) => axios.post(url('/assets'), { fileId }).then(data)
+export const updateAsset = (id, fields) => axios.put(url(`/assets/${id}`), fields).then(data)
 export const disableAsset = (id) => axios.delete(url(`/assets/${id}`))
 
 export const listComments = (versionId) => axios.get(url(`/versions/${versionId}/comments`)).then(data)

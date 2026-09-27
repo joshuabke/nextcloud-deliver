@@ -305,6 +305,30 @@ class ProjectService {
 		return [$version, $project, $folder];
 	}
 
+	/**
+	 * Sets or clears an Asset's Due Date (story 93). A new date earns new reminders.
+	 *
+	 * @param ?string $dueDate YYYY-MM-DD, or null for none
+	 * @throws InvalidRequestException not a calendar day
+	 */
+	public function setDueDate(string $uid, int $assetId, ?string $dueDate): array {
+		$asset = $this->assets->find($assetId) ?? throw new NotFoundException('Asset not found');
+		[, $folder] = $this->resolve($uid, $asset->getProjectId());
+		$this->assertWritable($folder);
+		if ($dueDate !== null) {
+			$day = \DateTimeImmutable::createFromFormat('!Y-m-d', $dueDate);
+			if ($day === false || $day->format('Y-m-d') !== $dueDate) {
+				throw new InvalidRequestException('A Due Date is a day like 2026-10-31');
+			}
+		}
+		if ($asset->getDueDate() !== $dueDate) {
+			$asset->setDueDate($dueDate);
+			$asset->setDueReminded(null);
+			$this->assets->update($asset);
+		}
+		return ['id' => $asset->getId(), 'dueDate' => $asset->getDueDate()];
+	}
+
 	/** Regenerates the derived media of a Version (story 80) */
 	public function regenerate(string $uid, int $versionId): array {
 		[$version, $project, $folder] = $this->writableVersion($uid, $versionId);
@@ -333,7 +357,7 @@ class ProjectService {
 		return [
 			'versionId' => $versionId,
 			'project' => $this->serialize($project, $folder),
-			'asset' => ['id' => $asset->getId(), 'name' => $name],
+			'asset' => ['id' => $asset->getId(), 'name' => $name, 'dueDate' => $asset->getDueDate()],
 			'versions' => array_map(fn (Version $each) => $this->versionPayload($each, $project, $folder, $uid), $stack),
 		];
 	}
@@ -661,6 +685,7 @@ class ProjectService {
 				'name' => $this->stacks->nameOf($asset),
 				'path' => $path ?? '',
 				'parentId' => $asset->getParentId(),
+				'dueDate' => $asset->getDueDate(),
 				'versions' => $versions,
 			];
 		}

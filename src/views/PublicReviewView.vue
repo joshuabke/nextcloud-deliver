@@ -10,6 +10,7 @@ import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import ApprovalControl from '../components/ApprovalControl.vue'
 import AssetStepper from '../components/AssetStepper.vue'
 import CommentPanel from '../components/CommentPanel.vue'
+import DueDate from '../components/DueDate.vue'
 import ReviewLayout from '../components/ReviewLayout.vue'
 import VersionPicker from '../components/VersionPicker.vue'
 import VideoPlayer from '../components/VideoPlayer.vue'
@@ -115,6 +116,7 @@ async function claim({ name, email }) {
 				<h2 class="deliver-public__title">
 					{{ context.asset?.name }}
 				</h2>
+				<DueDate :modelValue="context.asset?.dueDate ?? null" />
 			</template>
 			<template #center>
 				<AssetStepper :index="assetIndex" :count="newest.length" @step="step" />

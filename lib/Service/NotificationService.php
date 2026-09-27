@@ -32,6 +32,8 @@ class NotificationService {
 	public const APPROVED = 'approved';
 	public const CHANGES = 'changes';
 	public const MENTION = 'mention';
+	public const DUE_TOMORROW = 'due_tomorrow';
+	public const DUE_TODAY = 'due_today';
 
 	public function __construct(
 		private INotificationManager $notifications,
@@ -91,6 +93,11 @@ class NotificationService {
 			['file' => $version->getName()],
 			$this->userSession->getUser()?->getUID(),
 		);
+	}
+
+	/** An Asset is due tomorrow or today (story 93); nobody caused it, so every Member hears */
+	public function due(Version $newest, bool $today): void {
+		$this->notify($newest, $today ? self::DUE_TODAY : self::DUE_TOMORROW, 'asset', (string)$newest->getAssetId(), [], null);
 	}
 
 	/** Someone approved a Version or requested changes (story 88) */

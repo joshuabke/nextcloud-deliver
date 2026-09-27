@@ -108,6 +108,25 @@ class NotificationTest extends TestCase {
 		self::assertStringContainsString('@Mara Member please check the logo', $edl, 'exports show the name');
 	}
 
+	public function testMembersAreRemindedOfADueDateOnce(): void {
+		$assetId = $this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'][0]['id'];
+		self::assertSame(400, $this->nc->ocs('PUT', "/assets/$assetId", ['dueDate' => '2026-02-30'])['status']);
+
+		$set = $this->nc->ocs('PUT', "/assets/$assetId", ['dueDate' => date('Y-m-d')]);
+		self::assertSame([200, date('Y-m-d')], [$set['status'], $set['data']['dueDate']]);
+		self::assertSame(date('Y-m-d'), $this->nc->ocs('GET', "/versions/{$this->versionId}")['data']['asset']['dueDate']);
+
+		$this->runReminders();
+		$this->runReminders();
+		self::assertSame(['cut is due today'], $this->subjects($this->member), 'once, not every hour');
+	}
+
+	private function runReminders(): void {
+		exec("php /var/www/html/occ background-job:list --class='OCA\\Deliver\\BackgroundJob\\RemindDueDates' --output=json", $listed);
+		$job = json_decode(implode('', $listed), true)[0]['id'];
+		exec("php /var/www/html/occ background-job:execute $job --force-execute 2>&1");
+	}
+
 	public function testAMutedProjectStaysQuiet(): void {
 		self::assertTrue($this->nc->ocs('PUT', "/projects/{$this->projectId}/mute", ['muted' => true])['data']['muted']);
 		self::assertTrue($this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['muted']);

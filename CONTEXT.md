@@ -60,6 +60,10 @@ _Avoid_: Annotation (in the UI), sketch, markup
 A Member named in a Comment with `@`, who is notified even from a muted Project. Reviewers can be read but not mentioned, as they have no account.
 _Avoid_: Tag, ping
 
+**Due Date**:
+The calendar day an Asset should be through by. Members are reminded the day before and on the day, unless its newest Version is approved with nobody asking for changes.
+_Avoid_: Deadline
+
 **Attachment**:
 A file added to a Comment, up to five of 25 MB. It lives in the Project folder under `.deliver-attachments/<Comment id>/`, is never an Asset, and goes with its Comment.
 _Avoid_: Upload, file (alone)
@@ -141,4 +145,5 @@ The German translation (`l10n/de` with "du", `l10n/de_DE` with "Sie") uses these
 | Reaction | Reaktion |
 | Mention | Erwähnung |
 | Attachment | Anhang |
+| Due Date | Fälligkeitsdatum |
 | Approval (approved, changes requested) | Abnahme (abgenommen, Änderungen gewünscht) |

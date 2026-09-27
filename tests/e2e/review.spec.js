@@ -176,6 +176,11 @@ test.describe('Review view', () => {
 		await expect(page.locator('.deliver-comment').filter({ hasText: 'this corner' })).toBeVisible()
 		await expect(page.locator('.deliver-drawing path')).toHaveCount(1)
 
+		// A Due Date set in the header shows there (story 93)
+		await page.locator('.deliver-due__input').fill('2030-01-31')
+		await expect(page.locator('.deliver-due')).toContainText('Due')
+		await expect(page.locator('.deliver-due__clear')).toBeVisible()
+
 		// Approving shows the decision next to the menu (story 88)
 		await page.locator('.deliver-approval__menu button').click()
 		await page.getByRole('menuitemradio', { name: 'Approve this Version' }).click()
