@@ -43,6 +43,7 @@ class StackService {
 		private ReviewerMapper $reviewers,
 		private DerivedMedia $media,
 		private NotificationService $notifications,
+		private ReviewerMail $reviewerMail,
 		private MuteMapper $mutes,
 		private IRootFolder $root,
 		private ITimeFactory $time,
@@ -118,6 +119,7 @@ class StackService {
 			$this->db->commit();
 			$this->media->queue($version->getId());
 			$this->notifications->versionArrived($version);
+			$this->reviewerMail->versionArrived($version);
 			return $version;
 		} catch (DbException $e) {
 			$this->db->rollBack();

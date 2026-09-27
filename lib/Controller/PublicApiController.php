@@ -7,6 +7,7 @@ namespace OCA\Deliver\Controller;
 use OCA\Deliver\Db\Reviewer;
 use OCA\Deliver\Db\Version;
 use OCA\Deliver\Http\RangeFileResponse;
+use OCA\Deliver\Service\AccessDeniedException;
 use OCA\Deliver\Service\ApprovalService;
 use OCA\Deliver\Service\CommentService;
 use OCA\Deliver\Service\DerivedMedia;
@@ -133,10 +134,11 @@ class PublicApiController extends PublicShareController {
 	/** A Reviewer names themselves once; the answer carries their Personal Link (story 54) */
 	#[PublicPage]
 	#[NoCSRFRequired]
-	public function claim(string $name, ?string $email = null): Response {
-		return $this->guard(function () use ($name, $email) {
+	public function claim(string $name, ?string $email = null, ?bool $mailReplies = null, ?bool $mailComments = null, ?bool $mailVersions = null): Response {
+		return $this->guard(function () use ($name, $email, $mailReplies, $mailComments, $mailVersions) {
 			$share = $this->share();
-			$reviewer = $this->reviewers->claim($this->sharing->project($share), $name, $email);
+			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
+			$reviewer = $this->reviewers->claim($this->sharing->project($share), $name, $email, $wishes);
 			// A JSONResponse, because a DataResponse loses its cookies on the way out
 			$response = new JSONResponse(
 				$this->reviewers->serialize($reviewer) + ['link' => $this->sharing->personalLink($share, $reviewer)],
@@ -144,6 +146,17 @@ class PublicApiController extends PublicShareController {
 			);
 			$this->rememberReviewer($response, $reviewer->getSecretKey());
 			return $response;
+		});
+	}
+
+	/** A Reviewer changes their address or what they want mailed */
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function settings(?string $email = null, ?bool $mailReplies = null, ?bool $mailComments = null, ?bool $mailVersions = null): Response {
+		return $this->guard(function () use ($email, $mailReplies, $mailComments, $mailVersions) {
+			$reviewer = $this->reviewer() ?? throw new AccessDeniedException('Give a name first');
+			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
+			return $this->reviewers->serialize($this->reviewers->updateSettings($reviewer, $email, $wishes));
 		});
 	}
 
@@ -254,7 +267,7 @@ class PublicApiController extends PublicShareController {
 		return $reviewer === null
 			// A logged-in visitor gets their display name offered (story 58)
 			? ['type' => 'unnamed', 'name' => $this->userSession->getUser()?->getDisplayName() ?? '']
-			: ['type' => 'reviewer', 'id' => $reviewer->getId(), 'name' => $reviewer->getName()];
+			: ['type' => 'reviewer', 'id' => $reviewer->getId(), 'name' => $reviewer->getName(), 'email' => $reviewer->getEmail(), 'mail' => $reviewer->mailWishes()];
 	}
 
 	private function reviewer(): ?Reviewer {
