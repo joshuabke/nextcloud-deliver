@@ -180,7 +180,9 @@ class NotificationTest extends TestCase {
 		// In the language of whoever replied
 		self::assertSame("{$this->owner} replied to your Comment", $mail['Subject']);
 		self::assertStringContainsString('yes, final', $mail['Text']);
-		self::assertStringContainsString("/apps/deliver/s/{$link['data']['token']}/versions/{$this->versionId}?r=", $mail['Text'], 'straight into the Review view, as that Reviewer');
+		// On the instance's own address, whichever address the reply came through
+		$base = rtrim((string)shell_exec('php /var/www/html/occ config:system:get overwrite.cli.url'));
+		self::assertStringContainsString("$base/apps/deliver/s/{$link['data']['token']}/versions/{$this->versionId}?r=", $mail['Text'], 'straight into the Review view, as that Reviewer');
 		$this->nc->ocsForm('DELETE', "/ocs/v2.php/apps/files_sharing/api/v1/shares/{$link['data']['id']}");
 	}
 }

@@ -175,7 +175,7 @@ class ShareReviewService {
 		for (; $node !== null && $owner !== null; $node = $node->getId() === $folder->getId() ? null : $node->getParent()) {
 			foreach ($this->shares->getSharesBy($owner, IShare::TYPE_LINK, $node, true, -1) as $share) {
 				if ($this->isReview($share)) {
-					return $this->urls->linkToRouteAbsolute('deliver.Public.showVersion', ['token' => $share->getToken(), 'versionId' => $version->getId()])
+					return $this->instanceUrl($this->urls->linkToRoute('deliver.Public.showVersion', ['token' => $share->getToken(), 'versionId' => $version->getId()]))
 						. '?r=' . rawurlencode($reviewer->getSecretKey());
 				}
 			}
@@ -185,6 +185,18 @@ class ShareReviewService {
 
 	private function reviewerWithLink(IShare $share, Reviewer $reviewer): array {
 		return $this->reviewers->serialize($reviewer) + ['link' => $this->personalLink($share, $reviewer)];
+	}
+
+	/**
+	 * A path on the instance's own address (overwrite.cli.url), for mails:
+	 * the request that sent one may have come in through localhost or an IP.
+	 */
+	private function instanceUrl(string $path): string {
+		$base = parse_url($this->config->getSystemValueString('overwrite.cli.url'));
+		if (!isset($base['scheme'], $base['host'])) {
+			return $this->urls->getAbsoluteURL($path);
+		}
+		return $base['scheme'] . '://' . $base['host'] . (isset($base['port']) ? ':' . $base['port'] : '') . $path;
 	}
 
 	private function shareUrl(IShare $share): string {
