@@ -9,6 +9,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import { compareSource, drifted, frameOnA, frameOnB } from '../lib/compare.js'
 import { actionFor } from '../lib/hotkeys.js'
+import { isStill } from '../lib/media.js'
 import { formatAt, frameToTime, timeToFrame } from '../lib/timecode.js'
 
 /** Frames B is ahead of A */
@@ -41,6 +42,9 @@ const playing = ref(false)
 /** Where the wipe divides, from 0 to 100 */
 const wipe = ref(50)
 
+/** Stills show as pictures; with a still on side A there is no time to play (story 95) */
+const stillA = computed(() => isStill(props.a))
+const stillB = computed(() => isStill(props.b))
 const sourceA = computed(() => compareSource(props.a))
 const sourceB = computed(() => compareSource(props.b))
 const progress = computed(() => durationFrames.value ? (frame.value / durationFrames.value) * 100 : 0)
@@ -175,8 +179,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 			:class="`deliver-compare__stage--${mode}`"
 			@pointerdown="startWipe">
 			<div class="deliver-compare__side">
+				<img v-if="stillA" :src="a.url" :alt="a.name">
 				<video
-					v-if="sourceA"
+					v-else-if="sourceA"
 					ref="videoA"
 					:src="sourceA"
 					:muted="audio !== 'a'"
@@ -187,8 +192,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 				<span class="deliver-compare__label">{{ t('deliver', 'V{number}', { number: a.number }) }}</span>
 			</div>
 			<div class="deliver-compare__side deliver-compare__side--b" :style="mode === 'wipe' ? { clipPath: `inset(0 0 0 ${wipe}%)` } : null">
+				<img v-if="stillB" :src="b.url" :alt="b.name">
 				<video
-					v-if="sourceB"
+					v-else-if="sourceB"
 					ref="videoB"
 					:src="sourceB"
 					:muted="audio !== 'b'"
@@ -199,7 +205,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 			<div v-if="mode === 'wipe'" class="deliver-compare__handle" :style="{ left: wipe + '%' }" />
 		</div>
 
-		<div class="deliver-compare__timeline" @click="scrub">
+		<div v-if="!stillA" class="deliver-compare__timeline" @click="scrub">
 			<div class="deliver-compare__track">
 				<div class="deliver-compare__progress" :style="{ width: progress + '%' }" />
 			</div>
@@ -214,7 +220,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 				@click.stop="pause(); seekTo(marker.at)" />
 		</div>
 
-		<div class="deliver-compare__controls">
+		<div v-if="!stillA" class="deliver-compare__controls">
 			<div class="deliver-compare__group">
 				<NcButton
 					variant="tertiary"
@@ -310,7 +316,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 	min-height: 0;
 }
 
-.deliver-compare__side video {
+.deliver-compare__side video,
+.deliver-compare__side img {
 	position: absolute;
 	inset: 0;
 	width: 100%;

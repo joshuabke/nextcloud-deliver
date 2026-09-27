@@ -1,4 +1,5 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { isStill } from '../lib/media.js'
 
 /** How long to wait before asking again while derived media is being made */
 const DERIVED_RECHECK = 10000
@@ -27,6 +28,8 @@ export function useReview({ version, projectMode, refresh }) {
 		mode: mode.value,
 		startFrame: version.value?.startFrame ?? 0,
 		dropFrame: version.value?.dropFrame ?? false,
+		/** A still has no time to show (story 95) */
+		still: isStill(version.value),
 	}))
 
 	/**
@@ -73,7 +76,11 @@ export function useReview({ version, projectMode, refresh }) {
 	 * @param {{inFrame: number}} comment - the Comment to seek to
 	 */
 	function jump(comment) {
-		player.value?.seekTo(comment.inFrame)
+		if (player.value?.show) {
+			player.value.show(comment)
+		} else {
+			player.value?.seekTo(comment.inFrame)
+		}
 	}
 
 	/**

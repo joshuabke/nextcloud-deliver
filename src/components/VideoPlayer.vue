@@ -1,16 +1,12 @@
 <script setup>
-import arrowIcon from '@mdi/svg/svg/arrow-top-right.svg?raw'
 import menuIcon from '@mdi/svg/svg/chevron-down.svg?raw'
 import caretIcon from '@mdi/svg/svg/chevron-up.svg?raw'
 import closeIcon from '@mdi/svg/svg/close.svg?raw'
-import penIcon from '@mdi/svg/svg/draw.svg?raw'
 import fullscreenExitIcon from '@mdi/svg/svg/fullscreen-exit.svg?raw'
 import fullscreenIcon from '@mdi/svg/svg/fullscreen.svg?raw'
 import pauseIcon from '@mdi/svg/svg/pause.svg?raw'
 import playIcon from '@mdi/svg/svg/play.svg?raw'
 import loopIcon from '@mdi/svg/svg/repeat.svg?raw'
-import boxIcon from '@mdi/svg/svg/square-outline.svg?raw'
-import undoIcon from '@mdi/svg/svg/undo.svg?raw'
 import volumeIcon from '@mdi/svg/svg/volume-high.svg?raw'
 import mutedIcon from '@mdi/svg/svg/volume-off.svg?raw'
 import { t } from '@nextcloud/l10n'
@@ -21,6 +17,7 @@ import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DrawingLayer from './DrawingLayer.vue'
+import DrawToolbar from './DrawToolbar.vue'
 import { COLORS, drawingsAt } from '../lib/drawing.js'
 import { actionFor } from '../lib/hotkeys.js'
 import { formatAt, fpsValue, frameToTime, MODES, timeToFrame } from '../lib/timecode.js'
@@ -44,8 +41,6 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['comment', 'jump', 'update:mode', 'update:drawing'])
-
-const TOOL_ICONS = { pen: penIcon, arrow: arrowIcon, box: boxIcon }
 
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2]
 
@@ -492,38 +487,12 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 				:tool="tool"
 				:color="color" />
 			<div v-if="watermark" class="deliver-player__watermark" :style="{ backgroundImage: watermarkTile(watermark) }" />
-			<div v-if="drawing" class="deliver-player__drawbar">
-				<button
-					v-for="(icon, each) in TOOL_ICONS"
-					:key="each"
-					type="button"
-					:aria-pressed="tool === each"
-					:title="{ pen: t('deliver', 'Pen'), arrow: t('deliver', 'Arrow'), box: t('deliver', 'Box') }[each]"
-					@click="tool = each">
-					<NcIconSvgWrapper :svg="icon" :size="20" />
-				</button>
-				<span class="deliver-player__drawbar-gap" />
-				<button
-					v-for="each in COLORS"
-					:key="each"
-					type="button"
-					class="deliver-player__swatch"
-					:aria-pressed="color === each"
-					:style="{ background: each }"
-					:title="each"
-					@click="color = each" />
-				<span class="deliver-player__drawbar-gap" />
-				<button
-					type="button"
-					:disabled="!draft.length"
-					:title="t('deliver', 'Undo')"
-					@click="draft = draft.slice(0, -1)">
-					<NcIconSvgWrapper :svg="undoIcon" :size="20" />
-				</button>
-				<button type="button" class="deliver-player__drawbar-done" @click="emit('update:drawing', false)">
-					{{ t('deliver', 'Done') }}
-				</button>
-			</div>
+			<DrawToolbar
+				v-if="drawing"
+				v-model:tool="tool"
+				v-model:color="color"
+				v-model:draft="draft"
+				@done="emit('update:drawing', false)" />
 			<!-- Audio has no picture, so its Waveform takes the stage -->
 			<div v-if="version.audioOnly && peaks.length" class="deliver-player__sound" @click="scrub">
 				<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
@@ -771,67 +740,6 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	position: absolute;
 	inset: 0;
 	pointer-events: none;
-}
-
-/* The drawing tools float over the top of the picture */
-.deliver-player__drawbar {
-	position: absolute;
-	top: 12px;
-	left: 50%;
-	z-index: 1;
-	display: flex;
-	align-items: center;
-	gap: 4px;
-	padding: 4px 6px;
-	border-radius: var(--border-radius-large, 12px);
-	background: rgba(20, 20, 22, 0.9);
-	transform: translateX(-50%);
-}
-
-.deliver-player__drawbar button {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	min-width: 32px;
-	min-height: 32px;
-	margin: 0;
-	padding: 4px;
-	border: 2px solid transparent;
-	border-radius: var(--border-radius, 6px);
-	background: none;
-	color: #fff;
-	cursor: pointer;
-}
-
-.deliver-player__drawbar button[aria-pressed='true'] {
-	border-color: #fff;
-}
-
-.deliver-player__drawbar button:disabled {
-	opacity: 0.4;
-	cursor: default;
-}
-
-.deliver-player__drawbar .deliver-player__swatch {
-	min-width: 22px;
-	min-height: 22px;
-	width: 22px;
-	height: 22px;
-	padding: 0;
-	border-radius: 50%;
-}
-
-.deliver-player__drawbar-gap {
-	width: 1px;
-	height: 20px;
-	margin: 0 4px;
-	background: rgba(255, 255, 255, 0.25);
-}
-
-.deliver-player__drawbar .deliver-player__drawbar-done {
-	padding: 4px 12px;
-	background: var(--color-primary-element);
-	font-weight: bold;
 }
 
 .deliver-player__notice {

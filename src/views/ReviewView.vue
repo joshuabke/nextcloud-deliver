@@ -17,6 +17,7 @@ import AssetStepper from '../components/AssetStepper.vue'
 import CommentPanel from '../components/CommentPanel.vue'
 import DueDate from '../components/DueDate.vue'
 import ExportMenu from '../components/ExportMenu.vue'
+import ImageViewer from '../components/ImageViewer.vue'
 import PanelTabs from '../components/PanelTabs.vue'
 import ReviewLayout from '../components/ReviewLayout.vue'
 import VersionPicker from '../components/VersionPicker.vue'
@@ -231,8 +232,18 @@ async function upload(event) {
 			</NcNoteCard>
 		</template>
 
+		<ImageViewer
+			v-if="version && clock.still"
+			ref="player"
+			v-model:draft="draft"
+			v-model:drawing="drawing"
+			:version="version"
+			:comments="store.threads"
+			:canComment="store.canComment === true"
+			@comment="pin($event); tab = 'comments'; panelOpen = true"
+			@jump="jump" />
 		<VideoPlayer
-			v-if="version"
+			v-else-if="version"
 			ref="player"
 			v-model:mode="mode"
 			v-model:draft="draft"
@@ -264,7 +275,8 @@ async function upload(event) {
 					<ExportMenu
 						v-if="context.project.canWrite"
 						:versionId="id"
-						:audioOnly="version?.audioOnly ?? false" />
+						:audioOnly="version?.audioOnly ?? false"
+						:still="clock.still" />
 				</template>
 			</CommentPanel>
 			<VersionStack

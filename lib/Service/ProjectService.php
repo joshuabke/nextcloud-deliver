@@ -204,7 +204,7 @@ class ProjectService {
 			throw new NotFoundException('File not found');
 		}
 		if (!$file instanceof File || !Reviewable::file($file)) {
-			throw new ProjectConflictException('Only a video or audio file can be enabled for review');
+			throw new ProjectConflictException('Only a video, audio or picture file can be enabled for review');
 		}
 		$this->assertWritable($file);
 		$project = $this->findProjectForFile($userFolder, $file);
@@ -408,7 +408,7 @@ class ProjectService {
 			// False when browsers cannot play the original, null while nobody knows yet
 			'playable' => $version->getPlayable(),
 			// Audio without a picture, once ffprobe has looked; null before
-			'audioOnly' => $version->getPlayable() === null ? null : !$version->getHasVideo(),
+			'audioOnly' => $version->getPlayable() === null ? null : !$version->getHasVideo() && (bool)$version->getHasAudio(),
 			'width' => $version->getWidth(),
 			'height' => $version->getHeight(),
 			// The short side in pixels, as in "1080p"

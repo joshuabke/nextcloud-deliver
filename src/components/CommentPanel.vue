@@ -321,7 +321,11 @@ function claim() {
 
 			<form v-else class="deliver-comments__form" @submit.prevent="submit">
 				<div class="deliver-comments__box" @click="input?.focus()">
-					<label class="deliver-comments__anchor" for="deliver-comment-body" :title="t('deliver', 'Where the Comment goes')">
+					<label
+						v-if="!clock.still"
+						class="deliver-comments__anchor"
+						for="deliver-comment-body"
+						:title="t('deliver', 'Where the Comment goes')">
 						{{ anchorLabel }}
 					</label>
 					<textarea
@@ -388,7 +392,7 @@ function claim() {
 						hidden
 						@change="pickFiles">
 					<span v-if="draft.length" class="deliver-comments__drawn">{{ n('deliver', '%n shape drawn', '%n shapes drawn', draft.length) }}</span>
-					<span class="deliver-comments__hint">{{ t('deliver', 'C comments on the Frame, I and O set a Range') }}</span>
+					<span class="deliver-comments__hint">{{ clock.still ? t('deliver', 'The pencil points at a spot on the picture') : t('deliver', 'C comments on the Frame, I and O set a Range') }}</span>
 					<NcButton
 						variant="primary"
 						:disabled="busy || !body.trim()"

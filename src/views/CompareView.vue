@@ -16,6 +16,7 @@ import ReviewLayout from '../components/ReviewLayout.vue'
 import VersionPicker from '../components/VersionPicker.vue'
 import { errorMessage, getVersion, listComments } from '../api.js'
 import { usePanelOpen } from '../composables/panel.js'
+import { isStill } from '../lib/media.js'
 import { formatAt } from '../lib/timecode.js'
 
 const props = defineProps({
@@ -145,6 +146,7 @@ function jump(comment) {
 				</button>
 			</div>
 			<NcButton
+				v-if="!isStill(versionA)"
 				variant="tertiary"
 				:aria-label="t('deliver', 'Sound of V{number}', { number: (audio === 'a' ? versionA : versionB).number })"
 				:title="t('deliver', 'Sound of V{number}; click for the other side', { number: (audio === 'a' ? versionA : versionB).number })"
@@ -171,7 +173,11 @@ function jump(comment) {
 			<PanelTabs v-model="tab" :tabs="tabs" />
 			<ul v-if="shown.length" class="deliver-compare-view__list">
 				<li v-for="comment in shown" :key="comment.id">
-					<button type="button" class="deliver-compare-view__anchor" @click="jump(comment)">
+					<button
+						v-if="!isStill(versionA)"
+						type="button"
+						class="deliver-compare-view__anchor"
+						@click="jump(comment)">
 						{{ formatAt(comment.inFrame, tab === 'a' ? clock : { ...clock, fps: versionB.fps, startFrame: versionB.startFrame ?? 0 }) }}
 					</button>
 					<span class="deliver-compare-view__author">{{ comment.author.name }}</span>
