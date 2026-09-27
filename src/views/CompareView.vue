@@ -16,6 +16,7 @@ import ReviewLayout from '../components/ReviewLayout.vue'
 import VersionPicker from '../components/VersionPicker.vue'
 import { errorMessage, getVersion, listComments } from '../api.js'
 import { usePanelOpen } from '../composables/panel.js'
+import { frameOnA } from '../lib/compare.js'
 import { isStill } from '../lib/media.js'
 import { formatAt } from '../lib/timecode.js'
 
@@ -72,13 +73,21 @@ function open(a, b) {
 	}
 }
 
+/** The sides change places; the offset, counted in B's Frames, turns into the other side's */
+function swap() {
+	const fpsA = versionA.value.fps
+	const fpsB = versionB.value.fps
+	offset.value = -Math.round(offset.value * (fpsA.num * fpsB.den) / (fpsA.den * fpsB.num))
+	open(props.b, props.a)
+}
+
 /**
  * @param {object} comment - a Comment of the side on the tab
  */
 function jump(comment) {
 	const target = tab.value === 'a'
 		? comment.inFrame
-		: Math.max(0, comment.inFrame - offset.value)
+		: frameOnA(comment.inFrame, versionA.value.fps, versionB.value.fps, offset.value)
 	player.value?.seekTo(target)
 }
 </script>
@@ -117,7 +126,7 @@ function jump(comment) {
 				variant="tertiary"
 				:aria-label="t('deliver', 'Swap sides')"
 				:title="t('deliver', 'Swap sides')"
-				@click="offset = -offset; open(b, a)">
+				@click="swap">
 				<template #icon>
 					<NcIconSvgWrapper :svg="swapIcon" />
 				</template>

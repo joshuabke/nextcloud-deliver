@@ -143,7 +143,14 @@ export const useCommentsStore = defineStore('comments', {
 			let comment = await createComment(this.versionId, { inFrame, outFrame, body, parentId, annotation })
 			this.comments = mergeComments(this.comments, [comment], null)
 			for (const file of files) {
-				comment = await attachFile(comment.id, file)
+				try {
+					comment = await attachFile(comment.id, file)
+				} catch (e) {
+					// The Comment stands; sending again would post it twice
+					e.commentPosted = true
+					e.fileName = file.name
+					throw e
+				}
 				this.comments = mergeComments(this.comments, [comment], null)
 			}
 			return comment

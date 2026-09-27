@@ -99,9 +99,9 @@ class NotificationTest extends TestCase {
 		$members = $this->nc->ocs('GET', "/projects/{$this->projectId}/members")['data'];
 		self::assertEqualsCanonicalizing([$this->owner, $this->user], array_column($members, 'id'));
 
-		$comment = $this->nc->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 2, 'body' => "@{$this->user} please check the logo"]);
+		$comment = $this->nc->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 2, 'body' => "@{$this->user} please check the logo, @admin"]);
 		self::assertSame(201, $comment['status'], json_encode($comment['data']));
-		self::assertSame([$this->user => 'Mara Member'], (array)$comment['data']['mentions']);
+		self::assertSame([$this->user => 'Mara Member'], (array)$comment['data']['mentions'], 'names of Members only, never of other accounts');
 		self::assertSame(["{$this->owner} mentioned you on cut, Version 1"], $this->subjects($this->member), 'a mention, not also a Comment');
 
 		$edl = $this->nc->request('GET', "/index.php/apps/deliver/versions/{$this->versionId}/export/edl")['body'];
