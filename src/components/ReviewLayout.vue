@@ -64,6 +64,15 @@ defineProps({
 	--color-primary-element-light: rgba(255, 255, 255, 0.1);
 	--color-primary-element-light-hover: rgba(255, 255, 255, 0.16);
 	--color-primary-element-light-text: #ececef;
+	/* Note cards take their tint from these */
+	--color-success: #17301d;
+	--color-success-text: #5fd068;
+	--color-info: #15283a;
+	--color-info-text: #6ea8ff;
+	--color-warning: #35290f;
+	--color-warning-text: #f5c518;
+	--color-error: #3a1818;
+	--color-error-text: #ff7b72;
 	--deliver-card: #19191c;
 	--deliver-timecode: #6ea8ff;
 	display: flex;

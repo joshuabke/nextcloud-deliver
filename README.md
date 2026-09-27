@@ -52,6 +52,10 @@ DELIVER_BROWSER_URL=http://<address the container can reach>:8080 npm run test:e
 
 PHPUnit has two tiers: `tests/Unit` for pure PHP (filename convention, timecode, export writers, pipeline arithmetic) and `tests/Integration` for everything that needs a running Nextcloud. `make test-integration` runs both; `--testsuite Unit` runs the fast one alone.
 
+## Live updates
+
+The Review view asks for changes every five seconds (thirty in a hidden tab). Where Nextcloud runs the [notify_push](https://github.com/nextcloud/notify_push) app, every new or changed Comment, Reaction or Approval is pushed to the Project's Members as well, and their open Review views update at once. Reviewers on a Share Link have no account to push to and keep polling.
+
 ## Derived media
 
 `ffprobe` reads the frame rate as a fraction, the start timecode and the duration in Frames; `ffmpeg` makes a Proxy for anything a browser will not play, a WebP Thumbnail Strip for the timeline and a Waveform for the audio. Everything lands in app data, never in a user folder, and is served with byte ranges so the player can seek.

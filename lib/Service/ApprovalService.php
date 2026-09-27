@@ -23,6 +23,7 @@ class ApprovalService {
 		private Authors $authors,
 		private ITimeFactory $time,
 		private NotificationService $notifications,
+		private LiveUpdates $live,
 	) {
 	}
 
@@ -52,6 +53,7 @@ class ApprovalService {
 		if ($status === null) {
 			if ($mine !== null) {
 				$this->approvals->delete($mine);
+				$this->live->changed($version);
 			}
 			return $this->list($version);
 		}
@@ -76,6 +78,7 @@ class ApprovalService {
 			}
 		}
 		$this->notifications->decided($version, $status, $viewer->uid, $this->authors->of($viewer->uid, $viewer->reviewerId)['name']);
+		$this->live->changed($version);
 		return $this->list($version);
 	}
 

@@ -30,13 +30,15 @@ const panelOpen = usePanelOpen()
 const context = ref(null)
 const error = ref(null)
 const personalLink = ref(null)
+/** The name the Reviewer gave; the Comment answers only carry who they are, not their name */
+const reviewerName = ref('')
 const current = ref(props.versionId)
 /** The newest Version of every Asset the share shows, to step through */
 const newest = ref([])
 
 /** Who watches, and when: the Reviewer's name once they gave one (story 94) */
 const watermarkText = computed(() => [
-	store.me?.type === 'reviewer' ? store.me.name : t('deliver', 'Guest'),
+	store.me?.type === 'reviewer' ? (reviewerName.value || context.value?.me?.name || '') : t('deliver', 'Guest'),
 	new Date().toLocaleDateString(getLanguage()),
 ].join(' · '))
 const version = computed(() => context.value?.versions.find((each) => each.id === current.value) ?? null)
@@ -96,6 +98,7 @@ async function claim({ name, email }) {
 	try {
 		const reviewer = await claimReviewer(name, email || null)
 		personalLink.value = reviewer.link
+		reviewerName.value = reviewer.name
 		await store.reload()
 	} catch (e) {
 		error.value = errorMessage(e)
@@ -148,7 +151,7 @@ async function claim({ name, email }) {
 					{{ error }}
 				</NcNoteCard>
 				<NcNoteCard v-if="personalLink" type="success" class="deliver-public__notice">
-					{{ t('deliver', 'Bookmark your Personal Link. It makes you "{name}" again on any device:', { name: store.me?.name ?? '' }) }}
+					{{ t('deliver', 'Bookmark your Personal Link. It makes you "{name}" again on any device:', { name: reviewerName }) }}
 					<code>{{ personalLink }}</code>
 				</NcNoteCard>
 			</template>
