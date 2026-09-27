@@ -228,6 +228,7 @@ OC.L10N.register(
 		"not found: no Proxies, Thumbnail Strips or Waveforms": "nicht gefunden: keine Proxies, Vorschauleisten oder Wellenformen",
 		"{author} approved {asset}, Version {number}": "{author} hat {asset}, Version {number} abgenommen",
 		"{author} commented on {asset}, Version {number}": "{author} hat {asset}, Version {number} kommentiert",
+		"{author} mentioned you on {asset}, Version {number}": "{author} hat dich bei {asset}, Version {number} erwähnt",
 		"{author} replied on {asset}, Version {number}": "{author} hat auf {asset}, Version {number} geantwortet",
 		"{author} requested changes on {asset}, Version {number}": "{author} wünscht Änderungen an {asset}, Version {number}",
 		"{count} unseen": "{count} ungesehen",

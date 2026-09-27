@@ -93,6 +93,21 @@ class NotificationTest extends TestCase {
 		self::assertNotContains("{$this->user} commented on cut, Version 1", $this->subjects($this->nc));
 	}
 
+	public function testAMentionReachesTheMemberEvenWhenMuted(): void {
+		$this->member->ocs('PUT', "/projects/{$this->projectId}/mute", ['muted' => true]);
+		$this->admin->ocsForm('PUT', "/ocs/v2.php/cloud/users/{$this->user}", ['key' => 'displayname', 'value' => 'Mara Member']);
+		$members = $this->nc->ocs('GET', "/projects/{$this->projectId}/members")['data'];
+		self::assertEqualsCanonicalizing([$this->owner, $this->user], array_column($members, 'id'));
+
+		$comment = $this->nc->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 2, 'body' => "@{$this->user} please check the logo"]);
+		self::assertSame(201, $comment['status'], json_encode($comment['data']));
+		self::assertSame([$this->user => 'Mara Member'], (array)$comment['data']['mentions']);
+		self::assertSame(["{$this->owner} mentioned you on cut, Version 1"], $this->subjects($this->member), 'a mention, not also a Comment');
+
+		$edl = $this->nc->request('GET', "/index.php/apps/deliver/versions/{$this->versionId}/export/edl")['body'];
+		self::assertStringContainsString('@Mara Member please check the logo', $edl, 'exports show the name');
+	}
+
 	public function testAMutedProjectStaysQuiet(): void {
 		self::assertTrue($this->nc->ocs('PUT', "/projects/{$this->projectId}/mute", ['muted' => true])['data']['muted']);
 		self::assertTrue($this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['muted']);

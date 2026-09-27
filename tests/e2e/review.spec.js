@@ -9,6 +9,8 @@ const ADMIN_PASSWORD = process.env.DELIVER_TEST_PASSWORD ?? 'adminadmin123'
 /** A user of its own, in English: the tests find buttons by their names, whatever language the admin speaks */
 const USER = 'deliver-e2e'
 const PASSWORD = 'deliver-e2e-' + randomBytes(12).toString('hex')
+/** A second Member, someone to mention */
+const MATE = 'deliver-e2e-mate'
 const CDP = process.env.DELIVER_CDP ?? 'http://127.0.0.1:9222'
 /** The browser may sit in its own container, where localhost is not Nextcloud */
 const BROWSER_URL = process.env.DELIVER_BROWSER_URL ?? URL
@@ -31,6 +33,10 @@ test.describe('Review view', () => {
 		const dav = `/remote.php/dav/files/${USER}/${folder}`
 		expect((await api.fetch(dav, { method: 'MKCOL' })).status()).toBe(201)
 		expect((await api.fetch(`${dav}/clip.webm`, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(201)
+		const shared = await api.post('/ocs/v2.php/apps/files_sharing/api/v1/shares?format=json', {
+			form: { path: `/${folder}`, shareType: 0, shareWith: MATE, permissions: 1 },
+		})
+		expect(shared.ok()).toBe(true)
 
 		const created = await api.post('/ocs/v2.php/apps/deliver/api/v1/projects?format=json', {
 			data: { folderId: await fileId(api, dav), autoIntake: true },
@@ -46,15 +52,13 @@ test.describe('Review view', () => {
 		await login(page)
 	})
 
-	test.afterAll(async () => {
-		const api = await test.request?.newContext?.({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+	test.afterAll(async ({ playwright }) => {
 		await context?.close()
 		await browser?.close()
-		if (api) {
-			await api.delete(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)
-			await api.fetch(`/remote.php/dav/files/${USER}/${folder}`, { method: 'DELETE' })
-			await api.dispose()
-		}
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		await api.delete(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)
+		await api.fetch(`/remote.php/dav/files/${USER}/${folder}`, { method: 'DELETE' })
+		await api.dispose()
 	})
 
 	test('comments on a Frame and on a Range, resolves and replies', async () => {
@@ -141,6 +145,15 @@ test.describe('Review view', () => {
 		await page.getByRole('menuitem', { name: '👍' }).click()
 		await expect(reacted.locator('.deliver-comment__reaction--mine')).toHaveText('👍 1')
 
+		// Typing @ offers the Members; the Comment shows the name (story 90)
+		await page.locator('#deliver-comment-body').fill('')
+		await page.locator('#deliver-comment-body').pressSequentially('look @Ma')
+		await page.getByRole('option', { name: 'Mara Mate' }).click()
+		await expect(page.locator('#deliver-comment-body')).toHaveValue(`look @${MATE} `)
+		await page.locator('#deliver-comment-body').pressSequentially('here')
+		await page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
+		await expect(page.locator('.deliver-comment__mention').first()).toHaveText('@Mara Mate')
+
 		// A drawing goes with the Comment and shows while the player stands on it (story 89)
 		await page.getByRole('button', { name: 'Draw on the picture' }).click()
 		const stage = await page.locator('.deliver-player__stage').boundingBox()
@@ -203,6 +216,8 @@ async function testUser(playwright) {
 		expect((await admin.put(`${users}/${USER}?format=json`, { form: { key: 'password', value: PASSWORD } })).ok()).toBe(true)
 	}
 	expect((await admin.put(`${users}/${USER}?format=json`, { form: { key: 'language', value: 'en' } })).ok()).toBe(true)
+	// The mate never logs in; a random password it is
+	await admin.post(`${users}?format=json`, { form: { userid: MATE, password: 'mate-' + randomBytes(12).toString('hex'), displayName: 'Mara Mate' } })
 	await admin.dispose()
 }
 

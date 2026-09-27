@@ -15,6 +15,21 @@ class Authors {
 	) {
 	}
 
+	/**
+	 * @param list<string> $uids
+	 * @return array<string, string> user id → display name, for the users that exist
+	 */
+	public function names(array $uids): array {
+		$names = [];
+		foreach ($uids as $uid) {
+			$user = $this->users->get($uid);
+			if ($user !== null) {
+				$names[$uid] = $user->getDisplayName();
+			}
+		}
+		return $names;
+	}
+
 	/** @return array{type: string, id: int|string, name: string} */
 	public function of(?string $uid, ?int $reviewerId): array {
 		if ($reviewerId !== null) {

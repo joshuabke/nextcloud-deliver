@@ -43,6 +43,8 @@ class ProjectService {
 		private IRootFolder $root,
 		private IURLGenerator $urls,
 		private ITimeFactory $time,
+		private Members $members,
+		private Authors $authors,
 	) {
 	}
 
@@ -85,6 +87,18 @@ class ProjectService {
 		[$project] = $this->resolve($uid, $id);
 		$this->mutes->set($project->getId(), $uid, $muted);
 		return ['muted' => $muted];
+	}
+
+	/**
+	 * Who can be @mentioned in this Project (story 90): its Members, by name.
+	 *
+	 * @return list<array{id: string, name: string}>
+	 */
+	public function members(string $uid, int $id): array {
+		[$project] = $this->resolve($uid, $id);
+		$names = $this->authors->names($this->members->of($project->getFolderId()));
+		asort($names, SORT_NATURAL | SORT_FLAG_CASE);
+		return array_map(static fn (string $id, string $name) => ['id' => $id, 'name' => $name], array_keys($names), array_values($names));
 	}
 
 	/**

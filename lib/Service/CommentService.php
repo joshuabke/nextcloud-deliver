@@ -322,6 +322,8 @@ class CommentService {
 			'body' => $comment->getBody(),
 			'resolved' => (bool)$comment->getResolved(),
 			'annotation' => Annotation::decode($comment->getAnnotation()),
+			// Display names of the users it @mentions (story 90); JSON object even when empty
+			'mentions' => (object)$this->authors->names(Mentions::parse((string)$comment->getBody())),
 			'reactions' => array_map(
 				static fn (string $emoji) => ['emoji' => $emoji, 'authors' => $byEmoji[$emoji]],
 				array_values(array_filter(self::REACTIONS, static fn (string $emoji) => isset($byEmoji[$emoji]))),
