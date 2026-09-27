@@ -1,0 +1,47 @@
+<?php
+
+declare(strict_types=1);
+
+namespace OCA\Deliver\Db;
+
+use OCP\AppFramework\Db\QBMapper;
+use OCP\DB\QueryBuilder\IQueryBuilder;
+use OCP\IDBConnection;
+
+/** @template-extends QBMapper<Reaction> */
+class ReactionMapper extends QBMapper {
+	public function __construct(IDBConnection $db) {
+		parent::__construct($db, 'deliver_reactions', Reaction::class);
+	}
+
+	/**
+	 * @param list<int> $commentIds
+	 * @return array<int, list<Reaction>> per Comment, oldest first
+	 */
+	public function findByComments(array $commentIds): array {
+		if ($commentIds === []) {
+			return [];
+		}
+		$byComment = [];
+		foreach (array_chunk($commentIds, 1000) as $chunk) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->select('*')->from($this->getTableName())
+				->where($qb->expr()->in('comment_id', $qb->createNamedParameter($chunk, IQueryBuilder::PARAM_INT_ARRAY)))
+				->orderBy('id');
+			foreach ($this->findEntities($qb) as $reaction) {
+				$byComment[$reaction->getCommentId()][] = $reaction;
+			}
+		}
+		return $byComment;
+	}
+
+	/** @param list<int> $commentIds */
+	public function deleteByComments(array $commentIds): void {
+		foreach (array_chunk($commentIds, 1000) as $chunk) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->delete($this->getTableName())
+				->where($qb->expr()->in('comment_id', $qb->createNamedParameter($chunk, IQueryBuilder::PARAM_INT_ARRAY)))
+				->executeStatement();
+		}
+	}
+}

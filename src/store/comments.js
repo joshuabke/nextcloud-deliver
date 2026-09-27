@@ -6,6 +6,7 @@ import {
 	deleteComment,
 	listComments,
 	markSeen,
+	reactComment,
 	resolveComment,
 	updateComment,
 } from '../api.js'
@@ -137,6 +138,9 @@ export const useCommentsStore = defineStore('comments', {
 			await deleteComment(id)
 			const gone = new Set([id, ...this.comments.filter((comment) => comment.parentId === id).map((comment) => comment.id)])
 			this.comments = this.comments.filter((comment) => !gone.has(comment.id))
+		},
+		async react(id, emoji, on) {
+			this.comments = mergeComments(this.comments, [await reactComment(id, emoji, on)], null)
 		},
 		async setResolved(id, resolved) {
 			this.comments = mergeComments(this.comments, [await resolveComment(id, resolved)], null)

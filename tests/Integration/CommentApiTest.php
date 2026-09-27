@@ -86,6 +86,30 @@ class CommentApiTest extends TestCase {
 		self::assertNull($this->comment($this->nc, ['inFrame' => 3, 'body' => 'plain'])['annotation']);
 	}
 
+	public function testReactionsToggleAndTravelWithTheComment(): void {
+		$comment = $this->comment($this->nc, ['inFrame' => 4, 'body' => 'nice grade']);
+		$reader = $this->member(1);
+		$react = static fn (NextcloudClient $who, string $emoji, bool $on) => $who->ocs('PUT', "/comments/{$comment['id']}/reactions", ['emoji' => $emoji, 'on' => $on]);
+
+		$react($this->nc, '👍', true);
+		$reacted = $react($reader, '👍', true);
+		self::assertSame(200, $reacted['status'], json_encode($reacted['data']));
+		self::assertSame('👍', $reacted['data']['reactions'][0]['emoji']);
+		self::assertCount(2, $reacted['data']['reactions'][0]['authors']);
+		// Twice is still once
+		self::assertCount(2, $react($reader, '👍', true)['data']['reactions'][0]['authors']);
+
+		// The Comment counts as changed, so the next poll brings it
+		$changes = $this->nc->ocs('GET', "/versions/{$this->versionId}/changes?since=" . (time() - 1))['data']['comments'];
+		self::assertSame([$comment['id']], array_column($changes, 'id'));
+
+		// Taking mine back leaves the other person's
+		$left = $react($this->nc, '👍', false)['data']['reactions'];
+		self::assertCount(1, $left[0]['authors']);
+		self::assertNotSame('admin', $left[0]['authors'][0]['id']);
+		self::assertSame(400, $react($this->nc, '🦄', true)['status'], 'only the emojis on offer');
+	}
+
 	public function testCommentsAnchorToFramesAndRanges(): void {
 		$frame = $this->comment($this->nc, ['inFrame' => 120, 'body' => 'colour is off here']);
 		self::assertSame([120, null], [$frame['inFrame'], $frame['outFrame']]);

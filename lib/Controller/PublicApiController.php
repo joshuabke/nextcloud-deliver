@@ -189,6 +189,12 @@ class PublicApiController extends PublicShareController {
 
 	#[PublicPage]
 	#[NoCSRFRequired]
+	public function react(int $id, string $emoji, bool $on = true): Response {
+		return $this->onComment($id, fn ($viewer, $version) => $this->comments->react($viewer, $version, $id, $emoji, $on));
+	}
+
+	#[PublicPage]
+	#[NoCSRFRequired]
 	public function destroy(int $id): Response {
 		return $this->onComment($id, function (Viewer $viewer, Version $version) use ($id) {
 			$this->comments->remove($viewer, $version, $id);
