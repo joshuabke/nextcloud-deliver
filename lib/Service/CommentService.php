@@ -322,10 +322,10 @@ class CommentService {
 			'body' => $comment->getBody(),
 			'resolved' => (bool)$comment->getResolved(),
 			'annotation' => Annotation::decode($comment->getAnnotation()),
-			'reactions' => array_values(array_map(
+			'reactions' => array_map(
 				static fn (string $emoji) => ['emoji' => $emoji, 'authors' => $byEmoji[$emoji]],
 				array_values(array_filter(self::REACTIONS, static fn (string $emoji) => isset($byEmoji[$emoji]))),
-			)),
+			),
 			'createdAt' => $comment->getCreatedAt(),
 			'updatedAt' => $comment->getUpdatedAt(),
 		];
