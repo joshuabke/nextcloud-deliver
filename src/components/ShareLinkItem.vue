@@ -37,7 +37,7 @@ async function run(action) {
 }
 
 /**
- * @param {object} flags - the Deliver flags to change: review, canComment, allowOlder
+ * @param {object} flags - the Deliver flags to change: review, canComment, allowOlder, watermark
  */
 function setFlags(flags) {
 	return run(async () => emit('update', await setShareFlags(props.share.id, flags)))
@@ -85,6 +85,12 @@ function invite() {
 					:disabled="busy || !canWrite"
 					@update:modelValue="setFlags({ canComment: $event })">
 					{{ t('deliver', 'Reviewers may comment') }}
+				</NcCheckboxRadioSwitch>
+				<NcCheckboxRadioSwitch
+					:modelValue="share.watermark"
+					:disabled="busy || !canWrite"
+					@update:modelValue="setFlags({ watermark: $event })">
+					{{ t('deliver', 'Watermark with the Reviewer\'s name') }}
 				</NcCheckboxRadioSwitch>
 				<NcCheckboxRadioSwitch
 					:modelValue="share.allowOlder"

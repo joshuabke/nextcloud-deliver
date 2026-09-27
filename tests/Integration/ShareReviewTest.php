@@ -90,6 +90,15 @@ class ShareReviewTest extends TestCase {
 		self::assertSame(200, $this->reviewer()->page());
 	}
 
+	public function testTheWatermarkIsAFlagOfTheLink(): void {
+		$context = fn () => $this->reviewer()->call('GET', '/api/context?versionId=' . $this->versionId)['data']['flags'];
+		self::assertFalse($context()['watermark'], 'off unless asked for');
+		$this->setFlags(['watermark' => true]);
+		self::assertTrue($context()['watermark']);
+		$listed = $this->nc->ocs('GET', "/files/{$this->nc->fileId($this->root)}/shares")['data'];
+		self::assertTrue($listed[0]['watermark'], 'the sidebar shows the switch on');
+	}
+
 	public function testAReviewerAttachesToTheirComment(): void {
 		$asReviewer = $this->reviewer();
 		$asReviewer->call('POST', '/api/reviewer', ['name' => 'Mara']);

@@ -22,10 +22,11 @@ const props = defineProps({
 const reviewable = ref(false)
 const initial = computed(() => {
 	const attribute = (key) => props.share?.attributes?.find((each) => each.scope === 'deliver' && each.key === key)?.value
-	return { review: attribute('review') === true, canComment: attribute('comment') !== false }
+	return { review: attribute('review') === true, canComment: attribute('comment') !== false, watermark: attribute('watermark') === true }
 })
 const review = ref(initial.value.review)
 const canComment = ref(initial.value.canComment)
+const watermark = ref(initial.value.watermark)
 
 onMounted(async () => {
 	const fileid = props.node?.fileid
@@ -37,10 +38,11 @@ onMounted(async () => {
 	}
 	props.onSave?.(async () => {
 		const id = props.share?.id
-		if (!reviewable.value || !id || (review.value === initial.value.review && canComment.value === initial.value.canComment)) {
+		const changed = review.value !== initial.value.review || canComment.value !== initial.value.canComment || watermark.value !== initial.value.watermark
+		if (!reviewable.value || !id || !changed) {
 			return
 		}
-		await setShareFlags(id, { review: review.value, canComment: canComment.value })
+		await setShareFlags(id, { review: review.value, canComment: canComment.value, watermark: watermark.value })
 	})
 })
 </script>
@@ -55,9 +57,14 @@ onMounted(async () => {
 				? t('deliver', 'People with this link get a Review button and can leave frame-accurate Comments.')
 				: t('deliver', 'An ordinary link: people see and play the files, but no Comments.') }}
 		</p>
-		<NcCheckboxRadioSwitch v-if="review" v-model="canComment">
-			{{ t('deliver', 'Reviewers may comment') }}
-		</NcCheckboxRadioSwitch>
+		<template v-if="review">
+			<NcCheckboxRadioSwitch v-model="canComment">
+				{{ t('deliver', 'Reviewers may comment') }}
+			</NcCheckboxRadioSwitch>
+			<NcCheckboxRadioSwitch v-model="watermark">
+				{{ t('deliver', 'Watermark with the Reviewer\'s name') }}
+			</NcCheckboxRadioSwitch>
+		</template>
 	</div>
 </template>
 

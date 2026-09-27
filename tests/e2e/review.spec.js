@@ -216,12 +216,15 @@ test.describe('Review view', () => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		const folderId = await fileId(api, `/remote.php/dav/files/${USER}/${folder}`)
 		const link = (await (await api.post(`/ocs/v2.php/apps/deliver/api/v1/files/${folderId}/shares?format=json`)).json()).ocs.data
+		// Only the newest Version takes Comments on this link
+		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
+		const newest = project.ocs.data.assets[0].versions[0].id
 		await api.dispose()
 
 		// A browser that has never been here
 		const visitor = await browser.newContext({ baseURL: BROWSER_URL })
 		const reviewer = await visitor.newPage()
-		await reviewer.goto(`/apps/deliver/s/${link.token}/versions/${versionId}`)
+		await reviewer.goto(`/apps/deliver/s/${link.token}/versions/${newest}`)
 		await reviewer.locator('#deliver-reviewer-name').fill('Mara')
 		await reviewer.getByRole('button', { name: 'Start reviewing' }).click()
 		await reviewer.locator('#deliver-comment-body').fill('from the client')

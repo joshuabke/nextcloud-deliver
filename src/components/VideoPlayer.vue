@@ -24,6 +24,7 @@ import DrawingLayer from './DrawingLayer.vue'
 import { COLORS, drawingsAt } from '../lib/drawing.js'
 import { actionFor } from '../lib/hotkeys.js'
 import { formatAt, fpsValue, frameToTime, MODES, timeToFrame } from '../lib/timecode.js'
+import { watermarkTile } from '../lib/watermark.js'
 
 /** The drawing being made for the next Comment */
 const draft = defineModel('draft', { type: Array, default: () => [] })
@@ -36,6 +37,8 @@ const props = defineProps({
 	/** How time is shown: { fps, mode, startFrame, dropFrame } */
 	clock: { type: Object, required: true },
 	canComment: { type: Boolean, default: false },
+	/** Text shown across the picture on a Share Link that asks for it (story 94) */
+	watermark: { type: String, default: null },
 	/** Whether the pointer draws on the picture (story 89) */
 	drawing: { type: Boolean, default: false },
 })
@@ -488,6 +491,7 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 				:editing="drawing"
 				:tool="tool"
 				:color="color" />
+			<div v-if="watermark" class="deliver-player__watermark" :style="{ backgroundImage: watermarkTile(watermark) }" />
 			<div v-if="drawing" class="deliver-player__drawbar">
 				<button
 					v-for="(icon, each) in TOOL_ICONS"
@@ -759,6 +763,13 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	width: 2px;
 	margin-inline-start: -1px;
 	background: #fff;
+	pointer-events: none;
+}
+
+/* Over the picture and the drawings, under the tools; the pointer goes through */
+.deliver-player__watermark {
+	position: absolute;
+	inset: 0;
 	pointer-events: none;
 }
 
