@@ -78,7 +78,7 @@ class PublicApiController extends PublicShareController {
 					'fps' => ['num' => $project->getFpsNum(), 'den' => $project->getFpsDen()],
 					'timecodeMode' => $project->getTimecodeMode(),
 				],
-				'asset' => $stack === null ? null : ['id' => $stack['asset']->getId(), 'name' => $this->stacks->nameOf($stack['asset'])],
+				'asset' => $stack === null ? null : ['id' => $stack['asset']->getId(), 'name' => $this->stacks->nameOf($stack['asset']), 'dueDate' => $stack['asset']->getDueDate()],
 				'versions' => $stack === null ? [] : array_map(
 					fn (Version $each) => $this->describe($share, $each, $flags['canDownload']),
 					$stack['versions'],

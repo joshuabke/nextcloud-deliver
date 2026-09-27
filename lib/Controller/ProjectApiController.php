@@ -39,6 +39,12 @@ class ProjectApiController extends OCSController {
 		return $this->guard(fn () => $this->service->get((string)$this->userId, $id));
 	}
 
+	/** Sets the Asset's Due Date, or clears it with null (story 93) */
+	#[NoAdminRequired]
+	public function updateAsset(int $id, ?string $dueDate = null): Response {
+		return $this->guard(fn () => $this->service->setDueDate((string)$this->userId, $id, $dueDate));
+	}
+
 	#[NoAdminRequired]
 	public function members(int $id): Response {
 		return $this->guard(fn () => $this->service->members((string)$this->userId, $id));

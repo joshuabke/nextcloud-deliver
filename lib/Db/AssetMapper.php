@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Deliver\Db;
 
 use OCP\AppFramework\Db\QBMapper;
+use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 
 /** @template-extends QBMapper<Asset> */
@@ -44,5 +45,16 @@ class AssetMapper extends QBMapper {
 		$qb->delete($this->getTableName())
 			->where($qb->expr()->eq('project_id', $qb->createNamedParameter($projectId)))
 			->executeStatement();
+	}
+
+	/**
+	 * @param list<string> $days YYYY-MM-DD
+	 * @return list<Asset> the Assets due on one of the days
+	 */
+	public function findDueOn(array $days): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->in('due_date', $qb->createNamedParameter($days, IQueryBuilder::PARAM_STR_ARRAY)));
+		return $this->findEntities($qb);
 	}
 }

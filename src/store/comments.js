@@ -130,13 +130,13 @@ export const useCommentsStore = defineStore('comments', {
 		/**
 		 * Posts a Comment, then attaches its files one by one (story 92)
 		 *
-		 * @param {object} fields - anchor, body, parent, drawing, and the files to attach
-		 * @param fields.inFrame
-		 * @param fields.outFrame
-		 * @param fields.body
-		 * @param fields.parentId
-		 * @param fields.annotation
-		 * @param fields.files
+		 * @param {object} fields - the Comment
+		 * @param {number} fields.inFrame - its Frame, or where its Range starts
+		 * @param {number|null} fields.outFrame - where its Range ends
+		 * @param {string} fields.body - its text
+		 * @param {number|null} fields.parentId - the Comment it replies to
+		 * @param {Array|null} fields.annotation - its Drawing
+		 * @param {File[]} fields.files - what to attach
 		 * @return {Promise<object>} the Comment as it ended up
 		 */
 		async add({ inFrame, outFrame = null, body, parentId = null, annotation = null, files = [] }) {

@@ -8,6 +8,7 @@ import { n, t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import DueDate from './DueDate.vue'
 import { previewUrl } from '../lib/preview.js'
 
 const props = defineProps({
@@ -77,6 +78,7 @@ const status = computed(() => {
 			<div class="deliver-card__meta">
 				{{ newest.name }}
 			</div>
+			<DueDate v-if="asset.dueDate" class="deliver-card__due" :modelValue="asset.dueDate" />
 		</RouterLink>
 		<div v-if="candidates.length" class="deliver-card__suggestion">
 			<span>{{ t('deliver', 'Stack as a Version of:') }}</span>
@@ -184,6 +186,11 @@ const status = computed(() => {
 .deliver-card__status--warning {
 	background: var(--color-warning);
 	color: var(--color-warning-text, #000);
+}
+
+.deliver-card__due {
+	align-self: flex-start;
+	margin-top: 4px;
 }
 
 .deliver-card__name {

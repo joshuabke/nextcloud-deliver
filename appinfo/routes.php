@@ -44,6 +44,7 @@ return [
 		['name' => 'project_api#mute', 'url' => '/api/v1/projects/{id}/mute', 'verb' => 'PUT'],
 		['name' => 'project_api#assetForFile', 'url' => '/api/v1/files/{fileId}/asset', 'verb' => 'GET'],
 		['name' => 'project_api#enableFile', 'url' => '/api/v1/assets', 'verb' => 'POST'],
+		['name' => 'project_api#updateAsset', 'url' => '/api/v1/assets/{id}', 'verb' => 'PUT'],
 		['name' => 'project_api#disableAsset', 'url' => '/api/v1/assets/{id}', 'verb' => 'DELETE'],
 		['name' => 'project_api#version', 'url' => '/api/v1/versions/{id}', 'verb' => 'GET'],
 		['name' => 'project_api#updateVersion', 'url' => '/api/v1/versions/{id}', 'verb' => 'PUT'],

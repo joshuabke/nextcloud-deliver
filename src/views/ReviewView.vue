@@ -15,13 +15,14 @@ import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import ApprovalControl from '../components/ApprovalControl.vue'
 import AssetStepper from '../components/AssetStepper.vue'
 import CommentPanel from '../components/CommentPanel.vue'
+import DueDate from '../components/DueDate.vue'
 import ExportMenu from '../components/ExportMenu.vue'
 import PanelTabs from '../components/PanelTabs.vue'
 import ReviewLayout from '../components/ReviewLayout.vue'
 import VersionPicker from '../components/VersionPicker.vue'
 import VersionStack from '../components/VersionStack.vue'
 import VideoPlayer from '../components/VideoPlayer.vue'
-import { errorMessage, getVersion, listMembers, uploadNextVersion } from '../api.js'
+import { errorMessage, getVersion, listMembers, updateAsset, uploadNextVersion } from '../api.js'
 import { usePanelOpen } from '../composables/panel.js'
 import { useReview } from '../composables/review.js'
 import { filesDir, groupByFolder, uploadFolder } from '../lib/folders.js'
@@ -100,6 +101,18 @@ async function reload() {
 }
 
 /**
+ * @param {string|null} dueDate - the new Due Date, or null
+ */
+async function setDue(dueDate) {
+	try {
+		context.value.asset.dueDate = (await updateAsset(context.value.asset.id, { dueDate })).dueDate
+		projects.fetch(context.value.project.id).catch(() => {})
+	} catch (e) {
+		error.value = errorMessage(e)
+	}
+}
+
+/**
  * @param {number} by - -1 for the previous Asset, 1 for the next
  */
 function step(by) {
@@ -161,6 +174,10 @@ async function upload(event) {
 			<h2 class="deliver-review__title" tabindex="-1">
 				{{ context.asset.name }}
 			</h2>
+			<DueDate
+				:modelValue="context.asset.dueDate"
+				:editable="context.project.canWrite"
+				@update:modelValue="setDue" />
 		</template>
 		<template #center>
 			<AssetStepper :index="assetIndex" :count="assets.length" @step="step" />
