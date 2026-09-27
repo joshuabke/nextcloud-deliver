@@ -24,6 +24,7 @@ import VersionPicker from '../components/VersionPicker.vue'
 import VersionStack from '../components/VersionStack.vue'
 import VideoPlayer from '../components/VideoPlayer.vue'
 import { errorMessage, getVersion, listMembers, updateAsset, uploadNextVersion } from '../api.js'
+import { useLiveUpdates } from '../composables/live.js'
 import { usePanelOpen } from '../composables/panel.js'
 import { useReview } from '../composables/review.js'
 import { filesDir, groupByFolder, uploadFolder } from '../lib/folders.js'
@@ -38,6 +39,7 @@ const router = useRouter()
 const store = useCommentsStore()
 const projects = useProjectsStore()
 const panelOpen = usePanelOpen()
+useLiveUpdates(store)
 const context = ref(null)
 const error = ref(null)
 const uploading = ref(false)

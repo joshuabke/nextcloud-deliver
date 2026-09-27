@@ -44,6 +44,7 @@ class CommentService {
 		private AttachmentMapper $attachments,
 		private AttachmentStore $store,
 		private ProjectMapper $projects,
+		private LiveUpdates $live,
 	) {
 	}
 
@@ -115,6 +116,7 @@ class CommentService {
 		$comment = $this->comments->insert($comment);
 		$serialized = $this->serialize($comment);
 		$this->notifications->commented($comment, $version);
+		$this->live->changed($version);
 		if ($parent !== null) {
 			$this->mail->replied($comment, $version, $serialized['author']['name']);
 		}
@@ -133,7 +135,9 @@ class CommentService {
 		}
 		$comment->setBody($body);
 		$comment->setUpdatedAt($this->time->getTime());
-		return $this->serialize($this->comments->update($comment));
+		$serialized = $this->serialize($this->comments->update($comment));
+		$this->live->changed($version);
+		return $serialized;
 	}
 
 	/**
@@ -162,6 +166,7 @@ class CommentService {
 			$this->comments->delete($gone);
 			$this->notifications->commentDeleted($gone->getId());
 		}
+		$this->live->changed($version);
 	}
 
 	/**
@@ -204,7 +209,9 @@ class CommentService {
 			}
 		}
 		$comment->setUpdatedAt($this->time->getTime());
-		return $this->serialize($this->comments->update($comment));
+		$serialized = $this->serialize($this->comments->update($comment));
+		$this->live->changed($version);
+		return $serialized;
 	}
 
 	/**
@@ -240,7 +247,9 @@ class CommentService {
 		$attachment->setSize($file->getSize());
 		$this->attachments->insert($attachment);
 		$comment->setUpdatedAt($this->time->getTime());
-		return $this->serialize($this->comments->update($comment));
+		$serialized = $this->serialize($this->comments->update($comment));
+		$this->live->changed($version);
+		return $serialized;
 	}
 
 	/**
@@ -285,7 +294,9 @@ class CommentService {
 		}
 		$comment->setResolved($resolved);
 		$comment->setUpdatedAt($this->time->getTime());
-		return $this->serialize($this->comments->update($comment));
+		$serialized = $this->serialize($this->comments->update($comment));
+		$this->live->changed($version);
+		return $serialized;
 	}
 
 	/** Moves the person's Unseen mark forward, never back */
