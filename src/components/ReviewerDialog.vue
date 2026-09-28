@@ -5,6 +5,7 @@ import { ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
+import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { errorMessage, renewReviewerKey, updateReviewerAsMember } from '../api.js'
 import { confirmRemoval } from '../confirm.js'
@@ -22,6 +23,19 @@ const emit = defineEmits(['changed', 'close'])
 const name = ref(props.reviewer.name)
 const email = ref(props.reviewer.email ?? '')
 const mail = ref({ ...props.reviewer.mail })
+/** Their own rights; null leaves it to the link they come by */
+const rights = ref({ ...props.reviewer.rights })
+
+const RIGHTS = [
+	{ id: 'canComment', label: t('deliver', 'Comment') },
+	{ id: 'allowOlder', label: t('deliver', 'Comment on older Versions') },
+	{ id: 'watermark', label: t('deliver', 'Watermark with their name') },
+]
+const CHOICES = [
+	{ id: null, label: t('deliver', 'As the link says') },
+	{ id: true, label: t('deliver', 'Yes') },
+	{ id: false, label: t('deliver', 'No') },
+]
 const busy = ref(false)
 
 /**
@@ -56,6 +70,7 @@ function save() {
 			mailReplies: mail.value.replies,
 			mailComments: mail.value.comments,
 			mailVersions: mail.value.versions,
+			rights: rights.value,
 		})
 		showSuccess(t('deliver', 'Saved'))
 	})
@@ -95,6 +110,18 @@ async function renew() {
 					<NcCheckboxRadioSwitch v-model="mail.versions" :disabled="!email || busy">
 						{{ t('deliver', 'New Versions') }}
 					</NcCheckboxRadioSwitch>
+				</fieldset>
+				<fieldset class="deliver-reviewer__rights">
+					<legend>{{ t('deliver', 'Rights, over those of the link') }}</legend>
+					<NcSelect
+						v-for="right in RIGHTS"
+						:key="right.id"
+						:modelValue="CHOICES.find((choice) => choice.id === (rights[right.id] ?? null))"
+						:options="CHOICES"
+						:clearable="false"
+						:disabled="busy"
+						:inputLabel="right.label"
+						@update:modelValue="rights[right.id] = $event.id" />
 				</fieldset>
 				<NcButton type="submit" variant="primary" :disabled="busy || !name.trim()">
 					{{ t('deliver', 'Save') }}
@@ -139,6 +166,12 @@ async function renew() {
 
 .deliver-reviewer__form fieldset {
 	width: 100%;
+}
+
+.deliver-reviewer__rights {
+	display: flex;
+	flex-direction: column;
+	gap: var(--default-grid-baseline, 4px);
 }
 
 .deliver-reviewer h3 {

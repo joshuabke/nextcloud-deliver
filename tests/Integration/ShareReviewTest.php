@@ -283,4 +283,25 @@ class ShareReviewTest extends TestCase {
 		self::assertSame($stack[1]['id'], $byFile[$stack[1]['fileId']]['versionId'], 'Review on the first cut opens the first cut');
 		self::assertSame($stack[0]['id'], $byFile[$stack[1]['fileId']]['newestId'], 'and knows the newest');
 	}
+
+	public function testAReviewersOwnRightsGoOverThoseOfTheLink(): void {
+		$invited = $this->nc->ocs('POST', "/shares/{$this->shareId}/reviewers", ['name' => 'Kim']);
+		$key = $invited['data']['key'];
+		$asKim = $this->reviewer();
+		$post = fn () => $asKim->call('POST', "/api/versions/{$this->versionId}/comments?r=$key", ['inFrame' => 1, 'body' => 'hi'])['status'];
+		$rights = fn (array $rights) => $this->nc->ocs('PUT', "/reviewers/{$invited['data']['id']}", ['name' => 'Kim', 'rights' => $rights]);
+
+		self::assertSame(201, $post(), 'the link lets Reviewers comment');
+		self::assertSame([false, null], [$rights(['canComment' => false])['data']['rights']['canComment'], $rights(['canComment' => false])['data']['rights']['watermark']]);
+		self::assertSame(403, $post(), 'Kim may not, whatever the link says');
+		self::assertFalse($asKim->call('GET', "/api/context?versionId={$this->versionId}&r=$key")['data']['flags']['canComment']);
+
+		$this->setFlags(['canComment' => false]);
+		$rights(['canComment' => true, 'watermark' => true]);
+		self::assertSame(201, $post(), 'Kim may, though the link does not let anyone else');
+		self::assertTrue($asKim->call('GET', "/api/context?versionId={$this->versionId}&r=$key")['data']['flags']['watermark']);
+
+		$rights([]);
+		self::assertSame(403, $post(), 'without rights of their own, the link decides again');
+	}
 }
