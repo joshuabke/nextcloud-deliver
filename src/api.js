@@ -129,7 +129,8 @@ export async function uploadVersion(folderUrl, file) {
 	const response = await axios.put(target, file, {
 		headers: { 'Content-Type': file.type || 'application/octet-stream', 'If-None-Match': '*' },
 	})
-	return Number(response.headers['oc-fileid'])
+	// OC-FileId carries the instance id after the number, as in 00000123ocabc123
+	return parseInt(response.headers['oc-fileid'], 10)
 }
 
 /**
