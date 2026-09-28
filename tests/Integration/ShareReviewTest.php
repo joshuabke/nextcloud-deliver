@@ -236,21 +236,40 @@ class ShareReviewTest extends TestCase {
 		self::assertStringNotContainsString('/dav/', $url);
 	}
 
-	public function testAProjectListsTheShareLinksOnItAndInside(): void {
+	public function testAProjectListsItsLinksAndWhoCameByThem(): void {
 		$fileLink = $this->nc->ocs('POST', "/files/{$this->nc->fileId("{$this->root}/cut.mp4")}/shares");
 		self::assertSame(201, $fileLink['status'], json_encode($fileLink['data']));
+		$invited = $this->nc->ocs('POST', "/shares/{$this->shareId}/reviewers", ['name' => 'Kim']);
+		self::assertSame(201, $invited['status'], json_encode($invited['data']));
+		// A Reviewer who names themselves on the file's link came by that one
+		$walkIn = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $fileLink['data']['token']);
+		self::assertSame(201, $walkIn->call('POST', '/api/reviewer', ['name' => 'Lea'])['status']);
 
 		$listed = $this->nc->ocs('GET', "/projects/{$this->projectId}/shares");
 		self::assertSame(200, $listed['status'], json_encode($listed['data']));
-		$names = array_column($listed['data'], 'name', 'id');
-		self::assertSame([$this->root, 'cut.mp4'], [$names[$this->shareId] ?? null, $names[$fileLink['data']['id']] ?? null]);
-		self::assertSame('/' . $this->root, array_column($listed['data'], 'dir', 'name')['cut.mp4']);
-		self::assertTrue(array_column($listed['data'], 'review', 'name')['cut.mp4']);
+		$links = array_column($listed['data']['links'], null, 'id');
+		self::assertSame([$this->root, true], [$links[$this->shareId]['name'], $links[$this->shareId]['isProject']]);
+		self::assertSame(['cut.mp4', false, '/' . $this->root], [$links[$fileLink['data']['id']]['name'], $links[$fileLink['data']['id']]['isProject'], $links[$fileLink['data']['id']]['dir']]);
 
-		$invited = $this->nc->ocs('POST', "/shares/{$this->shareId}/reviewers", ['name' => 'Kim']);
-		self::assertSame(201, $invited['status'], json_encode($invited['data']));
-		$reviewers = array_column($this->nc->ocs('GET', "/projects/{$this->projectId}/shares")['data'], 'reviewers', 'name')['cut.mp4'];
-		self::assertSame(['Kim'], array_column($reviewers, 'name'), 'a Reviewer belongs to the Project, so every review link carries them');
-		self::assertStringContainsString($fileLink['data']['token'], $reviewers[0]['link'], 'with a Personal Link through that link');
+		$reviewers = array_column($listed['data']['reviewers'], null, 'name');
+		self::assertSame([$reviewers['Kim']['id']], $links[$this->shareId]['reviewerIds'], 'invited through the folder link');
+		self::assertSame([$reviewers['Lea']['id']], $links[$fileLink['data']['id']]['reviewerIds'], 'named themselves on the file link');
+		$kimLinks = array_column($reviewers['Kim']['links'], 'url', 'shareId');
+		self::assertStringContainsString($fileLink['data']['token'], $kimLinks[$fileLink['data']['id']], 'every Reviewer has a Personal Link through every review link');
 	}
+
+	public function testAMemberEditsAReviewerAndRenewsTheirLink(): void {
+		$invited = $this->nc->ocs('POST', "/shares/{$this->shareId}/reviewers", ['name' => 'Kim']);
+		$id = $invited['data']['id'];
+		$edited = $this->nc->ocs('PUT', "/reviewers/$id", ['name' => 'Kim Kunde', 'email' => 'kim@example.com', 'mailVersions' => true]);
+		self::assertSame(200, $edited['status'], json_encode($edited['data']));
+		self::assertSame(['Kim Kunde', 'kim@example.com', true], [$edited['data']['name'], $edited['data']['email'], $edited['data']['mail']['versions']]);
+
+		$renewed = $this->nc->ocs('POST', "/reviewers/$id/key");
+		self::assertSame(200, $renewed['status'], json_encode($renewed['data']));
+		self::assertNotSame($invited['data']['key'], $renewed['data']['key']);
+		$old = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $this->token);
+		self::assertSame('unnamed', $old->call('GET', "/api/context?versionId={$this->versionId}&r=" . $invited['data']['key'])['data']['me']['type'], 'the old Personal Link names nobody any more');
+	}
+
 }

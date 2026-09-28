@@ -1,5 +1,9 @@
 <script setup>
 import reviewerIcon from '@mdi/svg/svg/account-outline.svg?raw'
+import imageLinkIcon from '@mdi/svg/svg/file-image-outline.svg?raw'
+import audioLinkIcon from '@mdi/svg/svg/file-music-outline.svg?raw'
+import videoLinkIcon from '@mdi/svg/svg/file-video-outline.svg?raw'
+import projectLinkIcon from '@mdi/svg/svg/folder-account-outline.svg?raw'
 import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
 import allIcon from '@mdi/svg/svg/folder-play-outline.svg?raw'
 import linkIcon from '@mdi/svg/svg/link-variant.svg?raw'
@@ -15,6 +19,7 @@ import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
 import NcAppNavigationCaption from '@nextcloud/vue/components/NcAppNavigationCaption'
 import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import ReviewerDialog from '../components/ReviewerDialog.vue'
 import ShareLinkDialog from '../components/ShareLinkDialog.vue'
 import { createShareLink, errorMessage, listProjectShares } from '../api.js'
 import { folderTree } from '../lib/folders.js'
@@ -27,23 +32,46 @@ const props = defineProps({
 const store = useProjectsStore()
 const route = useRoute()
 const router = useRouter()
-/** My Share Links in this Project that have review on, each with the Project's Reviewers and their Personal Links */
+/** My Share Links in this Project that have review on */
 const links = ref([])
+/** The Project's Reviewers, each once, with their Personal Link through every review link */
+const reviewers = ref([])
 /** The Share Link whose settings are open */
 const editing = ref(null)
+/** The Reviewer whose settings are open */
+const person = ref(null)
 
 const project = computed(() => store.details[props.id])
 const folders = computed(() => folderTree(project.value?.assets ?? []))
 const current = computed(() => route.query.folder ?? '')
+const byId = computed(() => new Map(reviewers.value.map((reviewer) => [reviewer.id, reviewer])))
 
 /**
  * @param {number} id - the Project
  */
 async function load(id = props.id) {
-	const all = await listProjectShares(id).catch(() => [])
+	const found = await listProjectShares(id).catch(() => ({ links: [], reviewers: [] }))
 	if (props.id === id) {
-		links.value = all.filter((share) => share.review)
+		// The Project folder's link first: it is the one a Reviewer usually gets
+		links.value = found.links
+			.filter((share) => share.review)
+			.map((share) => ({ ...share, title: share.isProject ? t('deliver', 'Project folder') : (share.label || share.name) }))
+			.sort((a, b) => b.isProject - a.isProject || a.title.localeCompare(b.title))
+		reviewers.value = found.reviewers
+		person.value = person.value && (byId.value.get(person.value.id) ?? null)
 	}
+}
+
+/**
+ * @param {object} share - a Share Link
+ * @return {string} a folder with a person for the Project folder, else what kind of file it shows
+ */
+function iconOf(share) {
+	if (share.isProject) {
+		return projectLinkIcon
+	}
+	const kind = share.mimeType?.split('/')[0]
+	return { video: videoLinkIcon, audio: audioLinkIcon, image: imageLinkIcon }[kind] ?? linkIcon
 }
 
 watch(() => props.id, (id) => {
@@ -97,6 +125,15 @@ function closeEditing() {
 	editing.value = null
 	load()
 }
+
+/**
+ * @param {object} reviewer - a Reviewer
+ * @return {string} their Personal Link through the Project folder's link, or through the first review link
+ */
+function personalLink(reviewer) {
+	const share = links.value[0]
+	return reviewer.links.find((each) => each.shareId === share?.id)?.url ?? reviewer.links[0]?.url
+}
 </script>
 
 <template>
@@ -136,38 +173,33 @@ function closeEditing() {
 			<NcAppNavigationItem
 				v-for="share in links"
 				:key="share.id"
-				:name="share.label || share.name"
-				:title="share.url"
-				:allowCollapse="share.reviewers.length > 0"
+				:name="share.title"
+				:title="share.isProject ? t('deliver', 'Link to the whole Project folder') : share.name"
+				:allowCollapse="share.reviewerIds.length > 0"
 				:open="true"
 				@click="editing = share">
 				<template #icon>
-					<NcIconSvgWrapper :svg="linkIcon" />
+					<NcIconSvgWrapper :svg="iconOf(share)" />
 				</template>
 				<template #actions>
 					<NcActionButton @click="copy(share.url)">
 						{{ t('deliver', 'Copy link') }}
 					</NcActionButton>
 					<NcActionButton @click="editing = share">
-						{{ t('deliver', 'Link settings and Reviewers') }}
+						{{ t('deliver', 'Link settings') }}
 					</NcActionButton>
 					<NcActionLink :href="manageUrl(share)">
 						{{ t('deliver', 'Manage in Files') }}
 					</NcActionLink>
 				</template>
+				<!-- Who was invited through this link or came in by it -->
 				<NcAppNavigationItem
-					v-for="reviewer in share.reviewers"
+					v-for="reviewer in share.reviewerIds.map((id) => byId.get(id)).filter(Boolean)"
 					:key="reviewer.id"
 					:name="reviewer.name"
-					:title="t('deliver', 'Copy the Personal Link of {name}', { name: reviewer.name })"
-					@click="copy(reviewer.link)">
+					@click="person = reviewer">
 					<template #icon>
 						<NcIconSvgWrapper :svg="reviewerIcon" />
-					</template>
-					<template #actions>
-						<NcActionButton @click="copy(reviewer.link)">
-							{{ t('deliver', 'Copy Personal Link') }}
-						</NcActionButton>
 					</template>
 				</NcAppNavigationItem>
 			</NcAppNavigationItem>
@@ -179,6 +211,28 @@ function closeEditing() {
 					<NcIconSvgWrapper :svg="addIcon" />
 				</template>
 			</NcAppNavigationItem>
+
+			<template v-if="reviewers.length">
+				<NcAppNavigationCaption :name="t('deliver', 'Reviewers')" />
+				<NcAppNavigationItem
+					v-for="reviewer in reviewers"
+					:key="reviewer.id"
+					:name="reviewer.name"
+					:title="reviewer.email ?? ''"
+					@click="person = reviewer">
+					<template #icon>
+						<NcIconSvgWrapper :svg="reviewerIcon" />
+					</template>
+					<template #actions>
+						<NcActionButton v-if="personalLink(reviewer)" @click="copy(personalLink(reviewer))">
+							{{ t('deliver', 'Copy Personal Link') }}
+						</NcActionButton>
+						<NcActionButton @click="person = reviewer">
+							{{ t('deliver', 'Settings and Personal Links') }}
+						</NcActionButton>
+					</template>
+				</NcAppNavigationItem>
+			</template>
 		</template>
 		<template #footer>
 			<!-- The dialog renders over the page; it only lives here -->
@@ -188,6 +242,13 @@ function closeEditing() {
 				:canWrite="project?.canWrite ?? false"
 				@update="replace"
 				@close="closeEditing" />
+			<ReviewerDialog
+				v-if="person"
+				:reviewer="person"
+				:links="links"
+				:canWrite="project?.canWrite ?? false"
+				@changed="load()"
+				@close="person = null" />
 		</template>
 	</NcAppNavigation>
 </template>

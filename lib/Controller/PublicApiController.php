@@ -71,6 +71,10 @@ class PublicApiController extends PublicShareController {
 			$project = $this->sharing->project($share);
 			$flags = $this->sharing->flags($share);
 			$stack = $this->sharing->assets($share)[$version->getAssetId()] ?? null;
+			$reviewer = $this->reviewer();
+			if ($reviewer !== null) {
+				$this->reviewers->cameBy($reviewer, (int)$share->getId());
+			}
 			return [
 				'versionId' => $version->getId(),
 				'flags' => $flags,
@@ -139,6 +143,7 @@ class PublicApiController extends PublicShareController {
 			$share = $this->share();
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
 			$reviewer = $this->reviewers->claim($this->sharing->project($share), $name, $email, $wishes);
+			$this->reviewers->cameBy($reviewer, (int)$share->getId());
 			// A JSONResponse, because a DataResponse loses its cookies on the way out
 			$response = new JSONResponse(
 				$this->reviewers->serialize($reviewer) + ['link' => $this->sharing->personalLink($share, $reviewer)],
