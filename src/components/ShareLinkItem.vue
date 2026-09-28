@@ -1,6 +1,7 @@
 <script setup>
+import { showSuccess } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import { errorMessage, inviteReviewer, listReviewers, setShareFlags } from '../api.js'
@@ -15,7 +16,7 @@ const emit = defineEmits(['update'])
 
 const busy = ref(false)
 const error = ref(null)
-/** Null until the list is opened */
+/** The Project's Reviewers, each with their Personal Link through this share; null while loading */
 const reviewers = ref(null)
 const inviting = ref(false)
 const name = ref('')
@@ -43,11 +44,22 @@ function setFlags(flags) {
 	return run(async () => emit('update', await setShareFlags(props.share.id, flags)))
 }
 
-/** Lists the Project's Reviewers with a Personal Link through this share (story 55) */
-function showReviewers() {
-	return run(async () => {
-		reviewers.value = await listReviewers(props.share.id)
-	})
+// Every Reviewer shows with their Personal Link through this share (story 55)
+watch(() => [props.share.id, props.share.review, props.canWrite], ([id, review, canWrite]) => {
+	reviewers.value = null
+	if (review && canWrite) {
+		run(async () => {
+			reviewers.value = await listReviewers(id)
+		})
+	}
+}, { immediate: true })
+
+/**
+ * @param {string} link - a Personal Link
+ */
+async function copy(link) {
+	await navigator.clipboard.writeText(link)
+	showSuccess(t('deliver', 'Personal Link copied'))
 }
 
 /** Invites a Reviewer by name and gets their Personal Link (story 53) */
@@ -101,25 +113,20 @@ function invite() {
 			</div>
 
 			<div v-if="canWrite" class="deliver-link__reviewers">
-				<NcButton
-					v-if="reviewers === null"
-					variant="tertiary"
-					:disabled="busy"
-					@click="showReviewers">
-					{{ t('deliver', 'Reviewers and Personal Links') }}
-				</NcButton>
-				<template v-else>
-					<p v-if="reviewers.length === 0" class="deliver-link__hint">
-						{{ t('deliver', 'No Reviewers yet.') }}
-					</p>
-					<div v-for="reviewer in reviewers" :key="reviewer.id" class="deliver-link__reviewer">
-						<strong>{{ reviewer.name }}</strong>
-						<code>{{ reviewer.link }}</code>
-					</div>
-					<p v-if="reviewers.length" class="deliver-link__hint">
-						{{ t('deliver', 'A Personal Link makes whoever opens it that Reviewer, forever. Give each one to its person only.') }}
-					</p>
-				</template>
+				<p v-if="reviewers?.length === 0" class="deliver-link__hint">
+					{{ t('deliver', 'No Reviewers yet.') }}
+				</p>
+				<ul v-else-if="reviewers">
+					<li v-for="reviewer in reviewers" :key="reviewer.id" class="deliver-link__reviewer">
+						<span>{{ reviewer.name }}</span>
+						<NcButton variant="tertiary" @click="copy(reviewer.link)">
+							{{ t('deliver', 'Copy Personal Link') }}
+						</NcButton>
+					</li>
+				</ul>
+				<p v-if="reviewers?.length" class="deliver-link__hint">
+					{{ t('deliver', 'A Personal Link makes whoever opens it that Reviewer, forever. Give each one to its person only.') }}
+				</p>
 
 				<form v-if="inviting" class="deliver-link__invite" @submit.prevent="invite">
 					<input v-model="name" type="text" :placeholder="t('deliver', 'Name')">
@@ -159,12 +166,9 @@ function invite() {
 
 .deliver-link__reviewer {
 	display: flex;
-	flex-direction: column;
-	margin-block: var(--default-grid-baseline, 4px);
-}
-
-.deliver-link__reviewer code {
-	user-select: all;
+	align-items: center;
+	justify-content: space-between;
+	gap: calc(2 * var(--default-grid-baseline, 4px));
 }
 
 .deliver-link__invite {

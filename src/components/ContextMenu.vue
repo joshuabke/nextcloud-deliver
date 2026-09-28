@@ -84,25 +84,16 @@ function close() {
 			@keydown="onKey"
 			@contextmenu.prevent>
 			<li v-for="item in items" :key="item.label" role="none">
+				<!-- Links for every entry: Nextcloud styles every button of its own, which shifts the icons -->
 				<a
-					v-if="item.href"
-					:href="item.href"
-					role="menuitem"
-					class="deliver-context-menu__item"
-					@click="emit('close')">
-					<NcIconSvgWrapper :svg="item.icon" :size="20" />
-					{{ item.label }}
-				</a>
-				<button
-					v-else
-					type="button"
+					:href="item.href ?? '#'"
 					role="menuitem"
 					class="deliver-context-menu__item"
 					:class="{ 'deliver-context-menu__item--danger': item.danger }"
-					@click="choose(item)">
+					@click="item.href ? emit('close') : ($event.preventDefault(), choose(item))">
 					<NcIconSvgWrapper :svg="item.icon" :size="20" />
 					{{ item.label }}
-				</button>
+				</a>
 			</li>
 		</ul>
 	</Teleport>
@@ -119,26 +110,22 @@ function close() {
 	box-shadow: 0 1px 10px var(--color-box-shadow, rgba(0, 0, 0, 0.3));
 }
 
-/* Nextcloud's global button style gives every button a height and padding of its own */
 .deliver-context-menu__item {
+	box-sizing: border-box;
 	display: flex;
 	align-items: center;
 	gap: 10px;
 	width: 100%;
 	min-height: var(--default-clickable-area, 34px);
-	margin: 0;
 	padding: 0 12px 0 8px;
-	border: none;
 	border-radius: var(--border-radius, 8px);
-	background: none;
 	color: var(--color-main-text);
-	font-weight: normal;
-	text-align: start;
 	cursor: pointer;
 }
 
 .deliver-context-menu__item :deep(.icon-vue) {
 	width: 20px;
+	flex: none;
 	min-width: 20px;
 	height: 20px;
 	opacity: 1;
