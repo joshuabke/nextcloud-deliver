@@ -1,15 +1,17 @@
 <script setup>
 import backIcon from '@mdi/svg/svg/arrow-left.svg?raw'
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
+import compareIcon from '@mdi/svg/svg/compare.svg?raw'
+import removeIcon from '@mdi/svg/svg/delete-outline.svg?raw'
+import filesIcon from '@mdi/svg/svg/folder-eye-outline.svg?raw'
 import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
-import sortIcon from '@mdi/svg/svg/sort.svg?raw'
+import newVersionIcon from '@mdi/svg/svg/layers-plus.svg?raw'
+import openIcon from '@mdi/svg/svg/open-in-app.svg?raw'
 import uploadIcon from '@mdi/svg/svg/tray-arrow-up.svg?raw'
 import { t } from '@nextcloud/l10n'
-import { generateRemoteUrl } from '@nextcloud/router'
+import { generateRemoteUrl, generateUrl } from '@nextcloud/router'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import NcActionRadio from '@nextcloud/vue/components/NcActionRadio'
-import NcActions from '@nextcloud/vue/components/NcActions'
+import { useRouter } from 'vue-router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
@@ -17,10 +19,14 @@ import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import AssetCard from '../components/AssetCard.vue'
+import ContextMenu from '../components/ContextMenu.vue'
+import FilterBar from '../components/FilterBar.vue'
 import ProjectSettingsDialog from '../components/ProjectSettingsDialog.vue'
-import { enableFile, errorMessage, stackVersion, uploadVersion } from '../api.js'
+import { disableAsset, enableFile, errorMessage, stackVersion, uploadNextVersion, uploadVersion } from '../api.js'
+import { useQuery } from '../composables/query.js'
+import { confirmRemoval } from '../confirm.js'
 import { FILTERS, found, passes, sortAssets, SORTS } from '../lib/filters.js'
-import { groupByFolder, inFolder, projectDavPath } from '../lib/folders.js'
+import { groupByFolder, inFolder, projectDavPath, projectDir } from '../lib/folders.js'
 import { stackSuggestions } from '../lib/suggestions.js'
 import { useProjectsStore } from '../store/projects.js'
 
@@ -29,12 +35,16 @@ const props = defineProps({
 })
 
 const store = useProjectsStore()
-const route = useRoute()
 const router = useRouter()
 const error = ref(null)
 const settingsOpen = ref(false)
 const uploading = ref(false)
 const fileInput = ref(null)
+const versionInput = ref(null)
+/** The right-click menu: where, and for which Asset */
+const menu = ref(null)
+/** The Asset a new Version is picked for */
+const stackOn = ref(null)
 const project = computed(() => store.details[props.id])
 
 watch(() => props.id, async (id) => {
@@ -80,25 +90,19 @@ const LABELS = {
 	approved: t('deliver', 'Approved'),
 	due: t('deliver', 'Due'),
 }
-
-/** Folder, filter and search live in the address, so the way back from a Review keeps them */
-const folder = computed(() => route.query.folder ?? '')
 const SORT_LABELS = {
 	activity: t('deliver', 'Latest activity'),
 	name: t('deliver', 'Name'),
 	created: t('deliver', 'Newest first'),
 	due: t('deliver', 'Due Date'),
 }
+const sorts = SORTS.map((id) => ({ id, label: SORT_LABELS[id] }))
 
-const filter = computed(() => FILTERS.includes(route.query.filter) ? route.query.filter : 'all')
-const sort = computed({
-	get: () => SORTS.includes(route.query.sort) ? route.query.sort : 'activity',
-	set: (id) => router.replace({ query: { ...route.query, sort: id === 'activity' ? undefined : id } }),
-})
-const query = computed({
-	get: () => route.query.q ?? '',
-	set: (q) => router.replace({ query: { ...route.query, q: q || undefined } }),
-})
+/** Folder, filter, order and search live in the address, so the way back from a Review keeps them */
+const folder = useQuery('folder', null, '')
+const filter = useQuery('filter', FILTERS, 'all')
+const sort = useQuery('sort', SORTS, 'activity')
+const query = useQuery('q', null, '')
 const inView = computed(() => (project.value?.assets ?? []).filter((asset) => inFolder(asset, folder.value)))
 const filters = computed(() => FILTERS.map((id) => ({
 	id,
@@ -108,13 +112,6 @@ const filters = computed(() => FILTERS.map((id) => ({
 const shown = computed(() => inView.value.filter((asset) => passes(asset, filter.value) && found(asset, query.value)))
 // Sorted within each folder, the folders themselves by path
 const groups = computed(() => groupByFolder(sortAssets(shown.value, sort.value)))
-
-/**
- * @param {string} id - one of FILTERS
- */
-function setFilter(id) {
-	router.replace({ query: { ...route.query, filter: id === 'all' ? undefined : id } })
-}
 
 /** Files dragged over the view; enter and leave fire for every child, so they are counted */
 const dragDepth = ref(0)
@@ -128,8 +125,7 @@ const dragDepth = ref(0)
 async function upload(files) {
 	const media = files.filter((file) => /^(video|audio|image)\//.test(file.type))
 	error.value = media.length < files.length ? t('deliver', 'Only video, audio and image files are uploaded.') : null
-	const folderUrl = generateRemoteUrl('dav') + '/files/' + projectDavPath(project.value.path)
-		+ folder.value.split('/').filter(Boolean).map((part) => '/' + encodeURIComponent(part)).join('')
+	const folderUrl = davFolder(folder.value)
 	uploading.value = true
 	try {
 		for (const file of media) {
@@ -141,6 +137,92 @@ async function upload(files) {
 		uploading.value = false
 		await store.fetch(props.id).catch(() => {})
 	}
+}
+
+/**
+ * @param {string} path - a folder of the Project, '' for the Project folder
+ * @return {string} its WebDAV URL, without a trailing slash
+ */
+function davFolder(path) {
+	return generateRemoteUrl('dav') + '/files/' + projectDavPath(project.value.path)
+		+ path.split('/').filter(Boolean).map((part) => '/' + encodeURIComponent(part)).join('')
+}
+
+/**
+ * @param {MouseEvent} event - the right click
+ * @param {object} asset - the Asset under it
+ */
+function openMenu(event, asset) {
+	const [newest, previous] = asset.versions
+	const dir = projectDir(project.value.path) + (asset.path ? '/' + asset.path : '')
+	menu.value = {
+		x: event.clientX,
+		y: event.clientY,
+		items: [
+			{ label: t('deliver', 'Open'), icon: openIcon, action: () => router.push(`/versions/${newest.id}`) },
+			previous && { label: t('deliver', 'Compare with the Version before'), icon: compareIcon, action: () => router.push(`/compare/${previous.id}/${newest.id}`) },
+			project.value.canWrite && { label: t('deliver', 'Upload a new Version'), icon: newVersionIcon, action: () => pickVersion(asset) },
+			{
+				label: t('deliver', 'Show in Files'),
+				icon: filesIcon,
+				href: generateUrl('/apps/files/files/{fileId}', { fileId: newest.fileId }) + '?' + new URLSearchParams({ dir, opendetails: 'true' }),
+			},
+			project.value.canWrite && { label: t('deliver', 'Take out of Deliver'), icon: removeIcon, danger: true, action: () => takeOut(asset) },
+		].filter(Boolean),
+	}
+}
+
+/**
+ * @param {object} asset - the Asset the next Version is for
+ */
+function pickVersion(asset) {
+	stackOn.value = asset
+	versionInput.value.click()
+}
+
+/**
+ * Uploads the picked file next to the Asset's newest Version and stacks it on top (story 17)
+ *
+ * @param {Event} event - the file input's change event
+ */
+async function uploadStacked(event) {
+	const file = event.target.files?.[0]
+	event.target.value = ''
+	if (!file || !stackOn.value) {
+		return
+	}
+	uploading.value = true
+	error.value = null
+	try {
+		await uploadNextVersion(davFolder(stackOn.value.path), file, stackOn.value.id)
+	} catch (e) {
+		error.value = errorMessage(e)
+	} finally {
+		uploading.value = false
+		await store.fetch(props.id).catch(() => {})
+	}
+}
+
+/**
+ * Takes the Asset out of Deliver with its Comments and Versions; the files stay (story 4)
+ *
+ * @param {object} asset - the Asset to take out
+ */
+async function takeOut(asset) {
+	const confirmed = await confirmRemoval(
+		t('deliver', 'Take this Asset out of Deliver?'),
+		t('deliver', 'Its Comments and Versions are deleted. The files themselves stay untouched.'),
+		t('deliver', 'Take out'),
+	)
+	if (!confirmed) {
+		return
+	}
+	try {
+		await disableAsset(asset.id)
+	} catch (e) {
+		error.value = errorMessage(e)
+	}
+	await store.fetch(props.id).catch(() => {})
 }
 
 /**
@@ -236,35 +318,12 @@ function dropped(event) {
 					</template>
 				</NcButton>
 			</div>
-			<div v-if="project.assets.length" class="deliver-project__tools">
-				<div class="deliver-project__filters" role="group" :aria-label="t('deliver', 'Show')">
-					<NcButton
-						v-for="each in filters"
-						:key="each.id"
-						variant="tertiary"
-						:pressed="filter === each.id"
-						@click="setFilter(each.id)">
-						{{ each.label }}
-						<span v-if="each.id !== 'all'" class="deliver-project__count">{{ each.count }}</span>
-					</NcButton>
-				</div>
-				<NcActions
-					:menuName="SORT_LABELS[sort]"
-					:title="t('deliver', 'Sort by')"
-					variant="tertiary">
-					<template #icon>
-						<NcIconSvgWrapper :svg="sortIcon" />
-					</template>
-					<NcActionRadio
-						v-for="order in SORTS"
-						:key="order"
-						v-model="sort"
-						:value="order"
-						name="deliver-sort">
-						{{ SORT_LABELS[order] }}
-					</NcActionRadio>
-				</NcActions>
-			</div>
+			<FilterBar
+				v-if="project.assets.length"
+				v-model:filter="filter"
+				v-model:sort="sort"
+				:filters="filters"
+				:sorts="sorts" />
 			<NcEmptyContent
 				v-if="project.assets.length && shown.length === 0"
 				:name="t('deliver', 'No Asset fits')" />
@@ -285,9 +344,20 @@ function dropped(event) {
 						:key="asset.id"
 						:asset="asset"
 						:candidates="suggestions.get(asset.id) ?? []"
-						@stack="accept" />
+						@stack="accept"
+						@contextmenu.prevent="openMenu($event, asset)" />
 				</ul>
 			</section>
+			<input
+				ref="versionInput"
+				type="file"
+				accept="video/*,audio/*,image/*"
+				hidden
+				@change="uploadStacked">
+			<ContextMenu
+				v-if="menu"
+				v-bind="menu"
+				@close="menu = null" />
 			<ProjectSettingsDialog
 				v-if="settingsOpen"
 				:project="project"
@@ -341,26 +411,6 @@ function dropped(event) {
 	font-weight: bold;
 	/* The counter on the view decides, not this layer */
 	pointer-events: none;
-}
-
-.deliver-project__tools {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
-}
-
-.deliver-project__filters {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--default-grid-baseline, 4px);
-	flex: 1;
-}
-
-.deliver-project__count {
-	margin-inline-start: var(--default-grid-baseline, 4px);
-	font-weight: normal;
-	opacity: 0.7;
 }
 
 .deliver-project__search {

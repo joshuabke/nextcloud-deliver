@@ -1,17 +1,31 @@
 <script setup>
+import muteIcon from '@mdi/svg/svg/bell-off-outline.svg?raw'
+import unmuteIcon from '@mdi/svg/svg/bell-outline.svg?raw'
+import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
+import removeIcon from '@mdi/svg/svg/delete-outline.svg?raw'
+import filesIcon from '@mdi/svg/svg/folder-outline.svg?raw'
 import icon from '@mdi/svg/svg/folder-play-outline.svg?raw'
+import openIcon from '@mdi/svg/svg/open-in-app.svg?raw'
 import addIcon from '@mdi/svg/svg/plus.svg?raw'
 import { FilePickerType, getFilePickerBuilder } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
+import { generateUrl } from '@nextcloud/router'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
+import NcTextField from '@nextcloud/vue/components/NcTextField'
+import ContextMenu from '../components/ContextMenu.vue'
+import FilterBar from '../components/FilterBar.vue'
 import ProjectCard from '../components/ProjectCard.vue'
 import ProjectSettingsDialog from '../components/ProjectSettingsDialog.vue'
 import { errorMessage } from '../api.js'
+import { useQuery } from '../composables/query.js'
+import { confirmRemoval } from '../confirm.js'
+import { PROJECT_FILTERS, projectPasses, sortProjects, SORTS } from '../lib/filters.js'
+import { projectDir } from '../lib/folders.js'
 import { useProjectsStore } from '../store/projects.js'
 
 const store = useProjectsStore()
@@ -22,8 +36,87 @@ const settings = ref(null)
 // Every visit shows the news as they are now
 store.fetchAll()
 
-/** Where something happened last comes first */
-const projects = computed(() => [...store.projects].sort((a, b) => b.activity.lastActivity - a.activity.lastActivity))
+const LABELS = {
+	all: t('deliver', 'All'),
+	unseen: t('deliver', 'Unseen'),
+	changes: t('deliver', 'Changes requested'),
+	due: t('deliver', 'Due'),
+}
+const sorts = [
+	{ id: 'activity', label: t('deliver', 'Latest activity') },
+	{ id: 'name', label: t('deliver', 'Name') },
+	{ id: 'created', label: t('deliver', 'Newest first') },
+	{ id: 'due', label: t('deliver', 'Due Date') },
+]
+
+const filter = useQuery('filter', PROJECT_FILTERS, 'all')
+const sort = useQuery('sort', SORTS, 'activity')
+const query = useQuery('q', null, '')
+const filters = computed(() => PROJECT_FILTERS.map((id) => ({
+	id,
+	label: LABELS[id],
+	count: store.projects.filter((project) => projectPasses(project, id)).length,
+})))
+const projects = computed(() => sortProjects(
+	store.projects.filter((project) => projectPasses(project, filter.value)
+		&& project.name.toLocaleLowerCase().includes(query.value.trim().toLocaleLowerCase())),
+	sort.value,
+))
+
+/** The right-click menu: where, and for which Project */
+const menu = ref(null)
+
+/**
+ * @param {MouseEvent} event - the right click
+ * @param {object} project - the Project under it
+ */
+function openMenu(event, project) {
+	menu.value = {
+		x: event.clientX,
+		y: event.clientY,
+		items: [
+			{ label: t('deliver', 'Open'), icon: openIcon, action: () => router.push(`/projects/${project.id}`) },
+			{ label: t('deliver', 'Project settings'), icon: settingsIcon, action: () => { settings.value = project } },
+			project.muted
+				? { label: t('deliver', 'Notify me again'), icon: unmuteIcon, action: () => save(project, { muted: false }) }
+				: { label: t('deliver', 'Mute notifications'), icon: muteIcon, action: () => save(project, { muted: true }) },
+			{ label: t('deliver', 'Open in Files'), icon: filesIcon, href: generateUrl('/apps/files/') + '?' + new URLSearchParams({ dir: projectDir(project.path) }) },
+			project.canWrite && { label: t('deliver', 'Remove Project'), icon: removeIcon, danger: true, action: () => remove(project) },
+		].filter(Boolean),
+	}
+}
+
+/**
+ * @param {object} project - the Project to change
+ * @param {object} fields - its new settings
+ */
+async function save(project, fields) {
+	try {
+		await store.save(project.id, fields)
+	} catch (e) {
+		error.value = errorMessage(e)
+	}
+}
+
+/**
+ * Removes the Project with all its review data, after asking (story 9)
+ *
+ * @param {object} project - the Project to remove
+ */
+async function remove(project) {
+	const confirmed = await confirmRemoval(
+		t('deliver', 'Remove Project?'),
+		t('deliver', 'Its Comments and Version Stacks are deleted. The files stay untouched.'),
+		t('deliver', 'Remove Project'),
+	)
+	if (confirmed) {
+		try {
+			await store.remove(project.id)
+		} catch (e) {
+			error.value = errorMessage(e)
+		}
+	}
+}
 
 /** Picks a folder, or makes one, and turns it into a Project with Auto Intake (story 98) */
 async function create() {
@@ -52,9 +145,23 @@ async function create() {
 
 <template>
 	<div class="deliver-projects">
-		<h2 class="deliver-projects__head">
-			{{ t('deliver', 'Projects') }}
-		</h2>
+		<div class="deliver-projects__head">
+			<h2>{{ t('deliver', 'Projects') }}</h2>
+			<NcTextField
+				v-if="store.projects.length"
+				v-model="query"
+				class="deliver-projects__search"
+				:label="t('deliver', 'Find a Project')"
+				type="search"
+				:showTrailingButton="query !== ''"
+				@trailingButtonClick="query = ''" />
+		</div>
+		<FilterBar
+			v-if="store.projects.length"
+			v-model:filter="filter"
+			v-model:sort="sort"
+			:filters="filters"
+			:sorts="sorts" />
 		<NcNoteCard v-if="error" type="error">
 			{{ error }}
 		</NcNoteCard>
@@ -68,7 +175,8 @@ async function create() {
 				v-for="project in projects"
 				:key="project.id"
 				:project="project"
-				@settings="settings = project" />
+				@settings="settings = project"
+				@contextmenu.prevent="openMenu($event, project)" />
 			<li>
 				<button type="button" class="deliver-projects__new" @click="create">
 					<NcIconSvgWrapper :svg="projects.length ? addIcon : icon" :size="projects.length ? 32 : 48" />
@@ -77,6 +185,10 @@ async function create() {
 				</button>
 			</li>
 		</ul>
+		<ContextMenu
+			v-if="menu"
+			v-bind="menu"
+			@close="menu = null" />
 		<ProjectSettingsDialog
 			v-if="settings"
 			:project="settings"
@@ -96,10 +208,21 @@ async function create() {
 .deliver-projects__head {
 	display: flex;
 	align-items: center;
+	justify-content: space-between;
+	gap: calc(2 * var(--default-grid-baseline, 4px));
 	min-height: calc(var(--default-clickable-area, 34px) + 4 * var(--default-grid-baseline, 4px));
 	margin: 0;
 	border-bottom: 1px solid var(--color-border);
+}
+
+.deliver-projects__head h2 {
+	margin: 0;
 	font-size: 20px;
+}
+
+.deliver-projects__search {
+	width: 200px !important;
+	flex: none;
 }
 
 .deliver-projects__new {

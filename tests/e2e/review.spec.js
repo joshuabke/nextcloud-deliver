@@ -71,6 +71,14 @@ test.describe('Review view', () => {
 		await expect(page).toHaveURL(new RegExp(`/versions/${versionId}$`))
 		await page.getByRole('link', { name: folder, exact: true }).click()
 		await expect(page).toHaveURL(new RegExp(`/projects/${projectId}$`))
+
+		// The Project list finds a Project by name, and a right click opens it too
+		await page.goto('/apps/deliver/')
+		await page.getByRole('searchbox', { name: 'Find a Project' }).fill(folder)
+		await expect(page.locator('.deliver-project-card')).toHaveCount(1)
+		await tile.click({ button: 'right' })
+		await page.getByRole('menuitem', { name: 'Open', exact: true }).click()
+		await expect(page).toHaveURL(new RegExp(`/projects/${projectId}$`))
 	})
 
 	test('uploads into the Project, then filters and finds its Assets', async () => {
