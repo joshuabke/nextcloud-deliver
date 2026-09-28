@@ -214,11 +214,11 @@ async function claim({ name, email, mail }) {
 	/* The public page renders on the guest layout, so the view brings its own surface,
 	   and leaves room for the guest layout's own footer */
 	box-sizing: border-box;
-	width: calc(100vw - 4 * var(--default-grid-baseline, 4px));
+	width: calc(100vw - 4 * var(--default-grid-baseline));
 	max-width: 1800px;
 	height: calc(100vh - 140px);
-	margin: calc(2 * var(--default-grid-baseline, 4px)) auto;
-	border-radius: var(--border-radius-large, 12px);
+	margin: calc(2 * var(--default-grid-baseline)) auto;
+	border-radius: var(--border-radius-large);
 	background: var(--color-main-background);
 	overflow: hidden;
 }
@@ -233,7 +233,7 @@ async function claim({ name, email, mail }) {
 }
 
 .deliver-public__notice {
-	margin: calc(2 * var(--default-grid-baseline, 4px)) calc(3 * var(--default-grid-baseline, 4px)) 0;
+	margin: calc(2 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline)) 0;
 }
 
 .deliver-public__notice code {

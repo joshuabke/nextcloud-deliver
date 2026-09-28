@@ -44,7 +44,7 @@ const emit = defineEmits(['step'])
 .deliver-stepper {
 	display: flex;
 	align-items: center;
-	gap: var(--default-grid-baseline, 4px);
+	gap: var(--default-grid-baseline);
 }
 
 .deliver-stepper__count {

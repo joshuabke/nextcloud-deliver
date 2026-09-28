@@ -84,8 +84,8 @@ const badges = computed(() => {
 /* Over the picture's corner, outside the link, so the tile stays one link */
 .deliver-project-card__settings {
 	position: absolute !important;
-	top: calc(3 * var(--default-grid-baseline, 4px));
-	inset-inline-end: calc(3 * var(--default-grid-baseline, 4px));
+	top: calc(3 * var(--default-grid-baseline));
+	inset-inline-end: calc(3 * var(--default-grid-baseline));
 	background: rgba(0, 0, 0, 0.6) !important;
 	color: #fff !important;
 	opacity: 0;
@@ -100,8 +100,8 @@ const badges = computed(() => {
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
-	padding: calc(2 * var(--default-grid-baseline, 4px));
-	border-radius: var(--border-radius-large, 12px);
+	padding: calc(2 * var(--default-grid-baseline));
+	border-radius: var(--border-radius-large);
 	color: var(--color-main-text);
 }
 
@@ -117,8 +117,8 @@ const badges = computed(() => {
 	align-items: center;
 	justify-content: center;
 	aspect-ratio: 16 / 9;
-	margin-bottom: var(--default-grid-baseline, 4px);
-	border-radius: var(--border-radius, 8px);
+	margin-bottom: var(--default-grid-baseline);
+	border-radius: var(--border-radius);
 	background: #111;
 	color: #bbb;
 	overflow: hidden;
@@ -143,7 +143,7 @@ const badges = computed(() => {
 	align-items: center;
 	gap: 3px;
 	padding: 1px 6px;
-	border-radius: var(--border-radius, 4px);
+	border-radius: var(--border-radius);
 	color: #fff;
 	font-size: 12px;
 	font-weight: bold;

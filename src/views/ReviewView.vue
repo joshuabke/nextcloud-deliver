@@ -330,17 +330,17 @@ async function upload(event) {
 }
 
 .deliver-review__notice {
-	margin: calc(2 * var(--default-grid-baseline, 4px)) calc(3 * var(--default-grid-baseline, 4px)) 0;
+	margin: calc(2 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline)) 0;
 }
 
 .deliver-review__error {
-	margin: calc(var(--default-clickable-area, 34px) + 4 * var(--default-grid-baseline, 4px)) calc(4 * var(--default-grid-baseline, 4px));
+	margin: calc(var(--default-clickable-area) + 4 * var(--default-grid-baseline)) calc(4 * var(--default-grid-baseline));
 }
 
 .deliver-review__stack {
 	flex: 1;
 	min-height: 0;
-	padding: calc(3 * var(--default-grid-baseline, 4px));
+	padding: calc(3 * var(--default-grid-baseline));
 	overflow-y: auto;
 }
 </style>

@@ -86,7 +86,7 @@ function pick() {
 	display: inline-flex;
 	align-items: center;
 	flex-shrink: 0;
-	border-radius: var(--border-radius-pill, 20px);
+	border-radius: var(--border-radius-pill);
 	background: var(--color-background-dark);
 	font-size: 13px;
 }
@@ -100,7 +100,7 @@ function pick() {
 	margin: 0;
 	padding: 3px 10px;
 	border: none;
-	border-radius: var(--border-radius-pill, 20px);
+	border-radius: var(--border-radius-pill);
 	background: none;
 	color: inherit;
 	font-weight: normal;

@@ -71,7 +71,7 @@ function toggle(emoji) {
 	return run(() => store.react(props.comment.id, emoji, !(given && reactedByMe(given))))
 }
 const pieces = computed(() => linkify(props.comment.body)
-	.flatMap((piece) => piece.href ? [piece] : splitMentions(piece.text, props.comment.mentions ?? {})))
+	.flatMap((piece) => piece.href ? [piece] : splitMentions(piece.text, props.comment.mentions)))
 const anchor = computed(() => {
 	const from = formatAt(props.comment.inFrame, props.clock)
 	return props.comment.outFrame === null ? from : from + ' – ' + formatAt(props.comment.outFrame, props.clock)
@@ -308,10 +308,10 @@ function saveReply() {
 <style scoped>
 .deliver-comment {
 	display: flex;
-	gap: calc(3 * var(--default-grid-baseline, 4px));
-	padding: calc(3 * var(--default-grid-baseline, 4px));
+	gap: calc(3 * var(--default-grid-baseline));
+	padding: calc(3 * var(--default-grid-baseline));
 	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius-large, 12px);
+	border-radius: var(--border-radius-large);
 	background: var(--deliver-card, var(--color-main-background));
 }
 
@@ -325,7 +325,7 @@ function saveReply() {
 
 /* A Reply hangs under its parent, behind a line */
 .deliver-comment--reply {
-	padding: var(--default-grid-baseline, 4px) 0 var(--default-grid-baseline, 4px) calc(3 * var(--default-grid-baseline, 4px));
+	padding: var(--default-grid-baseline) 0 var(--default-grid-baseline) calc(3 * var(--default-grid-baseline));
 	border: none;
 	border-inline-start: 2px solid var(--color-border-dark);
 	border-radius: 0;
@@ -350,7 +350,7 @@ function saveReply() {
 .deliver-comment__head {
 	display: flex;
 	align-items: center;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
 	align-self: stretch;
 	min-height: 28px;
 	margin-top: 2px;
@@ -376,7 +376,7 @@ function saveReply() {
 
 .deliver-comment__new {
 	padding: 0 6px;
-	border-radius: var(--border-radius-pill, 20px);
+	border-radius: var(--border-radius-pill);
 	background: var(--color-primary-element);
 	color: var(--color-primary-element-text);
 	font-size: 11px;
@@ -384,7 +384,7 @@ function saveReply() {
 }
 
 .deliver-comment__resolve--done {
-	color: var(--color-success, #2d7b41);
+	color: var(--color-success);
 }
 
 .deliver-comment__anchor {
@@ -397,7 +397,7 @@ function saveReply() {
 	border: none;
 	background: none;
 	color: var(--deliver-timecode, var(--color-primary-element));
-	font-family: var(--font-face-monospace, monospace);
+	font-family: monospace;
 	font-size: 13px;
 	font-weight: normal;
 	cursor: pointer;
@@ -409,7 +409,7 @@ function saveReply() {
 
 .deliver-comment__mention {
 	padding: 0 4px;
-	border-radius: var(--border-radius, 4px);
+	border-radius: var(--border-radius);
 	background: color-mix(in srgb, var(--color-primary-element) 30%, transparent);
 	font-weight: bold;
 }
@@ -454,7 +454,7 @@ function saveReply() {
 	max-width: 100%;
 	padding: 4px 8px;
 	border: 1px solid var(--color-border-dark);
-	border-radius: var(--border-radius, 6px);
+	border-radius: var(--border-radius);
 	color: var(--color-main-text);
 	font-size: 13px;
 }
@@ -494,7 +494,7 @@ function saveReply() {
 	margin: 0;
 	padding: 1px 8px;
 	border: 1px solid var(--color-border-dark);
-	border-radius: var(--border-radius-pill, 20px);
+	border-radius: var(--border-radius-pill);
 	background: none;
 	color: var(--color-main-text);
 	font-size: 13px;
@@ -518,7 +518,7 @@ function saveReply() {
 .deliver-comment__replies {
 	display: flex;
 	flex-direction: column;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
 	align-self: stretch;
 }
 
@@ -534,10 +534,10 @@ function saveReply() {
 .deliver-comment__buttons {
 	display: flex;
 	justify-content: flex-end;
-	gap: var(--default-grid-baseline, 4px);
+	gap: var(--default-grid-baseline);
 }
 
 .deliver-comment__error {
-	color: var(--color-error-text, var(--color-error));
+	color: var(--color-error-text);
 }
 </style>

@@ -373,17 +373,17 @@ function dropped(event) {
 	min-height: 100%;
 	display: flex;
 	flex-direction: column;
-	gap: calc(4 * var(--default-grid-baseline, 4px));
-	padding: 0 calc(4 * var(--default-grid-baseline, 4px)) calc(6 * var(--default-grid-baseline, 4px));
+	gap: calc(4 * var(--default-grid-baseline));
+	padding: 0 calc(4 * var(--default-grid-baseline)) calc(6 * var(--default-grid-baseline));
 }
 
 /* One row next to the navigation toggle, which sits in the top left corner */
 .deliver-project__head {
 	display: flex;
 	align-items: center;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
-	min-height: calc(var(--default-clickable-area, 34px) + 4 * var(--default-grid-baseline, 4px));
-	padding-inline-start: var(--default-clickable-area, 34px);
+	gap: calc(2 * var(--default-grid-baseline));
+	min-height: calc(var(--default-clickable-area) + 4 * var(--default-grid-baseline));
+	padding-inline-start: var(--default-clickable-area);
 	border-bottom: 1px solid var(--color-border);
 }
 
@@ -399,14 +399,14 @@ function dropped(event) {
 
 .deliver-project__drop {
 	position: absolute;
-	inset: calc(2 * var(--default-grid-baseline, 4px));
+	inset: calc(2 * var(--default-grid-baseline));
 	z-index: 10;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	border: 2px dashed var(--color-primary-element);
-	border-radius: var(--border-radius-large, 12px);
-	background: rgba(var(--color-main-background-rgb, 255, 255, 255), 0.85);
+	border-radius: var(--border-radius-large);
+	background: rgba(var(--color-main-background-rgb), 0.85);
 	font-size: 18px;
 	font-weight: bold;
 	/* The counter on the view decides, not this layer */
@@ -425,9 +425,9 @@ function dropped(event) {
 .deliver-project__folder {
 	display: flex;
 	align-items: center;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
-	margin: 0 0 calc(2 * var(--default-grid-baseline, 4px));
-	padding-bottom: calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
+	margin: 0 0 calc(2 * var(--default-grid-baseline));
+	padding-bottom: calc(2 * var(--default-grid-baseline));
 	border-bottom: 1px solid var(--color-border);
 	font-size: 16px;
 }
@@ -435,6 +435,6 @@ function dropped(event) {
 .deliver-project__grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-	gap: calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
 }
 </style>

@@ -57,5 +57,5 @@ registerSidebarAction({
 	element: 'oca_deliver-share-review',
 	order: 50,
 	// Link and email shares, the two kinds that reach Reviewers
-	enabled: (share) => [3, 4].includes(share.type ?? share.shareType),
+	enabled: (share) => [3, 4].includes(share.type),
 })

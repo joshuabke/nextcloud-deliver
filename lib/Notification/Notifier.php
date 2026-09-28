@@ -34,7 +34,7 @@ class Notifier implements INotifier {
 		}
 		$l = $this->l10n->get(Application::APP_ID, $languageCode);
 		$p = $notification->getSubjectParameters();
-		$where = ['{asset}' => $p['asset'] ?? '', '{number}' => $p['number'] ?? ''];
+		$where = ['{asset}' => $p['asset'], '{number}' => $p['number']];
 		$subject = match ($notification->getSubject()) {
 			NotificationService::COMMENT => $l->t('{author} commented on {asset}, Version {number}'),
 			NotificationService::REPLY => $l->t('{author} replied on {asset}, Version {number}'),
@@ -55,7 +55,7 @@ class Notifier implements INotifier {
 		if (($p['body'] ?? '') !== '') {
 			$notification->setParsedMessage($p['body']);
 		}
-		$notification->setLink($this->urls->linkToRouteAbsolute('deliver.page.index') . 'versions/' . ($p['versionId'] ?? ''));
+		$notification->setLink($this->urls->linkToRouteAbsolute('deliver.page.index') . 'versions/' . $p['versionId']);
 		$notification->setIcon($this->urls->getAbsoluteURL($this->urls->imagePath(Application::APP_ID, 'app-dark.svg')));
 		return $notification;
 	}

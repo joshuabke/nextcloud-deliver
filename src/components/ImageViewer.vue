@@ -177,14 +177,14 @@ onBeforeUnmount(() => {
 	display: flex;
 	align-items: center;
 	justify-content: flex-end;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
-	padding: var(--default-grid-baseline, 4px) calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
+	padding: var(--default-grid-baseline) calc(2 * var(--default-grid-baseline));
 	border-top: 1px solid var(--color-border);
 }
 
 .deliver-still__size {
 	color: var(--color-text-maxcontrast);
-	font-family: var(--font-face-monospace, monospace);
+	font-family: monospace;
 	font-size: 13px;
 }
 </style>

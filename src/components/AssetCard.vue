@@ -28,7 +28,7 @@ const audio = computed(() => newest.value.mimeType?.startsWith('audio/'))
 const noPreview = ref(false)
 /** Requested changes outweigh approvals: the newest Version is not through while anyone wants changes (story 88) */
 const decision = computed(() => {
-	const { approved = 0, changes = 0 } = newest.value.approvals ?? {}
+	const { approved = 0, changes = 0 } = newest.value.approvals
 	if (changes > 0) {
 		return { kind: 'changes', icon: changesIcon, text: n('deliver', '%n requests changes', '%n request changes', changes) }
 	}
@@ -107,7 +107,7 @@ const status = computed(() => {
 .deliver-card {
 	display: flex;
 	flex-direction: column;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
 	min-width: 0;
 }
 
@@ -115,8 +115,8 @@ const status = computed(() => {
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
-	padding: calc(2 * var(--default-grid-baseline, 4px));
-	border-radius: var(--border-radius-large, 12px);
+	padding: calc(2 * var(--default-grid-baseline));
+	border-radius: var(--border-radius-large);
 	color: var(--color-main-text);
 }
 
@@ -131,8 +131,8 @@ const status = computed(() => {
 	align-items: center;
 	justify-content: center;
 	aspect-ratio: 16 / 9;
-	margin-bottom: var(--default-grid-baseline, 4px);
-	border-radius: var(--border-radius, 8px);
+	margin-bottom: var(--default-grid-baseline);
+	border-radius: var(--border-radius);
 	background: #111;
 	color: #bbb;
 	overflow: hidden;
@@ -152,7 +152,7 @@ const status = computed(() => {
 	align-items: center;
 	gap: 3px;
 	padding: 1px 6px;
-	border-radius: var(--border-radius, 4px);
+	border-radius: var(--border-radius);
 	background: rgba(0, 0, 0, 0.7);
 	color: #fff;
 	font-size: 12px;
@@ -199,7 +199,7 @@ const status = computed(() => {
 
 .deliver-card__status--warning {
 	background: var(--color-warning);
-	color: var(--color-warning-text, #000);
+	color: var(--color-warning-text);
 }
 
 .deliver-card__due {
@@ -226,8 +226,8 @@ const status = computed(() => {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: var(--default-grid-baseline, 4px);
-	padding: 0 calc(2 * var(--default-grid-baseline, 4px));
+	gap: var(--default-grid-baseline);
+	padding: 0 calc(2 * var(--default-grid-baseline));
 	color: var(--color-text-maxcontrast);
 	font-size: 13px;
 }

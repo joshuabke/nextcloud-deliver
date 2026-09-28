@@ -153,15 +153,15 @@ async function renew() {
 .deliver-reviewer {
 	display: flex;
 	flex-direction: column;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
-	padding-bottom: calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
+	padding-bottom: calc(2 * var(--default-grid-baseline));
 }
 
 .deliver-reviewer__form {
 	display: flex;
 	flex-direction: column;
 	align-items: flex-start;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
 }
 
 .deliver-reviewer__form fieldset {
@@ -171,11 +171,11 @@ async function renew() {
 .deliver-reviewer__rights {
 	display: flex;
 	flex-direction: column;
-	gap: var(--default-grid-baseline, 4px);
+	gap: var(--default-grid-baseline);
 }
 
 .deliver-reviewer h3 {
-	margin: calc(2 * var(--default-grid-baseline, 4px)) 0 0;
+	margin: calc(2 * var(--default-grid-baseline)) 0 0;
 	font-size: 16px;
 }
 

@@ -13,15 +13,14 @@ Deliver is a Nextcloud app for frame-accurate video review (a Frame.io / Clapsho
 - `main` carries v2 since it replaced the legacy code; work on short branches off `main` in a worktree, one small PR each.
 - Stack: PHP 8.2+ Nextcloud app framework, minimum Nextcloud 33 (the web-component sidebar tab API of `@nextcloud/files` 4 needs it), Vue 3 + @nextcloud/vue 9 + Pinia + Vite via @nextcloud/vite-config. Pinned versions live in `package.json`; verify against the Nextcloud developer docs and the server's own `package.json` before bumping.
 - Legacy code is gone on `main`; the old EDL writer is `git show legacy-0.1.6:lib/Service/EdlService.php`, for ideas only.
-- Version starts at 0.2.0. App id stays `deliver`. Author Joshua Böke, repo `git@github.com:joshuabke/nextcloud-deliver.git`.
+- Nothing is released yet: the version in `appinfo/info.xml` and `package.json` stays below 1.0.0 until the first release. App id stays `deliver`. Author Joshua Böke, repo `git@github.com:joshuabke/nextcloud-deliver.git`.
 - No attribution lines of any kind in commits, PRs, issues or files.
 
 ## Dev environment
 
 - Commands and the test setup are in `README.md` and the `Makefile` (`make up`, `make build`, `make test-integration`). The dev image (`docker-image/Dockerfile`) is Nextcloud 34 plus ffmpeg and the VAAPI drivers; change it there, never in the running container. `docker/` is the bind-mounted instance and gitignored.
 - `dev/opcache.ini` is mounted into the container so PHP edits apply immediately. Built bundles are cached by the browser under Nextcloud's `?v=` parameter: hard-reload after `npm run build`.
-- A new migration runs only when `appinfo/info.xml` carries a higher version: bump the patch number with it, then `occ upgrade`.
-- Changing the shipped migration during development: the migration never drops a v2 table, so either reset the instance (`make down`, delete `docker/`, `make up`) or drop the `oc_deliver_*` tables and the `deliver` rows in `oc_migrations` (psql in the `db` container) and run `occ app:disable deliver && occ app:enable deliver`.
+- Nothing is released yet, so the code carries no backwards compatibility of any kind: no second input shape, no fallback for older data, no migration chain. The schema is one migration, changed in place until the first release. To apply a change on the dev instance, alter its tables by hand to match (or reset it: `make down`, delete `docker/`, `make up`); a fresh instance, as in CI, runs the migration as it stands.
 - Routes are cached per PHP process: after editing `appinfo/routes.php`, `docker compose restart nextcloud`, otherwise new verbs answer 405 and new paths 404.
 - File actions in `@nextcloud/files` 4 take **one context object** (`{ nodes, view, folder }`) in both `enabled` and `exec`; a `(nodes)` signature silently never shows the action. There is no `FileAction` class any more, `registerFileAction()` takes a plain object.
 - Scripts for the public share page go through `Util::addInitScript`, not `addScript`: the file list reads the action registry while it renders.

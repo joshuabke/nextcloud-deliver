@@ -148,14 +148,14 @@ async function save() {
 .deliver-admin {
 	display: flex;
 	flex-direction: column;
-	gap: calc(var(--default-grid-baseline, 4px) * 2);
+	gap: calc(var(--default-grid-baseline) * 2);
 	max-width: 500px;
 }
 
 .deliver-admin__status {
 	display: grid;
 	grid-template-columns: max-content 1fr;
-	gap: var(--default-grid-baseline, 4px) calc(var(--default-grid-baseline, 4px) * 4);
+	gap: var(--default-grid-baseline) calc(var(--default-grid-baseline) * 4);
 }
 
 .deliver-admin__status dt {
@@ -167,6 +167,6 @@ async function save() {
 	max-height: 240px;
 	overflow: auto;
 	white-space: pre-wrap;
-	font-family: var(--font-face-monospace, monospace);
+	font-family: monospace;
 }
 </style>

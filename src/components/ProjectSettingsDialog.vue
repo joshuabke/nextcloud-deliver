@@ -108,7 +108,7 @@ async function remove() {
 .deliver-project-settings {
 	display: flex;
 	flex-direction: column;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
-	padding-bottom: calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
+	padding-bottom: calc(2 * var(--default-grid-baseline));
 }
 </style>

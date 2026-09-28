@@ -94,7 +94,7 @@ async function decide(status) {
 .deliver-approval {
 	display: flex;
 	align-items: center;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
 }
 
 /* Overlapping avatars, each ringed in the colour of its decision */
