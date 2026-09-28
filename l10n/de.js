@@ -207,6 +207,7 @@ OC.L10N.register(
 		"Seconds": "Sekunden",
 		"Send (Enter)": "Senden (Enter)",
 		"Set the Due Date; Members are reminded the day before and on the day": "Fälligkeitsdatum setzen; Mitglieder werden am Vortag und am Tag erinnert",
+		"Settings of {name}": "Einstellungen von {name}",
 		"Settings of {project}": "Einstellungen von {project}",
 		"Share": "Teilen",
 		"Share Link on {name}": "Freigabelink auf {name}",
