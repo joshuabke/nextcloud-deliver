@@ -78,6 +78,8 @@ test.describe('Review view', () => {
 		await page.locator('input[type=file][multiple]').setInputFiles({ name: 'second.webm', mimeType: 'video/webm', buffer: readFileSync(CLIP) })
 		const second = page.locator('.deliver-card', { hasText: 'second.webm' })
 		await expect(second).toBeVisible()
+		// Auto Intake would take the file anyway; the upload itself must not fail
+		await expect(page.locator('.deliver-project .notecard')).toHaveCount(0)
 
 		await page.getByRole('button', { name: /^Unseen/ }).click()
 		await expect(page).toHaveURL(/filter=unseen/)
