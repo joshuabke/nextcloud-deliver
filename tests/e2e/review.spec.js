@@ -73,6 +73,21 @@ test.describe('Review view', () => {
 		await expect(page).toHaveURL(new RegExp(`/projects/${projectId}$`))
 	})
 
+	test('uploads into the Project, then filters and finds its Assets', async () => {
+		await page.goto(`/apps/deliver/projects/${projectId}`)
+		await page.locator('input[type=file][multiple]').setInputFiles({ name: 'second.webm', mimeType: 'video/webm', buffer: readFileSync(CLIP) })
+		const second = page.locator('.deliver-card', { hasText: 'second.webm' })
+		await expect(second).toBeVisible()
+
+		await page.getByRole('button', { name: /^Unseen/ }).click()
+		await expect(page).toHaveURL(/filter=unseen/)
+		await expect(second).toBeVisible()
+		await page.getByRole('button', { name: /^All/ }).click()
+
+		await page.getByRole('searchbox', { name: 'Find an Asset' }).fill('SECOND')
+		await expect(page.locator('.deliver-card')).toHaveCount(1)
+	})
+
 	test('comments on a Frame and on a Range, resolves and replies', async () => {
 		await page.goto(`/apps/deliver/versions/${versionId}`)
 		await expect(page.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)

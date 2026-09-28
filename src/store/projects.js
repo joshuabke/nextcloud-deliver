@@ -29,8 +29,8 @@ export const useProjectsStore = defineStore('projects', {
 		},
 		/**
 		 * @param {number} id - the Project
-		 * @param {object} fields - settings to change, or muted
-		 * @param fields.muted
+		 * @param {object} fields - settings to change
+		 * @param {boolean} [fields.muted] - my notifications from this Project, instead of a setting
 		 */
 		async save(id, { muted, ...settings }) {
 			const changed = muted === undefined ? await updateProject(id, settings) : await muteProject(id, muted)
