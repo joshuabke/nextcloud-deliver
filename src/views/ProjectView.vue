@@ -17,7 +17,7 @@ import AssetCard from '../components/AssetCard.vue'
 import ProjectSettingsDialog from '../components/ProjectSettingsDialog.vue'
 import { enableFile, errorMessage, stackVersion, uploadVersion } from '../api.js'
 import { FILTERS, found, passes } from '../lib/filters.js'
-import { groupByFolder, projectDavPath } from '../lib/folders.js'
+import { groupByFolder, inFolder, projectDavPath } from '../lib/folders.js'
 import { stackSuggestions } from '../lib/suggestions.js'
 import { useProjectsStore } from '../store/projects.js'
 
@@ -78,18 +78,20 @@ const LABELS = {
 	due: t('deliver', 'Due'),
 }
 
-/** Filter and search live in the address, so the way back from a Review keeps them */
+/** Folder, filter and search live in the address, so the way back from a Review keeps them */
+const folder = computed(() => route.query.folder ?? '')
 const filter = computed(() => FILTERS.includes(route.query.filter) ? route.query.filter : 'all')
 const query = computed({
 	get: () => route.query.q ?? '',
 	set: (q) => router.replace({ query: { ...route.query, q: q || undefined } }),
 })
+const inView = computed(() => (project.value?.assets ?? []).filter((asset) => inFolder(asset, folder.value)))
 const filters = computed(() => FILTERS.map((id) => ({
 	id,
 	label: LABELS[id],
-	count: (project.value?.assets ?? []).filter((asset) => passes(asset, id)).length,
+	count: inView.value.filter((asset) => passes(asset, id)).length,
 })))
-const shown = computed(() => (project.value?.assets ?? []).filter((asset) => passes(asset, filter.value) && found(asset, query.value)))
+const shown = computed(() => inView.value.filter((asset) => passes(asset, filter.value) && found(asset, query.value)))
 const groups = computed(() => groupByFolder(shown.value))
 
 /**
@@ -108,7 +110,9 @@ function setFilter(id) {
 async function upload(event) {
 	const files = [...(event.target.files ?? [])]
 	event.target.value = ''
+	// Into the folder on screen
 	const folderUrl = generateRemoteUrl('dav') + '/files/' + projectDavPath(project.value.path)
+		+ folder.value.split('/').filter(Boolean).map((part) => '/' + encodeURIComponent(part)).join('')
 	uploading.value = true
 	error.value = null
 	try {
@@ -145,7 +149,11 @@ async function upload(event) {
 						<NcIconSvgWrapper :svg="backIcon" />
 					</template>
 				</NcButton>
-				<h2>{{ project.name }}</h2>
+				<h2>
+					{{ project.name }}<template v-if="folder">
+						<span class="deliver-project__path"> / {{ folder }}</span>
+					</template>
+				</h2>
 				<span class="deliver-project__spacer" />
 				<NcButton
 					v-if="project.canWrite"
@@ -204,7 +212,7 @@ async function upload(event) {
 					? t('deliver', 'Every video or audio file placed in this folder becomes an Asset.')
 					: t('deliver', 'Enable files for review in the Deliver tab of the Files sidebar.')" />
 			<section v-for="group in groups" :key="group.path" class="deliver-project__group">
-				<h3 v-if="group.path" class="deliver-project__folder">
+				<h3 v-if="group.path !== folder" class="deliver-project__folder">
 					<NcIconSvgWrapper :svg="folderIcon" :size="20" />
 					{{ group.path }}
 				</h3>
@@ -234,12 +242,19 @@ async function upload(event) {
 	padding: 0 calc(4 * var(--default-grid-baseline, 4px)) calc(6 * var(--default-grid-baseline, 4px));
 }
 
+/* One row next to the navigation toggle, which sits in the top left corner */
 .deliver-project__head {
 	display: flex;
 	align-items: center;
 	gap: calc(2 * var(--default-grid-baseline, 4px));
 	min-height: calc(var(--default-clickable-area, 34px) + 4 * var(--default-grid-baseline, 4px));
+	padding-inline-start: var(--default-clickable-area, 34px);
 	border-bottom: 1px solid var(--color-border);
+}
+
+.deliver-project__path {
+	color: var(--color-text-maxcontrast);
+	font-weight: normal;
 }
 
 .deliver-project__head h2 {
