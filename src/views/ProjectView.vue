@@ -1,7 +1,9 @@
 <script setup>
+import backIcon from '@mdi/svg/svg/arrow-left.svg?raw'
 import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
 import { t } from '@nextcloud/l10n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
@@ -85,6 +87,15 @@ const groups = computed(() => groupByFolder(project.value?.assets ?? []))
 		</NcEmptyContent>
 		<template v-else>
 			<div class="deliver-project__head">
+				<NcButton
+					variant="tertiary"
+					to="/"
+					:aria-label="t('deliver', 'All Projects')"
+					:title="t('deliver', 'All Projects')">
+					<template #icon>
+						<NcIconSvgWrapper :svg="backIcon" />
+					</template>
+				</NcButton>
 				<h2>{{ project.name }}</h2>
 				<span class="deliver-project__spacer" />
 				<NcCheckboxRadioSwitch
@@ -126,13 +137,11 @@ const groups = computed(() => groupByFolder(project.value?.assets ?? []))
 	padding: 0 calc(4 * var(--default-grid-baseline, 4px)) calc(6 * var(--default-grid-baseline, 4px));
 }
 
-/* One row next to the navigation toggle, which sits in the top left corner */
 .deliver-project__head {
 	display: flex;
 	align-items: center;
 	gap: calc(2 * var(--default-grid-baseline, 4px));
 	min-height: calc(var(--default-clickable-area, 34px) + 4 * var(--default-grid-baseline, 4px));
-	padding-inline-start: var(--default-clickable-area, 34px);
 	border-bottom: 1px solid var(--color-border);
 }
 

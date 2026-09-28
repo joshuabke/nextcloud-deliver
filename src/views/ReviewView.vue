@@ -162,7 +162,6 @@ async function upload(event) {
 	<ReviewLayout
 		v-else
 		v-model:panelOpen="panelOpen"
-		navToggle
 		class="deliver-review">
 		<template #start>
 			<NcButton
@@ -174,9 +173,14 @@ async function upload(event) {
 					<NcIconSvgWrapper :svg="backIcon" />
 				</template>
 			</NcButton>
-			<h2 class="deliver-review__title" tabindex="-1">
-				{{ context.asset.name }}
-			</h2>
+			<div class="deliver-review__crumbs">
+				<RouterLink class="deliver-review__project" :to="`/projects/${context.project.id}`">
+					{{ context.project.name }}
+				</RouterLink>
+				<h2 class="deliver-review__title" tabindex="-1">
+					{{ context.asset.name }}
+				</h2>
+			</div>
 			<DueDate
 				:modelValue="context.asset.dueDate"
 				:editable="context.project.canWrite"
@@ -295,6 +299,26 @@ async function upload(event) {
 </template>
 
 <style scoped>
+.deliver-review__crumbs {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	line-height: 1.25;
+}
+
+/* The Project this Asset belongs to, one click back */
+.deliver-review__project {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--color-text-maxcontrast);
+	font-size: 12px;
+}
+
+.deliver-review__project:hover {
+	text-decoration: underline;
+}
+
 .deliver-review__title {
 	margin: 0;
 	font-size: 16px;

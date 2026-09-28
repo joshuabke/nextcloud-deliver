@@ -61,6 +61,18 @@ test.describe('Review view', () => {
 		await api.dispose()
 	})
 
+	test('the Project list leads into a Review and back', async () => {
+		await page.goto('/apps/deliver/')
+		const tile = page.locator('.deliver-project-card', { hasText: folder })
+		await expect(tile).toContainText('1 Asset')
+		await tile.click()
+		await expect(page).toHaveURL(new RegExp(`/projects/${projectId}$`))
+		await page.locator('.deliver-card__link').first().click()
+		await expect(page).toHaveURL(new RegExp(`/versions/${versionId}$`))
+		await page.getByRole('link', { name: folder, exact: true }).click()
+		await expect(page).toHaveURL(new RegExp(`/projects/${projectId}$`))
+	})
+
 	test('comments on a Frame and on a Range, resolves and replies', async () => {
 		await page.goto(`/apps/deliver/versions/${versionId}`)
 		await expect(page.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)

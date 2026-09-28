@@ -10,6 +10,7 @@ OC.L10N.register(
 		"Ableton Live: add locators to a Live Set…": "Ableton Live: Locators in ein Live Set einfügen …",
 		"Added before the output file, for example -threads 4": "Wird vor der Ausgabedatei eingefügt, zum Beispiel -threads 4",
 		"All Comments": "Alle Kommentare",
+		"All Projects": "Alle Projekte",
 		"Also on older Versions": "Auch auf älteren Versionen",
 		"An attachment is at most 25 MB: {names}": "Ein Anhang ist höchstens 25 MB groß: {names}",
 		"An ordinary link: people see and play the files, but no Comments.": "Ein gewöhnlicher Link: Man sieht und spielt die Dateien, aber ohne Kommentare.",
@@ -136,7 +137,6 @@ OC.L10N.register(
 		"Pause (Space)": "Pause (Leertaste)",
 		"Pen": "Stift",
 		"People with this link get a Review button and can leave frame-accurate Comments.": "Wer diesen Link hat, bekommt einen Review-Knopf und kann framegenau kommentieren.",
-		"Pick a Project": "Wählen Sie ein Projekt",
 		"Play (Space)": "Abspielen (Leertaste)",
 		"Playback speed": "Wiedergabetempo",
 		"Position of {duration}": "Position von {duration}",
@@ -207,6 +207,7 @@ OC.L10N.register(
 		"Unresolved": "Offen",
 		"Unresolved only": "Nur offene",
 		"Unseen": "Ungesehen",
+		"Unseen Version": "Ungesehene Version",
 		"Unstack into its own Asset": "Als eigenes Asset abtrennen",
 		"Upload a new cut and stack it on top": "Neuen Schnitt hochladen und oben stapeln",
 		"VAAPI device": "VAAPI-Gerät",
@@ -233,9 +234,25 @@ OC.L10N.register(
 		"You get these mails because you asked for them in the review. The envelope next to the Comments changes that.": "Sie bekommen diese Mails, weil Sie sie im Review angefordert haben. Über den Briefumschlag neben den Kommentaren ändern Sie das.",
 		"Your Comment:": "Ihr Kommentar:",
 		"Your name, so the editor knows whose feedback this is": "Ihr Name, damit der Editor weiß, von wem das Feedback ist",
+		"_%n Asset with changes requested_::_%n Assets with changes requested_": [
+			"%n Asset mit gewünschten Änderungen",
+			"%n Assets mit gewünschten Änderungen"
+		],
+		"_%n Asset_::_%n Assets_": [
+			"%n Asset",
+			"%n Assets"
+		],
 		"_%n Comment_::_%n Comments_": [
 			"%n Kommentar",
 			"%n Kommentare"
+		],
+		"_%n Unseen Comment_::_%n Unseen Comments_": [
+			"%n ungesehener Kommentar",
+			"%n ungesehene Kommentare"
+		],
+		"_%n Unseen Version_::_%n Unseen Versions_": [
+			"%n ungesehene Version",
+			"%n ungesehene Versionen"
 		],
 		"_%n reply_::_%n replies_": [
 			"%n Antwort",

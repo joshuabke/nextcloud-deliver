@@ -140,6 +140,10 @@ After 0.2.0 the feature set grows to what a hosted review tool offers (FreeFrame
 94. As a Member with write access, I want a Share Link to show a Watermark with the Reviewer's name over the picture, so that a leaked screen recording names its source.
 95. As a Member or Reviewer, I want images to be Assets with Comments, drawings, Versions and comparison, so that stills and design frames get the same review.
 96. As a Member or Reviewer, I want new Comments, Replies, reactions and approvals to appear without reloading, promptly where the server offers push, so that a review session feels live.
+97. As a Member, I want the Deliver app page to show every Project as a tile with stills of its latest Assets, what is Unseen for me, how many Assets wait for changes and the next Due Date, the latest activity first, so that I see at a glance where something happened.
+98. As a Member, I want to turn a folder into a Project and change its settings from the Deliver app page, so that I do not have to go through the Files sidebar.
+99. As a Member, I want to filter a Project's Assets by Unseen, changes requested, approved and due, find them by name and upload new files into the Project folder, so that a large Project stays manageable.
+100. As a Member, I want a Project's navigation to list its folders and all its Share Links, and the Review view to use the whole window with a way back to its Project, so that each view has the room it needs.
 
 ## Implementation Decisions
 
@@ -200,7 +204,7 @@ One versioned REST surface under the app, used by the app page, the Files sideba
 
 ### Frontend surfaces
 
-- App page: Project list, Project view (folder tree of Assets with stack badges, processing state, comment counts), Review view (player, marker strip, comment panel, version switcher, export menu, link management drawer).
+- App page: Project list as tiles, without app navigation (story 97); Project view (Assets with stack badges, processing state, comment counts and Unseen marks, filters, and an app navigation of its folders and Share Links); Review view without app navigation (player, marker strip, comment panel, version switcher, export menu, link management drawer).
 - Public review page: the same Review view under the share token, with Reviewer identity prompt, Personal Link display and reduced controls. Deliver loads its script into Nextcloud's own public share page through `OCA\Files_Sharing\Event\BeforeTemplateRenderedEvent` and registers a Review file action there for shares carrying the review flag, so the Reviewer goes from the shared file list into the player in one click. Shares without the flag load nothing of Deliver's.
 - Files sidebar tab "Deliver": on a media file, the review toggle, stack position, comment count and "Open in Deliver"; on a folder, the Auto Intake toggle and the Project settings. Files action "Open in Deliver" on video and audio. The player never renders inside the sidebar.
 
@@ -238,6 +242,7 @@ CI runs php-cs-fixer, psalm, PHPUnit (unit and integration), Vitest and Playwrig
 ## Out of Scope
 
 - Digest emails.
+- Frame.io's project furniture: workspaces and roles of Deliver's own, metadata fields (status, assignee, rating, keywords), collections, cover images, and folder management inside Deliver. Nextcloud sharing and Files do those; Approvals and Due Dates carry the status.
 - PDFs as Assets.
 - Watermarks burned into the picture (the Watermark is an overlay in the player).
 - Adaptive streaming, multiple Proxy renditions, 4K Proxies.
