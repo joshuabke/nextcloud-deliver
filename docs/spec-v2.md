@@ -87,7 +87,7 @@ Deliver becomes a proper Nextcloud app, rebuilt from scratch, in which media fil
 58. As a Nextcloud user who is not a Member, I want a Share Link to treat me as a Reviewer with my display name prefilled, so that colleagues without folder access can still comment.
 59. As a Member, I want a Share Link to put me into the normal app view, so that I never work with reduced rights by accident.
 60. As a Reviewer, I want to download the original when the share allows it, so that I can inspect it in my own tools.
-61. As a Reviewer, I want the Review button to open the newest Version of an Asset, so that I always land on the current cut.
+61. As a Reviewer, I want the Review button on a file to open that file's Version, with the newer Versions one click away in the version picker, so that I review what I picked.
 
 ### Notifications
 

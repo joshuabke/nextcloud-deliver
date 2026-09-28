@@ -253,4 +253,16 @@ class ShareReviewTest extends TestCase {
 		self::assertSame(['Kim'], array_column($reviewers, 'name'), 'a Reviewer belongs to the Project, so every review link carries them');
 		self::assertStringContainsString($fileLink['data']['token'], $reviewers[0]['link'], 'with a Personal Link through that link');
 	}
+
+	public function testTheReviewButtonOpensTheVersionOfTheFileItSitsOn(): void {
+		$this->nc->put("{$this->root}/cut_v2.mp4", 'the second cut');
+		$stack = array_column($this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'], 'versions', 'name')['cut'];
+		self::assertSame(['cut_v2.mp4', 'cut.mp4'], array_column($stack, 'name'), 'the new file stacks on the old one');
+
+		$listed = $this->reviewer()->call('GET', '/api/assets');
+		self::assertSame(200, $listed['status'], json_encode($listed['data']));
+		$byFile = array_column($listed['data'], null, 'fileId');
+		self::assertSame($stack[1]['id'], $byFile[$stack[1]['fileId']]['versionId'], 'Review on the first cut opens the first cut');
+		self::assertSame($stack[0]['id'], $byFile[$stack[1]['fileId']]['newestId'], 'and knows the newest');
+	}
 }

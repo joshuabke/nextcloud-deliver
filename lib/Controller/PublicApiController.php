@@ -100,7 +100,13 @@ class PublicApiController extends PublicShareController {
 			$result = [];
 			foreach ($this->sharing->assets($this->share()) as ['asset' => $asset, 'versions' => $versions]) {
 				foreach ($versions as $version) {
-					$result[] = ['fileId' => $version->getFileId(), 'versionId' => $versions[0]->getId(), 'assetId' => $asset->getId()];
+					// The Review button opens the file's own Version; stepping through Assets lands on the newest
+					$result[] = [
+						'fileId' => $version->getFileId(),
+						'versionId' => $version->getId(),
+						'newestId' => $versions[0]->getId(),
+						'assetId' => $asset->getId(),
+					];
 				}
 			}
 			return $result;
