@@ -103,7 +103,7 @@ A Share Link URL carrying a Reviewer's own key, so that whoever opens it is that
 _Avoid_: Invite link, magic link, session
 
 **Unseen**:
-A Comment or Reply the current person has not yet had on screen since it was written. Tracked per person per Version.
+A Comment or Reply the current person has not yet had on screen since it was written, or a Version they never had on screen that arrived after the Project's first intake. Tracked per person per Version.
 _Avoid_: New, unread (unread is for notifications)
 
 ### Derived Media

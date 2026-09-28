@@ -6,16 +6,11 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 
 /** Whether the panel beside the player is open */
 const panelOpen = defineModel('panelOpen', { type: Boolean, default: true })
-
-defineProps({
-	/** Leaves room for Nextcloud's navigation toggle in the top left corner */
-	navToggle: { type: Boolean, default: false },
-})
 </script>
 
 <template>
 	<!-- The Review view is dark in any theme, like every video tool: the picture is what should stand out -->
-	<div class="deliver-layout" :class="{ 'deliver-layout--nav': navToggle }">
+	<div class="deliver-layout">
 		<div class="deliver-layout__bar">
 			<div class="deliver-layout__start">
 				<slot name="start" />
@@ -94,10 +89,6 @@ defineProps({
 	border-bottom: 1px solid var(--color-border);
 }
 
-.deliver-layout--nav .deliver-layout__bar {
-	padding-inline-start: calc(var(--default-clickable-area, 34px) + 4 * var(--default-grid-baseline, 4px));
-}
-
 .deliver-layout__start,
 .deliver-layout__center,
 .deliver-layout__end {
@@ -135,12 +126,6 @@ defineProps({
 	min-height: 0;
 	border-inline-start: 1px solid var(--color-border);
 	overflow: hidden;
-}
-
-/* With the navigation closed, its toggle floats over the dark bar */
-:global(body:has(.deliver-layout--nav) .app-navigation--closed .app-navigation-toggle) {
-	background: transparent !important;
-	color: #ececef !important;
 }
 
 @media (max-width: 1024px) {

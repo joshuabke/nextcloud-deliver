@@ -101,7 +101,7 @@ function jump(comment) {
 			<NcLoadingIcon />
 		</template>
 	</NcEmptyContent>
-	<ReviewLayout v-else v-model:panelOpen="panelOpen" navToggle>
+	<ReviewLayout v-else v-model:panelOpen="panelOpen">
 		<template #start>
 			<NcButton
 				variant="tertiary"

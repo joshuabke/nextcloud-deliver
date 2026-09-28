@@ -21,6 +21,8 @@ const props = defineProps({
 const emit = defineEmits(['stack'])
 
 const newest = computed(() => props.asset.versions[0])
+/** Comments by others on any Version of the Stack that I have not had on screen */
+const unseen = computed(() => props.asset.versions.reduce((sum, version) => sum + version.unseen, 0))
 const audio = computed(() => newest.value.mimeType?.startsWith('audio/'))
 /** Set when the server could not render a still; the icon stands in */
 const noPreview = ref(false)
@@ -58,8 +60,18 @@ const status = computed(() => {
 					alt=""
 					@error="noPreview = true">
 				<NcIconSvgWrapper v-else :svg="audio ? audioIcon : assetIcon" :size="40" />
-				<span class="deliver-card__version">{{ t('deliver', 'V{number}', { number: newest.number }) }}</span>
-				<span v-if="newest.comments" class="deliver-card__comments">
+				<span
+					class="deliver-card__version"
+					:class="{ 'deliver-card__version--unseen': !newest.seen }"
+					:title="newest.seen ? null : t('deliver', 'Unseen Version')">{{ t('deliver', 'V{number}', { number: newest.number }) }}</span>
+				<span
+					v-if="unseen"
+					class="deliver-card__comments deliver-card__comments--unseen"
+					:title="n('deliver', '%n Unseen Comment', '%n Unseen Comments', unseen)">
+					<NcIconSvgWrapper :svg="commentIcon" :size="14" />
+					{{ unseen }}
+				</span>
+				<span v-else-if="newest.comments" class="deliver-card__comments">
 					<NcIconSvgWrapper :svg="commentIcon" :size="14" />
 					{{ newest.comments }}
 				</span>
@@ -166,6 +178,12 @@ const status = computed(() => {
 
 .deliver-card__decision--changes {
 	background: #c77800;
+}
+
+.deliver-card__version--unseen,
+.deliver-card__comments--unseen {
+	background: var(--color-primary-element);
+	color: var(--color-primary-element-text);
 }
 
 .deliver-card__version {

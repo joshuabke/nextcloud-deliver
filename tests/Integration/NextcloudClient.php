@@ -11,7 +11,7 @@ namespace OCA\Deliver\Tests\Integration;
 class NextcloudClient {
 	public function __construct(
 		private string $baseUrl,
-		private string $user,
+		public readonly string $user,
 		private string $password,
 	) {
 	}
