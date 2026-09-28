@@ -1,6 +1,7 @@
 /**
  * The filters of the Project view (story 99). Each looks at the newest
- * Version of an Asset, except Unseen, which counts the whole Stack.
+ * Version of an Asset, except Unseen, which looks for Unseen Comments
+ * anywhere in the Stack.
  */
 export const FILTERS = ['all', 'unseen', 'changes', 'approved', 'due']
 
@@ -14,7 +15,7 @@ export function passes(asset, filter) {
 	const { approved = 0, changes = 0 } = newest.approvals ?? {}
 	switch (filter) {
 		case 'unseen':
-			return !newest.seen || asset.versions.some((version) => version.unseen > 0)
+			return asset.versions.some((version) => version.unseen > 0)
 		case 'changes':
 			return changes > 0
 		case 'approved':
@@ -37,4 +38,23 @@ export function found(asset, query) {
 	return needle === ''
 		|| asset.name.toLocaleLowerCase().includes(needle)
 		|| asset.versions[0].name.toLocaleLowerCase().includes(needle)
+}
+
+/** The orders of the Project view, the latest activity first by default */
+export const SORTS = ['activity', 'name', 'created', 'due']
+
+/**
+ * @param {object[]} assets - Assets with name, createdAt, lastActivity and dueDate
+ * @param {string} sort - one of SORTS
+ * @return {object[]} a sorted copy; ties and Assets without a Due Date go by name
+ */
+export function sortAssets(assets, sort) {
+	const byName = (a, b) => a.name.localeCompare(b.name)
+	const order = {
+		activity: (a, b) => b.lastActivity - a.lastActivity || byName(a, b),
+		name: byName,
+		created: (a, b) => b.createdAt - a.createdAt || byName(a, b),
+		due: (a, b) => (a.dueDate ?? '\uffff').localeCompare(b.dueDate ?? '\uffff') || byName(a, b),
+	}[sort] ?? byName
+	return [...assets].sort(order)
 }

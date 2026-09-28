@@ -102,23 +102,21 @@ class CommentMapper extends QBMapper {
 
 	/**
 	 * @param list<int> $versionIds
-	 * @return int|null when the newest Comment or Reply on these Versions was written
+	 * @return array<int, int> Version id → when its newest Comment or Reply was written
 	 */
-	public function latestOn(array $versionIds): ?int {
+	public function latestByVersions(array $versionIds): array {
 		if ($versionIds === []) {
-			return null;
+			return [];
 		}
 		$qb = $this->db->getQueryBuilder();
-		$qb->select($qb->func()->max('created_at'))
+		$qb->select('version_id')->selectAlias($qb->func()->max('created_at'), 'amount')
 			->from($this->getTableName())
-			->where($qb->expr()->in('version_id', $qb->createNamedParameter($versionIds, IQueryBuilder::PARAM_INT_ARRAY)));
-		$result = $qb->executeQuery();
-		$latest = $result->fetchOne();
-		$result->closeCursor();
-		return $latest === null || $latest === false ? null : (int)$latest;
+			->where($qb->expr()->in('version_id', $qb->createNamedParameter($versionIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->groupBy('version_id');
+		return $this->amounts($qb);
 	}
 
-	/** @return array<int, int> version_id → amount of a grouped count */
+	/** @return array<int, int> version_id → amount of a grouped query */
 	private function amounts(IQueryBuilder $qb): array {
 		$result = $qb->executeQuery();
 		$counts = [];

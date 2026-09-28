@@ -60,10 +60,7 @@ const status = computed(() => {
 					alt=""
 					@error="noPreview = true">
 				<NcIconSvgWrapper v-else :svg="audio ? audioIcon : assetIcon" :size="40" />
-				<span
-					class="deliver-card__version"
-					:class="{ 'deliver-card__version--unseen': !newest.seen }"
-					:title="newest.seen ? null : t('deliver', 'Unseen Version')">{{ t('deliver', 'V{number}', { number: newest.number }) }}</span>
+				<span class="deliver-card__version">{{ t('deliver', 'V{number}', { number: newest.number }) }}</span>
 				<span
 					v-if="unseen"
 					class="deliver-card__comments deliver-card__comments--unseen"
@@ -180,7 +177,6 @@ const status = computed(() => {
 	background: #c77800;
 }
 
-.deliver-card__version--unseen,
 .deliver-card__comments--unseen {
 	background: var(--color-primary-element);
 	color: var(--color-primary-element-text);
