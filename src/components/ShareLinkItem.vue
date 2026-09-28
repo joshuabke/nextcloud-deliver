@@ -6,14 +6,15 @@ import { ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { errorMessage, inviteReviewer, listReviewers, setShareFlags } from '../api.js'
 
 const props = defineProps({
 	/** One Share Link with Deliver's flags, as the server lists it */
 	share: { type: Object, required: true },
 	canWrite: { type: Boolean, default: false },
-	/** Offers each Reviewer's settings, where there is a place to show them */
-	personSettings: { type: Boolean, default: false },
+	/** In the Project's link dialog: each Reviewer's settings are offered, and the dialog's own button invites */
+	inDialog: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['update', 'person'])
@@ -57,6 +58,13 @@ watch(() => [props.share.id, props.share.review, props.canWrite], ([id, review, 
 		})
 	}
 }, { immediate: true })
+
+/** Opens the form to invite a Reviewer, for a button outside */
+function startInvite() {
+	inviting.value = true
+}
+
+defineExpose({ startInvite, inviting })
 
 /**
  * @param {string} link - a Personal Link
@@ -127,7 +135,7 @@ function invite() {
 							{{ t('deliver', 'Copy Personal Link') }}
 						</NcButton>
 						<NcButton
-							v-if="personSettings"
+							v-if="inDialog"
 							variant="tertiary"
 							:aria-label="t('deliver', 'Settings of {name}', { name: reviewer.name })"
 							:title="t('deliver', 'Settings of {name}', { name: reviewer.name })"
@@ -143,14 +151,14 @@ function invite() {
 				</p>
 
 				<form v-if="inviting" class="deliver-link__invite" @submit.prevent="invite">
-					<input v-model="name" type="text" :placeholder="t('deliver', 'Name')">
-					<input v-model="email" type="email" :placeholder="t('deliver', 'Email for replies (optional)')">
+					<NcTextField v-model="name" :label="t('deliver', 'Name')" />
+					<NcTextField v-model="email" type="email" :label="t('deliver', 'Email for replies (optional)')" />
 					<NcButton variant="primary" :disabled="busy || !name.trim()" @click="invite">
 						{{ t('deliver', 'Invite') }}
 					</NcButton>
 				</form>
 				<NcButton
-					v-else
+					v-else-if="!inDialog"
 					variant="tertiary"
 					:disabled="busy"
 					@click="inviting = true">
@@ -190,8 +198,13 @@ function invite() {
 
 .deliver-link__invite {
 	display: flex;
-	flex-direction: column;
-	gap: var(--default-grid-baseline, 4px);
+	align-items: flex-end;
+	gap: calc(2 * var(--default-grid-baseline, 4px));
+	margin-top: calc(2 * var(--default-grid-baseline, 4px));
+}
+
+.deliver-link__invite > :last-child {
+	flex: none;
 }
 
 .deliver-link__hint {
