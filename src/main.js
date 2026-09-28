@@ -9,6 +9,8 @@ import ProjectNavigation from './views/ProjectNavigation.vue'
 import ProjectView from './views/ProjectView.vue'
 import ReviewView from './views/ReviewView.vue'
 
+import '@nextcloud/dialogs/style.css'
+
 const router = createRouter({
 	history: createWebHistory(generateUrl('/apps/deliver')),
 	routes: [

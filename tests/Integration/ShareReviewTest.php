@@ -246,5 +246,11 @@ class ShareReviewTest extends TestCase {
 		self::assertSame([$this->root, 'cut.mp4'], [$names[$this->shareId] ?? null, $names[$fileLink['data']['id']] ?? null]);
 		self::assertSame('/' . $this->root, array_column($listed['data'], 'dir', 'name')['cut.mp4']);
 		self::assertTrue(array_column($listed['data'], 'review', 'name')['cut.mp4']);
+
+		$invited = $this->nc->ocs('POST', "/shares/{$this->shareId}/reviewers", ['name' => 'Kim']);
+		self::assertSame(201, $invited['status'], json_encode($invited['data']));
+		$reviewers = array_column($this->nc->ocs('GET', "/projects/{$this->projectId}/shares")['data'], 'reviewers', 'name')['cut.mp4'];
+		self::assertSame(['Kim'], array_column($reviewers, 'name'), 'a Reviewer belongs to the Project, so every review link carries them');
+		self::assertStringContainsString($fileLink['data']['token'], $reviewers[0]['link'], 'with a Personal Link through that link');
 	}
 }
