@@ -1,16 +1,18 @@
 <script setup>
 import backIcon from '@mdi/svg/svg/arrow-left.svg?raw'
+import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
 import { t } from '@nextcloud/l10n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import AssetCard from '../components/AssetCard.vue'
-import { errorMessage, muteProject, stackVersion } from '../api.js'
+import ProjectSettingsDialog from '../components/ProjectSettingsDialog.vue'
+import { errorMessage, stackVersion } from '../api.js'
 import { groupByFolder } from '../lib/folders.js'
 import { stackSuggestions } from '../lib/suggestions.js'
 import { useProjectsStore } from '../store/projects.js'
@@ -20,7 +22,9 @@ const props = defineProps({
 })
 
 const store = useProjectsStore()
+const router = useRouter()
 const error = ref(null)
+const settingsOpen = ref(false)
 const project = computed(() => store.details[props.id])
 
 watch(() => props.id, async (id) => {
@@ -59,19 +63,6 @@ async function accept(asset, target) {
 	}
 }
 
-/**
- * No notifications from this Project for me (story 64)
- *
- * @param {boolean} muted - the new switch state
- */
-async function mute(muted) {
-	try {
-		project.value.muted = (await muteProject(props.id, muted)).muted
-	} catch (e) {
-		error.value = errorMessage(e)
-	}
-}
-
 const groups = computed(() => groupByFolder(project.value?.assets ?? []))
 </script>
 
@@ -98,12 +89,15 @@ const groups = computed(() => groupByFolder(project.value?.assets ?? []))
 				</NcButton>
 				<h2>{{ project.name }}</h2>
 				<span class="deliver-project__spacer" />
-				<NcCheckboxRadioSwitch
-					type="switch"
-					:modelValue="project.muted"
-					@update:modelValue="mute">
-					{{ t('deliver', 'Mute notifications') }}
-				</NcCheckboxRadioSwitch>
+				<NcButton
+					variant="tertiary"
+					:aria-label="t('deliver', 'Project settings')"
+					:title="t('deliver', 'Project settings')"
+					@click="settingsOpen = true">
+					<template #icon>
+						<NcIconSvgWrapper :svg="settingsIcon" />
+					</template>
+				</NcButton>
 			</div>
 			<NcEmptyContent
 				v-if="project.assets.length === 0"
@@ -125,6 +119,11 @@ const groups = computed(() => groupByFolder(project.value?.assets ?? []))
 						@stack="accept" />
 				</ul>
 			</section>
+			<ProjectSettingsDialog
+				v-if="settingsOpen"
+				:project="project"
+				@close="settingsOpen = false"
+				@removed="router.push('/')" />
 		</template>
 	</div>
 </template>

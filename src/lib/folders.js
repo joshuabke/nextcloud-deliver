@@ -38,3 +38,11 @@ export function filesDir(davUrl) {
 	const parts = inHome.split('/').slice(1, -1)
 	return '/' + parts.join('/')
 }
+
+/**
+ * @param {string} path - a Project's path as the server has it, /<user>/files/<path>
+ * @return {string} the folder as Files shows it, such as /Clients/Showreel
+ */
+export function projectDir(path) {
+	return '/' + path.split('/').slice(3).join('/')
+}

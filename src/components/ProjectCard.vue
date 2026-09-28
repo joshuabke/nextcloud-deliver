@@ -1,10 +1,12 @@
 <script setup>
 import changesIcon from '@mdi/svg/svg/alert-circle-outline.svg?raw'
+import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import commentIcon from '@mdi/svg/svg/comment-outline.svg?raw'
 import projectIcon from '@mdi/svg/svg/folder-play-outline.svg?raw'
 import versionIcon from '@mdi/svg/svg/layers-plus.svg?raw'
-import { n } from '@nextcloud/l10n'
+import { n, t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
+import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDateTime from '@nextcloud/vue/components/NcDateTime'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DueDate from './DueDate.vue'
@@ -14,6 +16,8 @@ const props = defineProps({
 	/** A Project with its activity, as the Project list has it */
 	project: { type: Object, required: true },
 })
+
+const emit = defineEmits(['settings'])
 
 /** Stills the server could not render drop out of the picture */
 const broken = ref(new Set())
@@ -62,12 +66,38 @@ const badges = computed(() => {
 			</div>
 			<DueDate v-if="project.activity.nextDue" class="deliver-project-card__due" :modelValue="project.activity.nextDue" />
 		</RouterLink>
+		<NcButton
+			class="deliver-project-card__settings"
+			variant="tertiary"
+			:aria-label="t('deliver', 'Settings of {project}', { project: project.name })"
+			:title="t('deliver', 'Project settings')"
+			@click="emit('settings')">
+			<template #icon>
+				<NcIconSvgWrapper :svg="settingsIcon" />
+			</template>
+		</NcButton>
 	</li>
 </template>
 
 <style scoped>
 .deliver-project-card {
+	position: relative;
 	min-width: 0;
+}
+
+/* Over the picture's corner, outside the link, so the tile stays one link */
+.deliver-project-card__settings {
+	position: absolute !important;
+	top: calc(3 * var(--default-grid-baseline, 4px));
+	inset-inline-end: calc(3 * var(--default-grid-baseline, 4px));
+	background: rgba(0, 0, 0, 0.6) !important;
+	color: #fff !important;
+	opacity: 0;
+}
+
+.deliver-project-card:hover .deliver-project-card__settings,
+.deliver-project-card__settings:focus-visible {
+	opacity: 1;
 }
 
 .deliver-project-card__link {
