@@ -119,7 +119,13 @@ export const listPublicAssets = () => axios.get(url('/assets')).then(data)
  * @return {Promise<number>} the Nextcloud file id of the upload
  */
 export async function uploadVersion(folderUrl, file) {
-	const response = await axios.put(`${folderUrl}/${encodeURIComponent(file.name)}`, file, {
+	const target = `${folderUrl}/${encodeURIComponent(file.name)}`
+	// Ask first, so a taken name is refused now rather than after the whole upload
+	const taken = await axios.head(target).then(() => true, () => false)
+	if (taken) {
+		throw Object.assign(new Error('taken'), { response: { status: 412 } })
+	}
+	const response = await axios.put(target, file, {
 		headers: { 'Content-Type': file.type || 'application/octet-stream', 'If-None-Match': '*' },
 	})
 	return Number(response.headers['oc-fileid'])
