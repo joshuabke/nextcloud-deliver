@@ -1,18 +1,22 @@
 <script setup>
+import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import { showSuccess } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
 import { ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
+import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import { errorMessage, inviteReviewer, listReviewers, setShareFlags } from '../api.js'
 
 const props = defineProps({
 	/** One Share Link with Deliver's flags, as the server lists it */
 	share: { type: Object, required: true },
 	canWrite: { type: Boolean, default: false },
+	/** Offers each Reviewer's settings, where there is a place to show them */
+	personSettings: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['update'])
+const emit = defineEmits(['update', 'person'])
 
 const busy = ref(false)
 const error = ref(null)
@@ -118,9 +122,19 @@ function invite() {
 				</p>
 				<ul v-else-if="reviewers">
 					<li v-for="reviewer in reviewers" :key="reviewer.id" class="deliver-link__reviewer">
-						<span>{{ reviewer.name }}</span>
+						<span class="deliver-link__name">{{ reviewer.name }}</span>
 						<NcButton variant="tertiary" @click="copy(reviewer.link)">
 							{{ t('deliver', 'Copy Personal Link') }}
+						</NcButton>
+						<NcButton
+							v-if="personSettings"
+							variant="tertiary"
+							:aria-label="t('deliver', 'Settings of {name}', { name: reviewer.name })"
+							:title="t('deliver', 'Settings of {name}', { name: reviewer.name })"
+							@click="emit('person', reviewer.id)">
+							<template #icon>
+								<NcIconSvgWrapper :svg="settingsIcon" />
+							</template>
 						</NcButton>
 					</li>
 				</ul>
@@ -167,8 +181,11 @@ function invite() {
 .deliver-link__reviewer {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
+	gap: var(--default-grid-baseline, 4px);
+}
+
+.deliver-link__name {
+	flex: 1;
 }
 
 .deliver-link__invite {

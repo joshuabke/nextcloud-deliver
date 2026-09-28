@@ -11,7 +11,7 @@ const props = defineProps({
 	canWrite: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['update', 'close'])
+const emit = defineEmits(['update', 'person', 'close'])
 
 /** Password and expiry are Nextcloud's own share settings */
 const manageUrl = generateUrl('/apps/files/files/{fileId}', { fileId: props.share.fileId })
@@ -23,7 +23,12 @@ const manageUrl = generateUrl('/apps/files/files/{fileId}', { fileId: props.shar
 		:name="t('deliver', 'Share Link on {name}', { name: share.name })"
 		size="normal"
 		@closing="emit('close')">
-		<ShareLinkItem :share="share" :canWrite="canWrite" @update="emit('update', $event)" />
+		<ShareLinkItem
+			:share="share"
+			:canWrite="canWrite"
+			personSettings
+			@update="emit('update', $event)"
+			@person="emit('person', $event)" />
 		<template #actions>
 			<NcButton :href="manageUrl">
 				{{ t('deliver', 'Password and expiry in Files') }}

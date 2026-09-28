@@ -118,6 +118,17 @@ function closeEditing() {
 }
 
 /**
+ * From a link's settings to a Reviewer's: one dialog at a time
+ *
+ * @param {number} id - the Reviewer
+ */
+async function openPerson(id) {
+	editing.value = null
+	await load()
+	person.value = byId.value.get(id) ?? null
+}
+
+/**
  * @param {object} reviewer - a Reviewer
  * @return {string} their Personal Link through the Project folder's link, or through the first review link
  */
@@ -231,6 +242,7 @@ function personalLink(reviewer) {
 				:share="editing"
 				:canWrite="project?.canWrite ?? false"
 				@update="replace"
+				@person="openPerson"
 				@close="closeEditing" />
 			<ReviewerDialog
 				v-if="person"
