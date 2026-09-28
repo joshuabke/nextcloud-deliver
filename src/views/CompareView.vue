@@ -211,13 +211,13 @@ function jump(comment) {
 }
 
 .deliver-compare-view__error {
-	margin: calc(var(--default-clickable-area, 34px) + 4 * var(--default-grid-baseline, 4px)) calc(4 * var(--default-grid-baseline, 4px));
+	margin: calc(var(--default-clickable-area) + 4 * var(--default-grid-baseline)) calc(4 * var(--default-grid-baseline));
 }
 
 .deliver-compare-view__switch {
 	display: flex;
 	padding: 3px;
-	border-radius: var(--border-radius-element, 8px);
+	border-radius: var(--border-radius-element);
 	background: var(--color-background-dark);
 }
 
@@ -226,7 +226,7 @@ function jump(comment) {
 	margin: 0;
 	padding: 4px 10px;
 	border: none;
-	border-radius: calc(var(--border-radius-element, 8px) - 2px);
+	border-radius: calc(var(--border-radius-element) - 2px);
 	background: none;
 	color: var(--color-text-maxcontrast);
 	font-weight: normal;
@@ -242,15 +242,15 @@ function jump(comment) {
 .deliver-compare-view__list {
 	display: flex;
 	flex-direction: column;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
-	padding: calc(3 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
+	padding: calc(3 * var(--default-grid-baseline));
 	overflow-y: auto;
 }
 
 .deliver-compare-view__list li {
-	padding: calc(2 * var(--default-grid-baseline, 4px)) calc(3 * var(--default-grid-baseline, 4px));
+	padding: calc(2 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline));
 	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius-large, 12px);
+	border-radius: var(--border-radius-large);
 	background: var(--deliver-card);
 }
 
@@ -266,7 +266,7 @@ function jump(comment) {
 	border: none;
 	background: none;
 	color: var(--deliver-timecode);
-	font-family: var(--font-face-monospace, monospace);
+	font-family: monospace;
 	font-weight: normal;
 	cursor: pointer;
 }
@@ -276,7 +276,7 @@ function jump(comment) {
 }
 
 .deliver-compare-view__empty {
-	padding: calc(4 * var(--default-grid-baseline, 4px));
+	padding: calc(4 * var(--default-grid-baseline));
 	color: var(--color-text-maxcontrast);
 	text-align: center;
 }

@@ -146,7 +146,7 @@ const numbers = computed(() => new Map([...store.threads]
  */
 function matches(thread) {
 	const words = query.value.trim().toLowerCase()
-	return words === '' || [thread, ...(thread.replies ?? [])]
+	return words === '' || [thread, ...thread.replies]
 		.some((each) => (each.body + ' ' + each.author.name).toLowerCase().includes(words))
 }
 
@@ -455,7 +455,7 @@ function claim() {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	padding: calc(3 * var(--default-grid-baseline, 4px));
+	padding: calc(3 * var(--default-grid-baseline));
 	background: rgba(20, 20, 22, 0.78);
 	backdrop-filter: blur(2px);
 }
@@ -463,9 +463,9 @@ function claim() {
 .deliver-comments__gate .deliver-comments__claim {
 	width: 100%;
 	max-width: 360px;
-	padding: calc(4 * var(--default-grid-baseline, 4px));
+	padding: calc(4 * var(--default-grid-baseline));
 	border: 1px solid var(--color-border-dark);
-	border-radius: var(--border-radius-large, 12px);
+	border-radius: var(--border-radius-large);
 	background: var(--deliver-card, var(--color-main-background));
 	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
@@ -504,7 +504,7 @@ function claim() {
 	display: flex;
 	align-items: center;
 	gap: 2px;
-	padding: var(--default-grid-baseline, 4px) calc(2 * var(--default-grid-baseline, 4px));
+	padding: var(--default-grid-baseline) calc(2 * var(--default-grid-baseline));
 }
 
 .deliver-comments__show :deep(.button-vue__wrapper) {
@@ -517,7 +517,7 @@ function claim() {
 
 .deliver-comments__unseen {
 	padding: 0 7px;
-	border-radius: var(--border-radius-pill, 20px);
+	border-radius: var(--border-radius-pill);
 	background: var(--color-primary-element);
 	color: var(--color-primary-element-text);
 	font-size: 12px;
@@ -529,7 +529,7 @@ function claim() {
 }
 
 .deliver-comments__search {
-	margin: 0 calc(3 * var(--default-grid-baseline, 4px)) calc(2 * var(--default-grid-baseline, 4px));
+	margin: 0 calc(3 * var(--default-grid-baseline)) calc(2 * var(--default-grid-baseline));
 }
 
 .deliver-comments__list {
@@ -538,13 +538,13 @@ function claim() {
 	overflow-y: auto;
 	display: flex;
 	flex-direction: column;
-	gap: calc(3 * var(--default-grid-baseline, 4px));
-	padding: var(--default-grid-baseline, 4px) calc(3 * var(--default-grid-baseline, 4px)) calc(3 * var(--default-grid-baseline, 4px));
+	gap: calc(3 * var(--default-grid-baseline));
+	padding: var(--default-grid-baseline) calc(3 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline));
 }
 
 .deliver-comments__empty {
 	flex: 1;
-	padding: calc(4 * var(--default-grid-baseline, 4px));
+	padding: calc(4 * var(--default-grid-baseline));
 	color: var(--color-text-maxcontrast);
 	text-align: center;
 }
@@ -552,8 +552,8 @@ function claim() {
 .deliver-comments__composer {
 	display: flex;
 	flex-direction: column;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
-	padding: calc(3 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
+	padding: calc(3 * var(--default-grid-baseline));
 	border-top: 1px solid var(--color-border);
 }
 
@@ -561,17 +561,17 @@ function claim() {
 .deliver-comments__claim {
 	display: flex;
 	flex-direction: column;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
 }
 
 /* Timecode and text in one box, as one sentence: "at 00:00:04:12, …" */
 .deliver-comments__box {
 	display: flex;
 	align-items: flex-start;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
-	padding: calc(2 * var(--default-grid-baseline, 4px)) calc(3 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
+	padding: calc(2 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline));
 	border: 1px solid var(--color-border-dark);
-	border-radius: var(--border-radius-large, 12px);
+	border-radius: var(--border-radius-large);
 	background: var(--color-background-dark);
 	cursor: text;
 }
@@ -584,10 +584,10 @@ function claim() {
 	flex-shrink: 0;
 	margin-top: 3px;
 	padding: 1px 6px;
-	border-radius: var(--border-radius-small, 4px);
+	border-radius: var(--border-radius-small);
 	background: rgba(245, 197, 24, 0.16);
 	color: #f5c518;
-	font-family: var(--font-face-monospace, monospace);
+	font-family: monospace;
 	font-size: 12px;
 	line-height: 18px;
 }
@@ -619,8 +619,8 @@ function claim() {
 	z-index: 2;
 	padding: 4px;
 	border: 1px solid var(--color-border-dark);
-	border-radius: var(--border-radius-large, 12px);
-	background: var(--color-background-darker, #27272c);
+	border-radius: var(--border-radius-large);
+	background: var(--color-background-darker);
 	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
@@ -629,7 +629,7 @@ function claim() {
 	align-items: center;
 	gap: 8px;
 	padding: 6px 8px;
-	border-radius: var(--border-radius, 6px);
+	border-radius: var(--border-radius);
 	cursor: pointer;
 }
 
@@ -640,7 +640,7 @@ function claim() {
 .deliver-comments__actions {
 	display: flex;
 	align-items: center;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
 }
 
 .deliver-comments__files {
@@ -655,7 +655,7 @@ function claim() {
 	gap: 2px;
 	max-width: 100%;
 	padding: 2px 4px 2px 10px;
-	border-radius: var(--border-radius-pill, 20px);
+	border-radius: var(--border-radius-pill);
 	background: var(--color-primary-element-light);
 	font-size: 12px;
 }

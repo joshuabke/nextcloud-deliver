@@ -839,7 +839,7 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 
 .deliver-player__sound {
 	position: absolute;
-	inset: 15% calc(4 * var(--default-grid-baseline, 4px));
+	inset: 15% calc(4 * var(--default-grid-baseline));
 	cursor: pointer;
 }
 
@@ -879,7 +879,7 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	align-items: center;
 	justify-content: center;
 	margin: 0;
-	padding: calc(4 * var(--default-grid-baseline, 4px));
+	padding: calc(4 * var(--default-grid-baseline));
 	text-align: center;
 	color: var(--color-text-maxcontrast);
 }
@@ -975,16 +975,16 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 
 .deliver-player__tile {
 	border: 2px solid #fff;
-	border-radius: var(--border-radius, 4px);
+	border-radius: var(--border-radius);
 	background-color: #000;
 }
 
 .deliver-player__hover-time {
 	padding: 1px 6px;
-	border-radius: var(--border-radius, 4px);
+	border-radius: var(--border-radius);
 	background: rgba(0, 0, 0, 0.85);
 	color: #fff;
-	font-family: var(--font-face-monospace, monospace);
+	font-family: monospace;
 	font-size: 12px;
 }
 
@@ -1030,7 +1030,7 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	width: 320px;
 	padding: 12px 14px;
 	border: 1px solid var(--color-border-dark);
-	border-radius: var(--border-radius-large, 12px);
+	border-radius: var(--border-radius-large);
 	background: var(--deliver-card, #19191c);
 	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 	transform: translateX(-50%);
@@ -1075,10 +1075,10 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 .deliver-player__peek-time {
 	margin-inline-end: 4px;
 	padding: 2px 6px;
-	border-radius: var(--border-radius, 6px);
+	border-radius: var(--border-radius);
 	background: rgba(245, 197, 24, 0.16);
 	color: #f5c518;
-	font-family: var(--font-face-monospace, monospace);
+	font-family: monospace;
 	font-size: 13px;
 }
 
@@ -1086,8 +1086,8 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 	align-items: center;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
-	padding: var(--default-grid-baseline, 4px) calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
+	padding: var(--default-grid-baseline) calc(2 * var(--default-grid-baseline));
 }
 
 .deliver-player__group {
@@ -1104,10 +1104,10 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 .deliver-player__timecode {
 	display: flex;
 	align-items: center;
-	padding-inline-start: calc(3 * var(--default-grid-baseline, 4px));
-	border-radius: var(--border-radius-element, 8px);
+	padding-inline-start: calc(3 * var(--default-grid-baseline));
+	border-radius: var(--border-radius-element);
 	background: var(--color-background-dark);
-	font-family: var(--font-face-monospace, monospace);
+	font-family: monospace;
 	font-size: 16px;
 	letter-spacing: 0.04em;
 }
@@ -1117,9 +1117,9 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	align-items: center;
 	gap: 2px;
 	padding: 2px 4px 2px 10px;
-	border-radius: var(--border-radius-pill, 20px);
+	border-radius: var(--border-radius-pill);
 	background: var(--color-primary-element-light);
-	font-family: var(--font-face-monospace, monospace);
+	font-family: monospace;
 	font-size: 13px;
 }
 

@@ -63,7 +63,7 @@ const TOOL_ICONS = { pen: penIcon, arrow: arrowIcon, box: boxIcon }
 	align-items: center;
 	gap: 4px;
 	padding: 4px 6px;
-	border-radius: var(--border-radius-large, 12px);
+	border-radius: var(--border-radius-large);
 	background: rgba(20, 20, 22, 0.9);
 	transform: translateX(-50%);
 }
@@ -77,7 +77,7 @@ const TOOL_ICONS = { pen: penIcon, arrow: arrowIcon, box: boxIcon }
 	margin: 0;
 	padding: 4px;
 	border: 2px solid transparent;
-	border-radius: var(--border-radius, 6px);
+	border-radius: var(--border-radius);
 	background: none;
 	color: #fff;
 	cursor: pointer;

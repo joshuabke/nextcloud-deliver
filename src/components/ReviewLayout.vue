@@ -83,9 +83,9 @@ const panelOpen = defineModel('panelOpen', { type: Boolean, default: true })
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 	align-items: center;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
 	min-height: 56px;
-	padding: 0 calc(3 * var(--default-grid-baseline, 4px));
+	padding: 0 calc(3 * var(--default-grid-baseline));
 	border-bottom: 1px solid var(--color-border);
 }
 
@@ -94,7 +94,7 @@ const panelOpen = defineModel('panelOpen', { type: Boolean, default: true })
 .deliver-layout__end {
 	display: flex;
 	align-items: center;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
 	min-width: 0;
 }
 

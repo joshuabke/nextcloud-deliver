@@ -28,9 +28,9 @@ const emit = defineEmits(['update:modelValue'])
 .deliver-tabs {
 	display: flex;
 	gap: 2px;
-	margin: calc(3 * var(--default-grid-baseline, 4px)) calc(3 * var(--default-grid-baseline, 4px)) var(--default-grid-baseline, 4px);
+	margin: calc(3 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline)) var(--default-grid-baseline);
 	padding: 3px;
-	border-radius: var(--border-radius-element, 8px);
+	border-radius: var(--border-radius-element);
 	background: var(--color-background-dark);
 }
 
@@ -40,7 +40,7 @@ const emit = defineEmits(['update:modelValue'])
 	margin: 0;
 	padding: 6px;
 	border: none;
-	border-radius: calc(var(--border-radius-element, 8px) - 2px);
+	border-radius: calc(var(--border-radius-element) - 2px);
 	background: none;
 	color: var(--color-text-maxcontrast);
 	cursor: pointer;

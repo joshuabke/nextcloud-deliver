@@ -49,7 +49,7 @@ const number = computed(() => props.versions.find((each) => each.id === props.cu
 .deliver-version-picker {
 	display: flex;
 	align-items: center;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
 }
 
 .deliver-version-picker__label {
@@ -58,7 +58,7 @@ const number = computed(() => props.versions.find((each) => each.id === props.cu
 
 .deliver-version-picker__pill {
 	padding: 4px 10px;
-	border-radius: var(--border-radius-element, 8px);
+	border-radius: var(--border-radius-element);
 	background: var(--color-primary-element);
 	color: var(--color-primary-element-text);
 	font-weight: bold;

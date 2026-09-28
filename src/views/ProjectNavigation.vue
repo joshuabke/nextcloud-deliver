@@ -257,7 +257,7 @@ function personalLink(reviewer) {
 
 <style scoped>
 .deliver-navigation__hint {
-	padding: 0 calc(3 * var(--default-grid-baseline, 4px));
+	padding: 0 calc(3 * var(--default-grid-baseline));
 	color: var(--color-text-maxcontrast);
 }
 </style>

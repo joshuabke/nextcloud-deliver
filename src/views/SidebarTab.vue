@@ -231,7 +231,7 @@ async function remove() {
 .deliver-tab {
 	display: flex;
 	flex-direction: column;
-	gap: calc(var(--default-grid-baseline, 4px) * 2);
+	gap: calc(var(--default-grid-baseline) * 2);
 	align-items: flex-start;
 }
 
@@ -242,9 +242,9 @@ async function remove() {
 .deliver-tab__section {
 	display: flex;
 	flex-direction: column;
-	gap: var(--default-grid-baseline, 4px);
+	gap: var(--default-grid-baseline);
 	width: 100%;
 	border-top: 1px solid var(--color-border);
-	padding-top: calc(var(--default-grid-baseline, 4px) * 2);
+	padding-top: calc(var(--default-grid-baseline) * 2);
 }
 </style>

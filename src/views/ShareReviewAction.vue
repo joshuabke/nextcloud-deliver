@@ -70,8 +70,8 @@ onMounted(async () => {
 
 <style scoped>
 .deliver-share-review__hint {
-	margin: 0 0 var(--default-grid-baseline, 4px);
-	padding-inline-start: calc(var(--default-clickable-area, 34px) + var(--default-grid-baseline, 4px));
+	margin: 0 0 var(--default-grid-baseline);
+	padding-inline-start: calc(var(--default-clickable-area) + var(--default-grid-baseline));
 	color: var(--color-text-maxcontrast);
 }
 </style>

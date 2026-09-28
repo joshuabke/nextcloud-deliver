@@ -57,18 +57,18 @@ defineProps({
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
 }
 
 .deliver-filter-bar__filters {
 	display: flex;
 	flex-wrap: wrap;
-	gap: var(--default-grid-baseline, 4px);
+	gap: var(--default-grid-baseline);
 	flex: 1;
 }
 
 .deliver-filter-bar__count {
-	margin-inline-start: var(--default-grid-baseline, 4px);
+	margin-inline-start: var(--default-grid-baseline);
 	font-weight: normal;
 	opacity: 0.7;
 }

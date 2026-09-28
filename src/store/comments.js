@@ -102,7 +102,7 @@ export const useCommentsStore = defineStore('comments', {
 			this.canComment = answer.canComment
 			this.me = answer.me
 			this.seenUntil = answer.seenUntil
-			this.approvals = answer.approvals ?? []
+			this.approvals = answer.approvals
 			this.now = answer.now
 			this.onScreen()
 		},
@@ -114,7 +114,7 @@ export const useCommentsStore = defineStore('comments', {
 					return
 				}
 				this.comments = mergeComments(this.comments, answer.comments, answer.ids)
-				this.approvals = answer.approvals ?? this.approvals
+				this.approvals = answer.approvals
 				this.now = answer.now
 				this.onScreen()
 			} catch {

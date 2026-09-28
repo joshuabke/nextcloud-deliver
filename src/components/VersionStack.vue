@@ -149,20 +149,20 @@ async function drop(event) {
 .deliver-stack {
 	display: flex;
 	flex-direction: column;
-	gap: calc(3 * var(--default-grid-baseline, 4px));
+	gap: calc(3 * var(--default-grid-baseline));
 	overflow-y: auto;
 }
 
 .deliver-stack__list {
 	display: flex;
 	flex-direction: column;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
 }
 
 .deliver-stack__item {
-	padding: calc(2 * var(--default-grid-baseline, 4px));
+	padding: calc(2 * var(--default-grid-baseline));
 	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius-large, 12px);
+	border-radius: var(--border-radius-large);
 }
 
 .deliver-stack__item--current {
@@ -173,13 +173,13 @@ async function drop(event) {
 .deliver-stack__row {
 	display: flex;
 	align-items: center;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
 }
 
 .deliver-stack__open {
 	display: flex;
 	align-items: center;
-	gap: calc(3 * var(--default-grid-baseline, 4px));
+	gap: calc(3 * var(--default-grid-baseline));
 	flex: 1;
 	min-width: 0;
 	margin: 0;
@@ -196,7 +196,7 @@ async function drop(event) {
 	width: 80px;
 	height: 45px;
 	object-fit: cover;
-	border-radius: var(--border-radius, 4px);
+	border-radius: var(--border-radius);
 	background: var(--color-background-dark);
 }
 
@@ -216,18 +216,18 @@ async function drop(event) {
 
 .deliver-stack__badge {
 	padding: 0 8px;
-	border-radius: var(--border-radius-pill, 20px);
+	border-radius: var(--border-radius-pill);
 	background: var(--color-warning);
-	color: var(--color-warning-text, #000);
+	color: var(--color-warning-text);
 	font-size: 12px;
 }
 
 .deliver-stack__auto {
 	display: flex;
 	align-items: center;
-	gap: var(--default-grid-baseline, 4px);
-	margin-top: calc(2 * var(--default-grid-baseline, 4px));
-	padding-top: calc(2 * var(--default-grid-baseline, 4px));
+	gap: var(--default-grid-baseline);
+	margin-top: calc(2 * var(--default-grid-baseline));
+	padding-top: calc(2 * var(--default-grid-baseline));
 	border-top: 1px solid var(--color-border);
 	font-size: 13px;
 }
@@ -237,9 +237,9 @@ async function drop(event) {
 }
 
 .deliver-stack__drop {
-	padding: calc(4 * var(--default-grid-baseline, 4px));
+	padding: calc(4 * var(--default-grid-baseline));
 	border: 2px dashed var(--color-border-dark);
-	border-radius: var(--border-radius-large, 12px);
+	border-radius: var(--border-radius-large);
 	color: var(--color-text-maxcontrast);
 	text-align: center;
 }

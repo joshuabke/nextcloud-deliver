@@ -330,7 +330,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 	top: 8px;
 	inset-inline-start: 8px;
 	padding: 2px 8px;
-	border-radius: var(--border-radius, 4px);
+	border-radius: var(--border-radius);
 	background: rgba(0, 0, 0, 0.7);
 	color: #fff;
 	font-weight: bold;
@@ -398,8 +398,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 	align-items: center;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
-	padding: var(--default-grid-baseline, 4px) calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
+	padding: var(--default-grid-baseline) calc(2 * var(--default-grid-baseline));
 }
 
 .deliver-compare__group {
@@ -414,14 +414,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 .deliver-compare__timecode {
 	padding: 6px 12px;
-	border-radius: var(--border-radius-element, 8px);
+	border-radius: var(--border-radius-element);
 	background: var(--color-background-dark);
-	font-family: var(--font-face-monospace, monospace);
+	font-family: monospace;
 	font-size: 16px;
 }
 
 .deliver-compare__offset-label {
-	margin-inline-end: var(--default-grid-baseline, 4px);
+	margin-inline-end: var(--default-grid-baseline);
 	color: var(--color-text-maxcontrast);
 	font-size: 13px;
 }

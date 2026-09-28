@@ -26,24 +26,13 @@ const loading = fetch(generateUrl('/apps/deliver/s/{token}/api/assets', { token 
 		return reviewable
 	})
 
-/**
- * @nextcloud/files 4 hands the action one context object; older file lists
- * pass the nodes themselves.
- *
- * @param {object|Array} context - what the file list handed over
- * @return {Array<object>} the nodes the action is asked about
- */
-function selected(context) {
-	return Array.isArray(context) ? context : (context?.nodes ?? [])
-}
-
 registerFileAction({
 	id: 'deliver-review',
 	displayName: () => t('deliver', 'Review'),
 	iconSvgInline: () => icon,
 	order: -50,
 	enabled(context) {
-		const nodes = selected(context)
+		const nodes = context.nodes
 		if (nodes.length !== 1) {
 			return false
 		}
@@ -53,7 +42,7 @@ registerFileAction({
 			: reviewable.has(nodes[0].fileid)
 	},
 	async exec(context) {
-		const versionId = (await loading).get(selected(context)[0].fileid)
+		const versionId = (await loading).get(context.nodes[0].fileid)
 		if (versionId !== undefined) {
 			window.location.href = generateUrl('/apps/deliver/s/{token}/versions/{versionId}', { token, versionId })
 		}

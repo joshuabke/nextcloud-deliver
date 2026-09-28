@@ -201,16 +201,16 @@ async function create() {
 .deliver-projects {
 	display: flex;
 	flex-direction: column;
-	gap: calc(4 * var(--default-grid-baseline, 4px));
-	padding: 0 calc(4 * var(--default-grid-baseline, 4px)) calc(6 * var(--default-grid-baseline, 4px));
+	gap: calc(4 * var(--default-grid-baseline));
+	padding: 0 calc(4 * var(--default-grid-baseline)) calc(6 * var(--default-grid-baseline));
 }
 
 .deliver-projects__head {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
-	min-height: calc(var(--default-clickable-area, 34px) + 4 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
+	min-height: calc(var(--default-clickable-area) + 4 * var(--default-grid-baseline));
 	margin: 0;
 	border-bottom: 1px solid var(--color-border);
 }
@@ -230,14 +230,14 @@ async function create() {
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	gap: var(--default-grid-baseline, 4px);
-	width: calc(100% - 4 * var(--default-grid-baseline, 4px));
+	gap: var(--default-grid-baseline);
+	width: calc(100% - 4 * var(--default-grid-baseline));
 	min-height: 0;
 	aspect-ratio: 16 / 9;
-	margin: calc(2 * var(--default-grid-baseline, 4px));
-	padding: calc(4 * var(--default-grid-baseline, 4px));
+	margin: calc(2 * var(--default-grid-baseline));
+	padding: calc(4 * var(--default-grid-baseline));
 	border: 2px dashed var(--color-border-dark);
-	border-radius: var(--border-radius, 8px);
+	border-radius: var(--border-radius);
 	background: none;
 	color: var(--color-text-maxcontrast);
 	font-weight: normal;
@@ -259,6 +259,6 @@ async function create() {
 .deliver-projects__grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-	gap: calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
 }
 </style>

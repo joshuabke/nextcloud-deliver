@@ -177,19 +177,19 @@ function invite() {
 .deliver-link {
 	display: flex;
 	flex-direction: column;
-	gap: var(--default-grid-baseline, 4px);
+	gap: var(--default-grid-baseline);
 	overflow-wrap: anywhere;
 }
 
 .deliver-link__flags,
 .deliver-link__reviewers {
-	padding-inline-start: calc(var(--default-grid-baseline, 4px) * 4);
+	padding-inline-start: calc(var(--default-grid-baseline) * 4);
 }
 
 .deliver-link__reviewer {
 	display: flex;
 	align-items: center;
-	gap: var(--default-grid-baseline, 4px);
+	gap: var(--default-grid-baseline);
 }
 
 .deliver-link__name {
@@ -199,8 +199,8 @@ function invite() {
 .deliver-link__invite {
 	display: flex;
 	align-items: flex-end;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
-	margin-top: calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
+	margin-top: calc(2 * var(--default-grid-baseline));
 }
 
 .deliver-link__invite > :last-child {
@@ -212,6 +212,6 @@ function invite() {
 }
 
 .deliver-link__error {
-	color: var(--color-error-text, var(--color-error));
+	color: var(--color-error-text);
 }
 </style>

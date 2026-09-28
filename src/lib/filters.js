@@ -12,7 +12,7 @@ export const FILTERS = ['all', 'unseen', 'changes', 'approved', 'due']
  */
 export function passes(asset, filter) {
 	const newest = asset.versions[0]
-	const { approved = 0, changes = 0 } = newest.approvals ?? {}
+	const { approved = 0, changes = 0 } = newest.approvals
 	switch (filter) {
 		case 'unseen':
 			return asset.versions.some((version) => version.unseen > 0)
