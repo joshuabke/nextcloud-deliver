@@ -1,5 +1,6 @@
 <script setup>
 import reviewerIcon from '@mdi/svg/svg/account-outline.svg?raw'
+import copyIcon from '@mdi/svg/svg/content-copy.svg?raw'
 import imageLinkIcon from '@mdi/svg/svg/file-image-outline.svg?raw'
 import audioLinkIcon from '@mdi/svg/svg/file-music-outline.svg?raw'
 import videoLinkIcon from '@mdi/svg/svg/file-video-outline.svg?raw'
@@ -10,11 +11,9 @@ import linkIcon from '@mdi/svg/svg/link-variant.svg?raw'
 import addIcon from '@mdi/svg/svg/plus.svg?raw'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
-import { generateUrl } from '@nextcloud/router'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
-import NcActionLink from '@nextcloud/vue/components/NcActionLink'
 import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
 import NcAppNavigationCaption from '@nextcloud/vue/components/NcAppNavigationCaption'
 import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
@@ -105,14 +104,6 @@ function open(folder) {
 }
 
 /**
- * @param {object} share - a Share Link
- * @return {string} Files with the share settings of the link's file or folder open
- */
-function manageUrl(share) {
-	return generateUrl('/apps/files/files/{fileId}', { fileId: share.fileId }) + '?' + new URLSearchParams({ dir: share.dir, opendetails: 'true' })
-}
-
-/**
  * @param {string} link - a Share Link or a Personal Link
  */
 async function copy(link) {
@@ -177,20 +168,18 @@ function personalLink(reviewer) {
 				:title="share.isProject ? t('deliver', 'Link to the whole Project folder') : share.name"
 				:allowCollapse="share.reviewerIds.length > 0"
 				:open="true"
+				:inlineActions="1"
 				@click="editing = share">
 				<template #icon>
 					<NcIconSvgWrapper :svg="iconOf(share)" />
 				</template>
 				<template #actions>
-					<NcActionButton @click="copy(share.url)">
+					<NcActionButton :aria-label="t('deliver', 'Copy link')" @click="copy(share.url)">
+						<template #icon>
+							<NcIconSvgWrapper :svg="copyIcon" />
+						</template>
 						{{ t('deliver', 'Copy link') }}
 					</NcActionButton>
-					<NcActionButton @click="editing = share">
-						{{ t('deliver', 'Link settings') }}
-					</NcActionButton>
-					<NcActionLink :href="manageUrl(share)">
-						{{ t('deliver', 'Manage in Files') }}
-					</NcActionLink>
 				</template>
 				<!-- Who was invited through this link or came in by it -->
 				<NcAppNavigationItem
@@ -219,16 +208,17 @@ function personalLink(reviewer) {
 					:key="reviewer.id"
 					:name="reviewer.name"
 					:title="reviewer.email ?? ''"
+					:inlineActions="1"
 					@click="person = reviewer">
 					<template #icon>
 						<NcIconSvgWrapper :svg="reviewerIcon" />
 					</template>
 					<template #actions>
-						<NcActionButton v-if="personalLink(reviewer)" @click="copy(personalLink(reviewer))">
+						<NcActionButton v-if="personalLink(reviewer)" :aria-label="t('deliver', 'Copy Personal Link')" @click="copy(personalLink(reviewer))">
+							<template #icon>
+								<NcIconSvgWrapper :svg="copyIcon" />
+							</template>
 							{{ t('deliver', 'Copy Personal Link') }}
-						</NcActionButton>
-						<NcActionButton @click="person = reviewer">
-							{{ t('deliver', 'Settings and Personal Links') }}
 						</NcActionButton>
 					</template>
 				</NcAppNavigationItem>
