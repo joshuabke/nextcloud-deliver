@@ -58,3 +58,36 @@ export function sortAssets(assets, sort) {
 	}[sort] ?? byName
 	return [...assets].sort(order)
 }
+
+/** The filters of the Project list: where something waits on me */
+export const PROJECT_FILTERS = ['all', 'unseen', 'changes', 'due']
+
+/**
+ * @param {object} project - a Project with its activity, as the Project list has it
+ * @param {string} filter - one of PROJECT_FILTERS
+ * @return {boolean} whether the Project passes the filter
+ */
+export function projectPasses(project, filter) {
+	const { unseenComments, changes, nextDue } = project.activity
+	return {
+		unseen: unseenComments > 0,
+		changes: changes > 0,
+		due: nextDue !== null,
+	}[filter] ?? true
+}
+
+/**
+ * @param {object[]} projects - Projects with their activity
+ * @param {string} sort - one of SORTS; Due Date is the next one of each Project
+ * @return {object[]} a sorted copy
+ */
+export function sortProjects(projects, sort) {
+	const keyed = projects.map((project) => ({
+		project,
+		name: project.name,
+		createdAt: project.createdAt,
+		lastActivity: project.activity.lastActivity,
+		dueDate: project.activity.nextDue,
+	}))
+	return sortAssets(keyed, sort).map((each) => each.project)
+}

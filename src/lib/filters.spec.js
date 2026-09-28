@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { found, passes, sortAssets } from './filters.js'
+import { found, passes, projectPasses, sortAssets, sortProjects } from './filters.js'
 
 const version = (fields = {}) => ({ name: 'cut_v2.mov', unseen: 0, approvals: { approved: 0, changes: 0 }, ...fields })
 const asset = (fields = {}, versions = [version()]) => ({ name: 'Cut', dueDate: null, versions, ...fields })
@@ -33,5 +33,19 @@ describe('filters', () => {
 		expect(names('name')).toEqual(['Anna', 'b-roll', 'cut'])
 		expect(names('created')).toEqual(['Anna', 'cut', 'b-roll'])
 		expect(names('due')).toEqual(['cut', 'Anna', 'b-roll'])
+	})
+
+	it('filters and sorts Projects by what waits in them', () => {
+		const project = (name, createdAt, activity) => ({ name, createdAt, activity: { unseenComments: 0, changes: 0, nextDue: null, lastActivity: 0, ...activity } })
+		const quiet = project('Archiv', 1, { lastActivity: 5 })
+		const busy = project('Kampagne', 3, { unseenComments: 2, lastActivity: 9, nextDue: '2030-03-01' })
+		const late = project('Imagefilm', 2, { changes: 1, lastActivity: 7, nextDue: '2030-01-01' })
+		expect([quiet, busy, late].filter((each) => projectPasses(each, 'unseen'))).toEqual([busy])
+		expect([quiet, busy, late].filter((each) => projectPasses(each, 'due'))).toEqual([busy, late])
+		const names = (sort) => sortProjects([quiet, busy, late], sort).map((each) => each.name)
+		expect(names('activity')).toEqual(['Kampagne', 'Imagefilm', 'Archiv'])
+		expect(names('created')).toEqual(['Kampagne', 'Imagefilm', 'Archiv'])
+		expect(names('due')).toEqual(['Imagefilm', 'Kampagne', 'Archiv'])
+		expect(names('name')).toEqual(['Archiv', 'Imagefilm', 'Kampagne'])
 	})
 })
