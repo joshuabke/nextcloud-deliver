@@ -3,7 +3,6 @@ import changesIcon from '@mdi/svg/svg/alert-circle-outline.svg?raw'
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import commentIcon from '@mdi/svg/svg/comment-outline.svg?raw'
 import projectIcon from '@mdi/svg/svg/folder-play-outline.svg?raw'
-import versionIcon from '@mdi/svg/svg/layers-plus.svg?raw'
 import { n, t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -19,15 +18,13 @@ const props = defineProps({
 
 const emit = defineEmits(['settings'])
 
-/** Stills the server could not render drop out of the picture */
-const broken = ref(new Set())
-const posters = computed(() => props.project.activity.posters.filter((fileId) => !broken.value.has(fileId)))
+/** Set when the server could not render the still; the icon stands in */
+const broken = ref(false)
 /** What is new for me, and what waits on someone */
 const badges = computed(() => {
-	const { unseenComments, unseenVersions, changes } = props.project.activity
+	const { unseenComments, changes } = props.project.activity
 	return [
 		{ kind: 'unseen', icon: commentIcon, count: unseenComments, text: n('deliver', '%n Unseen Comment', '%n Unseen Comments', unseenComments) },
-		{ kind: 'unseen', icon: versionIcon, count: unseenVersions, text: n('deliver', '%n Unseen Version', '%n Unseen Versions', unseenVersions) },
 		{ kind: 'changes', icon: changesIcon, count: changes, text: n('deliver', '%n Asset with changes requested', '%n Assets with changes requested', changes) },
 	].filter((badge) => badge.count > 0)
 })
@@ -36,14 +33,13 @@ const badges = computed(() => {
 <template>
 	<li class="deliver-project-card">
 		<RouterLink class="deliver-project-card__link" :to="`/projects/${project.id}`">
-			<div class="deliver-project-card__still" :class="`deliver-project-card__still--${Math.min(posters.length, 3)}`">
+			<div class="deliver-project-card__still">
 				<img
-					v-for="fileId in posters"
-					:key="fileId"
-					:src="previewUrl(fileId, posters.length === 1 ? 480 : 256)"
+					v-if="project.activity.still && !broken"
+					:src="previewUrl(project.activity.still, 480)"
 					alt=""
-					@error="broken = new Set(broken).add(fileId)">
-				<NcIconSvgWrapper v-if="posters.length === 0" :svg="projectIcon" :size="48" />
+					@error="broken = true">
+				<NcIconSvgWrapper v-else :svg="projectIcon" :size="48" />
 				<div v-if="badges.length" class="deliver-project-card__badges">
 					<span
 						v-for="badge in badges"
@@ -114,12 +110,12 @@ const badges = computed(() => {
 	background: var(--color-background-hover);
 }
 
-/* One still fills the picture, two sit side by side, more make a grid of four */
+/* A still of the newest video */
 .deliver-project-card__still {
 	position: relative;
-	display: grid;
-	place-items: center;
-	gap: 2px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 	aspect-ratio: 16 / 9;
 	margin-bottom: var(--default-grid-baseline, 4px);
 	border-radius: var(--border-radius, 8px);
@@ -128,18 +124,9 @@ const badges = computed(() => {
 	overflow: hidden;
 }
 
-.deliver-project-card__still--2 {
-	grid-template-columns: 1fr 1fr;
-}
-
-.deliver-project-card__still--3 {
-	grid-template: 1fr 1fr / 1fr 1fr;
-}
-
 .deliver-project-card__still img {
 	width: 100%;
 	height: 100%;
-	min-height: 0;
 	object-fit: cover;
 }
 

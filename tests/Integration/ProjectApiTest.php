@@ -258,34 +258,22 @@ class ProjectApiTest extends TestCase {
 			'permissions' => 31,
 		]);
 		self::assertSame(200, $shared['status'], json_encode($shared['data']));
-		self::assertSame(
-			['assets' => 1, 'unseenComments' => 0, 'unseenVersions' => 0, 'changes' => 0, 'nextDue' => null],
-			array_intersect_key($this->activity($member, $project['id']), array_flip(['assets', 'unseenComments', 'unseenVersions', 'changes', 'nextDue'])),
-			'what the Project started with is nobody\'s news',
-		);
-
-		// Timestamps count seconds; the next arrival must be after the first intake
-		sleep(1);
-		$this->nc->put("{$this->root}/teaser.mp4", 'not really a video either');
-		$stacks = $this->stacks($this->nc, $project['id']);
-		$cut = $stacks['cut'][0]['id'];
-		$teaser = $stacks['teaser'][0]['id'];
-		self::assertFalse($stacks['teaser'][0]['seen']);
+		$cut = $this->stacks($this->nc, $project['id'])['cut'][0]['id'];
 
 		$comment = $member->ocs('POST', "/versions/$cut/comments", ['inFrame' => 3, 'body' => 'too dark']);
 		self::assertSame(201, $comment['status'], json_encode($comment['data']));
 		self::assertSame(200, $member->ocs('PUT', "/versions/$cut/approval", ['status' => 'changes'])['status']);
-		$assetId = array_column($this->nc->ocs('GET', "/projects/{$project['id']}")['data']['assets'], 'id', 'name')['cut'];
-		self::assertSame(200, $this->nc->ocs('PUT', "/assets/$assetId", ['dueDate' => '2030-01-31'])['status']);
+		$asset = $this->nc->ocs('GET', "/projects/{$project['id']}")['data']['assets'][0];
+		self::assertSame(200, $this->nc->ocs('PUT', "/assets/{$asset['id']}", ['dueDate' => '2030-01-31'])['status']);
 
 		$mine = $this->activity($this->nc, $project['id']);
-		self::assertSame([2, 1, 1, 1, '2030-01-31'], [$mine['assets'], $mine['unseenComments'], $mine['unseenVersions'], $mine['changes'], $mine['nextDue']]);
+		self::assertSame([1, 1, 1, '2030-01-31', null], [$mine['assets'], $mine['unseenComments'], $mine['changes'], $mine['nextDue'], $mine['still']], 'no video has been probed, so no still');
 		self::assertSame(0, $this->activity($member, $project['id'])['unseenComments'], 'one\'s own Comment is not news');
 		self::assertGreaterThanOrEqual($comment['data']['createdAt'], $mine['lastActivity']);
+		self::assertGreaterThanOrEqual($comment['data']['createdAt'], $asset['lastActivity'], 'an Asset sorts by its latest Comment too');
+		self::assertLessThanOrEqual($asset['lastActivity'], $asset['createdAt']);
 
-		self::assertSame(200, $this->nc->ocs('POST', "/versions/$teaser/seen")['status']);
 		self::assertSame(200, $this->nc->ocs('POST', "/versions/$cut/seen")['status']);
-		$after = $this->activity($this->nc, $project['id']);
-		self::assertSame([0, 0], [$after['unseenComments'], $after['unseenVersions']], 'having it on screen clears both');
+		self::assertSame(0, $this->activity($this->nc, $project['id'])['unseenComments'], 'having it on screen clears it');
 	}
 }

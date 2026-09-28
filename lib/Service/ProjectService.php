@@ -10,7 +10,6 @@ use OCA\Deliver\Db\CommentMapper;
 use OCA\Deliver\Db\MuteMapper;
 use OCA\Deliver\Db\Project;
 use OCA\Deliver\Db\ProjectMapper;
-use OCA\Deliver\Db\SeenMapper;
 use OCA\Deliver\Db\Version;
 use OCA\Deliver\Db\VersionMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -39,7 +38,6 @@ class ProjectService {
 		private CommentMapper $comments,
 		private ApprovalMapper $approvals,
 		private MuteMapper $mutes,
-		private SeenMapper $seen,
 		private StackService $stacks,
 		private DerivedMedia $media,
 		private IRootFolder $root,
@@ -128,9 +126,6 @@ class ProjectService {
 		$project = $this->insert($uid, $folderId, $autoIntake);
 		if ($autoIntake) {
 			$this->scan($project, $folder);
-			// What the first intake found was there before the Project: nobody is shown it as Unseen
-			$project->setCreatedAt($this->time->getTime());
-			$project = $this->projects->update($project);
 		}
 		return $this->serialize($project, $folder);
 	}
@@ -659,7 +654,8 @@ class ProjectService {
 		}
 		$commentCounts = $this->comments->countByVersions($versionIds);
 		$approvalCounts = $this->approvals->countByVersions($versionIds);
-		[$unseenComments, $unseenVersions] = $this->unseen($project, $uid, $versionsByAsset);
+		$unseen = $this->comments->countUnseenByVersions($versionIds, $uid);
+		$latestComments = $this->comments->latestByVersions($versionIds);
 		$result = [];
 		foreach ($this->assets->findByProject($project->getId()) as $asset) {
 			$stack = $versionsByAsset[$asset->getId()] ?? [];
@@ -683,8 +679,7 @@ class ProjectService {
 					'size' => $file?->getSize(),
 					'autoStacked' => (bool)$version->getAutoStacked(),
 					'comments' => $commentCounts[$version->getId()] ?? 0,
-					'unseen' => $unseenComments[$version->getId()] ?? 0,
-					'seen' => !isset($unseenVersions[$version->getId()]),
+					'unseen' => $unseen[$version->getId()] ?? 0,
 					'approvals' => $approvalCounts[$version->getId()] ?? ['approved' => 0, 'changes' => 0],
 					// Queued or running derived media, with the running job's progress
 					'processing' => array_intersect(
@@ -699,6 +694,12 @@ class ProjectService {
 				'path' => $path ?? '',
 				'parentId' => $asset->getParentId(),
 				'dueDate' => $asset->getDueDate(),
+				// For sorting: when its first Version arrived, and when anything last happened on it
+				'createdAt' => min(array_map(static fn (Version $version) => $version->getCreatedAt(), $stack)),
+				'lastActivity' => max(array_map(
+					static fn (Version $version) => max($version->getCreatedAt(), $latestComments[$version->getId()] ?? 0),
+					$stack,
+				)),
 				'versions' => $versions,
 			];
 		}
@@ -707,30 +708,9 @@ class ProjectService {
 	}
 
 	/**
-	 * What is Unseen for the Member: Comments by others after their mark, and
-	 * Versions they never had on screen that arrived after the Project's first intake.
-	 *
-	 * @param array<int, list<Version>> $versionsByAsset
-	 * @return array{0: array<int, int>, 1: array<int, true>} Unseen Comments by Version id, and the Unseen Version ids
-	 */
-	private function unseen(Project $project, string $uid, array $versionsByAsset): array {
-		$ids = [];
-		$arrived = [];
-		foreach ($versionsByAsset as $stack) {
-			foreach ($stack as $version) {
-				$ids[] = $version->getId();
-				if ($version->getCreatedAt() > $project->getCreatedAt()) {
-					$arrived[$version->getId()] = true;
-				}
-			}
-		}
-		$versions = array_diff_key($arrived, array_flip($this->seen->versionsSeenBy(array_keys($arrived), $uid)));
-		return [$this->comments->countUnseenByVersions($ids, $uid), $versions];
-	}
-
-	/**
-	 * A Project's state at a glance, for its tile in the Project list: what is
-	 * Unseen, what waits for changes, the next Due Date and the latest activity.
+	 * A Project's state at a glance, for its tile in the Project list: its
+	 * Unseen Comments, what waits for changes, the next Due Date, the latest
+	 * activity and the newest video for a picture.
 	 *
 	 * @return array<string, mixed>
 	 */
@@ -741,7 +721,6 @@ class ProjectService {
 			$versionsByAsset[$version->getAssetId()][] = $version;
 			$versionIds[] = $version->getId();
 		}
-		[$unseenComments, $unseenVersions] = $this->unseen($project, $uid, $versionsByAsset);
 		$newest = [];
 		foreach ($versionsByAsset as $stack) {
 			usort($stack, static fn (Version $a, Version $b) => $b->getNumber() <=> $a->getNumber());
@@ -762,18 +741,17 @@ class ProjectService {
 				$nextDue = $due;
 			}
 		}
-		// The latest arrivals first, for the tile's picture
+		// The latest arrival first, for the tile's picture
 		usort($newest, static fn (Version $a, Version $b) => $b->getCreatedAt() <=> $a->getCreatedAt());
-		$posters = array_filter($newest, static fn (Version $version) => $version->getState() === Version::STATE_READY
-			&& ($version->getHasVideo() || !$version->getHasAudio()));
+		$videos = array_filter($newest, static fn (Version $version) => $version->getState() === Version::STATE_READY && $version->getHasVideo());
+		$latestComments = $this->comments->latestByVersions($versionIds);
 		return [
 			'assets' => count($newest),
-			'unseenComments' => array_sum($unseenComments),
-			'unseenVersions' => count($unseenVersions),
+			'unseenComments' => array_sum($this->comments->countUnseenByVersions($versionIds, $uid)),
 			'changes' => $changes,
 			'nextDue' => $nextDue,
-			'lastActivity' => max($project->getCreatedAt(), ($newest[0] ?? null)?->getCreatedAt() ?? 0, $this->comments->latestOn($versionIds) ?? 0),
-			'posters' => array_map(static fn (Version $version) => $version->getFileId(), array_slice($posters, 0, 4)),
+			'lastActivity' => max($project->getCreatedAt(), ($newest[0] ?? null)?->getCreatedAt() ?? 0, ...array_values($latestComments)),
+			'still' => (array_values($videos)[0] ?? null)?->getFileId(),
 		];
 	}
 

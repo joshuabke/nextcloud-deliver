@@ -90,6 +90,7 @@ OC.L10N.register(
 		"Jobs running at the same time": "Gleichzeitig laufende Jobs",
 		"Keep": "Behalten",
 		"Last failed job": "Zuletzt fehlgeschlagener Job",
+		"Latest activity": "Letzte Aktivität",
 		"Layout": "Anordnung",
 		"Leave a Comment…": "Kommentar schreiben …",
 		"Leave fullscreen": "Vollbild verlassen",
@@ -191,6 +192,7 @@ OC.L10N.register(
 		"Show the drawing": "Zeichnung zeigen",
 		"Show time as": "Zeit anzeigen als",
 		"Side by side": "Nebeneinander",
+		"Sort by": "Sortieren nach",
 		"Sound of V{number}": "Ton von V{number}",
 		"Sound of V{number}; click for the other side": "Ton von V{number}; klicken Sie für die andere Seite",
 		"Sound on": "Ton an",
@@ -221,7 +223,6 @@ OC.L10N.register(
 		"Unresolved": "Offen",
 		"Unresolved only": "Nur offene",
 		"Unseen": "Ungesehen",
-		"Unseen Version": "Ungesehene Version",
 		"Unstack into its own Asset": "Als eigenes Asset abtrennen",
 		"Upload": "Hochladen",
 		"Upload a new cut and stack it on top": "Neuen Schnitt hochladen und oben stapeln",
@@ -264,10 +265,6 @@ OC.L10N.register(
 		"_%n Unseen Comment_::_%n Unseen Comments_": [
 			"%n ungesehener Kommentar",
 			"%n ungesehene Kommentare"
-		],
-		"_%n Unseen Version_::_%n Unseen Versions_": [
-			"%n ungesehene Version",
-			"%n ungesehene Versionen"
 		],
 		"_%n reply_::_%n replies_": [
 			"%n Antwort",

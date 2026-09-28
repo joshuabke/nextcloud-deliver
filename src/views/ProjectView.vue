@@ -2,11 +2,14 @@
 import backIcon from '@mdi/svg/svg/arrow-left.svg?raw'
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
+import sortIcon from '@mdi/svg/svg/sort.svg?raw'
 import uploadIcon from '@mdi/svg/svg/tray-arrow-up.svg?raw'
 import { t } from '@nextcloud/l10n'
 import { generateRemoteUrl } from '@nextcloud/router'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import NcActionRadio from '@nextcloud/vue/components/NcActionRadio'
+import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
@@ -16,7 +19,7 @@ import NcTextField from '@nextcloud/vue/components/NcTextField'
 import AssetCard from '../components/AssetCard.vue'
 import ProjectSettingsDialog from '../components/ProjectSettingsDialog.vue'
 import { enableFile, errorMessage, stackVersion, uploadVersion } from '../api.js'
-import { FILTERS, found, passes } from '../lib/filters.js'
+import { FILTERS, found, passes, sortAssets, SORTS } from '../lib/filters.js'
 import { groupByFolder, inFolder, projectDavPath } from '../lib/folders.js'
 import { stackSuggestions } from '../lib/suggestions.js'
 import { useProjectsStore } from '../store/projects.js'
@@ -80,7 +83,18 @@ const LABELS = {
 
 /** Folder, filter and search live in the address, so the way back from a Review keeps them */
 const folder = computed(() => route.query.folder ?? '')
+const SORT_LABELS = {
+	activity: t('deliver', 'Latest activity'),
+	name: t('deliver', 'Name'),
+	created: t('deliver', 'Newest first'),
+	due: t('deliver', 'Due Date'),
+}
+
 const filter = computed(() => FILTERS.includes(route.query.filter) ? route.query.filter : 'all')
+const sort = computed({
+	get: () => SORTS.includes(route.query.sort) ? route.query.sort : 'activity',
+	set: (id) => router.replace({ query: { ...route.query, sort: id === 'activity' ? undefined : id } }),
+})
 const query = computed({
 	get: () => route.query.q ?? '',
 	set: (q) => router.replace({ query: { ...route.query, q: q || undefined } }),
@@ -92,7 +106,8 @@ const filters = computed(() => FILTERS.map((id) => ({
 	count: inView.value.filter((asset) => passes(asset, id)).length,
 })))
 const shown = computed(() => inView.value.filter((asset) => passes(asset, filter.value) && found(asset, query.value)))
-const groups = computed(() => groupByFolder(shown.value))
+// Sorted within each folder, the folders themselves by path
+const groups = computed(() => groupByFolder(sortAssets(shown.value, sort.value)))
 
 /**
  * @param {string} id - one of FILTERS
@@ -155,6 +170,14 @@ async function upload(event) {
 					</template>
 				</h2>
 				<span class="deliver-project__spacer" />
+				<NcTextField
+					v-if="project.assets.length"
+					v-model="query"
+					class="deliver-project__search"
+					:label="t('deliver', 'Find an Asset')"
+					type="search"
+					:showTrailingButton="query !== ''"
+					@trailingButtonClick="query = ''" />
 				<NcButton
 					v-if="project.canWrite"
 					:disabled="uploading"
@@ -194,13 +217,22 @@ async function upload(event) {
 						<span v-if="each.id !== 'all'" class="deliver-project__count">{{ each.count }}</span>
 					</NcButton>
 				</div>
-				<NcTextField
-					v-model="query"
-					class="deliver-project__search"
-					:label="t('deliver', 'Find an Asset')"
-					type="search"
-					:showTrailingButton="query !== ''"
-					@trailingButtonClick="query = ''" />
+				<NcActions
+					:menuName="SORT_LABELS[sort]"
+					:title="t('deliver', 'Sort by')"
+					variant="tertiary">
+					<template #icon>
+						<NcIconSvgWrapper :svg="sortIcon" />
+					</template>
+					<NcActionRadio
+						v-for="order in SORTS"
+						:key="order"
+						v-model="sort"
+						:value="order"
+						name="deliver-sort">
+						{{ SORT_LABELS[order] }}
+					</NcActionRadio>
+				</NcActions>
 			</div>
 			<NcEmptyContent
 				v-if="project.assets.length && shown.length === 0"
@@ -283,7 +315,7 @@ async function upload(event) {
 }
 
 .deliver-project__search {
-	width: 260px !important;
+	width: 200px !important;
 	flex: none;
 }
 

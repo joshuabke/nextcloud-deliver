@@ -79,10 +79,17 @@ test.describe('Review view', () => {
 		const second = page.locator('.deliver-card', { hasText: 'second.webm' })
 		await expect(second).toBeVisible()
 
-		await page.getByRole('button', { name: /^Unseen/ }).click()
-		await expect(page).toHaveURL(/filter=unseen/)
-		await expect(second).toBeVisible()
+		await page.getByRole('button', { name: /^Changes requested/ }).click()
+		await expect(page).toHaveURL(/filter=changes/)
+		await expect(second).toHaveCount(0)
 		await page.getByRole('button', { name: /^All/ }).click()
+
+		// The latest activity comes first, until the order is by name
+		await expect(page.locator('.deliver-card__name').first()).toHaveText('second')
+		await page.getByRole('button', { name: 'Latest activity' }).click()
+		await page.getByRole('menuitemradio', { name: 'Name' }).click()
+		await expect(page).toHaveURL(/sort=name/)
+		await expect(page.locator('.deliver-card__name').first()).toHaveText('clip')
 
 		await page.getByRole('searchbox', { name: 'Find an Asset' }).fill('SECOND')
 		await expect(page.locator('.deliver-card')).toHaveCount(1)
