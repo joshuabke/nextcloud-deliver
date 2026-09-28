@@ -24,6 +24,7 @@ export const createProject = (folderId, autoIntake = true) => axios.post(url('/p
 export const updateProject = (id, settings) => axios.put(url(`/projects/${id}`), settings).then(data)
 export const removeProject = (id) => axios.delete(url(`/projects/${id}`))
 export const listMembers = (id) => axios.get(url(`/projects/${id}/members`)).then(data)
+export const listProjectShares = (id) => axios.get(url(`/projects/${id}/shares`)).then(data)
 export const muteProject = (id, muted) => axios.put(url(`/projects/${id}/mute`), { muted }).then(data)
 
 export const getVersion = (id) => axios.get(url(`/versions/${id}`)).then(data)

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Controller;
 
+use OCA\Deliver\Service\ProjectService;
 use OCA\Deliver\Service\ShareReviewService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -19,6 +20,7 @@ class ShareApiController extends OCSController {
 		string $appName,
 		IRequest $request,
 		private ShareReviewService $sharing,
+		private ProjectService $projects,
 		private ?string $userId,
 	) {
 		parent::__construct($appName, $request);
@@ -27,6 +29,15 @@ class ShareApiController extends OCSController {
 	#[NoAdminRequired]
 	public function index(int $fileId): Response {
 		return $this->guard(fn () => $this->sharing->linksFor((string)$this->userId, $fileId));
+	}
+
+	/** Every Share Link of mine in a Project, for its navigation (story 100) */
+	#[NoAdminRequired]
+	public function inProject(int $id): Response {
+		return $this->guard(function () use ($id) {
+			[, $folder] = $this->projects->resolve((string)$this->userId, $id);
+			return $this->sharing->linksUnder((string)$this->userId, $folder);
+		});
 	}
 
 	#[NoAdminRequired]

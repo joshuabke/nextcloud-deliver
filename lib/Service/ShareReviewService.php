@@ -110,6 +110,33 @@ class ShareReviewService {
 	}
 
 	/**
+	 * The user's Share Links on a Project folder and on anything inside it,
+	 * for the Project's navigation (story 100). Each names its file or folder
+	 * and the folder Files shows it in.
+	 *
+	 * @return list<array<string, mixed>>
+	 */
+	public function linksUnder(string $uid, Folder $folder): array {
+		// Nextcloud no longer looks into subfolders for us: take all of the user's links, keep those inside
+		// ponytail: one node lookup per link of the user; filter by path in SQL if people keep thousands
+		$shares = $this->shares->getSharesBy($uid, IShare::TYPE_LINK, null, true, -1);
+		$home = $this->root->getUserFolder($uid);
+		$result = [];
+		foreach ($shares as $share) {
+			$node = $share->getNodeId() === $folder->getId() ? $folder : $folder->getFirstNodeById($share->getNodeId());
+			if ($node === null) {
+				continue;
+			}
+			$result[] = $this->serialize($share) + [
+				'fileId' => $node->getId(),
+				'name' => $node->getName(),
+				'dir' => $home->getRelativePath($node->getParent()->getPath()) ?? '/',
+			];
+		}
+		return $result;
+	}
+
+	/**
 	 * A new Share Link with review already on (story 45).
 	 *
 	 * @throws AccessDeniedException the node is read-only for the user

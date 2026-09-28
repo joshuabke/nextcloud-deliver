@@ -235,4 +235,16 @@ class ShareReviewTest extends TestCase {
 		self::assertStringContainsString('/media/', $url, 'without a Proxy the original still plays, but through Deliver');
 		self::assertStringNotContainsString('/dav/', $url);
 	}
+
+	public function testAProjectListsTheShareLinksOnItAndInside(): void {
+		$fileLink = $this->nc->ocs('POST', "/files/{$this->nc->fileId("{$this->root}/cut.mp4")}/shares");
+		self::assertSame(201, $fileLink['status'], json_encode($fileLink['data']));
+
+		$listed = $this->nc->ocs('GET', "/projects/{$this->projectId}/shares");
+		self::assertSame(200, $listed['status'], json_encode($listed['data']));
+		$names = array_column($listed['data'], 'name', 'id');
+		self::assertSame([$this->root, 'cut.mp4'], [$names[$this->shareId] ?? null, $names[$fileLink['data']['id']] ?? null]);
+		self::assertSame('/' . $this->root, array_column($listed['data'], 'dir', 'name')['cut.mp4']);
+		self::assertTrue(array_column($listed['data'], 'review', 'name')['cut.mp4']);
+	}
 }

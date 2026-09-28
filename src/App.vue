@@ -5,6 +5,7 @@ import NcContent from '@nextcloud/vue/components/NcContent'
 
 <template>
 	<NcContent appName="deliver">
+		<RouterView name="navigation" />
 		<NcAppContent>
 			<RouterView />
 		</NcAppContent>
