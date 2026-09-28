@@ -35,8 +35,8 @@ class ShareApiController extends OCSController {
 	#[NoAdminRequired]
 	public function inProject(int $id): Response {
 		return $this->guard(function () use ($id) {
-			[, $folder] = $this->projects->resolve((string)$this->userId, $id);
-			return $this->sharing->linksUnder((string)$this->userId, $folder);
+			[$project, $folder] = $this->projects->resolve((string)$this->userId, $id);
+			return $this->sharing->linksUnder((string)$this->userId, $project, $folder);
 		});
 	}
 

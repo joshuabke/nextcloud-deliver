@@ -143,7 +143,7 @@ After 0.2.0 the feature set grows to what a hosted review tool offers (FreeFrame
 97. As a Member, I want the Deliver app page to show every Project as a tile with a still of its newest video, its Unseen Comments, how many Assets wait for changes and the next Due Date, the latest activity first, so that I see at a glance where something happened.
 98. As a Member, I want to turn a folder into a Project and change its settings from the Deliver app page, so that I do not have to go through the Files sidebar.
 99. As a Member, I want to filter a Project's Assets by Unseen Comments, changes requested, approved and due, sort them by latest activity, name, arrival or Due Date, find them by name and upload new files into the Project folder, also by dropping them, so that a large Project stays manageable.
-100. As a Member, I want a Project's navigation to list its folders and all its Share Links, and the Review view to use the whole window with a way back to its Project, so that each view has the room it needs.
+100. As a Member, I want a Project's navigation to list its folders and all its Share Links with review, each with its settings and every Reviewer's Personal Link through it, and to create a Review Link there, and the Review view to use the whole window with a way back to its Project, so that each view has the room it needs and every link is findable.
 
 ## Implementation Decisions
 

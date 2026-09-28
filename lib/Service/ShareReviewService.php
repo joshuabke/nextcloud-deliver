@@ -112,15 +112,17 @@ class ShareReviewService {
 	/**
 	 * The user's Share Links on a Project folder and on anything inside it,
 	 * for the Project's navigation (story 100). Each names its file or folder
-	 * and the folder Files shows it in.
+	 * and the folder Files shows it in; one with review on also carries the
+	 * Project's Reviewers with their Personal Link through it.
 	 *
 	 * @return list<array<string, mixed>>
 	 */
-	public function linksUnder(string $uid, Folder $folder): array {
+	public function linksUnder(string $uid, Project $project, Folder $folder): array {
 		// Nextcloud no longer looks into subfolders for us: take all of the user's links, keep those inside
 		// ponytail: one node lookup per link of the user; filter by path in SQL if people keep thousands
 		$shares = $this->shares->getSharesBy($uid, IShare::TYPE_LINK, null, true, -1);
 		$home = $this->root->getUserFolder($uid);
+		$reviewers = $this->reviewers->forProject($project);
 		$result = [];
 		foreach ($shares as $share) {
 			$node = $share->getNodeId() === $folder->getId() ? $folder : $folder->getFirstNodeById($share->getNodeId());
@@ -131,6 +133,9 @@ class ShareReviewService {
 				'fileId' => $node->getId(),
 				'name' => $node->getName(),
 				'dir' => $home->getRelativePath($node->getParent()->getPath()) ?? '/',
+				'reviewers' => $this->isReview($share)
+					? array_map(fn (Reviewer $reviewer) => $this->reviewerWithLink($share, $reviewer), $reviewers)
+					: [],
 			];
 		}
 		return $result;
