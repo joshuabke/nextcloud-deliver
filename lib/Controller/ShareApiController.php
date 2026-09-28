@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Controller;
 
+use OCA\Deliver\Service\AccessDeniedException;
 use OCA\Deliver\Service\ProjectService;
+use OCA\Deliver\Service\ReviewerService;
 use OCA\Deliver\Service\ShareReviewService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -21,6 +23,7 @@ class ShareApiController extends OCSController {
 		IRequest $request,
 		private ShareReviewService $sharing,
 		private ProjectService $projects,
+		private ReviewerService $reviewers,
 		private ?string $userId,
 	) {
 		parent::__construct($appName, $request);
@@ -31,7 +34,35 @@ class ShareApiController extends OCSController {
 		return $this->guard(fn () => $this->sharing->linksFor((string)$this->userId, $fileId));
 	}
 
-	/** Every Share Link of mine in a Project, for its navigation (story 100) */
+	/** A Member edits a Reviewer of a Project they can write to: name, address, mail wishes */
+	#[NoAdminRequired]
+	public function updateReviewer(int $id, string $name, ?string $email = null, ?bool $mailReplies = null, ?bool $mailComments = null, ?bool $mailVersions = null): Response {
+		return $this->guard(function () use ($id, $name, $email, $mailReplies, $mailComments, $mailVersions) {
+			$reviewer = $this->writableReviewer($id);
+			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
+			return $this->reviewers->serialize($this->reviewers->update($reviewer, $name, $email, $wishes));
+		});
+	}
+
+	/** A new Personal Link for a Reviewer; the old ones stop working */
+	#[NoAdminRequired]
+	public function renewReviewerKey(int $id): Response {
+		return $this->guard(fn () => $this->reviewers->serialize($this->reviewers->renewKey($this->writableReviewer($id))));
+	}
+
+	/**
+	 * @throws AccessDeniedException the user may not write to the Reviewer's Project folder
+	 */
+	private function writableReviewer(int $id): \OCA\Deliver\Db\Reviewer {
+		$reviewer = $this->reviewers->find($id);
+		[, $folder] = $this->projects->resolve((string)$this->userId, $reviewer->getProjectId());
+		if (!$this->projects->canWrite($folder)) {
+			throw new AccessDeniedException('Write permission on the Project folder is required');
+		}
+		return $reviewer;
+	}
+
+	/** Every Share Link of mine in a Project, and the Project's Reviewers, for its navigation (story 100) */
 	#[NoAdminRequired]
 	public function inProject(int $id): Response {
 		return $this->guard(function () use ($id) {

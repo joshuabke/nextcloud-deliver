@@ -258,6 +258,7 @@ class StackService {
 			$this->purge($version);
 		}
 		$this->assets->deleteByProject($project->getId());
+		$this->reviewers->deleteLinks(array_map(static fn ($reviewer) => $reviewer->getId(), $this->reviewers->findByProject($project->getId())));
 		$this->reviewers->deleteByProject($project->getId());
 		$this->mutes->deleteByProject($project->getId());
 		$this->projects->delete($project);

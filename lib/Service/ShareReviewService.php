@@ -111,11 +111,12 @@ class ShareReviewService {
 
 	/**
 	 * The user's Share Links on a Project folder and on anything inside it,
-	 * for the Project's navigation (story 100). Each names its file or folder
-	 * and the folder Files shows it in; one with review on also carries the
-	 * Project's Reviewers with their Personal Link through it.
+	 * and the Project's Reviewers, for the Project's navigation (story 100).
+	 * A link names its file or folder, the folder Files shows it in, and the
+	 * Reviewers who were invited through it or came in by it; a Reviewer
+	 * carries their Personal Link through every link with review on.
 	 *
-	 * @return list<array<string, mixed>>
+	 * @return array{links: list<array<string, mixed>>, reviewers: list<array<string, mixed>>}
 	 */
 	public function linksUnder(string $uid, Project $project, Folder $folder): array {
 		// Nextcloud no longer looks into subfolders for us: take all of the user's links, keep those inside
@@ -123,22 +124,32 @@ class ShareReviewService {
 		$shares = $this->shares->getSharesBy($uid, IShare::TYPE_LINK, null, true, -1);
 		$home = $this->root->getUserFolder($uid);
 		$reviewers = $this->reviewers->forProject($project);
-		$result = [];
+		$cameBy = $this->reviewers->byLink($reviewers);
+		$links = [];
+		$review = [];
 		foreach ($shares as $share) {
 			$node = $share->getNodeId() === $folder->getId() ? $folder : $folder->getFirstNodeById($share->getNodeId());
 			if ($node === null) {
 				continue;
 			}
-			$result[] = $this->serialize($share) + [
+			if ($this->isReview($share)) {
+				$review[] = $share;
+			}
+			$links[] = $this->serialize($share) + [
 				'fileId' => $node->getId(),
 				'name' => $node->getName(),
+				'isProject' => $node->getId() === $folder->getId(),
+				'mimeType' => $node->getMimetype(),
 				'dir' => $home->getRelativePath($node->getParent()->getPath()) ?? '/',
-				'reviewers' => $this->isReview($share)
-					? array_map(fn (Reviewer $reviewer) => $this->reviewerWithLink($share, $reviewer), $reviewers)
-					: [],
+				'reviewerIds' => $cameBy[(int)$share->getId()] ?? [],
 			];
 		}
-		return $result;
+		return [
+			'links' => $links,
+			'reviewers' => array_map(fn (Reviewer $reviewer) => $this->reviewers->serialize($reviewer) + [
+				'links' => array_map(fn (IShare $share) => ['shareId' => (int)$share->getId(), 'url' => $this->personalLink($share, $reviewer)], $review),
+			], $reviewers),
+		];
 	}
 
 	/**
@@ -181,7 +192,9 @@ class ShareReviewService {
 	 */
 	public function invite(string $uid, int $shareId, string $name, ?string $email): array {
 		$share = $this->ownShare($uid, $shareId);
-		return $this->reviewerWithLink($share, $this->reviewers->claim($this->project($share), $name, $email));
+		$reviewer = $this->reviewers->claim($this->project($share), $name, $email);
+		$this->reviewers->cameBy($reviewer, $shareId);
+		return $this->reviewerWithLink($share, $reviewer);
 	}
 
 	/** The share URL plus the Reviewer's key: whoever opens it is that Reviewer */
