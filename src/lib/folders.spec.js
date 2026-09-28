@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filesDir, groupByFolder, projectDir, uploadFolder } from './folders.js'
+import { filesDir, groupByFolder, projectDavPath, projectDir, uploadFolder } from './folders.js'
 
 describe('folders', () => {
 	it('groups Assets by folder, the Project folder first', () => {
@@ -19,5 +19,6 @@ describe('folders', () => {
 
 	it('finds the Files folder of a Project', () => {
 		expect(projectDir('/me/files/Clients/Showreel')).toBe('/Clients/Showreel')
+		expect(projectDavPath('/me/files/Clients/Show reel')).toBe('me/Clients/Show%20reel')
 	})
 })

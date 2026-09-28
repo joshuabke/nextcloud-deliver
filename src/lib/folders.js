@@ -46,3 +46,12 @@ export function filesDir(davUrl) {
 export function projectDir(path) {
 	return '/' + path.split('/').slice(3).join('/')
 }
+
+/**
+ * @param {string} path - a Project's path as the server has it, /<user>/files/<path>
+ * @return {string} the folder under the WebDAV files root, encoded, such as me/Clients/Show%20reel
+ */
+export function projectDavPath(path) {
+	const [, user, , ...rest] = path.split('/')
+	return [user, ...rest].map(encodeURIComponent).join('/')
+}

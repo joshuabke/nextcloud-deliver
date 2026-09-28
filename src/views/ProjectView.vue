@@ -2,18 +2,22 @@
 import backIcon from '@mdi/svg/svg/arrow-left.svg?raw'
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
+import uploadIcon from '@mdi/svg/svg/tray-arrow-up.svg?raw'
 import { t } from '@nextcloud/l10n'
+import { generateRemoteUrl } from '@nextcloud/router'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
+import NcTextField from '@nextcloud/vue/components/NcTextField'
 import AssetCard from '../components/AssetCard.vue'
 import ProjectSettingsDialog from '../components/ProjectSettingsDialog.vue'
-import { errorMessage, stackVersion } from '../api.js'
-import { groupByFolder } from '../lib/folders.js'
+import { enableFile, errorMessage, stackVersion, uploadVersion } from '../api.js'
+import { FILTERS, found, passes } from '../lib/filters.js'
+import { groupByFolder, projectDavPath } from '../lib/folders.js'
 import { stackSuggestions } from '../lib/suggestions.js'
 import { useProjectsStore } from '../store/projects.js'
 
@@ -22,9 +26,12 @@ const props = defineProps({
 })
 
 const store = useProjectsStore()
+const route = useRoute()
 const router = useRouter()
 const error = ref(null)
 const settingsOpen = ref(false)
+const uploading = ref(false)
+const fileInput = ref(null)
 const project = computed(() => store.details[props.id])
 
 watch(() => props.id, async (id) => {
@@ -63,7 +70,58 @@ async function accept(asset, target) {
 	}
 }
 
-const groups = computed(() => groupByFolder(project.value?.assets ?? []))
+const LABELS = {
+	all: t('deliver', 'All'),
+	unseen: t('deliver', 'Unseen'),
+	changes: t('deliver', 'Changes requested'),
+	approved: t('deliver', 'Approved'),
+	due: t('deliver', 'Due'),
+}
+
+/** Filter and search live in the address, so the way back from a Review keeps them */
+const filter = computed(() => FILTERS.includes(route.query.filter) ? route.query.filter : 'all')
+const query = computed({
+	get: () => route.query.q ?? '',
+	set: (q) => router.replace({ query: { ...route.query, q: q || undefined } }),
+})
+const filters = computed(() => FILTERS.map((id) => ({
+	id,
+	label: LABELS[id],
+	count: (project.value?.assets ?? []).filter((asset) => passes(asset, id)).length,
+})))
+const shown = computed(() => (project.value?.assets ?? []).filter((asset) => passes(asset, filter.value) && found(asset, query.value)))
+const groups = computed(() => groupByFolder(shown.value))
+
+/**
+ * @param {string} id - one of FILTERS
+ */
+function setFilter(id) {
+	router.replace({ query: { ...route.query, filter: id === 'all' ? undefined : id } })
+}
+
+/**
+ * Uploads the picked files into the Project folder and makes each an Asset
+ * right away, with or without Auto Intake (story 99)
+ *
+ * @param {Event} event - the file input's change event
+ */
+async function upload(event) {
+	const files = [...(event.target.files ?? [])]
+	event.target.value = ''
+	const folderUrl = generateRemoteUrl('dav') + '/files/' + projectDavPath(project.value.path)
+	uploading.value = true
+	error.value = null
+	try {
+		for (const file of files) {
+			await enableFile(await uploadVersion(folderUrl, file))
+		}
+	} catch (e) {
+		error.value = errorMessage(e)
+	} finally {
+		uploading.value = false
+		await store.fetch(props.id).catch(() => {})
+	}
+}
 </script>
 
 <template>
@@ -71,12 +129,12 @@ const groups = computed(() => groupByFolder(project.value?.assets ?? []))
 		<NcNoteCard v-if="error" type="error">
 			{{ error }}
 		</NcNoteCard>
-		<NcEmptyContent v-else-if="!project" :name="t('deliver', 'Loading Project…')">
+		<NcEmptyContent v-if="!project && !error" :name="t('deliver', 'Loading Project…')">
 			<template #icon>
 				<NcLoadingIcon />
 			</template>
 		</NcEmptyContent>
-		<template v-else>
+		<template v-else-if="project">
 			<div class="deliver-project__head">
 				<NcButton
 					variant="tertiary"
@@ -90,6 +148,23 @@ const groups = computed(() => groupByFolder(project.value?.assets ?? []))
 				<h2>{{ project.name }}</h2>
 				<span class="deliver-project__spacer" />
 				<NcButton
+					v-if="project.canWrite"
+					:disabled="uploading"
+					@click="fileInput.click()">
+					<template #icon>
+						<NcLoadingIcon v-if="uploading" />
+						<NcIconSvgWrapper v-else :svg="uploadIcon" />
+					</template>
+					{{ t('deliver', 'Upload') }}
+				</NcButton>
+				<input
+					ref="fileInput"
+					type="file"
+					accept="video/*,audio/*,image/*"
+					multiple
+					hidden
+					@change="upload">
+				<NcButton
 					variant="tertiary"
 					:aria-label="t('deliver', 'Project settings')"
 					:title="t('deliver', 'Project settings')"
@@ -99,6 +174,29 @@ const groups = computed(() => groupByFolder(project.value?.assets ?? []))
 					</template>
 				</NcButton>
 			</div>
+			<div v-if="project.assets.length" class="deliver-project__tools">
+				<div class="deliver-project__filters" role="group" :aria-label="t('deliver', 'Show')">
+					<NcButton
+						v-for="each in filters"
+						:key="each.id"
+						variant="tertiary"
+						:pressed="filter === each.id"
+						@click="setFilter(each.id)">
+						{{ each.label }}
+						<span v-if="each.id !== 'all'" class="deliver-project__count">{{ each.count }}</span>
+					</NcButton>
+				</div>
+				<NcTextField
+					v-model="query"
+					class="deliver-project__search"
+					:label="t('deliver', 'Find an Asset')"
+					type="search"
+					:showTrailingButton="query !== ''"
+					@trailingButtonClick="query = ''" />
+			</div>
+			<NcEmptyContent
+				v-if="project.assets.length && shown.length === 0"
+				:name="t('deliver', 'No Asset fits')" />
 			<NcEmptyContent
 				v-if="project.assets.length === 0"
 				:name="t('deliver', 'No Assets yet')"
@@ -147,6 +245,31 @@ const groups = computed(() => groupByFolder(project.value?.assets ?? []))
 .deliver-project__head h2 {
 	margin: 0;
 	font-size: 20px;
+}
+
+.deliver-project__tools {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: calc(2 * var(--default-grid-baseline, 4px));
+}
+
+.deliver-project__filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--default-grid-baseline, 4px);
+	flex: 1;
+}
+
+.deliver-project__count {
+	margin-inline-start: var(--default-grid-baseline, 4px);
+	font-weight: normal;
+	opacity: 0.7;
+}
+
+.deliver-project__search {
+	width: 260px !important;
+	flex: none;
 }
 
 .deliver-project__spacer {
