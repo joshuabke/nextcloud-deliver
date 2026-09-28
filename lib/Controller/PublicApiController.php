@@ -69,12 +69,12 @@ class PublicApiController extends PublicShareController {
 				default => throw new NotFoundException('Version not found'),
 			};
 			$project = $this->sharing->project($share);
-			$flags = $this->sharing->flags($share);
 			$stack = $this->sharing->assets($share)[$version->getAssetId()] ?? null;
 			$reviewer = $this->reviewer();
 			if ($reviewer !== null) {
 				$this->reviewers->cameBy($reviewer, (int)$share->getId());
 			}
+			$flags = $this->flags($share, $reviewer);
 			return [
 				'versionId' => $version->getId(),
 				'flags' => $flags,
@@ -286,10 +286,20 @@ class PublicApiController extends PublicShareController {
 		return $this->reviewers->byKey(is_string($key) ? $key : null, $this->sharing->project($this->share()));
 	}
 
-	/** A Reviewer comments while the share allows it, and never resolves */
+	/**
+	 * The link's review flags, with the Reviewer's own rights over them
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function flags(IShare $share, ?Reviewer $reviewer): array {
+		$flags = $this->sharing->flags($share);
+		return $reviewer === null ? $flags : $reviewer->over($flags);
+	}
+
+	/** A Reviewer comments while the share or their own rights allow it, and never resolves */
 	private function viewer(IShare $share): Viewer {
 		$reviewer = $this->reviewer();
-		$flags = $this->sharing->flags($share);
+		$flags = $this->flags($share, $reviewer);
 		return $reviewer === null
 			? Viewer::unnamed($flags['canComment'], $flags['allowOlder'])
 			: Viewer::reviewer($reviewer->getId(), $flags['canComment'], $flags['allowOlder']);

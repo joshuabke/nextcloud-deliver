@@ -56,14 +56,26 @@ class ReviewerService {
 	}
 
 	/**
-	 * A Member edits a Reviewer: name, address and what they want mailed.
+	 * A Member edits a Reviewer: name, address, what they want mailed and,
+	 * when given, their own rights over those of the link (null: the link decides).
 	 *
 	 * @param array{replies?: ?bool, comments?: ?bool, versions?: ?bool} $mail
+	 * @param array{canComment?: ?bool, allowOlder?: ?bool, watermark?: ?bool}|null $rights
 	 * @throws InvalidRequestException the name is empty or the email is not one
 	 */
-	public function update(Reviewer $reviewer, string $name, ?string $email, array $mail): Reviewer {
+	public function update(Reviewer $reviewer, string $name, ?string $email, array $mail, ?array $rights = null): Reviewer {
 		$reviewer->setName(self::name($name));
+		if ($rights !== null) {
+			$reviewer->setCanComment(self::right($rights, 'canComment'));
+			$reviewer->setAllowOlder(self::right($rights, 'allowOlder'));
+			$reviewer->setWatermark(self::right($rights, 'watermark'));
+		}
 		return $this->updateSettings($reviewer, $email, $mail);
+	}
+
+	/** @param array<string, mixed> $rights */
+	private static function right(array $rights, string $key): ?bool {
+		return isset($rights[$key]) ? (bool)$rights[$key] : null;
 	}
 
 	/** A new key: the old Personal Links stop working, the Reviewer keeps their Comments */
@@ -142,6 +154,7 @@ class ReviewerService {
 			'email' => $reviewer->getEmail(),
 			'key' => $reviewer->getSecretKey(),
 			'mail' => $reviewer->mailWishes(),
+			'rights' => $reviewer->rights(),
 		];
 	}
 }

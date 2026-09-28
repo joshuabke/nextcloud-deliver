@@ -34,13 +34,21 @@ class ShareApiController extends OCSController {
 		return $this->guard(fn () => $this->sharing->linksFor((string)$this->userId, $fileId));
 	}
 
-	/** A Member edits a Reviewer of a Project they can write to: name, address, mail wishes */
+	/** A Member edits a Reviewer of a Project they can write to: name, address, mail wishes, own rights */
 	#[NoAdminRequired]
-	public function updateReviewer(int $id, string $name, ?string $email = null, ?bool $mailReplies = null, ?bool $mailComments = null, ?bool $mailVersions = null): Response {
-		return $this->guard(function () use ($id, $name, $email, $mailReplies, $mailComments, $mailVersions) {
+	public function updateReviewer(
+		int $id,
+		string $name,
+		?string $email = null,
+		?bool $mailReplies = null,
+		?bool $mailComments = null,
+		?bool $mailVersions = null,
+		?array $rights = null,
+	): Response {
+		return $this->guard(function () use ($id, $name, $email, $mailReplies, $mailComments, $mailVersions, $rights) {
 			$reviewer = $this->writableReviewer($id);
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
-			return $this->reviewers->serialize($this->reviewers->update($reviewer, $name, $email, $wishes));
+			return $this->reviewers->serialize($this->reviewers->update($reviewer, $name, $email, $wishes, $rights));
 		});
 	}
 

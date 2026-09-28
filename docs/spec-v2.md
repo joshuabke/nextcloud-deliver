@@ -145,6 +145,7 @@ After 0.2.0 the feature set grows to what a hosted review tool offers (FreeFrame
 99. As a Member, I want to filter a Project's Assets by Unseen Comments, changes requested, approved and due, sort them by latest activity, name, arrival or Due Date, find them by name and upload new files into the Project folder, also by dropping them, so that a large Project stays manageable.
 100. As a Member, I want a Project's navigation to list its folders, its Share Links with review (the Project folder's marked as such) with the Reviewers who were invited through or came in by each, and every Reviewer once with one place to edit their name, address and mail wishes, copy their Personal Links or replace them, and to create a Review Link there; and the Review view to use the whole window with a way back to its Project, so that each view has the room it needs and every person is managed in one place.
 101. As a Member, I want a right-click menu on a Project tile and on an Asset card with what I do there most (open, settings, mute, compare, upload a new Version, show in Files, remove), so that common steps take one click.
+102. As a Member with write access, I want to give a Reviewer their own rights to comment, to comment on older Versions and to see the Watermark, over those of the Share Link they come by, so that one person can be treated differently without a link of their own.
 
 ## Implementation Decisions
 
