@@ -88,7 +88,7 @@ async function reload() {
 function step(by) {
 	const next = newest.value[assetIndex.value + by]
 	if (next) {
-		current.value = next.versionId
+		current.value = next.newestId
 	}
 }
 

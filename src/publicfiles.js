@@ -16,7 +16,7 @@ if (reviewUrl !== null) {
 	window.location.replace(reviewUrl)
 }
 
-/** File id → the id of its Asset's newest Version (story 61); null until loaded */
+/** File id → the id of its own Version (story 61); null until loaded */
 let reviewable = null
 const loading = fetch(generateUrl('/apps/deliver/s/{token}/api/assets', { token }))
 	.then((response) => response.ok ? response.json() : [])
