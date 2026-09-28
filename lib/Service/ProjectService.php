@@ -58,7 +58,10 @@ class ProjectService {
 		foreach ($this->projects->findAll() as $project) {
 			$folder = $userFolder->getFirstNodeById($project->getFolderId());
 			if ($folder instanceof Folder) {
-				$result[] = $this->serialize($project, $folder) + ['activity' => $this->activity($project, $uid)];
+				$result[] = $this->serialize($project, $folder) + [
+					'muted' => $this->mutes->isMuted($project->getId(), $uid),
+					'activity' => $this->activity($project, $uid),
+				];
 			}
 		}
 		return $result;

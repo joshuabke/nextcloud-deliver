@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filesDir, groupByFolder, uploadFolder } from './folders.js'
+import { filesDir, groupByFolder, projectDir, uploadFolder } from './folders.js'
 
 describe('folders', () => {
 	it('groups Assets by folder, the Project folder first', () => {
@@ -15,5 +15,9 @@ describe('folders', () => {
 	it('finds the Files folder of a WebDAV URL', () => {
 		expect(filesDir('http://x/remote.php/dav/files/me/Synthese%20Quartet/Video/No.%204.mp4')).toBe('/Synthese Quartet/Video')
 		expect(filesDir('http://x/remote.php/dav/files/me/a.mov')).toBe('/')
+	})
+
+	it('finds the Files folder of a Project', () => {
+		expect(projectDir('/me/files/Clients/Showreel')).toBe('/Clients/Showreel')
 	})
 })
