@@ -116,22 +116,23 @@ function setFilter(id) {
 	router.replace({ query: { ...route.query, filter: id === 'all' ? undefined : id } })
 }
 
+/** Files dragged over the view; enter and leave fire for every child, so they are counted */
+const dragDepth = ref(0)
+
 /**
- * Uploads the picked files into the Project folder and makes each an Asset
- * right away, with or without Auto Intake (story 99)
+ * Uploads files into the folder on screen and makes each an Asset right
+ * away, with or without Auto Intake (story 99). Only media files go.
  *
- * @param {Event} event - the file input's change event
+ * @param {File[]} files - picked or dropped
  */
-async function upload(event) {
-	const files = [...(event.target.files ?? [])]
-	event.target.value = ''
-	// Into the folder on screen
+async function upload(files) {
+	const media = files.filter((file) => /^(video|audio|image)\//.test(file.type))
+	error.value = media.length < files.length ? t('deliver', 'Only video, audio and image files are uploaded.') : null
 	const folderUrl = generateRemoteUrl('dav') + '/files/' + projectDavPath(project.value.path)
 		+ folder.value.split('/').filter(Boolean).map((part) => '/' + encodeURIComponent(part)).join('')
 	uploading.value = true
-	error.value = null
 	try {
-		for (const file of files) {
+		for (const file of media) {
 			await enableFile(await uploadVersion(folderUrl, file))
 		}
 	} catch (e) {
@@ -141,10 +142,40 @@ async function upload(event) {
 		await store.fetch(props.id).catch(() => {})
 	}
 }
+
+/**
+ * @param {Event} event - the file input's change event
+ */
+function picked(event) {
+	const files = [...(event.target.files ?? [])]
+	event.target.value = ''
+	upload(files)
+}
+
+/**
+ * @param {DragEvent} event - the drop
+ */
+function dropped(event) {
+	dragDepth.value = 0
+	if (project.value?.canWrite && !uploading.value) {
+		upload([...(event.dataTransfer?.files ?? [])])
+	}
+}
 </script>
 
 <template>
-	<div class="deliver-project">
+	<div
+		class="deliver-project"
+		:class="{ 'deliver-project--dragging': dragDepth > 0 && project?.canWrite }"
+		@dragenter.prevent="dragDepth++"
+		@dragleave="dragDepth--"
+		@dragover.prevent
+		@drop.prevent="dropped">
+		<div v-if="dragDepth > 0 && project?.canWrite" class="deliver-project__drop">
+			{{ folder
+				? t('deliver', 'Drop files to upload them into {folder}', { folder })
+				: t('deliver', 'Drop files to upload them into the Project') }}
+		</div>
 		<NcNoteCard v-if="error" type="error">
 			{{ error }}
 		</NcNoteCard>
@@ -194,7 +225,7 @@ async function upload(event) {
 					accept="video/*,audio/*,image/*"
 					multiple
 					hidden
-					@change="upload">
+					@change="picked">
 				<NcButton
 					variant="tertiary"
 					:aria-label="t('deliver', 'Project settings')"
@@ -268,6 +299,8 @@ async function upload(event) {
 
 <style scoped>
 .deliver-project {
+	position: relative;
+	min-height: 100%;
 	display: flex;
 	flex-direction: column;
 	gap: calc(4 * var(--default-grid-baseline, 4px));
@@ -292,6 +325,22 @@ async function upload(event) {
 .deliver-project__head h2 {
 	margin: 0;
 	font-size: 20px;
+}
+
+.deliver-project__drop {
+	position: absolute;
+	inset: calc(2 * var(--default-grid-baseline, 4px));
+	z-index: 10;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: 2px dashed var(--color-primary-element);
+	border-radius: var(--border-radius-large, 12px);
+	background: rgba(var(--color-main-background-rgb, 255, 255, 255), 0.85);
+	font-size: 18px;
+	font-weight: bold;
+	/* The counter on the view decides, not this layer */
+	pointer-events: none;
 }
 
 .deliver-project__tools {

@@ -95,6 +95,21 @@ test.describe('Review view', () => {
 
 		await page.getByRole('searchbox', { name: 'Find an Asset' }).fill('SECOND')
 		await expect(page.locator('.deliver-card')).toHaveCount(1)
+
+		// Dropped files go the same way; anything but media stays out
+		await page.getByRole('searchbox', { name: 'Find an Asset' }).fill('')
+		await page.evaluate((bytes) => {
+			const files = new DataTransfer()
+			files.items.add(new File([new Uint8Array(bytes)], 'third.webm', { type: 'video/webm' }))
+			files.items.add(new File(['notes'], 'notes.txt', { type: 'text/plain' }))
+			const view = document.querySelector('.deliver-project')
+			for (const type of ['dragenter', 'dragover', 'drop']) {
+				view.dispatchEvent(new DragEvent(type, { dataTransfer: files, bubbles: true, cancelable: true }))
+			}
+		}, [...readFileSync(CLIP)])
+		await expect(page.locator('.deliver-card', { hasText: 'third.webm' })).toBeVisible()
+		await expect(page.locator('.deliver-project .notecard')).toContainText('Only video, audio and image files')
+		await expect(page.locator('.deliver-card', { hasText: 'notes' })).toHaveCount(0)
 	})
 
 	test('comments on a Frame and on a Range, resolves and replies', async () => {
