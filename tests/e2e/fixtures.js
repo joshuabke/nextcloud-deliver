@@ -14,9 +14,17 @@ export default function globalSetup() {
 	}
 	mkdirSync(FIXTURES, { recursive: true })
 	execFileSync('ffmpeg', [
-		'-loglevel', 'error', '-y',
-		'-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=25:duration=4',
-		'-c:v', 'libvpx-vp9', '-b:v', '200k',
+		'-loglevel',
+		'error',
+		'-y',
+		'-f',
+		'lavfi',
+		'-i',
+		'testsrc=size=320x180:rate=25:duration=4',
+		'-c:v',
+		'libvpx-vp9',
+		'-b:v',
+		'200k',
 		CLIP,
 	])
 }
