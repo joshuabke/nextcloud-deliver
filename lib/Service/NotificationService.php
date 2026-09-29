@@ -9,11 +9,9 @@ use OCA\Deliver\Db\AssetMapper;
 use OCA\Deliver\Db\Comment;
 use OCA\Deliver\Db\MuteMapper;
 use OCA\Deliver\Db\ProjectMapper;
-use OCA\Deliver\Db\ReviewerMapper;
 use OCA\Deliver\Db\Version;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Utility\ITimeFactory;
-use OCP\IUserManager;
 use OCP\IUserSession;
 use OCP\Notification\IManager as INotificationManager;
 
@@ -41,8 +39,6 @@ class NotificationService {
 		private ProjectMapper $projects,
 		private AssetMapper $assets,
 		private MuteMapper $mutes,
-		private ReviewerMapper $reviewers,
-		private IUserManager $users,
 		private IUserSession $userSession,
 		private ITimeFactory $time,
 	) {
@@ -52,11 +48,7 @@ class NotificationService {
 	 * A new Comment or Reply (story 62). Members it @mentions hear of it as a
 	 * mention, even from a Project they muted (story 90), and not twice.
 	 */
-	public function commented(Comment $comment, Version $version): void {
-		$uid = $comment->getUserId();
-		$author = $uid !== null
-			? ($this->users->get($uid)?->getDisplayName() ?? $uid)
-			: ($this->reviewers->find((int)$comment->getReviewerId())?->getName() ?? '');
+	public function commented(Comment $comment, Version $version, string $author): void {
 		$parameters = ['author' => $author, 'body' => mb_substr($comment->getBody(), 0, 200)];
 		$mentioned = $this->mentioned($comment, $version);
 		$this->notify($version, $comment->getParentId() === null ? self::COMMENT : self::REPLY, 'comment', (string)$comment->getId(), $parameters, $comment->getUserId(), $mentioned);

@@ -14,7 +14,6 @@ use OCA\Deliver\Db\ReactionMapper;
 use OCA\Deliver\Db\Seen;
 use OCA\Deliver\Db\SeenMapper;
 use OCA\Deliver\Db\Version;
-use OCA\Deliver\Db\VersionMapper;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\DB\Exception as DbException;
 use OCP\Files\NotFoundException;
@@ -38,7 +37,6 @@ class CommentService {
 	public function __construct(
 		private CommentMapper $comments,
 		private SeenMapper $seen,
-		private VersionMapper $versions,
 		private ITimeFactory $time,
 		private NotificationService $notifications,
 		private ReviewerMail $mail,
@@ -120,13 +118,14 @@ class CommentService {
 		$comment->setCreatedAt($now);
 		$comment->setUpdatedAt($now);
 		$comment = $this->comments->insert($comment);
-		$serialized = $this->serialize($comment);
-		$this->notifications->commented($comment, $version);
+		$serialized = $this->serialize($version, $comment);
+		$author = $serialized['author']['name'];
+		$this->notifications->commented($comment, $version, $author);
 		$this->live->changed($version);
 		if ($parent !== null) {
-			$this->mail->replied($comment, $version, $serialized['author']['name']);
+			$this->mail->replied($comment, $parent, $version, $author);
 		}
-		$this->mail->commented($comment, $version, $serialized['author']['name']);
+		$this->mail->commented($comment, $parent, $version, $author);
 		return $serialized;
 	}
 
@@ -141,10 +140,7 @@ class CommentService {
 			throw new InvalidRequestException('A Comment needs a body');
 		}
 		$comment->setBody($body);
-		$comment->setUpdatedAt($this->time->getTime());
-		$serialized = $this->serialize($this->comments->update($comment));
-		$this->live->changed($version);
-		return $serialized;
+		return $this->changed($version, $comment);
 	}
 
 	/**
@@ -218,10 +214,7 @@ class CommentService {
 				$this->reactions->delete($reaction);
 			}
 		}
-		$comment->setUpdatedAt($this->time->getTime());
-		$serialized = $this->serialize($this->comments->update($comment));
-		$this->live->changed($version);
-		return $serialized;
+		return $this->changed($version, $comment);
 	}
 
 	/**
@@ -259,10 +252,7 @@ class CommentService {
 		$attachment->setMimeType($file->getMimeType());
 		$attachment->setSize($file->getSize());
 		$this->attachments->insert($attachment);
-		$comment->setUpdatedAt($this->time->getTime());
-		$serialized = $this->serialize($this->comments->update($comment));
-		$this->live->changed($version);
-		return $serialized;
+		return $this->changed($version, $comment);
 	}
 
 	/**
@@ -270,10 +260,7 @@ class CommentService {
 	 * @throws NotFoundException no such attachment here, or its file is gone
 	 */
 	public function attachment(Version $version, int $attachmentId): array {
-		$attachment = $this->attachments->find($attachmentId);
-		if ($attachment === null) {
-			throw new NotFoundException('Attachment not found');
-		}
+		$attachment = $this->attachments->find($attachmentId) ?? throw new NotFoundException('Attachment not found');
 		$this->reach($version, $attachment->getCommentId());
 		$file = $this->store->file($this->projects->find($version->getProjectId()), $attachment->getFileId());
 		return [$file ?? throw new NotFoundException('The attached file is gone'), $attachment];
@@ -306,10 +293,7 @@ class CommentService {
 			throw new InvalidRequestException('Replies are not resolved on their own');
 		}
 		$comment->setResolved($resolved);
-		$comment->setUpdatedAt($this->time->getTime());
-		$serialized = $this->serialize($this->comments->update($comment));
-		$this->live->changed($version);
-		return $serialized;
+		return $this->changed($version, $comment);
 	}
 
 	/** Moves the person's Unseen mark forward, never back */
@@ -345,11 +329,16 @@ class CommentService {
 
 	/** @throws NotFoundException no such Comment */
 	public function versionIdOf(int $commentId): int {
-		$comment = $this->comments->find($commentId);
-		if ($comment === null) {
-			throw new NotFoundException('Comment not found');
-		}
+		$comment = $this->comments->find($commentId) ?? throw new NotFoundException('Comment not found');
 		return $comment->getVersionId();
+	}
+
+	/** Saves a changed Comment and tells everyone's next poll to bring it */
+	private function changed(Version $version, Comment $comment): array {
+		$comment->setUpdatedAt($this->time->getTime());
+		$serialized = $this->serialize($version, $this->comments->update($comment));
+		$this->live->changed($version);
+		return $serialized;
 	}
 
 	/** @throws NotFoundException the Comment is not on this Version */
@@ -382,7 +371,7 @@ class CommentService {
 			// In the same shape as a Comment's author, so the client can spot its own
 			'me' => $viewer->identity(),
 			'now' => $this->time->getTime(),
-			'comments' => $this->serializeAll($comments),
+			'comments' => $this->serializeAll($version, $comments),
 			// Few and small, so every answer carries them all
 			'approvals' => $this->approvals->list($version),
 		];
@@ -397,32 +386,27 @@ class CommentService {
 	 *
 	 * @return list<string>
 	 */
-	private function membersOf(int $versionId): array {
-		if (!isset($this->membersByVersion[$versionId])) {
-			$version = $this->versions->find($versionId);
-			$this->membersByVersion[$versionId] = $version === null
-				? []
-				: $this->members->of($this->projects->find($version->getProjectId())->getFolderId());
-		}
-		return $this->membersByVersion[$versionId];
+	private function membersOf(Version $version): array {
+		return $this->membersByVersion[$version->getId()]
+			??= $this->members->of($this->projects->find($version->getProjectId())->getFolderId());
 	}
 
 	/**
 	 * @param Comment[] $comments
 	 * @return list<array<string, mixed>>
 	 */
-	private function serializeAll(array $comments): array {
+	private function serializeAll(Version $version, array $comments): array {
 		$ids = array_map(static fn (Comment $comment) => $comment->getId(), $comments);
 		$reactions = $this->reactions->findByComments($ids);
 		$attachments = $this->attachments->findByComments($ids);
-		return array_values(array_map(fn (Comment $comment) => $this->serialize($comment, $reactions[$comment->getId()] ?? [], $attachments[$comment->getId()] ?? []), $comments));
+		return array_values(array_map(fn (Comment $comment) => $this->serialize($version, $comment, $reactions[$comment->getId()] ?? [], $attachments[$comment->getId()] ?? []), $comments));
 	}
 
 	/**
 	 * @param ?list<Reaction> $reactions the Comment's, when already loaded
 	 * @param ?list<Attachment> $attachments the Comment's, when already loaded
 	 */
-	private function serialize(Comment $comment, ?array $reactions = null, ?array $attachments = null): array {
+	private function serialize(Version $version, Comment $comment, ?array $reactions = null, ?array $attachments = null): array {
 		$reactions ??= $this->reactions->findByComments([$comment->getId()])[$comment->getId()] ?? [];
 		$attachments ??= $this->attachments->findByComments([$comment->getId()])[$comment->getId()] ?? [];
 		$byEmoji = [];
@@ -433,7 +417,7 @@ class CommentService {
 			'id' => $comment->getId(),
 			'versionId' => $comment->getVersionId(),
 			'parentId' => $comment->getParentId(),
-			'author' => $this->author($comment),
+			'author' => $this->authors->of($comment->getUserId(), $comment->getReviewerId()),
 			'inFrame' => $comment->getInFrame(),
 			'outFrame' => $comment->getOutFrame(),
 			'body' => $comment->getBody(),
@@ -442,7 +426,7 @@ class CommentService {
 			// Display names of the users it @mentions (story 90); JSON object even when empty
 			'mentions' => (object)$this->authors->names(array_values(array_intersect(
 				Mentions::parse((string)$comment->getBody()),
-				$this->membersOf($comment->getVersionId()),
+				$this->membersOf($version),
 			))),
 			'attachments' => array_map(static fn (Attachment $attachment) => [
 				'id' => $attachment->getId(),
@@ -458,9 +442,5 @@ class CommentService {
 			'createdAt' => $comment->getCreatedAt(),
 			'updatedAt' => $comment->getUpdatedAt(),
 		];
-	}
-
-	private function author(Comment $comment): array {
-		return $this->authors->of($comment->getUserId(), $comment->getReviewerId());
 	}
 }
