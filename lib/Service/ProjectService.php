@@ -210,7 +210,7 @@ class ProjectService {
 			throw new ProjectConflictException('Only a video, audio or picture file can be enabled for review');
 		}
 		$this->assertWritable($file);
-		$project = $this->findProjectForFile($userFolder, $file);
+		$project = $this->projects->findAbove($file);
 		if ($project === null) {
 			$parent = $file->getParent();
 			$this->assertNotNested($userFolder, $parent);
@@ -233,7 +233,7 @@ class ProjectService {
 		if (!$file instanceof File) {
 			throw new NotFoundException('File not found');
 		}
-		$project = $this->findProjectForFile($userFolder, $file);
+		$project = $this->projects->findAbove($file);
 		$version = $project === null ? null : $this->versions->findByProjectAndFile($project->getId(), $fileId);
 		if ($project === null || $version === null) {
 			throw new NotFoundException('File is not enabled for review');
@@ -257,11 +257,7 @@ class ProjectService {
 	 * @throws NotFoundException the Version is gone or its Project folder is out of reach
 	 */
 	public function viewerForVersion(string $uid, int $versionId): array {
-		$version = $this->versions->find($versionId);
-		if ($version === null) {
-			throw new NotFoundException('Version not found');
-		}
-		[$project, $folder] = $this->resolve($uid, $version->getProjectId());
+		[$version, $project, $folder] = $this->reachVersion($uid, $versionId);
 		return [Viewer::member($uid, $this->canWrite($folder), (bool)$project->getAllowOlder()), $version];
 	}
 
@@ -296,16 +292,21 @@ class ProjectService {
 
 	/**
 	 * @return array{0: Version, 1: Project, 2: Folder}
+	 * @throws NotFoundException the Version is gone or its Project folder is out of reach
+	 */
+	private function reachVersion(string $uid, int $versionId): array {
+		$version = $this->versions->find($versionId) ?? throw new NotFoundException('Version not found');
+		return [$version, ...$this->resolve($uid, $version->getProjectId())];
+	}
+
+	/**
+	 * @return array{0: Version, 1: Project, 2: Folder}
 	 * @throws AccessDeniedException the folder is read-only for this user
 	 */
 	private function writableVersion(string $uid, int $versionId): array {
-		$version = $this->versions->find($versionId);
-		if ($version === null) {
-			throw new NotFoundException('Version not found');
-		}
-		[$project, $folder] = $this->resolve($uid, $version->getProjectId());
-		$this->assertWritable($folder);
-		return [$version, $project, $folder];
+		$reached = $this->reachVersion($uid, $versionId);
+		$this->assertWritable($reached[2]);
+		return $reached;
 	}
 
 	/**
@@ -346,15 +347,8 @@ class ProjectService {
 	 * @throws NotFoundException the Version is gone or its Project folder is out of reach
 	 */
 	public function versionContext(string $uid, int $versionId): array {
-		$version = $this->versions->find($versionId);
-		if ($version === null) {
-			throw new NotFoundException('Version not found');
-		}
-		[$project, $folder] = $this->resolve($uid, $version->getProjectId());
-		$asset = $this->assets->find($version->getAssetId());
-		if ($asset === null) {
-			throw new NotFoundException('Asset not found');
-		}
+		[$version, $project, $folder] = $this->reachVersion($uid, $versionId);
+		$asset = $this->assets->find($version->getAssetId()) ?? throw new NotFoundException('Asset not found');
 		$stack = array_reverse($this->versions->findByAsset($asset->getId()));
 		$name = $this->stacks->nameOf($asset);
 		return [
@@ -451,10 +445,7 @@ class ProjectService {
 	 * @throws AccessDeniedException the folder is read-only for this user
 	 */
 	public function disableAsset(string $uid, int $assetId): void {
-		$asset = $this->assets->find($assetId);
-		if ($asset === null) {
-			throw new NotFoundException('Asset not found');
-		}
+		$asset = $this->assets->find($assetId) ?? throw new NotFoundException('Asset not found');
 		[$project, $folder] = $this->resolve($uid, $asset->getProjectId());
 		$this->assertWritable($folder);
 		foreach ($this->versions->findByAsset($assetId) as $version) {
@@ -498,21 +489,6 @@ class ProjectService {
 		}
 	}
 
-	/** The nearest Project at or above the file's folder, in this user's view */
-	private function findProjectForFile(Folder $userFolder, File $file): ?Project {
-		$top = rtrim($userFolder->getPath(), '/') . '/';
-		for ($node = $file->getParent(); $node instanceof Folder; $node = $node->getParent()) {
-			if (!str_starts_with(rtrim($node->getPath(), '/') . '/', $top)) {
-				return null;
-			}
-			$project = $this->projects->findByFolderId($node->getId());
-			if ($project !== null) {
-				return $project;
-			}
-		}
-		return null;
-	}
-
 	/**
 	 * The Project and its folder as this user sees it; the folder's
 	 * permissions are the Project's permissions (ADR 0002).
@@ -533,13 +509,13 @@ class ProjectService {
 		return [$project, $folder];
 	}
 
-	public function canWrite(Node $node): bool {
+	public static function canWrite(Node $node): bool {
 		return ($node->getPermissions() & Constants::PERMISSION_UPDATE) !== 0;
 	}
 
 	/** @throws AccessDeniedException the node is read-only for this user */
-	private function assertWritable(Node $node): void {
-		if (!$this->canWrite($node)) {
+	public static function assertWritable(Node $node): void {
+		if (!self::canWrite($node)) {
 			throw new AccessDeniedException('Write permission is required');
 		}
 	}
@@ -646,12 +622,7 @@ class ProjectService {
 
 	/** @return list<array<string, mixed>> the Assets with their Version Stacks, newest Version first */
 	private function assetTree(Project $project, Folder $folder, string $uid): array {
-		$versionsByAsset = [];
-		$versionIds = [];
-		foreach ($this->versions->findByProject($project->getId()) as $version) {
-			$versionsByAsset[$version->getAssetId()][] = $version;
-			$versionIds[] = $version->getId();
-		}
+		[$versionsByAsset, $versionIds] = $this->stacks($project);
 		$commentCounts = $this->comments->countByVersions($versionIds);
 		$approvalCounts = $this->approvals->countByVersions($versionIds);
 		$unseen = $this->comments->countUnseenByVersions($versionIds, $uid);
@@ -676,7 +647,6 @@ class ProjectService {
 					'state' => $version->getState(),
 					'name' => $version->getName(),
 					'mimeType' => $file?->getMimeType(),
-					'size' => $file?->getSize(),
 					'autoStacked' => (bool)$version->getAutoStacked(),
 					'comments' => $commentCounts[$version->getId()] ?? 0,
 					'unseen' => $unseen[$version->getId()] ?? 0,
@@ -707,6 +677,17 @@ class ProjectService {
 		return $result;
 	}
 
+	/** @return array{0: array<int, non-empty-list<Version>>, 1: list<int>} the Version Stacks by Asset id, newest Version first, and all their ids */
+	private function stacks(Project $project): array {
+		$versionsByAsset = [];
+		$versionIds = [];
+		foreach ($this->versions->findByProject($project->getId()) as $version) {
+			$versionsByAsset[$version->getAssetId()][] = $version;
+			$versionIds[] = $version->getId();
+		}
+		return [$versionsByAsset, $versionIds];
+	}
+
 	/**
 	 * A Project's state at a glance, for its tile in the Project list: its
 	 * Unseen Comments, what waits for changes, the next Due Date, the latest
@@ -715,17 +696,8 @@ class ProjectService {
 	 * @return array<string, mixed>
 	 */
 	private function activity(Project $project, string $uid): array {
-		$versionsByAsset = [];
-		$versionIds = [];
-		foreach ($this->versions->findByProject($project->getId()) as $version) {
-			$versionsByAsset[$version->getAssetId()][] = $version;
-			$versionIds[] = $version->getId();
-		}
-		$newest = [];
-		foreach ($versionsByAsset as $stack) {
-			usort($stack, static fn (Version $a, Version $b) => $b->getNumber() <=> $a->getNumber());
-			$newest[] = $stack[0];
-		}
+		[$versionsByAsset, $versionIds] = $this->stacks($project);
+		$newest = array_values(array_map(static fn (array $stack) => $stack[0], $versionsByAsset));
 		$approvals = $this->approvals->countByVersions(array_map(static fn (Version $version) => $version->getId(), $newest));
 		$dueDates = [];
 		foreach ($this->assets->findByProject($project->getId()) as $asset) {
