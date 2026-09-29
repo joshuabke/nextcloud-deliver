@@ -1,7 +1,5 @@
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-
-import './fullscreen.css'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 /**
  * Fullscreen for a player and everything on it: markers, Drawings and the
@@ -20,7 +18,6 @@ export function useFullscreen(root) {
 	const filling = ref(false)
 	const isMobile = useIsMobile()
 	const sideways = window.matchMedia('(orientation: landscape)')
-	watch(filling, (on) => document.body.classList.toggle('deliver-filling', on))
 
 	/**
 	 *
@@ -104,7 +101,6 @@ export function useFullscreen(root) {
 		window.addEventListener('keydown', onKey)
 	})
 	onBeforeUnmount(() => {
-		document.body.classList.remove('deliver-filling')
 		document.removeEventListener('fullscreenchange', onChange)
 		sideways.removeEventListener('change', onTurn)
 		window.removeEventListener('keydown', onKey)

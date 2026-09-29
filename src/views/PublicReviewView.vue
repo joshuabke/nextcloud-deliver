@@ -253,18 +253,6 @@ async function claim({ name, email, mail }) {
 </template>
 
 <style scoped>
-.deliver-public {
-	/* The public page renders on the guest layout, so the view brings its own surface,
-	   and leaves room for the guest layout's own footer */
-	box-sizing: border-box;
-	width: calc(100vw - 4 * var(--default-grid-baseline));
-	max-width: 1800px;
-	height: calc(100vh - 140px);
-	margin: calc(2 * var(--default-grid-baseline)) auto;
-	border-radius: var(--border-radius-large);
-	background: var(--color-main-background);
-	overflow: hidden;
-}
 
 .deliver-public__crumbs {
 	display: flex;
@@ -291,16 +279,5 @@ async function claim({ name, email, mail }) {
 	display: block;
 	user-select: all;
 	overflow-wrap: anywhere;
-}
-
-/* On a phone the review takes the whole window under Nextcloud's header */
-@media (max-width: 1023px) {
-	.deliver-public {
-		width: 100vw;
-		/* Nextcloud measures its floating footer on public pages; the review ends above it */
-		height: calc(100dvh - var(--header-height) - var(--footer-height, 0px) - 2 * var(--default-grid-baseline));
-		margin: 0;
-		border-radius: 0;
-	}
 }
 </style>
