@@ -1,20 +1,20 @@
 <script setup>
 import { t } from '@nextcloud/l10n'
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionInput from '@nextcloud/vue/components/NcActionInput'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { errorMessage, regenerateVersion, unstackVersion, updateVersion, uploadNextVersion } from '../api.js'
-import { uploadFolder } from '../lib/folders.js'
 import { previewUrl } from '../lib/preview.js'
 
 const props = defineProps({
 	/** The Version Stack of the Asset, newest first */
 	versions: { type: Array, required: true },
-	current: { type: Number, required: true },
 	assetId: { type: Number, required: true },
+	/** The WebDAV folder a dropped file goes to, next to the newest Version */
+	folderUrl: { type: String, default: null },
 	canWrite: { type: Boolean, default: false },
 })
 
@@ -23,9 +23,6 @@ const emit = defineEmits(['open', 'changed'])
 const busy = ref(false)
 const error = ref(null)
 const dragging = ref(false)
-
-/** Where a dropped file goes: the folder of the newest Version that still has a file */
-const folderUrl = computed(() => uploadFolder(props.versions))
 
 /**
  * @param {() => Promise<unknown>} action - what to run while the Stack is busy
@@ -71,10 +68,10 @@ async function renumber(version) {
 async function drop(event) {
 	dragging.value = false
 	const file = event.dataTransfer?.files?.[0]
-	if (!file || !folderUrl.value || !props.canWrite) {
+	if (!file || !props.folderUrl || !props.canWrite) {
 		return
 	}
-	await run(() => uploadNextVersion(folderUrl.value, file, props.assetId))
+	await run(() => uploadNextVersion(props.folderUrl, file, props.assetId))
 }
 </script>
 
@@ -93,8 +90,7 @@ async function drop(event) {
 			<li
 				v-for="version in versions"
 				:key="version.id"
-				class="deliver-stack__item"
-				:class="{ 'deliver-stack__item--current': version.id === current }">
+				class="deliver-stack__item">
 				<div class="deliver-stack__row">
 					<button type="button" class="deliver-stack__open" @click="emit('open', version.id)">
 						<img
@@ -163,11 +159,6 @@ async function drop(event) {
 	padding: calc(2 * var(--default-grid-baseline));
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius-large);
-}
-
-.deliver-stack__item--current {
-	border-color: var(--color-primary-element);
-	box-shadow: 0 0 0 1px var(--color-primary-element);
 }
 
 .deliver-stack__row {

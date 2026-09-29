@@ -126,6 +126,11 @@ test.describe('Review view', () => {
 		await expect(page.locator('.deliver-card', { hasText: 'third.webm' })).toBeVisible()
 		await expect(page.locator('.deliver-project .notecard')).toContainText('Only video, audio and image files')
 		await expect(page.locator('.deliver-card', { hasText: 'notes' })).toHaveCount(0)
+
+		// A Version Stack is managed from its card, not in the Review view
+		await second.click({ button: 'right' })
+		await page.getByRole('menuitem', { name: 'Manage Versions' }).click()
+		await expect(page.getByRole('dialog', { name: 'Versions of second' })).toContainText('Version 1')
 	})
 
 	test('comments on a Frame and on a Range, resolves and replies', async () => {
