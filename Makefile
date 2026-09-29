@@ -40,7 +40,7 @@ build:
 
 # PHP dev dependencies (PHPUnit) without a local PHP: vendor/ is gitignored
 composer:
-	docker run --rm -u $(shell id -u):$(shell id -g) -v $(CURDIR):/app -w /app composer:2 install --ignore-platform-req=php
+	docker run --rm -u $(shell id -u):$(shell id -g) -v $(CURDIR):/app -w /app composer:2 install
 
 # Coding standard and Psalm, as CI runs them, in a throwaway PHP container
 PHP = docker run --rm -u $(shell id -u):$(shell id -g) -v $(CURDIR):/app -w /app php:8.3-cli php -d memory_limit=2G
