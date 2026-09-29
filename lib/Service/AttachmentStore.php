@@ -78,13 +78,6 @@ class AttachmentStore {
 	private function freeName(Folder $folder, string $name): string {
 		$name = trim(str_replace(['/', '\\', "\0"], '_', $name), " \t\n\r.");
 		// Leading dots would hide the file; very long names break file systems
-		$name = mb_substr($name, -200) ?: 'attachment';
-		$candidate = $name;
-		$dot = strrpos($name, '.');
-		[$base, $ending] = $dot > 0 ? [substr($name, 0, $dot), substr($name, $dot)] : [$name, ''];
-		for ($n = 2; $folder->nodeExists($candidate); $n++) {
-			$candidate = "$base ($n)$ending";
-		}
-		return $candidate;
+		return $folder->getNonExistingName(mb_substr($name, -200) ?: 'attachment');
 	}
 }

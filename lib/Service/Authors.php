@@ -22,9 +22,9 @@ class Authors {
 	public function names(array $uids): array {
 		$names = [];
 		foreach ($uids as $uid) {
-			$user = $this->users->get($uid);
-			if ($user !== null) {
-				$names[$uid] = $user->getDisplayName();
+			$name = $this->users->getDisplayName($uid);
+			if ($name !== null) {
+				$names[$uid] = $name;
 			}
 		}
 		return $names;
@@ -36,6 +36,6 @@ class Authors {
 			return ['type' => 'reviewer', 'id' => $reviewerId, 'name' => $this->reviewers->find($reviewerId)?->getName() ?? ''];
 		}
 		$uid = (string)$uid;
-		return ['type' => 'user', 'id' => $uid, 'name' => $this->users->get($uid)?->getDisplayName() ?? $uid];
+		return ['type' => 'user', 'id' => $uid, 'name' => $this->users->getDisplayName($uid) ?? $uid];
 	}
 }

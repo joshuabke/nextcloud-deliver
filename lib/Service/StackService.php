@@ -62,10 +62,7 @@ class StackService {
 		}
 		$suggestion = VersionNaming::parse($file->getName());
 		$target = $suggestion === null ? null : $this->onlyCandidate($project, $file, $suggestion['base']);
-		if ($target === null) {
-			return $this->register($project, $file, $suggestion['number'] ?? 1);
-		}
-		return $this->register($project, $file, $suggestion['number'], $target, true);
+		return $this->register($project, $file, $suggestion['number'] ?? 1, $target);
 	}
 
 	/**
@@ -94,10 +91,12 @@ class StackService {
 	}
 
 	/**
-	 * Inserts the Version, and a new Asset for it unless one is given. When a
-	 * concurrent request registered the same file first, that Version wins.
+	 * Inserts the Version, and a new Asset for it unless one is given: then it
+	 * is stacked automatically. When a concurrent request registered the same
+	 * file first, that Version wins.
 	 */
-	private function register(Project $project, File $file, int $number, ?Asset $asset = null, bool $stacked = false): Version {
+	private function register(Project $project, File $file, int $number, ?Asset $asset): Version {
+		$stacked = $asset !== null;
 		$this->db->beginTransaction();
 		try {
 			if ($asset === null) {

@@ -39,7 +39,7 @@ final class Viewer {
 	 * not write. Where the link takes Comments, the Review view asks for the
 	 * name instead of saying that commenting is off.
 	 */
-	public static function unnamed(bool $shareTakesComments = false, bool $canCommentOnOlder = false): self {
+	public static function unnamed(bool $shareTakesComments, bool $canCommentOnOlder): self {
 		return new self(null, null, false, false, $canCommentOnOlder, $shareTakesComments);
 	}
 
