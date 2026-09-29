@@ -211,13 +211,6 @@ watch(source, () => {
 	unplayable.value = false
 })
 
-/** Switches between the original and the Proxy at the same Frame */
-function toggleSource() {
-	resumeAt = frame.value
-	pause()
-	useProxy.value = !useProxy.value
-}
-
 /**
  * @return {Promise<object|null>} the tile grid of the Thumbnail Strip, for hover previews
  */
@@ -701,18 +694,32 @@ const sources = computed(() => [
 	{ proxy: false, label: t('deliver', 'Original'), resolution: props.version.resolution },
 	{ proxy: true, label: t('deliver', 'Proxy'), resolution: props.version.derived?.proxy?.resolution },
 ])
+const currentSource = computed(() => sources.value.find((each) => each.proxy === useProxy.value))
 
 /**
+ * @param {{label: string, resolution: ?number}} each - one of the sources
+ * @return {string} its name in the quality menu, with its height when known
+ */
+function sourceLabel(each) {
+	return each.resolution ? each.label + ' · ' + each.resolution + 'p' : each.label
+}
+
+/**
+ * Switches between the original and the Proxy at the same Frame
+ *
  * @param {boolean} wanted - whether the Proxy should play
  */
 function pickSource(wanted) {
 	if (wanted !== useProxy.value) {
-		toggleSource()
+		resumeAt = frame.value
+		pause()
+		useProxy.value = wanted
 	}
 }
 
 /** Loops the Range when one is set, else the whole Version */
 const loopsWhole = computed(() => loop.value && outPoint.value === null)
+const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') : t('deliver', 'Loop the Range'))
 </script>
 
 <template>
@@ -952,7 +959,7 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 						<NcIconSvgWrapper :svg="moreIcon" />
 					</template>
 					<NcActionButton :modelValue="loop" type="checkbox" @click="loop = !loop">
-						{{ range?.outFrame != null ? t('deliver', 'Loop the Range') : t('deliver', 'Loop') }}
+						{{ loopLabel }}
 					</NcActionButton>
 					<NcActionSeparator />
 					<NcActionButton
@@ -973,7 +980,7 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 							type="radio"
 							closeAfterClick
 							@click="pickSource(each.proxy)">
-							{{ each.resolution ? each.label + ' · ' + each.resolution + 'p' : each.label }}
+							{{ sourceLabel(each) }}
 						</NcActionButton>
 					</template>
 					<NcActionSeparator />
@@ -1013,8 +1020,8 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 				<NcButton
 					variant="tertiary"
 					:pressed="loop"
-					:aria-label="range?.outFrame != null ? t('deliver', 'Loop the Range') : t('deliver', 'Loop')"
-					:title="range?.outFrame != null ? t('deliver', 'Loop the Range') : t('deliver', 'Loop')"
+					:aria-label="loopLabel"
+					:title="loopLabel"
 					@click="loop = !loop">
 					<template #icon>
 						<NcIconSvgWrapper :svg="loopIcon" />
@@ -1074,7 +1081,7 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 					v-if="original && proxy"
 					variant="tertiary"
 					class="deliver-player__quality"
-					:menuName="(useProxy ? version.derived.proxy.resolution : version.resolution) ? (useProxy ? version.derived.proxy.resolution : version.resolution) + 'p' : t('deliver', 'Original')"
+					:menuName="currentSource.resolution ? currentSource.resolution + 'p' : currentSource.label"
 					:aria-label="t('deliver', 'Quality')">
 					<template #icon>
 						<NcIconSvgWrapper :svg="menuIcon" :size="18" />
@@ -1086,7 +1093,7 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 						type="radio"
 						closeAfterClick
 						@click="pickSource(each.proxy)">
-						{{ each.resolution ? each.label + ' · ' + each.resolution + 'p' : each.label }}
+						{{ sourceLabel(each) }}
 					</NcActionButton>
 				</NcActions>
 				<NcButton
