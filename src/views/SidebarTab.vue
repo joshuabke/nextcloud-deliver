@@ -20,7 +20,7 @@ import {
 	removeProject,
 	updateProject,
 } from '../api.js'
-import { confirmRemoval } from '../confirm.js'
+import { confirmProjectRemoval, confirmRemoval } from '../confirm.js'
 
 // The Files app also sets folder, view and active on the web component; only node is used
 const props = defineProps({
@@ -147,12 +147,7 @@ function replaceShare(updated) {
 
 /** Removes the Project with all its review data (story 9) */
 async function remove() {
-	const confirmed = await confirmRemoval(
-		t('deliver', 'Remove Project?'),
-		t('deliver', 'Its Comments and Version Stacks are deleted. The files stay untouched.'),
-		t('deliver', 'Remove Project'),
-	)
-	if (confirmed) {
+	if (await confirmProjectRemoval()) {
 		await run(async () => {
 			await removeProject(project.value.id)
 			project.value = null

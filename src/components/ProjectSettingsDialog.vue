@@ -8,7 +8,7 @@ import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import ProjectSettingsFields from './ProjectSettingsFields.vue'
 import { errorMessage } from '../api.js'
-import { confirmRemoval } from '../confirm.js'
+import { confirmProjectRemoval } from '../confirm.js'
 import { projectDir } from '../lib/folders.js'
 import { useProjectsStore } from '../store/projects.js'
 
@@ -48,12 +48,7 @@ function save(fields) {
 
 /** Removes the Project with all its review data (story 9) */
 async function remove() {
-	const confirmed = await confirmRemoval(
-		t('deliver', 'Remove Project?'),
-		t('deliver', 'Its Comments and Version Stacks are deleted. The files stay untouched.'),
-		t('deliver', 'Remove Project'),
-	)
-	if (confirmed) {
+	if (await confirmProjectRemoval()) {
 		await run(async () => {
 			await store.remove(props.project.id)
 			emit('removed')

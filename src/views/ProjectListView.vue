@@ -23,7 +23,7 @@ import ProjectCard from '../components/ProjectCard.vue'
 import ProjectSettingsDialog from '../components/ProjectSettingsDialog.vue'
 import { errorMessage } from '../api.js'
 import { useQuery } from '../composables/query.js'
-import { confirmRemoval } from '../confirm.js'
+import { confirmProjectRemoval } from '../confirm.js'
 import { FILTER_LABELS, PROJECT_FILTERS, projectPasses, SORT_OPTIONS, sortProjects, SORTS } from '../lib/filters.js'
 import { projectDir } from '../lib/folders.js'
 import { useProjectsStore } from '../store/projects.js'
@@ -91,12 +91,7 @@ async function save(project, fields) {
  * @param {object} project - the Project to remove
  */
 async function remove(project) {
-	const confirmed = await confirmRemoval(
-		t('deliver', 'Remove Project?'),
-		t('deliver', 'Its Comments and Version Stacks are deleted. The files stay untouched.'),
-		t('deliver', 'Remove Project'),
-	)
-	if (confirmed) {
+	if (await confirmProjectRemoval()) {
 		try {
 			await store.remove(project.id)
 		} catch (e) {
