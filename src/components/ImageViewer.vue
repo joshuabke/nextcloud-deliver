@@ -2,11 +2,14 @@
 import fullscreenExitIcon from '@mdi/svg/svg/fullscreen-exit.svg?raw'
 import fullscreenIcon from '@mdi/svg/svg/fullscreen.svg?raw'
 import { t } from '@nextcloud/l10n'
+import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DrawingLayer from './DrawingLayer.vue'
 import DrawToolbar from './DrawToolbar.vue'
+import { useFullscreen } from '../composables/fullscreen.js'
+import { useGestures } from '../composables/gestures.js'
 import { COLORS } from '../lib/drawing.js'
 import { actionFor } from '../lib/hotkeys.js'
 import { watermarkTile } from '../lib/watermark.js'
@@ -24,11 +27,24 @@ const props = defineProps({
 	drawing: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['comment', 'jump', 'update:drawing'])
+const emit = defineEmits(['comment', 'jump', 'swipe', 'update:drawing'])
 
 const root = ref(null)
 const picture = ref({ width: 0, height: 0 })
-const fullscreen = ref(false)
+const isMobile = useIsMobile()
+const { fullscreen, filling, toggle: toggleFullscreen } = useFullscreen(root)
+/** On a phone: tap for fullscreen, two fingers to zoom, a swipe to the next Asset (story 104) */
+const { zoom, reset: resetZoom, listeners: gestures } = useGestures({
+	tap: () => {
+		if (isMobile.value) {
+			toggleFullscreen()
+		}
+	},
+	doubleTap: () => {},
+	holdStart: () => {},
+	holdEnd: () => {},
+	swipe: (step) => emit('swipe', step),
+}, computed(() => !props.drawing))
 const tool = ref('pen')
 const color = ref(COLORS[0])
 /** The Comment whose Drawing shows; a still has no Frame to pick it by */
@@ -46,6 +62,7 @@ const shownDrawings = computed(() => {
 
 watch(() => props.version.id, () => {
 	focused.value = null
+	resetZoom()
 })
 
 defineExpose({
@@ -68,20 +85,6 @@ function onLoad(event) {
 	picture.value = { width: event.target.naturalWidth, height: event.target.naturalHeight }
 }
 
-/** The whole viewer goes fullscreen, drawings included */
-function toggleFullscreen() {
-	if (fullscreen.value) {
-		document.exitFullscreen()
-	} else {
-		root.value?.requestFullscreen()
-	}
-}
-
-/** Follows the browser's own fullscreen state, which Escape also leaves */
-function onFullscreenChange() {
-	fullscreen.value = document.fullscreenElement === root.value
-}
-
 /**
  * C comments on the still, as it does on a Frame
  *
@@ -96,31 +99,33 @@ function onKey(event) {
 
 onMounted(() => {
 	window.addEventListener('keydown', onKey)
-	document.addEventListener('fullscreenchange', onFullscreenChange)
 })
 onBeforeUnmount(() => {
 	window.removeEventListener('keydown', onKey)
-	document.removeEventListener('fullscreenchange', onFullscreenChange)
 })
 </script>
 
 <template>
-	<div ref="root" class="deliver-still">
-		<div class="deliver-still__stage">
-			<img
-				v-if="version.url"
-				class="deliver-still__picture"
-				:src="version.url"
-				:alt="version.name"
-				@load="onLoad">
-			<DrawingLayer
-				v-model:draft="draft"
-				:pictureWidth="picture.width"
-				:pictureHeight="picture.height"
-				:shown="shownDrawings"
-				:editing="drawing"
-				:tool="tool"
-				:color="color" />
+	<div ref="root" class="deliver-still" :class="{ 'deliver-still--filling': filling }">
+		<div class="deliver-still__stage" v-on="gestures">
+			<div
+				class="deliver-still__zoom"
+				:style="zoom.scale > 1 ? { transform: `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})` } : null">
+				<img
+					v-if="version.url"
+					class="deliver-still__picture"
+					:src="version.url"
+					:alt="version.name"
+					@load="onLoad">
+				<DrawingLayer
+					v-model:draft="draft"
+					:pictureWidth="picture.width"
+					:pictureHeight="picture.height"
+					:shown="shownDrawings"
+					:editing="drawing"
+					:tool="tool"
+					:color="color" />
+			</div>
 			<div v-if="watermark" class="deliver-still__watermark" :style="{ backgroundImage: watermarkTile(watermark) }" />
 			<DrawToolbar
 				v-if="drawing"
@@ -156,7 +161,22 @@ onBeforeUnmount(() => {
 	position: relative;
 	flex: 1;
 	min-height: 160px;
+	overflow: hidden;
 	background: #000;
+	touch-action: none;
+}
+
+.deliver-still__zoom {
+	position: absolute;
+	inset: 0;
+}
+
+/* Fullscreen without the browser's help: the viewer covers the window */
+.deliver-still--filling {
+	position: fixed;
+	inset: 0;
+	z-index: 10000;
+	height: 100dvh;
 }
 
 .deliver-still__picture {

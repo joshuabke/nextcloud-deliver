@@ -322,7 +322,8 @@ async function upload(event) {
 			:comments="store.threads"
 			:canComment="store.canComment === true"
 			@comment="pin($event); tab = 'comments'; panelOpen = true"
-			@jump="jump" />
+			@jump="jump"
+			@swipe="step" />
 		<VideoPlayer
 			v-else-if="version"
 			ref="player"
@@ -334,7 +335,8 @@ async function upload(event) {
 			:clock="clock"
 			:canComment="store.canComment === true"
 			@comment="pin($event); tab = 'comments'; panelOpen = true"
-			@jump="jump" />
+			@jump="jump"
+			@swipe="step" />
 
 		<template #panel>
 			<PanelTabs v-model="tab" :tabs="tabs" />

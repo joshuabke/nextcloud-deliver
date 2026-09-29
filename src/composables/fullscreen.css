@@ -1,0 +1,15 @@
+/*
+ * Nextcloud blurs behind its content area, and a backdrop filter makes that
+ * area the frame for fixed elements: a player filling the window would fill
+ * only the content area. While one fills the window, the blur goes.
+ */
+body.deliver-filling #content-vue,
+body.deliver-filling #content {
+	backdrop-filter: none !important;
+}
+
+/* The player sits in the content area's stacking; Nextcloud's header and public footer would stay on top */
+body.deliver-filling #header,
+body.deliver-filling footer {
+	display: none !important;
+}
