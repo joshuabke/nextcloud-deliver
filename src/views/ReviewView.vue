@@ -24,14 +24,12 @@ import CommentPanel from '../components/CommentPanel.vue'
 import DueDate from '../components/DueDate.vue'
 import ExportMenu from '../components/ExportMenu.vue'
 import ImageViewer from '../components/ImageViewer.vue'
-import PanelTabs from '../components/PanelTabs.vue'
 import ReviewLayout from '../components/ReviewLayout.vue'
 import VersionPicker from '../components/VersionPicker.vue'
-import VersionStack from '../components/VersionStack.vue'
 import VideoPlayer from '../components/VideoPlayer.vue'
 import { errorMessage, getVersion, listMembers, updateAsset, uploadNextVersion } from '../api.js'
 import { useLiveUpdates } from '../composables/live.js'
-import { sheet, usePanelOpen } from '../composables/panel.js'
+import { usePanelOpen } from '../composables/panel.js'
 import { useReview } from '../composables/review.js'
 import { filesDir, groupByFolder, uploadFolder } from '../lib/folders.js'
 import { useCommentsStore } from '../store/comments.js'
@@ -56,20 +54,8 @@ const fileInput = ref(null)
 const dueInput = ref(null)
 /** Who can be mentioned in this Project */
 const members = ref([])
-/** The right panel shows the Comments or the Version Stack */
-const tab = ref('comments')
-// On an upright phone the list pulled down leaves only the field to write in, so the Comments are the tab that comes back up
-watch(sheet.up, (pulled) => {
-	if (!pulled) {
-		tab.value = 'comments'
-	}
-})
 
 const version = computed(() => context.value?.versions.find((each) => each.id === props.id) ?? null)
-const tabs = computed(() => [
-	{ id: 'comments', label: t('deliver', 'Comments') },
-	{ id: 'versions', label: t('deliver', 'Versions ({count})', { count: context.value?.versions.length ?? 0 }) },
-])
 
 /** The Project's Assets in the order the Project view shows them, to step through */
 const assets = computed(() => {
@@ -327,7 +313,7 @@ async function upload(event) {
 			:version="version"
 			:comments="store.threads"
 			:canComment="store.canComment === true"
-			@comment="pin($event); tab = 'comments'; panelOpen = true"
+			@comment="pin($event); panelOpen = true"
 			@jump="jump"
 			@swipe="step" />
 		<VideoPlayer
@@ -345,9 +331,7 @@ async function upload(event) {
 			@swipe="step" />
 
 		<template #panel>
-			<PanelTabs v-model="tab" :tabs="tabs" />
 			<CommentPanel
-				v-show="tab === 'comments'"
 				ref="panel"
 				:clock="clock"
 				:anchor="anchor"
@@ -371,15 +355,6 @@ async function upload(event) {
 						:still="clock.still" />
 				</template>
 			</CommentPanel>
-			<VersionStack
-				v-if="tab === 'versions'"
-				class="deliver-review__stack"
-				:versions="context.versions"
-				:current="id"
-				:assetId="context.asset.id"
-				:canWrite="context.project.canWrite && !isMobile"
-				@open="$router.push(`/versions/${$event}`)"
-				@changed="reload" />
 		</template>
 	</ReviewLayout>
 </template>
@@ -444,10 +419,4 @@ async function upload(event) {
 	margin: calc(var(--default-clickable-area) + 4 * var(--default-grid-baseline)) calc(4 * var(--default-grid-baseline));
 }
 
-.deliver-review__stack {
-	flex: 1;
-	min-height: 0;
-	padding: calc(3 * var(--default-grid-baseline));
-	overflow-y: auto;
-}
 </style>

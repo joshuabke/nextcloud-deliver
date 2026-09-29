@@ -5,6 +5,7 @@ import compareIcon from '@mdi/svg/svg/compare.svg?raw'
 import removeIcon from '@mdi/svg/svg/delete-outline.svg?raw'
 import filesIcon from '@mdi/svg/svg/folder-eye-outline.svg?raw'
 import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
+import stackIcon from '@mdi/svg/svg/layers-outline.svg?raw'
 import newVersionIcon from '@mdi/svg/svg/layers-plus.svg?raw'
 import searchIcon from '@mdi/svg/svg/magnify.svg?raw'
 import openIcon from '@mdi/svg/svg/open-in-app.svg?raw'
@@ -15,6 +16,7 @@ import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
@@ -24,6 +26,7 @@ import AssetCard from '../components/AssetCard.vue'
 import ContextMenu from '../components/ContextMenu.vue'
 import FilterBar from '../components/FilterBar.vue'
 import ProjectSettingsDialog from '../components/ProjectSettingsDialog.vue'
+import VersionStack from '../components/VersionStack.vue'
 import { disableAsset, enableFile, errorMessage, stackVersion, uploadNextVersion, uploadVersion } from '../api.js'
 import { useQuery } from '../composables/query.js'
 import { confirmRemoval } from '../confirm.js'
@@ -51,6 +54,9 @@ const menu = ref(null)
 /** The Asset a new Version is picked for */
 const stackOn = ref(null)
 const project = computed(() => store.details[props.id])
+/** The Asset whose Version Stack is being managed; managing is the Project view's, not the Review view's */
+const managing = ref(null)
+const managed = computed(() => project.value?.assets.find((asset) => asset.id === managing.value) ?? null)
 
 watch(() => props.id, async (id) => {
 	error.value = null
@@ -167,6 +173,7 @@ function openMenu(event, asset) {
 			{ label: t('deliver', 'Open'), icon: openIcon, action: () => router.push(`/versions/${newest.id}`) },
 			previous && { label: t('deliver', 'Compare with the Version before'), icon: compareIcon, action: () => router.push(`/compare/${previous.id}/${newest.id}`) },
 			project.value.canWrite && { label: t('deliver', 'Upload a new Version'), icon: newVersionIcon, action: () => pickVersion(asset) },
+			project.value.canWrite && !isMobile.value && { label: t('deliver', 'Manage Versions'), icon: stackIcon, action: () => { managing.value = asset.id } },
 			{
 				label: t('deliver', 'Show in Files'),
 				icon: filesIcon,
@@ -370,7 +377,9 @@ function dropped(event) {
 						:key="asset.id"
 						:asset="asset"
 						:candidates="suggestions.get(asset.id) ?? []"
+						:canWrite="project.canWrite"
 						@stack="accept"
+						@versions="managing = $event.id"
 						@contextmenu.prevent="openMenu($event, asset)"
 						@menu="openMenu($event, asset)" />
 				</ul>
@@ -385,6 +394,19 @@ function dropped(event) {
 				v-if="menu"
 				v-bind="menu"
 				@close="menu = null" />
+			<NcDialog
+				v-if="managed"
+				:name="t('deliver', 'Versions of {asset}', { asset: managed.name })"
+				size="normal"
+				@closing="managing = null">
+				<VersionStack
+					:versions="managed.versions"
+					:assetId="managed.id"
+					:folderUrl="davFolder(managed.path)"
+					canWrite
+					@open="router.push(`/versions/${$event}`)"
+					@changed="store.fetch(props.id)" />
+			</NcDialog>
 			<ProjectSettingsDialog
 				v-if="settingsOpen"
 				:project="project"

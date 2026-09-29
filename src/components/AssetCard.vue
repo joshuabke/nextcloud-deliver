@@ -19,9 +19,11 @@ const props = defineProps({
 	asset: { type: Object, required: true },
 	/** The Assets its filename could join (story 14) */
 	candidates: { type: Array, default: () => [] },
+	/** Whether the Stack may be managed here */
+	canWrite: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['stack', 'menu'])
+const emit = defineEmits(['stack', 'menu', 'versions'])
 
 /** A phone has no right click: a button opens the menu, and so does a long press (story 109) */
 const isMobile = useIsMobile()
@@ -36,6 +38,8 @@ function menuFromButton(event) {
 }
 
 const newest = computed(() => props.asset.versions[0])
+/** A Version stacked by its name waits here until a Member keeps or undoes it (story 13) */
+const autoStacked = computed(() => props.canWrite && !isMobile.value && props.asset.versions.some((version) => version.autoStacked))
 /** Comments by others on any Version of the Stack that I have not had on screen */
 const unseen = computed(() => props.asset.versions.reduce((sum, version) => sum + version.unseen, 0))
 const audio = computed(() => newest.value.mimeType?.startsWith('audio/'))
@@ -114,6 +118,12 @@ const status = computed(() => {
 				<NcIconSvgWrapper :svg="moreIcon" />
 			</template>
 		</NcButton>
+		<div v-if="autoStacked" class="deliver-card__suggestion">
+			<span>{{ t('deliver', 'Stacked automatically, going by its name') }}</span>
+			<NcButton variant="secondary" @click="emit('versions', asset)">
+				{{ t('deliver', 'Manage Versions') }}
+			</NcButton>
+		</div>
 		<div v-if="candidates.length" class="deliver-card__suggestion">
 			<span>{{ t('deliver', 'Stack as a Version of:') }}</span>
 			<NcButton

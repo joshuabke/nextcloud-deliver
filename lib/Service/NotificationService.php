@@ -142,6 +142,7 @@ class NotificationService {
 			->setObject($objectType, $objectId)
 			->setSubject($subject, $parameters + [
 				'versionId' => (string)$version->getId(),
+				'projectId' => (string)$version->getProjectId(),
 				'number' => (string)$version->getNumber(),
 				'asset' => $asset === null ? $version->getName() : ($asset->getNameOverride() ?? VersionNaming::assetName($version->getName())),
 			]);

@@ -55,7 +55,10 @@ class Notifier implements INotifier {
 		if (($p['body'] ?? '') !== '') {
 			$notification->setParsedMessage($p['body']);
 		}
-		$notification->setLink($this->urls->linkToRouteAbsolute('deliver.page.index') . 'versions/' . $p['versionId']);
+		// An automatic stack is kept or undone where Version Stacks are managed: in the Project view
+		$notification->setLink($this->urls->linkToRouteAbsolute('deliver.page.index') . ($notification->getSubject() === NotificationService::AUTO_STACK
+			? 'projects/' . $p['projectId']
+			: 'versions/' . $p['versionId']));
 		$notification->setIcon($this->urls->getAbsoluteURL($this->urls->imagePath(Application::APP_ID, 'app-dark.svg')));
 		return $notification;
 	}
