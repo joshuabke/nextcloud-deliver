@@ -2,13 +2,16 @@
 import changesIcon from '@mdi/svg/svg/alert-circle-outline.svg?raw'
 import approvedIcon from '@mdi/svg/svg/check-decagram.svg?raw'
 import commentIcon from '@mdi/svg/svg/comment-outline.svg?raw'
+import moreIcon from '@mdi/svg/svg/dots-horizontal.svg?raw'
 import assetIcon from '@mdi/svg/svg/filmstrip.svg?raw'
 import audioIcon from '@mdi/svg/svg/waveform.svg?raw'
 import { n, t } from '@nextcloud/l10n'
+import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DueDate from './DueDate.vue'
+import { useLongPress } from '../composables/longpress.js'
 import { previewUrl } from '../lib/preview.js'
 
 const props = defineProps({
@@ -18,7 +21,19 @@ const props = defineProps({
 	candidates: { type: Array, default: () => [] },
 })
 
-const emit = defineEmits(['stack'])
+const emit = defineEmits(['stack', 'menu'])
+
+/** A phone has no right click: a button opens the menu, and so does a long press (story 109) */
+const isMobile = useIsMobile()
+const press = useLongPress((where) => emit('menu', where))
+
+/**
+ * @param {MouseEvent} event - the tap on the menu button
+ */
+function menuFromButton(event) {
+	const box = event.currentTarget.getBoundingClientRect()
+	emit('menu', { clientX: box.left, clientY: box.bottom })
+}
 
 const newest = computed(() => props.asset.versions[0])
 /** Comments by others on any Version of the Stack that I have not had on screen */
@@ -51,7 +66,7 @@ const status = computed(() => {
 </script>
 
 <template>
-	<li class="deliver-card">
+	<li class="deliver-card" v-on="press">
 		<RouterLink class="deliver-card__link" :to="`/versions/${newest.id}`">
 			<div class="deliver-card__still">
 				<img
@@ -89,6 +104,16 @@ const status = computed(() => {
 			</div>
 			<DueDate v-if="asset.dueDate" class="deliver-card__due" :modelValue="asset.dueDate" />
 		</RouterLink>
+		<NcButton
+			v-if="isMobile"
+			class="deliver-card__more"
+			variant="tertiary"
+			:aria-label="t('deliver', 'Actions for {name}', { name: asset.name })"
+			@click="menuFromButton">
+			<template #icon>
+				<NcIconSvgWrapper :svg="moreIcon" />
+			</template>
+		</NcButton>
 		<div v-if="candidates.length" class="deliver-card__suggestion">
 			<span>{{ t('deliver', 'Stack as a Version of:') }}</span>
 			<NcButton
@@ -105,13 +130,24 @@ const status = computed(() => {
 
 <style scoped>
 .deliver-card {
+	position: relative;
+	/* The menu button places itself by the card's width, under the 16:9 still */
+	container-type: inline-size;
 	display: flex;
 	flex-direction: column;
 	gap: calc(2 * var(--default-grid-baseline));
 	min-width: 0;
 }
 
+/* Beside the name, outside the link: below the still, which is 16:9 of the card less its padding */
+.deliver-card__more {
+	position: absolute !important;
+	top: calc(8px + (100cqw - 16px) * 9 / 16 + 6px);
+	inset-inline-end: 0;
+}
+
 .deliver-card__link {
+	-webkit-touch-callout: none;
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
