@@ -229,7 +229,7 @@ test.describe('Review view', () => {
 
 		// An attached picture shows under its Comment (story 92)
 		const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64')
-		await page.locator('.deliver-comments__actions input[type=file]').setInputFiles({ name: 'reference.png', mimeType: 'image/png', buffer: pixel })
+		await page.locator('.deliver-comments__form input[type=file]').setInputFiles({ name: 'reference.png', mimeType: 'image/png', buffer: pixel })
 		await expect(page.locator('.deliver-comments__files li')).toHaveText('reference.png')
 		await page.locator('#deliver-comment-body').fill('like this')
 		await page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
@@ -317,7 +317,8 @@ test.describe('Review view', () => {
 		await page.waitForTimeout(700)
 		await page.touchscreen.tap(stage.x + stage.width / 2, right.y)
 		await expect(page.locator('.deliver-player--fullscreen')).toHaveCount(1)
-		await page.getByRole('button', { name: 'Leave fullscreen' }).tap()
+		await page.waitForTimeout(700)
+		await page.touchscreen.tap(stage.x + stage.width / 2, right.y)
 		await expect(page.locator('.deliver-player--fullscreen')).toHaveCount(0)
 
 		// Sideways, the picture fills the window and the list opens beside it
@@ -342,11 +343,15 @@ test.describe('Review view', () => {
 		await reviewer.locator('#deliver-reviewer-name').fill('Pia')
 		await reviewer.getByRole('button', { name: 'Start reviewing' }).tap()
 		await expect(reviewer.locator('.deliver-comments__gate')).toHaveCount(0)
-		await reviewer.getByRole('button', { name: 'Start a Range here' }).tap()
+		// The composer's tools sit in its menu
+		const options = reviewer.getByRole('button', { name: 'Comment options' })
+		await options.tap()
+		await reviewer.getByRole('menuitem', { name: 'Start a Range here' }).tap()
 		for (let i = 0; i < 3; i++) {
 			await reviewer.getByRole('button', { name: 'One Frame forward' }).tap()
 		}
-		await reviewer.getByRole('button', { name: 'End the Range here' }).tap()
+		await options.tap()
+		await reviewer.getByRole('menuitem', { name: 'End the Range here' }).tap()
 		await expect(reviewer.locator('.deliver-comments__anchor')).toContainText('–')
 		await reviewer.locator('#deliver-comment-body').fill('on the phone')
 		await reviewer.getByRole('button', { name: 'Send (Enter)' }).tap()
@@ -354,6 +359,12 @@ test.describe('Review view', () => {
 		// A tap on its marker opens the Comment on the picture
 		await reviewer.locator('.deliver-player__marker[aria-label^="Pia"]').tap()
 		await expect(reviewer.locator('.deliver-player__peek--tapped')).toContainText('on the phone')
+		// A tap on the picture then only closes it
+		await reviewer.waitForTimeout(700)
+		await reviewer.locator('.deliver-player__stage').tap({ position: { x: 40, y: 40 } })
+		await expect(reviewer.locator('.deliver-player__peek')).toHaveCount(0)
+		await reviewer.waitForTimeout(700)
+		await expect(reviewer.locator('.deliver-player--fullscreen')).toHaveCount(0)
 		await guest.close()
 	})
 

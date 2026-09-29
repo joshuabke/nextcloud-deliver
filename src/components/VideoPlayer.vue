@@ -26,8 +26,8 @@ import DrawingLayer from './DrawingLayer.vue'
 import DrawToolbar from './DrawToolbar.vue'
 import { useFullscreen } from '../composables/fullscreen.js'
 import { useGestures } from '../composables/gestures.js'
-import { landscape } from '../composables/panel.js'
 import { COLORS, drawingsAt } from '../lib/drawing.js'
+import { DOUBLE_TAP_MS } from '../lib/gestures.js'
 import { actionFor } from '../lib/hotkeys.js'
 import { formatAt, fpsValue, frameToTime, MODES, timeToFrame } from '../lib/timecode.js'
 import { watermarkTile } from '../lib/watermark.js'
@@ -149,8 +149,16 @@ const JUMP_SECONDS = 5
 
 /** Touch on the picture (story 104); drawing takes the fingers for itself */
 const { zoom, touched, reset: resetZoom, listeners: gestures } = useGestures({
-	// On an upright phone a tap goes fullscreen, as in the Frame.io app; there, and sideways, it plays and pauses
-	tap: () => (fullscreen.value || !isMobile.value || landscape.value ? playPause() : toggleFullscreen()),
+	// A card opened from a marker only closes; otherwise on a phone a tap goes in and out of fullscreen, as in the Frame.io app
+	tap: () => {
+		if (peek.value?.tapped) {
+			peek.value = null
+		} else if (isMobile.value) {
+			toggleFullscreen()
+		} else {
+			playPause()
+		}
+	},
 	doubleTap: (side) => {
 		if (side === 0) {
 			return
@@ -389,16 +397,24 @@ function pressMarker(event) {
 	tappedMarker = event.pointerType !== 'mouse'
 }
 
+/** The last tap on a marker, to tell a double tap */
+let lastTap = { id: null, at: 0 }
+
 /**
- * A marker pressed: to its Frame, and after a tap the card stays open to be
- * read, also in fullscreen, until it is tapped away or playback starts
+ * A marker clicked goes to its Frame. A tap only opens its card, to be read
+ * also in fullscreen, until it is tapped away or playback starts; a double
+ * tap goes to the Frame.
  *
  * @param {object} comment - the marker's Comment
  * @param {MouseEvent} event - the click
  */
 function openMarker(comment, event) {
-	seekTo(comment.inFrame)
-	emit('jump', comment)
+	const again = lastTap.id === comment.id && event.timeStamp - lastTap.at < DOUBLE_TAP_MS
+	lastTap = { id: comment.id, at: event.timeStamp }
+	if (!tappedMarker || again) {
+		seekTo(comment.inFrame)
+		emit('jump', comment)
+	}
 	if (tappedMarker) {
 		showPeek(comment, event)
 		peek.value.tapped = true
@@ -1334,6 +1350,8 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	top: 2px;
 	min-height: 0;
 	z-index: 1;
+	/* Two quick taps are a double tap here, not a zoom */
+	touch-action: manipulation;
 	width: 24px;
 	height: 24px;
 	margin: 0;
