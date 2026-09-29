@@ -14,6 +14,9 @@ import { COLORS } from '../lib/drawing.js'
 import { actionFor } from '../lib/hotkeys.js'
 import { watermarkTile } from '../lib/watermark.js'
 
+// The views hand it what they hand the VideoPlayer; the clock and its events mean nothing to a still
+defineOptions({ inheritAttrs: false })
+
 /** The drawing being made for the next Comment */
 const draft = defineModel('draft', { type: Array, default: () => [] })
 
@@ -27,7 +30,7 @@ const props = defineProps({
 	drawing: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['comment', 'jump', 'swipe', 'update:drawing'])
+const emit = defineEmits(['comment', 'swipe', 'update:drawing'])
 
 const root = ref(null)
 const picture = ref({ width: 0, height: 0 })
@@ -40,17 +43,12 @@ const { zoom, reset: resetZoom, listeners: gestures } = useGestures({
 			toggleFullscreen()
 		}
 	},
-	doubleTap: () => {},
-	holdStart: () => {},
-	holdEnd: () => {},
 	swipe: (step) => emit('swipe', step),
 }, computed(() => !props.drawing))
 const tool = ref('pen')
 const color = ref(COLORS[0])
 /** The Comment whose Drawing shows; a still has no Frame to pick it by */
 const focused = ref(null)
-/** A still has one Frame; the Review view reads it like a player's */
-const frame = ref(0)
 
 const shownDrawings = computed(() => {
 	if (props.drawing) {
@@ -65,10 +63,8 @@ watch(() => props.version.id, () => {
 	resetZoom()
 })
 
+/* No frame to expose: the Review view reads a missing one as Frame 0, the only one a still has */
 defineExpose({
-	frame,
-	/** Nothing to seek on a still */
-	seekTo: () => {},
 	pause: () => {},
 	/**
 	 * @param {{id: number}} comment - the Comment picked in the list

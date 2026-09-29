@@ -199,20 +199,9 @@ async function claim({ name, email, mail }) {
 				</NcNoteCard>
 			</template>
 
-			<ImageViewer
-				v-if="version && clock.still"
-				ref="player"
-				v-model:draft="draft"
-				v-model:drawing="drawing"
-				:version="version"
-				:comments="store.threads"
-				:canComment="store.canComment === true && store.me?.type !== 'unnamed'"
-				:watermark="context.flags.watermark ? watermarkText : null"
-				@comment="pin($event); panelOpen = true"
-				@jump="jump"
-				@swipe="step" />
-			<VideoPlayer
-				v-else-if="version"
+			<component
+				:is="clock.still ? ImageViewer : VideoPlayer"
+				v-if="version"
 				ref="player"
 				v-model:mode="mode"
 				v-model:draft="draft"
