@@ -196,7 +196,7 @@ async function upload(event) {
 						:editable="context.project.canWrite"
 						@update:modelValue="setDue" />
 				</div>
-				<h2 class="deliver-review__title" tabindex="-1">
+				<h2 class="deliver-layout__title deliver-review__title" tabindex="-1">
 					{{ context.asset.name }}
 				</h2>
 			</div>
@@ -297,10 +297,10 @@ async function upload(event) {
 		</template>
 
 		<template #notice>
-			<NcNoteCard v-if="error" type="error" class="deliver-review__notice">
+			<NcNoteCard v-if="error" type="error" class="deliver-layout__notice">
 				{{ error }}
 			</NcNoteCard>
-			<NcNoteCard v-if="version?.state === 'missing'" type="warning" class="deliver-review__notice">
+			<NcNoteCard v-if="version?.state === 'missing'" type="warning" class="deliver-layout__notice">
 				{{ t('deliver', 'The file of this Version is gone from the Project folder. Its Comments are kept.') }}
 			</NcNoteCard>
 		</template>
@@ -392,17 +392,7 @@ async function upload(event) {
 }
 
 .deliver-review__title {
-	margin: 0;
-	font-size: 16px;
-	font-weight: bold;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
 	outline: none;
-}
-
-.deliver-review__notice {
-	margin: calc(2 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline)) 0;
 }
 
 .deliver-review__error {

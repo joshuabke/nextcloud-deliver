@@ -1080,7 +1080,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 				<NcActions
 					v-if="original && proxy"
 					variant="tertiary"
-					class="deliver-player__quality"
+					class="deliver-player__quality deliver-caret-after"
 					:menuName="currentSource.resolution ? currentSource.resolution + 'p' : currentSource.label"
 					:aria-label="t('deliver', 'Quality')">
 					<template #icon>
@@ -1514,10 +1514,6 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 .deliver-player__quality :deep(.button-vue) {
 	border: 1px solid var(--color-border-dark);
 	font-weight: normal;
-}
-
-.deliver-player__quality :deep(.button-vue__wrapper) {
-	flex-direction: row-reverse;
 }
 
 .deliver-player--fullscreen {

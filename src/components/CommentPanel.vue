@@ -306,7 +306,7 @@ function claim() {
 		<div class="deliver-comments__head">
 			<NcActions
 				variant="tertiary"
-				class="deliver-comments__show"
+				class="deliver-comments__show deliver-caret-after"
 				:menuName="SHOW[show]"
 				:aria-label="t('deliver', 'Filter')">
 				<template #icon>
@@ -625,10 +625,6 @@ function claim() {
 	align-items: center;
 	gap: 2px;
 	padding: var(--default-grid-baseline) calc(2 * var(--default-grid-baseline));
-}
-
-.deliver-comments__show :deep(.button-vue__wrapper) {
-	flex-direction: row-reverse;
 }
 
 .deliver-comments__show :deep(.button-vue) {

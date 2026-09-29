@@ -29,7 +29,7 @@ const number = computed(() => props.versions.find((each) => each.id === props.cu
 		<span v-if="versions.length < 2" class="deliver-version-picker__pill">v{{ number }}</span>
 		<NcActions
 			v-else
-			class="deliver-version-picker__menu"
+			class="deliver-version-picker__menu deliver-caret-after"
 			variant="primary"
 			:menuName="'v' + number"
 			:aria-label="t('deliver', 'Version {number}', { number })">
@@ -66,10 +66,6 @@ const number = computed(() => props.versions.find((each) => each.id === props.cu
 	background: var(--color-primary-element);
 	color: var(--color-primary-element-text);
 	font-weight: bold;
-}
-
-.deliver-version-picker__menu :deep(.button-vue__wrapper) {
-	flex-direction: row-reverse;
 }
 
 .deliver-version-picker__menu :deep(.button-vue) {

@@ -134,7 +134,7 @@ async function claim({ name, email, mail }) {
 		<ReviewLayout v-else v-model:panelOpen="panelOpen">
 			<template #start>
 				<div class="deliver-public__crumbs">
-					<h2 class="deliver-public__title">
+					<h2 class="deliver-layout__title">
 						{{ context.asset?.name }}
 					</h2>
 					<DueDate v-if="isMobile" :modelValue="context.asset?.dueDate ?? null" />
@@ -190,10 +190,10 @@ async function claim({ name, email, mail }) {
 			</template>
 
 			<template #notice>
-				<NcNoteCard v-if="error" type="error" class="deliver-public__notice">
+				<NcNoteCard v-if="error" type="error" class="deliver-layout__notice">
 					{{ error }}
 				</NcNoteCard>
-				<NcNoteCard v-if="personalLink" type="success" class="deliver-public__notice">
+				<NcNoteCard v-if="personalLink" type="success" class="deliver-layout__notice">
 					{{ t('deliver', 'Bookmark your Personal Link. It makes you "{name}" again on any device:', { name: reviewerName }) }}
 					<code>{{ personalLink }}</code>
 				</NcNoteCard>
@@ -251,20 +251,7 @@ async function claim({ name, email, mail }) {
 	padding-inline-start: var(--default-grid-baseline);
 }
 
-.deliver-public__title {
-	margin: 0;
-	font-size: 16px;
-	font-weight: bold;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.deliver-public__notice {
-	margin: calc(2 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline)) 0;
-}
-
-.deliver-public__notice code {
+.deliver-layout__notice code {
 	display: block;
 	user-select: all;
 	overflow-wrap: anywhere;

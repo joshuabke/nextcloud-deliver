@@ -161,6 +161,11 @@ body.deliver-review #header,
 body.deliver-review footer {
 	display: none !important;
 }
+
+/* A menu button with its arrow after the text, as a select has it */
+.deliver-caret-after .button-vue__wrapper {
+	flex-direction: row-reverse;
+}
 </style>
 
 <style scoped>
@@ -222,6 +227,20 @@ body.deliver-review footer {
 
 .deliver-layout__end {
 	justify-content: flex-end;
+}
+
+/* The views' own title in the bar, and their notes above the picture */
+:slotted(.deliver-layout__title) {
+	margin: 0;
+	font-size: 16px;
+	font-weight: bold;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+:slotted(.deliver-layout__notice) {
+	margin: calc(2 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline)) 0;
 }
 
 .deliver-layout__body {

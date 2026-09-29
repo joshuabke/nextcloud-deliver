@@ -116,7 +116,7 @@ function jump(comment) {
 					<NcIconSvgWrapper :svg="backIcon" />
 				</template>
 			</NcButton>
-			<h2 class="deliver-compare-view__title">
+			<h2 class="deliver-layout__title">
 				{{ context.asset.name }}
 			</h2>
 		</template>
@@ -194,15 +194,6 @@ function jump(comment) {
 </template>
 
 <style scoped>
-.deliver-compare-view__title {
-	margin: 0;
-	font-size: 16px;
-	font-weight: bold;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
 .deliver-compare-view__error {
 	margin: calc(var(--default-clickable-area) + 4 * var(--default-grid-baseline)) calc(4 * var(--default-grid-baseline));
 }
