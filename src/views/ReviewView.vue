@@ -326,7 +326,7 @@ async function upload(event) {
 			:comments="store.threads"
 			:clock="clock"
 			:canComment="store.canComment === true"
-			@comment="pin($event); tab = 'comments'; panelOpen = true"
+			@comment="pin($event); panelOpen = true"
 			@jump="jump"
 			@swipe="step" />
 

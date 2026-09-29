@@ -137,7 +137,8 @@ test.describe('Review view', () => {
 		await page.goto(`/apps/deliver/versions/${versionId}`)
 		await expect(page.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
 
-		// Frame stepping is exact: five steps at 25 fps land on 00:00:00:05
+		// Frame stepping is exact: five steps at 25 fps land on 00:00:00:05; C brings hidden Comments back
+		await page.getByRole('button', { name: 'Hide Comments' }).click()
 		// Focus the page without touching the player
 		await page.locator('.deliver-review__title').click()
 		for (let i = 0; i < 5; i++) {
@@ -146,6 +147,7 @@ test.describe('Review view', () => {
 		await expect(page.locator('.deliver-player__timecode')).toContainText('00:00:00:05')
 
 		await page.keyboard.press('c')
+		await expect(page.locator('#deliver-comment-body')).toBeFocused()
 		await expect(page.locator('.deliver-comments__anchor')).toHaveText(/00:00:00:05/)
 		await page.locator('#deliver-comment-body').fill('sound starts too early')
 		await page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()

@@ -404,7 +404,7 @@ function pressMarker(event) {
 let lastTap = { id: null, at: 0 }
 
 /**
- * A marker clicked goes to its Frame. A tap only opens its card, to be read
+ * A marker clicked goes to its Frame, through the view's jump. A tap only opens its card, to be read
  * also in fullscreen, until it is tapped away or playback starts; a double
  * tap goes to the Frame.
  *
@@ -415,7 +415,6 @@ function openMarker(comment, event) {
 	const again = lastTap.id === comment.id && event.timeStamp - lastTap.at < DOUBLE_TAP_MS
 	lastTap = { id: comment.id, at: event.timeStamp }
 	if (!tappedMarker || again) {
-		seekTo(comment.inFrame)
 		emit('jump', comment)
 	}
 	if (tappedMarker) {

@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { isStill } from '../lib/media.js'
 import { sheet } from './panel.js'
 
@@ -66,12 +66,16 @@ export function useReview({ version, projectMode, refresh }) {
 	}
 
 	/**
+	 * The field gets the focus once a hidden panel is out; on a phone held
+	 * sideways the list comes out beside the picture for it
+	 *
 	 * @param {{inFrame: number, outFrame: ?number}} where - the Frame or Range to comment on
 	 */
 	function pin(where) {
 		pinnedByTyping = false
 		pinned.value = where
-		panel.value?.focus()
+		sheet.aside.value = true
+		nextTick(() => panel.value?.focus())
 	}
 
 	/**
