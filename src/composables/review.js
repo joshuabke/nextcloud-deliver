@@ -49,6 +49,7 @@ export function useReview({ version, projectMode, refresh }) {
 		pinnedByTyping = false
 		drawing.value = false
 		draft.value = []
+		player.value?.clearRange?.()
 	})
 
 	/** Drawing stops the picture and fixes the Frame the Comment goes to */
@@ -106,6 +107,27 @@ export function useReview({ version, projectMode, refresh }) {
 		}
 	}
 
+	/** The Range being marked in the player, while it has one (story 107) */
+	const range = computed(() => player.value?.range ?? null)
+
+	/** The Range button: first its start at the Frame on screen, then its end, which pins it */
+	function markRange() {
+		if (range.value === null) {
+			player.value?.markIn()
+			return
+		}
+		player.value.markOut()
+		pin(player.value.range)
+	}
+
+	/** Drops the Range, and a pin on it */
+	function clearRange() {
+		player.value?.clearRange()
+		if (pinned.value && pinned.value.outFrame !== null) {
+			pinned.value = null
+		}
+	}
+
 	/** The pinned anchor is used up once its Comment is posted */
 	function posted() {
 		pinnedByTyping = false
@@ -124,5 +146,5 @@ export function useReview({ version, projectMode, refresh }) {
 	}, { immediate: true })
 	onBeforeUnmount(() => clearTimeout(recheck))
 
-	return { player, panel, mode, clock, anchor, pin, hold, release, jump, posted, drawing, draft, draw }
+	return { player, panel, mode, clock, anchor, pin, hold, release, jump, posted, drawing, draft, draw, range, markRange, clearRange }
 }

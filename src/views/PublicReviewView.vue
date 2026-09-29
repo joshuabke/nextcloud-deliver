@@ -52,7 +52,7 @@ const watermarkText = computed(() => [
 const version = computed(() => context.value?.versions.find((each) => each.id === current.value) ?? null)
 const assetIndex = computed(() => newest.value.findIndex((each) => each.assetId === context.value?.asset?.id))
 
-const { player, panel, mode, clock, anchor, pin, hold, release, jump, posted, drawing, draft, draw } = useReview({
+const { player, panel, mode, clock, anchor, pin, hold, release, jump, posted, drawing, draft, draw, range, markRange, clearRange } = useReview({
 	version,
 	projectMode: computed(() => context.value?.project.timecodeMode ?? 'smpte'),
 	refresh: reload,
@@ -234,7 +234,10 @@ async function claim({ name, email, mail }) {
 					:draft="draft"
 					:drawing="drawing"
 					:canDraw="!!version && !version.audioOnly"
+					:range="range"
 					@draw="draw"
+					@range="markRange"
+					@clearRange="clearRange"
 					@claim="claim"
 					@jump="jump"
 					@posted="posted"

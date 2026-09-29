@@ -84,7 +84,7 @@ const shareUrl = computed(() => version.value?.url
 	? generateUrl('/apps/files/files/{fileId}', { fileId: version.value.fileId }) + '?' + new URLSearchParams({ dir: filesDir(version.value.url), opendetails: 'true' })
 	: null)
 
-const { player, panel, mode, clock, anchor, pin, hold, release, jump, posted, drawing, draft, draw } = useReview({
+const { player, panel, mode, clock, anchor, pin, hold, release, jump, posted, drawing, draft, draw, range, markRange, clearRange } = useReview({
 	version,
 	projectMode: computed(() => context.value?.project.timecodeMode ?? 'smpte'),
 	refresh: reload,
@@ -349,7 +349,10 @@ async function upload(event) {
 				:draft="draft"
 				:drawing="drawing"
 				:canDraw="!!version && !version.audioOnly"
+				:range="range"
 				@draw="draw"
+				@range="markRange"
+				@clearRange="clearRange"
 				@jump="jump"
 				@posted="posted"
 				@typing="hold"
