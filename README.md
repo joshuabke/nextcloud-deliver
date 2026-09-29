@@ -13,7 +13,7 @@ Frame-accurate video review inside Nextcloud Files. A media file enabled for rev
 
 Everything runs in Docker; no local PHP is needed. Node 22 builds the frontend.
 
-The dev image is built from `docker-image/Dockerfile`: Nextcloud 34 plus ffmpeg and the VAAPI drivers, with `/dev/dri` passed in, so the hardware encoder of ADR 0003 can be tried on real hardware (`vainfo --display drm --device /dev/dri/renderD128`).
+The dev image is `deploy/Dockerfile` built for Nextcloud 34: ffmpeg and the VAAPI drivers, with `/dev/dri` passed in, so the hardware encoder of ADR 0003 can be tried on real hardware (`vainfo --display drm --device /dev/dri/renderD128`).
 
 ```sh
 make up               # Nextcloud 34 + ffmpeg + Postgres on http://localhost:8080 (admin / adminadmin123), enables the app
@@ -72,7 +72,7 @@ Cron takes jobs from the same queue every five minutes, for up to four minutes p
 
 Admins configure the pipeline under *Administration → Deliver*: the paths to ffmpeg and ffprobe (empty means whatever is on the PATH), how many jobs run at once, the maximum Proxy height, the Thumbnail Strip cap, extra ffmpeg arguments for Proxies, and a hardware encoder (VAAPI with its device path, NVENC or VideoToolbox). Saving runs a one-second test encode; a hardware encoder that fails it stays configured but unused, and a Proxy it fails on later is made again with libx264. The same page shows the ffmpeg versions, the queue and the stderr of the last failed job. `max_jobs`, `max_height` and friends are ordinary app config values, so `occ config:app:set deliver …` works as well.
 
-For VAAPI in Docker, pass `/dev/dri` into the container **and** put the web server's user into the group that owns `/dev/dri/renderD128`: `group_add` in compose only reaches the container's first process, and Apache drops it when it switches to `www-data`. `docker-image/Dockerfile` does this with the build argument `RENDER_GID`.
+For VAAPI in Docker, pass `/dev/dri` into the container **and** put the web server's user into the group that owns `/dev/dri/renderD128`: `group_add` in compose only reaches the container's first process, and Apache drops it when it switches to `www-data`. `deploy/Dockerfile` does this with the build argument `RENDER_GID`.
 
 An hourly scan compares every Project with its folder, next to the file listener: it catches deletions from the trash, which fire no event Deliver can hear, and purges Projects whose folder is gone for good.
 

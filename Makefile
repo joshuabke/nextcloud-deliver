@@ -1,4 +1,4 @@
-.PHONY: up down enable occ build watch composer lint-php fix-php test-integration package appinfo
+.PHONY: up down enable occ build composer lint-php fix-php test-integration package appinfo
 
 COMPOSE = docker compose
 OCC = $(COMPOSE) exec -u www-data nextcloud php occ
@@ -37,9 +37,6 @@ occ:
 build:
 	npm ci
 	npm run build
-
-watch:
-	npm run watch
 
 # PHP dev dependencies (PHPUnit) without a local PHP: vendor/ is gitignored
 composer:

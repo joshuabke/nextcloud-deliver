@@ -4,6 +4,5 @@ services:
     ports: !override
       - 127.0.0.1:8080:80
     devices: !reset []
-    group_add: !reset []
   mail:
     ports: !reset []

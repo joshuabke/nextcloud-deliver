@@ -15,6 +15,9 @@ test-results/
 playwright-report/
 tests/e2e/media/
 
+# Scratch scripts at the top level
+/.*.mjs
+
 # Tool caches
 .phpunit.cache/
 .phpunit.result.cache

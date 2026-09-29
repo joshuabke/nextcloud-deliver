@@ -4,7 +4,7 @@
 // `node dev/l10n.mjs write` also regenerates l10n/<lang>.js from the JSON,
 // which is the file to edit.
 /* eslint-disable no-console -- a command line tool reports on the console */
-import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 
@@ -17,13 +17,9 @@ const root = join(import.meta.dirname, '..')
  * @return {string[]} every file below the folder with one of the endings, specs left out
  */
 function files(dir, endings) {
-	return readdirSync(dir).flatMap((name) => {
-		const path = join(dir, name)
-		if (statSync(path).isDirectory()) {
-			return files(path, endings)
-		}
-		return endings.some((ending) => name.endsWith(ending)) && !name.includes('.spec.') ? [path] : []
-	})
+	return readdirSync(dir, { recursive: true })
+		.filter((name) => endings.some((ending) => name.endsWith(ending)) && !name.includes('.spec.'))
+		.map((name) => join(dir, name))
 }
 
 /** A quoted string literal, single or double, with its escapes undone */
@@ -31,7 +27,7 @@ const LITERAL = String.raw`('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")`
 const unquote = (literal) => literal.slice(1, -1).replace(/\\(.)/g, '$1')
 
 /** @return {Set<string>} the source strings, plurals as Nextcloud keys them */
-export function sourceStrings() {
+function sourceStrings() {
 	const found = new Set()
 	for (const path of files(join(root, 'src'), ['.js', '.vue'])) {
 		const code = readFileSync(path, 'utf8')
