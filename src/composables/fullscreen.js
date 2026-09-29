@@ -6,8 +6,8 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
  * Watermark. The browser's own fullscreen where it takes any element; where
  * it does not (the iPhone's Safari takes only a bare video, which would drop
  * all of that), or without a tap to allow it, the player fills the window
- * instead. On a phone, turning it sideways goes fullscreen and upright
- * leaves it (story 104).
+ * instead. A phone held sideways shows the picture across the window anyway;
+ * turning it upright again leaves fullscreen.
  *
  * @param {import('vue').Ref<HTMLElement|null>} root - the element to show fullscreen
  * @return {{fullscreen: import('vue').Ref<boolean>, filling: import('vue').Ref<boolean>, toggle: () => void}}
@@ -68,16 +68,9 @@ export function useFullscreen(root) {
 		}
 	}
 
-	/**
-	 *
-	 */
+	/** Upright again: back to the view, where the picture has its room */
 	function onTurn() {
-		if (!isMobile.value) {
-			return
-		}
-		if (sideways.matches) {
-			enter()
-		} else {
+		if (isMobile.value && !sideways.matches) {
 			exit()
 		}
 	}
@@ -92,10 +85,6 @@ export function useFullscreen(root) {
 	}
 
 	onMounted(() => {
-		// Opened on a phone held sideways: straight to fullscreen, without a tap to allow the browser's own
-		if (isMobile.value && sideways.matches) {
-			fill()
-		}
 		document.addEventListener('fullscreenchange', onChange)
 		sideways.addEventListener('change', onTurn)
 		window.addEventListener('keydown', onKey)
