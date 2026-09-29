@@ -1,26 +1,36 @@
 <script setup>
 import panelIcon from '@mdi/svg/svg/dock-right.svg?raw'
 import { t } from '@nextcloud/l10n'
+import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
+import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 
-/** Whether the panel beside the player is open */
+/** Whether the panel beside the player is open; on a phone it always is, under the player */
 const panelOpen = defineModel('panelOpen', { type: Boolean, default: true })
+
+/** Below 1024 px the player sits on top and the Comments below it; the bar keeps only what fits */
+const isMobile = useIsMobile()
 </script>
 
 <template>
 	<!-- The Review view is dark in any theme, like every video tool: the picture is what should stand out -->
-	<div class="deliver-layout">
+	<div class="deliver-layout" :class="{ 'deliver-layout--mobile': isMobile }">
 		<div class="deliver-layout__bar">
 			<div class="deliver-layout__start">
 				<slot name="start" />
 			</div>
-			<div class="deliver-layout__center">
+			<div v-if="!isMobile" class="deliver-layout__center">
 				<slot name="center" />
 			</div>
 			<div class="deliver-layout__end">
 				<slot name="end" />
+				<!-- What does not fit into a phone's bar -->
+				<NcActions v-if="isMobile && $slots.menu" variant="tertiary" :aria-label="t('deliver', 'More')">
+					<slot name="menu" />
+				</NcActions>
 				<NcButton
+					v-if="!isMobile"
 					variant="tertiary"
 					:pressed="panelOpen"
 					:aria-label="panelOpen ? t('deliver', 'Hide Comments') : t('deliver', 'Show Comments')"
@@ -33,11 +43,11 @@ const panelOpen = defineModel('panelOpen', { type: Boolean, default: true })
 			</div>
 		</div>
 		<slot name="notice" />
-		<div class="deliver-layout__body" :class="{ 'deliver-layout__body--wide': !panelOpen }">
+		<div class="deliver-layout__body" :class="{ 'deliver-layout__body--wide': !panelOpen && !isMobile }">
 			<div class="deliver-layout__main">
 				<slot />
 			</div>
-			<div v-show="panelOpen" class="deliver-layout__panel">
+			<div v-show="panelOpen || isMobile" class="deliver-layout__panel">
 				<slot name="panel" />
 			</div>
 		</div>
@@ -128,17 +138,39 @@ const panelOpen = defineModel('panelOpen', { type: Boolean, default: true })
 	overflow: hidden;
 }
 
-@media (max-width: 1024px) {
-	.deliver-layout__body {
-		grid-template-columns: minmax(0, 1fr);
-		grid-template-rows: minmax(60vh, 1fr) auto;
-		overflow-y: auto;
-	}
+/* On a phone: the bar in one row, the player on top at its width, the Comments below; the page itself does not scroll */
+.deliver-layout--mobile .deliver-layout__bar {
+	display: flex;
+	min-height: 48px;
+	padding: 0 var(--default-grid-baseline);
+	gap: var(--default-grid-baseline);
+}
 
-	.deliver-layout__panel {
-		border-inline-start: none;
-		border-top: 1px solid var(--color-border);
-		min-height: 60vh;
-	}
+.deliver-layout--mobile .deliver-layout__start {
+	flex: 1;
+	gap: var(--default-grid-baseline);
+}
+
+.deliver-layout--mobile .deliver-layout__end {
+	flex: none;
+	gap: 2px;
+}
+
+.deliver-layout--mobile .deliver-layout__body {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+/* A 16:9 picture at full width, plus its timeline and controls */
+.deliver-layout--mobile .deliver-layout__main {
+	flex: none;
+	height: min(calc(56.25vw + 96px), 55%);
+}
+
+.deliver-layout--mobile .deliver-layout__panel {
+	flex: 1;
+	border-inline-start: none;
+	border-top: 1px solid var(--color-border);
 }
 </style>

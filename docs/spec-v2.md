@@ -147,6 +147,18 @@ After 0.2.0 the feature set grows to what a hosted review tool offers (FreeFrame
 101. As a Member, I want a right-click menu on a Project tile and on an Asset card with what I do there most (open, settings, mute, compare, upload a new Version, show in Files, remove), so that common steps take one click.
 102. As a Member with write access, I want to give a Reviewer their own rights to comment, to comment on older Versions and to see the Watermark, over those of the Share Link they come by, so that one person can be treated differently without a link of their own.
 
+### Phones and tablets
+
+The phone version follows the Frame.io iOS app, in the mobile browser: Deliver is a Nextcloud app and ships no native app. Below 1024 px wide (phones, and tablets upright) the Review view stacks; wider screens keep the desktop layout, with touch.
+
+103. As a Reviewer or Member on a phone, I want the Review view to show the picture on top, the Comments below and the field to write in at the bottom, with only back, name, Version and Approval in the bar and the rest in its menu, so that I review without zooming or scrolling the page.
+104. As a Reviewer or Member on a phone, I want to tap the picture for fullscreen, also by turning the phone sideways, play and step Frame by Frame with buttons, double-tap either side to jump five seconds, hold for double speed, pinch to zoom and swipe to the next Asset, so that the player works without a keyboard.
+105. As a Reviewer or Member on a phone, I want to drag the playhead with the exact Frame shown above my finger and tap a Comment's marker to jump to it and see it in the list, so that I find places without hovering.
+106. As a Reviewer or Member on a phone, I want to pull the Comment list up over the picture and have it step aside while I write, so that reading and writing both have room.
+107. As a Reviewer or Member, I want a Range button next to the field, to start a Range at the current Frame and end it where I scrub to, so that Ranges need no I and O keys.
+108. As a Reviewer or Member on a phone or tablet, I want to draw on the picture with a finger or a pen, so that Drawings work there too.
+109. As a Member on a phone, I want the Project list and Project view to fit: the navigation as a drawer, menus by a long press or a "…" button on each card, filters as a row to swipe, and upload by button, so that I can follow my Projects on the go.
+
 ## Implementation Decisions
 
 ### Repository and stack
@@ -248,6 +260,7 @@ CI runs php-cs-fixer, psalm, PHPUnit (unit and integration), Vitest and Playwrig
 - PDFs as Assets.
 - Watermarks burned into the picture (the Watermark is an overlay in the player).
 - Adaptive streaming, multiple Proxy renditions, 4K Proxies.
+- On phones: comparing Versions, Exports, managing Version Stacks and upload by drag and drop; they stay on larger screens.
 - External or GPU-farm transcoding workers over HTTP (job table is ready for it).
 - Direct push of markers into DaVinci Resolve.
 - Signed App Store release workflow and the certificate.

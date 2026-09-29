@@ -1,6 +1,7 @@
 <script setup>
 import menuIcon from '@mdi/svg/svg/chevron-down.svg?raw'
 import { t } from '@nextcloud/l10n'
+import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
@@ -16,12 +17,15 @@ const props = defineProps({
 
 const emit = defineEmits(['select'])
 
+/** On a phone the pill says enough on its own */
+const isMobile = useIsMobile()
+
 const number = computed(() => props.versions.find((each) => each.id === props.current)?.number)
 </script>
 
 <template>
 	<div class="deliver-version-picker">
-		<span v-if="label" class="deliver-version-picker__label">{{ label }}</span>
+		<span v-if="label && !isMobile" class="deliver-version-picker__label">{{ label }}</span>
 		<span v-if="versions.length < 2" class="deliver-version-picker__pill">v{{ number }}</span>
 		<NcActions
 			v-else
