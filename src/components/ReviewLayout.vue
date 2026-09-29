@@ -56,87 +56,81 @@ function grabEnd(event) {
 </script>
 
 <template>
-	<!-- The Review view is dark in any theme, like every video tool: the picture is what should stand out -->
-	<div
-		class="deliver-layout"
-		:class="{
-			'deliver-layout--mobile': isMobile,
-			'deliver-layout--upright': upright,
-			'deliver-layout--sideways': sideways,
-			'deliver-layout--up': upright && up && !writing,
-			'deliver-layout--writing': isMobile && writing,
-		}">
-		<div v-if="!sideways" class="deliver-layout__bar">
-			<div class="deliver-layout__start">
-				<slot name="start" />
+	<!-- The Review view is dark in any theme, like every video tool: the picture is what should stand out.
+		It hangs off the body: Nextcloud's content area carries a backdrop filter, which makes that area,
+		not the window, the frame for anything fixed; on the iPhone the view ended up under the header -->
+	<Teleport to="body">
+		<div
+			class="deliver-layout"
+			:class="{
+				'deliver-layout--mobile': isMobile,
+				'deliver-layout--upright': upright,
+				'deliver-layout--sideways': sideways,
+				'deliver-layout--up': upright && up && !writing,
+				'deliver-layout--writing': isMobile && writing,
+			}">
+			<div v-if="!sideways" class="deliver-layout__bar">
+				<div class="deliver-layout__start">
+					<slot name="start" />
+				</div>
+				<div v-if="!isMobile" class="deliver-layout__center">
+					<slot name="center" />
+				</div>
+				<div class="deliver-layout__end">
+					<slot name="end" />
+					<!-- What does not fit into a phone's bar -->
+					<NcActions v-if="isMobile && $slots.menu" variant="tertiary" :aria-label="t('deliver', 'More')">
+						<slot name="menu" />
+					</NcActions>
+					<NcButton
+						v-if="!isMobile"
+						variant="tertiary"
+						:pressed="panelOpen"
+						:aria-label="panelOpen ? t('deliver', 'Hide Comments') : t('deliver', 'Show Comments')"
+						:title="panelOpen ? t('deliver', 'Hide Comments') : t('deliver', 'Show Comments')"
+						@click="panelOpen = !panelOpen">
+						<template #icon>
+							<NcIconSvgWrapper :svg="panelIcon" />
+						</template>
+					</NcButton>
+				</div>
 			</div>
-			<div v-if="!isMobile" class="deliver-layout__center">
-				<slot name="center" />
-			</div>
-			<div class="deliver-layout__end">
-				<slot name="end" />
-				<!-- What does not fit into a phone's bar -->
-				<NcActions v-if="isMobile && $slots.menu" variant="tertiary" :aria-label="t('deliver', 'More')">
-					<slot name="menu" />
-				</NcActions>
-				<NcButton
-					v-if="!isMobile"
-					variant="tertiary"
-					:pressed="panelOpen"
-					:aria-label="panelOpen ? t('deliver', 'Hide Comments') : t('deliver', 'Show Comments')"
-					:title="panelOpen ? t('deliver', 'Hide Comments') : t('deliver', 'Show Comments')"
-					@click="panelOpen = !panelOpen">
-					<template #icon>
-						<NcIconSvgWrapper :svg="panelIcon" />
-					</template>
-				</NcButton>
+			<slot name="notice" />
+			<div class="deliver-layout__body" :class="{ 'deliver-layout__body--wide': !panelOpen && !isMobile }">
+				<div class="deliver-layout__main">
+					<slot />
+					<NcButton
+						v-if="sideways"
+						class="deliver-layout__aside"
+						variant="tertiary"
+						:pressed="aside"
+						:aria-label="aside ? t('deliver', 'Hide Comments') : t('deliver', 'Show Comments')"
+						@click="aside = !aside">
+						<template #icon>
+							<NcIconSvgWrapper :svg="commentsIcon" />
+						</template>
+					</NcButton>
+				</div>
+				<div v-show="sideways ? aside : panelOpen || isMobile" class="deliver-layout__panel">
+					<button
+						v-if="upright"
+						type="button"
+						class="deliver-layout__grabber"
+						:aria-label="up ? t('deliver', 'Show the picture') : t('deliver', 'Pull the Comments up')"
+						@pointerdown="grabStart"
+						@pointerup="grabEnd"
+						@pointercancel="grab = null"
+						@keydown.enter.prevent="up = !up"
+						@keydown.space.prevent="up = !up" />
+					<slot name="panel" />
+				</div>
 			</div>
 		</div>
-		<slot name="notice" />
-		<div class="deliver-layout__body" :class="{ 'deliver-layout__body--wide': !panelOpen && !isMobile }">
-			<div class="deliver-layout__main">
-				<slot />
-				<NcButton
-					v-if="sideways"
-					class="deliver-layout__aside"
-					variant="tertiary"
-					:pressed="aside"
-					:aria-label="aside ? t('deliver', 'Hide Comments') : t('deliver', 'Show Comments')"
-					@click="aside = !aside">
-					<template #icon>
-						<NcIconSvgWrapper :svg="commentsIcon" />
-					</template>
-				</NcButton>
-			</div>
-			<div v-show="sideways ? aside : panelOpen || isMobile" class="deliver-layout__panel">
-				<button
-					v-if="upright"
-					type="button"
-					class="deliver-layout__grabber"
-					:aria-label="up ? t('deliver', 'Show the picture') : t('deliver', 'Pull the Comments up')"
-					@pointerdown="grabStart"
-					@pointerup="grabEnd"
-					@pointercancel="grab = null"
-					@keydown.enter.prevent="up = !up"
-					@keydown.space.prevent="up = !up" />
-				<slot name="panel" />
-			</div>
-		</div>
-	</div>
+	</Teleport>
 </template>
 
 <style>
-/*
- * Nextcloud blurs behind its content area, and a backdrop filter makes that
- * area the frame for fixed elements: the view would fill only the content
- * area. While the Review view is open, the blur goes, and with it the header
- * and the public page's footer.
- */
-body.deliver-review #content-vue,
-body.deliver-review #content {
-	backdrop-filter: none !important;
-}
-
+/* While the Review view is open, Nextcloud's header and the public page's footer step aside */
 body.deliver-review #header,
 body.deliver-review footer {
 	display: none !important;
@@ -171,6 +165,7 @@ body.deliver-review footer {
 	--deliver-timecode: #6ea8ff;
 	position: fixed;
 	inset: 0;
+	z-index: 1000;
 	display: flex;
 	flex-direction: column;
 	min-width: 0;
