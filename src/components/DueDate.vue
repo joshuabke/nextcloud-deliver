@@ -28,9 +28,9 @@ const label = computed(() => {
 	return named ?? (kind.value === 'overdue' ? t('deliver', 'Was due {date}', { date }) : t('deliver', 'Due {date}', { date }))
 })
 
-/** Opens the browser's own date picker */
+/** Opens the browser's own date picker; read-only, the date is only text */
 function pick() {
-	if (!props.editable || !input.value) {
+	if (!props.editable) {
 		return
 	}
 	if (input.value.showPicker) {
@@ -46,19 +46,15 @@ function pick() {
 		v-if="modelValue || editable"
 		class="deliver-due"
 		:class="[kind && `deliver-due--${kind}`, { 'deliver-due--empty': !modelValue }]">
-		<button
-			v-if="editable"
-			type="button"
+		<component
+			:is="editable ? 'button' : 'span'"
+			:type="editable ? 'button' : undefined"
 			class="deliver-due__button"
-			:title="t('deliver', 'Set the Due Date; Members are reminded the day before and on the day')"
+			:title="editable ? t('deliver', 'Set the Due Date; Members are reminded the day before and on the day') : undefined"
 			@click="pick">
 			<NcIconSvgWrapper :svg="calendarIcon" :size="16" inline />
 			<span>{{ label }}</span>
-		</button>
-		<span v-else class="deliver-due__button">
-			<NcIconSvgWrapper :svg="calendarIcon" :size="16" inline />
-			<span>{{ label }}</span>
-		</span>
+		</component>
 		<input
 			v-if="editable"
 			ref="input"
