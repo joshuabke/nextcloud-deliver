@@ -28,6 +28,11 @@ const mail = ref({ ...props.reviewer.mail })
 /** Their own rights; null leaves it to the link they come by */
 const rights = ref({ ...props.reviewer.rights })
 
+const WISHES = [
+	{ id: 'replies', label: t('deliver', 'Replies to their Comments') },
+	{ id: 'comments', label: t('deliver', 'Every new Comment') },
+	{ id: 'versions', label: t('deliver', 'New Versions') },
+]
 const RIGHTS = [
 	{ id: 'canComment', label: t('deliver', 'Comment') },
 	{ id: 'allowOlder', label: t('deliver', 'Comment on older Versions') },
@@ -85,14 +90,12 @@ async function renew() {
 					:disabled="busy" />
 				<fieldset>
 					<legend>{{ t('deliver', 'With an email address, Deliver can mail about') }}</legend>
-					<NcCheckboxRadioSwitch v-model="mail.replies" :disabled="!email || busy">
-						{{ t('deliver', 'Replies to their Comments') }}
-					</NcCheckboxRadioSwitch>
-					<NcCheckboxRadioSwitch v-model="mail.comments" :disabled="!email || busy">
-						{{ t('deliver', 'Every new Comment') }}
-					</NcCheckboxRadioSwitch>
-					<NcCheckboxRadioSwitch v-model="mail.versions" :disabled="!email || busy">
-						{{ t('deliver', 'New Versions') }}
+					<NcCheckboxRadioSwitch
+						v-for="wish in WISHES"
+						:key="wish.id"
+						v-model="mail[wish.id]"
+						:disabled="!email || busy">
+						{{ wish.label }}
 					</NcCheckboxRadioSwitch>
 				</fieldset>
 				<fieldset class="deliver-reviewer__rights">
