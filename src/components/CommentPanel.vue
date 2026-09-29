@@ -4,6 +4,7 @@ import closeIcon from '@mdi/svg/svg/close.svg?raw'
 import penIcon from '@mdi/svg/svg/draw.svg?raw'
 import searchIcon from '@mdi/svg/svg/magnify.svg?raw'
 import attachIcon from '@mdi/svg/svg/paperclip.svg?raw'
+import rangeIcon from '@mdi/svg/svg/ray-start-end.svg?raw'
 import sendIcon from '@mdi/svg/svg/send.svg?raw'
 import sortIcon from '@mdi/svg/svg/sort.svg?raw'
 import { n, t } from '@nextcloud/l10n'
@@ -36,9 +37,11 @@ const props = defineProps({
 	members: { type: Array, default: () => [] },
 	/** Whether this Version has a picture to draw on */
 	canDraw: { type: Boolean, default: false },
+	/** The Range being marked in the player, or null; a still has none (story 107) */
+	range: { type: Object, default: null },
 })
 
-const emit = defineEmits(['jump', 'claim', 'posted', 'typing', 'cleared', 'draw'])
+const emit = defineEmits(['jump', 'claim', 'posted', 'typing', 'cleared', 'draw', 'range', 'clearRange'])
 
 const store = useCommentsStore()
 /** A phone has no keyboard shortcuts to hint at */
@@ -184,7 +187,7 @@ defineExpose({ focus: () => input.value?.focus(), reveal })
 
 const form = ref(null)
 
-/** On a phone, writing makes room for the keyboard: the list steps aside (story 106) */
+/** On a phone, writing makes room for the keyboard: the list steps aside (story 106). Only the text field starts it; a tap on a button beside it must not move the form under the finger */
 function startWriting() {
 	if (isMobile.value) {
 		sheet.up.value = false
@@ -393,7 +396,6 @@ function claim() {
 				ref="form"
 				class="deliver-comments__form"
 				@submit.prevent="submit"
-				@focusin="startWriting"
 				@focusout="stopWriting">
 				<div class="deliver-comments__box" @click="input?.focus()">
 					<label
@@ -410,6 +412,7 @@ function claim() {
 						rows="1"
 						:placeholder="t('deliver', 'Leave a Comment…')"
 						@keydown="onKeydown"
+						@focus="startWriting"
 						@input="onInput"
 						@click="onInput" />
 				</div>
@@ -450,6 +453,31 @@ function claim() {
 							<NcIconSvgWrapper :svg="penIcon" />
 						</template>
 					</NcButton>
+					<template v-if="!clock.still">
+						<NcButton
+							variant="tertiary"
+							:pressed="range !== null"
+							:aria-label="range === null ? t('deliver', 'Start a Range here') : t('deliver', 'End the Range here')"
+							:title="range === null ? t('deliver', 'Start a Range here, then scrub to its end (I and O)') : t('deliver', 'End the Range here')"
+							@click="emit('range')">
+							<template #icon>
+								<NcIconSvgWrapper :svg="rangeIcon" />
+							</template>
+							<template v-if="range !== null && range.outFrame === null">
+								{{ t('deliver', 'End here') }}
+							</template>
+						</NcButton>
+						<NcButton
+							v-if="range !== null"
+							variant="tertiary"
+							:aria-label="t('deliver', 'Clear the Range')"
+							:title="t('deliver', 'Clear the Range')"
+							@click="emit('clearRange')">
+							<template #icon>
+								<NcIconSvgWrapper :svg="closeIcon" />
+							</template>
+						</NcButton>
+					</template>
 					<NcButton
 						variant="tertiary"
 						:disabled="files.length >= MAX_FILES"

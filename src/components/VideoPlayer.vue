@@ -123,7 +123,7 @@ const duration = computed(() => formatAt(durationFrames.value, props.clock))
 const range = computed(() => inPoint.value === null ? null : { inFrame: inPoint.value, outFrame: outPoint.value })
 const progress = computed(() => durationFrames.value ? (frame.value / durationFrames.value) * 100 : 0)
 
-defineExpose({ seekTo, frame, pause })
+defineExpose({ seekTo, frame, pause, range, markIn, markOut, clearRange })
 
 /** What a gesture did, shown for a moment over the picture */
 const flash = ref(null)
@@ -554,24 +554,33 @@ function onKey(event) {
 		stepBack: () => step(-1),
 		shuttleForward: () => shuttle(1),
 		shuttleBack: () => shuttle(-1),
-		markIn: () => {
-			inPoint.value = frame.value
-			if (outPoint.value !== null && outPoint.value < frame.value) {
-				outPoint.value = null
-			}
-		},
-		markOut: () => {
-			outPoint.value = Math.max(frame.value, inPoint.value ?? 0)
-			inPoint.value ??= frame.value
-		},
+		markIn,
+		markOut,
 		comment,
-		clearRange: () => {
-			inPoint.value = null
-			outPoint.value = null
-			loop.value = false
-		},
+		clearRange,
 	}
 	actions[action]()
+}
+
+/** I, or the Range button: the Range starts here */
+function markIn() {
+	inPoint.value = frame.value
+	if (outPoint.value !== null && outPoint.value < frame.value) {
+		outPoint.value = null
+	}
+}
+
+/** O, or the Range button again: the Range ends here */
+function markOut() {
+	outPoint.value = Math.max(frame.value, inPoint.value ?? 0)
+	inPoint.value ??= frame.value
+}
+
+/** Escape, or the Range's ✕ */
+function clearRange() {
+	inPoint.value = null
+	outPoint.value = null
+	loop.value = false
 }
 
 /** C, or the Comment button: the Range if one is set, else the current Frame */
@@ -996,7 +1005,7 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 						type="button"
 						:aria-label="t('deliver', 'Clear the Range (Esc)')"
 						:title="t('deliver', 'Clear the Range (Esc)')"
-						@click="inPoint = null; outPoint = null; loop = false">
+						@click="clearRange">
 						<NcIconSvgWrapper :svg="closeIcon" :size="16" inline />
 					</button>
 				</div>
