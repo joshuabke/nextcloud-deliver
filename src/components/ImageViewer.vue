@@ -176,7 +176,7 @@ onBeforeUnmount(() => {
 	position: fixed;
 	inset: 0;
 	z-index: 10000;
-	height: 100dvh;
+	padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 .deliver-still__picture {

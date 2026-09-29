@@ -1516,8 +1516,8 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 .deliver-player--filling {
 	position: fixed;
 	inset: 0;
+	padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 	z-index: 10000;
-	height: 100dvh;
 }
 
 .deliver-player__timecode--plain {
