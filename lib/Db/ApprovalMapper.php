@@ -24,7 +24,7 @@ class ApprovalMapper extends Mapper {
 
 	/**
 	 * @param list<int> $versionIds
-	 * @return array<int, array{approved: int, changes: int}> per Version, those with decisions only
+	 * @return array<int, array{approved: int, changes: int}> per Version asked for, zero where nobody decided
 	 */
 	public function countByVersions(array $versionIds): array {
 		if ($versionIds === []) {
@@ -35,10 +35,9 @@ class ApprovalMapper extends Mapper {
 			->from($this->getTableName())
 			->where($qb->expr()->in('version_id', $qb->createNamedParameter($versionIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->groupBy('version_id', 'status');
-		$counts = [];
+		$counts = array_fill_keys($versionIds, ['approved' => 0, 'changes' => 0]);
 		$result = $qb->executeQuery();
 		while ($row = $result->fetch()) {
-			$counts[(int)$row['version_id']] ??= ['approved' => 0, 'changes' => 0];
 			$counts[(int)$row['version_id']][$row['status']] = (int)$row['n'];
 		}
 		$result->closeCursor();

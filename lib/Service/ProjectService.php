@@ -680,7 +680,7 @@ class ProjectService {
 					'autoStacked' => (bool)$version->getAutoStacked(),
 					'comments' => $commentCounts[$version->getId()] ?? 0,
 					'unseen' => $unseen[$version->getId()] ?? 0,
-					'approvals' => $approvalCounts[$version->getId()] ?? ['approved' => 0, 'changes' => 0],
+					'approvals' => $approvalCounts[$version->getId()],
 					// Queued or running derived media, with the running job's progress
 					'processing' => array_intersect(
 						[$version->getProxyState(), $version->getThumbsState(), $version->getWaveformState()],
@@ -734,10 +734,10 @@ class ProjectService {
 		$changes = 0;
 		$nextDue = null;
 		foreach ($newest as $version) {
-			$decided = $approvals[$version->getId()] ?? ['approved' => 0, 'changes' => 0];
+			$decided = $approvals[$version->getId()];
 			$changes += $decided['changes'] > 0 ? 1 : 0;
 			$due = $dueDates[$version->getAssetId()] ?? null;
-			if ($due !== null && ($decided['approved'] === 0 || $decided['changes'] > 0) && ($nextDue === null || $due < $nextDue)) {
+			if ($due !== null && !ApprovalService::isApproved($decided) && ($nextDue === null || $due < $nextDue)) {
 				$nextDue = $due;
 			}
 		}

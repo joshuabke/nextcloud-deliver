@@ -22,6 +22,16 @@ class VersionMapper extends Mapper {
 		return $this->findEntities($qb);
 	}
 
+	/** The top of an Asset's Version Stack: its highest Version Number */
+	public function findNewest(int $assetId): ?Version {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->eq('asset_id', $qb->createNamedParameter($assetId)))
+			->orderBy('number', 'DESC')
+			->setMaxResults(1);
+		return $this->findEntities($qb)[0] ?? null;
+	}
+
 	/** @return Version[] all Versions of every Asset in the Project, newest Version Number first */
 	public function findByProject(int $projectId): array {
 		$qb = $this->db->getQueryBuilder();

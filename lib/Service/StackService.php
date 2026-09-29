@@ -89,9 +89,8 @@ class StackService {
 		if ($override !== null) {
 			return $override;
 		}
-		$stack = $this->versions->findByAsset($asset->getId());
-		$newest = end($stack);
-		return $newest === false ? '' : VersionNaming::assetName($newest->getName());
+		$newest = $this->versions->findNewest($asset->getId());
+		return $newest === null ? '' : VersionNaming::assetName($newest->getName());
 	}
 
 	/**

@@ -21,8 +21,7 @@ class CommentWindow {
 		if ($viewer->canCommentOnOlder) {
 			return true;
 		}
-		$stack = $this->versions->findByAsset($version->getAssetId());
-		$newest = end($stack);
-		return $newest === false || $newest->getId() === $version->getId();
+		$newest = $this->versions->findNewest($version->getAssetId());
+		return $newest === null || $newest->getId() === $version->getId();
 	}
 }
