@@ -16,6 +16,14 @@ const CDP = process.env.DELIVER_CDP ?? 'http://127.0.0.1:9222'
 const BROWSER_URL = process.env.DELIVER_BROWSER_URL ?? URL
 
 const auth = { username: USER, password: PASSWORD, send: 'always' }
+/** An iPhone as Nextcloud accepts it: a current Safari, touch, and its size */
+const PHONE = {
+	viewport: { width: 390, height: 844 },
+	deviceScaleFactor: 3,
+	isMobile: true,
+	hasTouch: true,
+	userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Mobile/15E148 Safari/604.1',
+}
 const ocsHeaders = { 'OCS-APIREQUEST': 'true', Accept: 'application/json' }
 
 test.describe('Review view', () => {
@@ -270,6 +278,65 @@ test.describe('Review view', () => {
 
 		await page.getByRole('radio', { name: 'Wipe' }).click()
 		await expect(page.locator('.deliver-compare__handle')).toBeVisible()
+	})
+
+	test('on a phone: stacked, by touch, and a Reviewer comments on a Range', async ({ playwright }) => {
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const page = await phone.newPage()
+		await login(page)
+		await page.goto(`/apps/deliver/projects/${projectId}`)
+		// A card's menu has a button of its own on a phone
+		await page.locator('.deliver-card__more').first().tap()
+		await page.getByRole('menuitem', { name: 'Open', exact: true }).tap()
+		await expect(page).toHaveURL(/\/versions\/\d+$/)
+		const video = page.locator('video.deliver-player__video')
+		await expect(video).toHaveJSProperty('readyState', 4)
+
+		// The Comments sit under the picture, and pull up over it
+		const stage = await page.locator('.deliver-player__stage').boundingBox()
+		const panel = await page.locator('.deliver-layout__panel').boundingBox()
+		expect(panel.y).toBeGreaterThanOrEqual(stage.y + stage.height)
+		await page.locator('.deliver-layout__grabber').tap()
+		await expect(page.locator('.deliver-layout--up')).toHaveCount(1)
+		await page.locator('.deliver-layout__grabber').tap()
+		await expect(page.locator('.deliver-layout--up')).toHaveCount(0)
+
+		// A double tap on the right jumps ahead, a tap goes fullscreen
+		const right = { x: stage.x + stage.width * 0.85, y: stage.y + stage.height / 2 }
+		await page.touchscreen.tap(right.x, right.y)
+		await page.touchscreen.tap(right.x, right.y)
+		await expect(page.locator('.deliver-player__flash')).toContainText('+5')
+		await page.waitForTimeout(700)
+		await page.touchscreen.tap(stage.x + stage.width / 2, right.y)
+		await expect(page.locator('.deliver-player--fullscreen')).toHaveCount(1)
+		await page.getByRole('button', { name: 'Leave fullscreen' }).tap()
+		await expect(page.locator('.deliver-player--fullscreen')).toHaveCount(0)
+		await phone.close()
+
+		// A Reviewer on a phone: name first, then a Range by its button
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const folderId = await fileId(api, `/remote.php/dav/files/${USER}/${folder}`)
+		const link = (await (await api.post(`/ocs/v2.php/apps/deliver/api/v1/files/${folderId}/shares?format=json`)).json()).ocs.data
+		// Only the newest Version takes Comments on this link
+		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
+		const newest = project.ocs.data.assets.find((asset) => asset.versions.some((version) => version.id === versionId)).versions[0].id
+		await api.dispose()
+		const guest = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const reviewer = await guest.newPage()
+		await reviewer.goto(`/apps/deliver/s/${link.token}/versions/${newest}`)
+		await reviewer.locator('#deliver-reviewer-name').fill('Pia')
+		await reviewer.getByRole('button', { name: 'Start reviewing' }).tap()
+		await expect(reviewer.locator('.deliver-comments__gate')).toHaveCount(0)
+		await reviewer.getByRole('button', { name: 'Start a Range here' }).tap()
+		for (let i = 0; i < 3; i++) {
+			await reviewer.getByRole('button', { name: 'One Frame forward' }).tap()
+		}
+		await reviewer.getByRole('button', { name: 'End the Range here' }).tap()
+		await expect(reviewer.locator('.deliver-comments__anchor')).toContainText('–')
+		await reviewer.locator('#deliver-comment-body').fill('on the phone')
+		await reviewer.getByRole('button', { name: 'Send (Enter)' }).tap()
+		await expect(reviewer.locator('.deliver-comment').filter({ hasText: 'on the phone' })).toContainText('Pia')
+		await guest.close()
 	})
 
 	test('a Reviewer names themselves and comments through a Share Link', async ({ playwright }) => {
