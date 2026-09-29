@@ -2,7 +2,7 @@
 import panelIcon from '@mdi/svg/svg/dock-right.svg?raw'
 import { t } from '@nextcloud/l10n'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
-import { onBeforeUnmount } from 'vue'
+import { onBeforeUnmount, onMounted } from 'vue'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
@@ -14,7 +14,10 @@ const panelOpen = defineModel('panelOpen', { type: Boolean, default: true })
 /** Below 1024 px the player sits on top and the Comments below it; the bar keeps only what fits */
 const isMobile = useIsMobile()
 const { up, writing } = sheet
+/** The Review view takes the whole window; Nextcloud's header and footer step aside */
+onMounted(() => document.body.classList.add('deliver-review'))
 onBeforeUnmount(() => {
+	document.body.classList.remove('deliver-review')
 	up.value = false
 	writing.value = false
 })
@@ -102,6 +105,24 @@ function grabEnd(event) {
 	</div>
 </template>
 
+<style>
+/*
+ * Nextcloud blurs behind its content area, and a backdrop filter makes that
+ * area the frame for fixed elements: the view would fill only the content
+ * area. While the Review view is open, the blur goes, and with it the header
+ * and the public page's footer.
+ */
+body.deliver-review #content-vue,
+body.deliver-review #content {
+	backdrop-filter: none !important;
+}
+
+body.deliver-review #header,
+body.deliver-review footer {
+	display: none !important;
+}
+</style>
+
 <style scoped>
 .deliver-layout {
 	--color-main-background: #141416;
@@ -128,9 +149,10 @@ function grabEnd(event) {
 	--color-error-text: #ff7b72;
 	--deliver-card: #19191c;
 	--deliver-timecode: #6ea8ff;
+	position: fixed;
+	inset: 0;
 	display: flex;
 	flex-direction: column;
-	height: 100%;
 	min-width: 0;
 	background: var(--color-main-background);
 	color: var(--color-main-text);

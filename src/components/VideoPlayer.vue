@@ -678,6 +678,7 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 					:src="source"
 					:muted="muted"
 					:loop="loopsWhole"
+					playsinline
 					preload="metadata"
 					@loadedmetadata="onLoaded"
 					@timeupdate="onTimeUpdate"
@@ -747,6 +748,7 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 				class="deliver-player__scrub-video"
 				:src="scrubSource"
 				muted
+				playsinline
 				preload="metadata"
 				aria-hidden="true"
 				@loadedmetadata="onScrubLoaded"
@@ -1445,7 +1447,7 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	background: #000;
 }
 
-/* Fullscreen without the browser's help: the player covers the window, Nextcloud's header too */
+/* Fullscreen without the browser's help: the player covers the window */
 .deliver-player--filling {
 	position: fixed;
 	inset: 0;
