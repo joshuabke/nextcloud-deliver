@@ -26,6 +26,7 @@ import DrawingLayer from './DrawingLayer.vue'
 import DrawToolbar from './DrawToolbar.vue'
 import { useFullscreen } from '../composables/fullscreen.js'
 import { useGestures } from '../composables/gestures.js'
+import { landscape } from '../composables/panel.js'
 import { COLORS, drawingsAt } from '../lib/drawing.js'
 import { actionFor } from '../lib/hotkeys.js'
 import { formatAt, fpsValue, frameToTime, MODES, timeToFrame } from '../lib/timecode.js'
@@ -148,8 +149,8 @@ const JUMP_SECONDS = 5
 
 /** Touch on the picture (story 104); drawing takes the fingers for itself */
 const { zoom, touched, reset: resetZoom, listeners: gestures } = useGestures({
-	// On a phone a tap goes fullscreen, as in the Frame.io app; there it plays and pauses
-	tap: () => (fullscreen.value || !isMobile.value ? playPause() : toggleFullscreen()),
+	// On an upright phone a tap goes fullscreen, as in the Frame.io app; there, and sideways, it plays and pauses
+	tap: () => (fullscreen.value || !isMobile.value || landscape.value ? playPause() : toggleFullscreen()),
 	doubleTap: (side) => {
 		if (side === 0) {
 			return
@@ -367,7 +368,7 @@ function onDragEnd() {
 }
 
 /**
- * The card over a marker is for the mouse and the keyboard; a finger taps straight through to the Comment
+ * The card over a marker follows the mouse and the keyboard; a finger opens it with a tap, below
  *
  * @param {object} comment - the marker's Comment
  * @param {PointerEvent|FocusEvent} event - the pointer entering, or focus
@@ -378,10 +379,45 @@ function peekAt(comment, event) {
 	}
 }
 
+/** Whether the last press on a marker was a finger's or a pen's */
+let tappedMarker = false
+
+/**
+ * @param {PointerEvent} event - a press on a marker
+ */
+function pressMarker(event) {
+	tappedMarker = event.pointerType !== 'mouse'
+}
+
+/**
+ * A marker pressed: to its Frame, and after a tap the card stays open to be
+ * read, also in fullscreen, until it is tapped away or playback starts
+ *
+ * @param {object} comment - the marker's Comment
+ * @param {MouseEvent} event - the click
+ */
+function openMarker(comment, event) {
+	seekTo(comment.inFrame)
+	emit('jump', comment)
+	if (tappedMarker) {
+		showPeek(comment, event)
+		peek.value.tapped = true
+	}
+}
+
+watch(playing, (now) => {
+	if (now && peek.value?.tapped) {
+		peek.value = null
+	}
+})
+
 /** The pointer left the bar */
 function leaveScrubber() {
 	hover.value = null
-	peek.value = null
+	// A card opened by a tap stays until it is tapped away
+	if (!peek.value?.tapped) {
+		peek.value = null
+	}
 	scrubDrawn.value = false
 	scrubWanted = null
 }
@@ -805,11 +841,12 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 					:class="{ 'deliver-player__marker--resolved': each.resolved }"
 					:style="{ left: leftOf(each) + '%' }"
 					:aria-label="each.author.name + ': ' + each.body"
+					@pointerdown="pressMarker"
 					@pointerenter="peekAt(each, $event)"
-					@pointerleave="peek = null"
+					@pointerleave="$event.pointerType === 'mouse' && (peek = null)"
 					@focus="peekAt(each, $event)"
-					@blur="peek = null"
-					@click="seekTo(each.inFrame); emit('jump', each)">
+					@blur="peek?.tapped || (peek = null)"
+					@click="openMarker(each, $event)">
 					<NcAvatar
 						:user="each.author.type === 'user' ? each.author.id : undefined"
 						:displayName="each.author.name"
@@ -819,7 +856,12 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 						disableMenu
 						disableTooltip />
 				</button>
-				<div v-if="peek" class="deliver-player__peek" :style="{ left: peek.left + 'px' }">
+				<div
+					v-if="peek"
+					class="deliver-player__peek"
+					:class="{ 'deliver-player__peek--tapped': peek.tapped }"
+					:style="{ left: peek.left + 'px' }"
+					@click="peek = null">
 					<NcAvatar
 						:user="peek.comment.author.type === 'user' ? peek.comment.author.id : undefined"
 						:displayName="peek.comment.author.name"
@@ -1328,6 +1370,11 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 	transform: translateX(-50%);
 	pointer-events: none;
+}
+
+/* Opened by a tap, it is tapped away */
+.deliver-player__peek--tapped {
+	pointer-events: auto;
 }
 
 .deliver-player__peek-content {

@@ -31,7 +31,7 @@ import VersionStack from '../components/VersionStack.vue'
 import VideoPlayer from '../components/VideoPlayer.vue'
 import { errorMessage, getVersion, listMembers, updateAsset, uploadNextVersion } from '../api.js'
 import { useLiveUpdates } from '../composables/live.js'
-import { usePanelOpen } from '../composables/panel.js'
+import { sheet, usePanelOpen } from '../composables/panel.js'
 import { useReview } from '../composables/review.js'
 import { filesDir, groupByFolder, uploadFolder } from '../lib/folders.js'
 import { useCommentsStore } from '../store/comments.js'
@@ -58,6 +58,12 @@ const dueInput = ref(null)
 const members = ref([])
 /** The right panel shows the Comments or the Version Stack */
 const tab = ref('comments')
+// On an upright phone the list pulled down leaves only the field to write in, so the Comments are the tab that comes back up
+watch(sheet.up, (pulled) => {
+	if (!pulled) {
+		tab.value = 'comments'
+	}
+})
 
 const version = computed(() => context.value?.versions.find((each) => each.id === props.id) ?? null)
 const tabs = computed(() => [

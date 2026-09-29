@@ -149,12 +149,12 @@ After 0.2.0 the feature set grows to what a hosted review tool offers (FreeFrame
 
 ### Phones and tablets
 
-The phone version follows the Frame.io iOS app, in the mobile browser: Deliver is a Nextcloud app and ships no native app. Below 1024 px wide (phones, and tablets upright) the Review view stacks; wider screens keep the desktop layout, with touch.
+The phone version follows the Frame.io iOS app, in the mobile browser: Deliver is a Nextcloud app and ships no native app. Below 1024 px wide (phones, and tablets upright) the Review view stacks; wider screens keep the desktop layout, with touch. On every screen the Review view takes the whole window, without Nextcloud's header.
 
-103. As a Reviewer or Member on a phone, I want the Review view to show the picture on top, the Comments below and the field to write in at the bottom, with only back, name, Version and Approval in the bar and the rest in its menu, so that I review without zooming or scrolling the page.
-104. As a Reviewer or Member on a phone, I want to tap the picture for fullscreen, also by turning the phone sideways, play and step Frame by Frame with buttons, double-tap either side to jump five seconds, hold for double speed, pinch to zoom and swipe to the next Asset, so that the player works without a keyboard.
-105. As a Reviewer or Member on a phone, I want to drag the playhead with the exact Frame shown above my finger and tap a Comment's marker to jump to it and see it in the list, so that I find places without hovering.
-106. As a Reviewer or Member on a phone, I want to pull the Comment list up over the picture and have it step aside while I write, so that reading and writing both have room.
+103. As a Reviewer or Member on a phone held upright, I want the Review view to give the picture all the room above the field to write in, with only back, name, Version and Approval in the bar and the rest in its menu, so that I watch big and concentrate on my own Comments.
+104. As a Reviewer or Member on a phone, I want to tap the picture for fullscreen, play and step Frame by Frame with buttons, double-tap either side to jump five seconds, hold for double speed, pinch to zoom and swipe to the next Asset, so that the player works without a keyboard.
+105. As a Reviewer or Member on a phone, I want to drag the playhead with the exact Frame shown above my finger and tap a Comment's marker to jump to it and read it on the picture, also in fullscreen, so that I find and read Comments without hovering.
+106. As a Reviewer or Member on a phone, I want to pull the Comment list up in place of the picture while upright, to have the picture fill the window with the list to open beside it, as a live chat, while sideways, and the list to step aside while I write, so that reading and writing both have room.
 107. As a Reviewer or Member, I want a Range button next to the field, to start a Range at the current Frame and end it where I scrub to, so that Ranges need no I and O keys.
 108. As a Reviewer or Member on a phone or tablet, I want to draw on the picture with a finger or a pen, so that Drawings work there too.
 109. As a Member on a phone, I want the Project list and Project view to fit: the navigation as a drawer, menus by a long press or a "…" button on each card, filters as a row to swipe, and upload by button, so that I can follow my Projects on the go.

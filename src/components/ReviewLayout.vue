@@ -1,19 +1,26 @@
 <script setup>
+import commentsIcon from '@mdi/svg/svg/comment-text-multiple-outline.svg?raw'
 import panelIcon from '@mdi/svg/svg/dock-right.svg?raw'
 import { t } from '@nextcloud/l10n'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
-import { onBeforeUnmount, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
-import { sheet } from '../composables/panel.js'
+import { landscape, sheet } from '../composables/panel.js'
 
 /** Whether the panel beside the player is open; on a phone it always is, under the player */
 const panelOpen = defineModel('panelOpen', { type: Boolean, default: true })
 
-/** Below 1024 px the player sits on top and the Comments below it; the bar keeps only what fits */
+/**
+ * Below 1024 px a phone: upright, the picture takes the room and only the
+ * field to write in sits below it, the Comment list comes up in its place;
+ * sideways, the picture fills the window and the list opens beside it
+ */
 const isMobile = useIsMobile()
-const { up, writing } = sheet
+const sideways = computed(() => isMobile.value && landscape.value)
+const upright = computed(() => isMobile.value && !landscape.value)
+const { up, aside, writing } = sheet
 /** The Review view takes the whole window; Nextcloud's header and footer step aside */
 onMounted(() => document.body.classList.add('deliver-review'))
 onBeforeUnmount(() => {
@@ -49,74 +56,81 @@ function grabEnd(event) {
 </script>
 
 <template>
-	<!-- The Review view is dark in any theme, like every video tool: the picture is what should stand out -->
-	<div
-		class="deliver-layout"
-		:class="{
-			'deliver-layout--mobile': isMobile,
-			'deliver-layout--up': isMobile && up && !writing,
-			'deliver-layout--writing': isMobile && writing,
-		}">
-		<div class="deliver-layout__bar">
-			<div class="deliver-layout__start">
-				<slot name="start" />
+	<!-- The Review view is dark in any theme, like every video tool: the picture is what should stand out.
+		It hangs off the body: Nextcloud's content area carries a backdrop filter, which makes that area,
+		not the window, the frame for anything fixed; on the iPhone the view ended up under the header -->
+	<Teleport to="body">
+		<div
+			class="deliver-layout"
+			:class="{
+				'deliver-layout--mobile': isMobile,
+				'deliver-layout--upright': upright,
+				'deliver-layout--sideways': sideways,
+				'deliver-layout--up': upright && up && !writing,
+				'deliver-layout--writing': isMobile && writing,
+			}">
+			<div v-if="!sideways" class="deliver-layout__bar">
+				<div class="deliver-layout__start">
+					<slot name="start" />
+				</div>
+				<div v-if="!isMobile" class="deliver-layout__center">
+					<slot name="center" />
+				</div>
+				<div class="deliver-layout__end">
+					<slot name="end" />
+					<!-- What does not fit into a phone's bar -->
+					<NcActions v-if="isMobile && $slots.menu" variant="tertiary" :aria-label="t('deliver', 'More')">
+						<slot name="menu" />
+					</NcActions>
+					<NcButton
+						v-if="!isMobile"
+						variant="tertiary"
+						:pressed="panelOpen"
+						:aria-label="panelOpen ? t('deliver', 'Hide Comments') : t('deliver', 'Show Comments')"
+						:title="panelOpen ? t('deliver', 'Hide Comments') : t('deliver', 'Show Comments')"
+						@click="panelOpen = !panelOpen">
+						<template #icon>
+							<NcIconSvgWrapper :svg="panelIcon" />
+						</template>
+					</NcButton>
+				</div>
 			</div>
-			<div v-if="!isMobile" class="deliver-layout__center">
-				<slot name="center" />
-			</div>
-			<div class="deliver-layout__end">
-				<slot name="end" />
-				<!-- What does not fit into a phone's bar -->
-				<NcActions v-if="isMobile && $slots.menu" variant="tertiary" :aria-label="t('deliver', 'More')">
-					<slot name="menu" />
-				</NcActions>
-				<NcButton
-					v-if="!isMobile"
-					variant="tertiary"
-					:pressed="panelOpen"
-					:aria-label="panelOpen ? t('deliver', 'Hide Comments') : t('deliver', 'Show Comments')"
-					:title="panelOpen ? t('deliver', 'Hide Comments') : t('deliver', 'Show Comments')"
-					@click="panelOpen = !panelOpen">
-					<template #icon>
-						<NcIconSvgWrapper :svg="panelIcon" />
-					</template>
-				</NcButton>
+			<slot name="notice" />
+			<div class="deliver-layout__body" :class="{ 'deliver-layout__body--wide': !panelOpen && !isMobile }">
+				<div class="deliver-layout__main">
+					<slot />
+					<NcButton
+						v-if="sideways"
+						class="deliver-layout__aside"
+						variant="tertiary"
+						:pressed="aside"
+						:aria-label="aside ? t('deliver', 'Hide Comments') : t('deliver', 'Show Comments')"
+						@click="aside = !aside">
+						<template #icon>
+							<NcIconSvgWrapper :svg="commentsIcon" />
+						</template>
+					</NcButton>
+				</div>
+				<div v-show="sideways ? aside : panelOpen || isMobile" class="deliver-layout__panel">
+					<button
+						v-if="upright"
+						type="button"
+						class="deliver-layout__grabber"
+						:aria-label="up ? t('deliver', 'Show the picture') : t('deliver', 'Pull the Comments up')"
+						@pointerdown="grabStart"
+						@pointerup="grabEnd"
+						@pointercancel="grab = null"
+						@keydown.enter.prevent="up = !up"
+						@keydown.space.prevent="up = !up" />
+					<slot name="panel" />
+				</div>
 			</div>
 		</div>
-		<slot name="notice" />
-		<div class="deliver-layout__body" :class="{ 'deliver-layout__body--wide': !panelOpen && !isMobile }">
-			<div class="deliver-layout__main">
-				<slot />
-			</div>
-			<div v-show="panelOpen || isMobile" class="deliver-layout__panel">
-				<button
-					v-if="isMobile"
-					type="button"
-					class="deliver-layout__grabber"
-					:aria-label="up ? t('deliver', 'Show the picture') : t('deliver', 'Pull the Comments up')"
-					@pointerdown="grabStart"
-					@pointerup="grabEnd"
-					@pointercancel="grab = null"
-					@keydown.enter.prevent="up = !up"
-					@keydown.space.prevent="up = !up" />
-				<slot name="panel" />
-			</div>
-		</div>
-	</div>
+	</Teleport>
 </template>
 
 <style>
-/*
- * Nextcloud blurs behind its content area, and a backdrop filter makes that
- * area the frame for fixed elements: the view would fill only the content
- * area. While the Review view is open, the blur goes, and with it the header
- * and the public page's footer.
- */
-body.deliver-review #content-vue,
-body.deliver-review #content {
-	backdrop-filter: none !important;
-}
-
+/* While the Review view is open, Nextcloud's header and the public page's footer step aside */
 body.deliver-review #header,
 body.deliver-review footer {
 	display: none !important;
@@ -151,6 +165,7 @@ body.deliver-review footer {
 	--deliver-timecode: #6ea8ff;
 	position: fixed;
 	inset: 0;
+	z-index: 1000;
 	display: flex;
 	flex-direction: column;
 	min-width: 0;
@@ -260,9 +275,22 @@ body.deliver-review footer {
 	transform: translateX(-50%);
 }
 
+/* Upright: the list waits below the grabber until it is pulled up */
+.deliver-layout--upright:not(.deliver-layout--up) :deep(.deliver-comments__head),
+.deliver-layout--upright:not(.deliver-layout--up) :deep(.deliver-comments__list),
+.deliver-layout--upright:not(.deliver-layout--up) :deep(.deliver-comments__empty),
+.deliver-layout--upright:not(.deliver-layout--up) :deep(.deliver-tabs),
+.deliver-layout--upright:not(.deliver-layout--up) :deep(.deliver-versions) {
+	display: none;
+}
+
 /* Pulled up: of the player only its timeline and controls stay, the picture plays on unseen */
-.deliver-layout--mobile.deliver-layout--up .deliver-layout__main {
-	height: auto;
+.deliver-layout--upright.deliver-layout--up .deliver-layout__main {
+	flex: none;
+}
+
+.deliver-layout--upright.deliver-layout--up .deliver-layout__panel {
+	flex: 1;
 }
 
 .deliver-layout--up :deep(.deliver-player__stage),
@@ -280,15 +308,38 @@ body.deliver-review footer {
 	display: none;
 }
 
-/* A 16:9 picture at full width, plus its timeline and controls */
-.deliver-layout--mobile .deliver-layout__main {
-	flex: none;
-	height: min(calc(56.25vw + 96px), 55%);
+/* Upright: the picture as large as the room allows, the field below it */
+.deliver-layout--upright .deliver-layout__main {
+	flex: 1;
 }
 
-.deliver-layout--mobile .deliver-layout__panel {
-	flex: 1;
+.deliver-layout--upright .deliver-layout__panel {
+	flex: none;
+	max-height: 100%;
 	border-inline-start: none;
 	border-top: 1px solid var(--color-border);
+}
+
+/* Sideways: the picture fills the window, the list opens beside it, as a live chat does */
+.deliver-layout--sideways .deliver-layout__body {
+	flex-direction: row;
+}
+
+.deliver-layout--sideways .deliver-layout__main {
+	position: relative;
+	flex: 1;
+}
+
+.deliver-layout--sideways .deliver-layout__panel {
+	flex: none;
+	width: min(360px, 45%);
+}
+
+.deliver-layout__aside {
+	position: absolute !important;
+	top: var(--default-grid-baseline);
+	right: var(--default-grid-baseline);
+	z-index: 3;
+	background: rgba(0, 0, 0, 0.5) !important;
 }
 </style>

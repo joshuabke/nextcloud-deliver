@@ -292,12 +292,15 @@ test.describe('Review view', () => {
 		const video = page.locator('video.deliver-player__video')
 		await expect(video).toHaveJSProperty('readyState', 4)
 
-		// The Comments sit under the picture, and pull up over it
+		// Upright, only the field sits under the picture, without Nextcloud's header; the list pulls up in its place
+		await expect(page.locator('#header')).toBeHidden()
 		const stage = await page.locator('.deliver-player__stage').boundingBox()
 		const panel = await page.locator('.deliver-layout__panel').boundingBox()
 		expect(panel.y).toBeGreaterThanOrEqual(stage.y + stage.height)
+		await expect(page.locator('.deliver-comments__head')).toBeHidden()
 		await page.locator('.deliver-layout__grabber').tap()
 		await expect(page.locator('.deliver-layout--up')).toHaveCount(1)
+		await expect(page.locator('.deliver-comments__head')).toBeVisible()
 		await page.locator('.deliver-layout__grabber').tap()
 		await expect(page.locator('.deliver-layout--up')).toHaveCount(0)
 
@@ -311,6 +314,13 @@ test.describe('Review view', () => {
 		await expect(page.locator('.deliver-player--fullscreen')).toHaveCount(1)
 		await page.getByRole('button', { name: 'Leave fullscreen' }).tap()
 		await expect(page.locator('.deliver-player--fullscreen')).toHaveCount(0)
+
+		// Sideways, the picture fills the window and the list opens beside it
+		await page.setViewportSize({ width: PHONE.viewport.height, height: PHONE.viewport.width })
+		await expect(page.locator('.deliver-layout__bar')).toHaveCount(0)
+		await expect(page.locator('.deliver-layout__panel')).toBeHidden()
+		await page.getByRole('button', { name: 'Show Comments' }).tap()
+		await expect(page.locator('.deliver-comments__head')).toBeVisible()
 		await phone.close()
 
 		// A Reviewer on a phone: name first, then a Range by its button
@@ -336,6 +346,9 @@ test.describe('Review view', () => {
 		await reviewer.locator('#deliver-comment-body').fill('on the phone')
 		await reviewer.getByRole('button', { name: 'Send (Enter)' }).tap()
 		await expect(reviewer.locator('.deliver-comment').filter({ hasText: 'on the phone' })).toContainText('Pia')
+		// A tap on its marker opens the Comment on the picture
+		await reviewer.locator('.deliver-player__marker[aria-label^="Pia"]').tap()
+		await expect(reviewer.locator('.deliver-player__peek--tapped')).toContainText('on the phone')
 		await guest.close()
 	})
 
