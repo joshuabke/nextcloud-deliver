@@ -209,7 +209,8 @@ async function claim({ name, email, mail }) {
 				:canComment="store.canComment === true && store.me?.type !== 'unnamed'"
 				:watermark="context.flags.watermark ? watermarkText : null"
 				@comment="pin($event); panelOpen = true"
-				@jump="jump" />
+				@jump="jump"
+				@swipe="step" />
 			<VideoPlayer
 				v-else-if="version"
 				ref="player"
@@ -222,7 +223,8 @@ async function claim({ name, email, mail }) {
 				:canComment="store.canComment === true && store.me?.type !== 'unnamed'"
 				:watermark="context.flags.watermark ? watermarkText : null"
 				@comment="pin($event); panelOpen = true"
-				@jump="jump" />
+				@jump="jump"
+				@swipe="step" />
 
 			<template #panel>
 				<CommentPanel

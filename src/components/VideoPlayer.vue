@@ -2,23 +2,30 @@
 import menuIcon from '@mdi/svg/svg/chevron-down.svg?raw'
 import caretIcon from '@mdi/svg/svg/chevron-up.svg?raw'
 import closeIcon from '@mdi/svg/svg/close.svg?raw'
+import moreIcon from '@mdi/svg/svg/dots-horizontal.svg?raw'
 import fullscreenExitIcon from '@mdi/svg/svg/fullscreen-exit.svg?raw'
 import fullscreenIcon from '@mdi/svg/svg/fullscreen.svg?raw'
 import pauseIcon from '@mdi/svg/svg/pause.svg?raw'
 import playIcon from '@mdi/svg/svg/play.svg?raw'
 import loopIcon from '@mdi/svg/svg/repeat.svg?raw'
+import stepBackIcon from '@mdi/svg/svg/step-backward.svg?raw'
+import stepForwardIcon from '@mdi/svg/svg/step-forward.svg?raw'
 import volumeIcon from '@mdi/svg/svg/volume-high.svg?raw'
 import mutedIcon from '@mdi/svg/svg/volume-off.svg?raw'
 import { t } from '@nextcloud/l10n'
+import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
+import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDateTime from '@nextcloud/vue/components/NcDateTime'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DrawingLayer from './DrawingLayer.vue'
 import DrawToolbar from './DrawToolbar.vue'
+import { useFullscreen } from '../composables/fullscreen.js'
+import { useGestures } from '../composables/gestures.js'
 import { COLORS, drawingsAt } from '../lib/drawing.js'
 import { actionFor } from '../lib/hotkeys.js'
 import { formatAt, fpsValue, frameToTime, MODES, timeToFrame } from '../lib/timecode.js'
@@ -41,14 +48,16 @@ const props = defineProps({
 	drawing: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['comment', 'jump', 'update:mode', 'update:drawing'])
+const emit = defineEmits(['comment', 'jump', 'swipe', 'update:mode', 'update:drawing'])
 
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2]
 
 const root = ref(null)
 const video = ref(null)
 const muted = ref(false)
-const fullscreen = ref(false)
+/** On a phone the bar is shorter and the picture answers to fingers */
+const isMobile = useIsMobile()
+const { fullscreen, filling, toggle: toggleFullscreen } = useFullscreen(root)
 const frame = ref(0)
 const durationFrames = ref(0)
 const playing = ref(false)
@@ -116,6 +125,56 @@ const progress = computed(() => durationFrames.value ? (frame.value / durationFr
 
 defineExpose({ seekTo, frame, pause })
 
+/** What a gesture did, shown for a moment over the picture */
+const flash = ref(null)
+let flashTimer = null
+
+/**
+ * @param {string} text - what to show
+ * @param {number} side - -1 on the left, 1 on the right, 0 in the middle
+ */
+function showFlash(text, side = 0) {
+	clearTimeout(flashTimer)
+	flash.value = { text, side }
+	flashTimer = setTimeout(() => {
+		flash.value = null
+	}, 600)
+}
+
+/** The speed and state to go back to when a held finger lifts */
+let beforeHold = null
+
+const JUMP_SECONDS = 5
+
+/** Touch on the picture (story 104); drawing takes the fingers for itself */
+const { zoom, touched, reset: resetZoom, listeners: gestures } = useGestures({
+	// On a phone a tap goes fullscreen, as in the Frame.io app; there it plays and pauses
+	tap: () => (fullscreen.value || !isMobile.value ? playPause() : toggleFullscreen()),
+	doubleTap: (side) => {
+		if (side === 0) {
+			return
+		}
+		seekTo(frame.value + side * Math.round(JUMP_SECONDS * fpsValue(fps.value)))
+		showFlash(side < 0 ? t('deliver', '−{seconds} s', { seconds: JUMP_SECONDS }) : t('deliver', '+{seconds} s', { seconds: JUMP_SECONDS }), side)
+	},
+	holdStart: () => {
+		beforeHold = { playing: playing.value, speed: speed.value }
+		speed.value = 2
+		play()
+		showFlash('2×')
+	},
+	holdEnd: () => {
+		if (beforeHold) {
+			setSpeed(beforeHold.speed)
+			if (!beforeHold.playing) {
+				pause()
+			}
+			beforeHold = null
+		}
+	},
+	swipe: (step) => emit('swipe', step),
+}, computed(() => !props.drawing))
+
 watch(() => props.version.id, async (id) => {
 	pause()
 	useProxy.value = false
@@ -130,6 +189,7 @@ watch(() => props.version.id, async (id) => {
 	strip.value = null
 	peaks.value = []
 	hover.value = null
+	resetZoom()
 	const [loadedStrip, loadedPeaks] = await Promise.all([loadStrip(), loadWaveform()])
 	// A later Version may have been opened in the meantime
 	if (props.version.id === id) {
@@ -312,28 +372,13 @@ const waveformPoints = computed(() => {
 	return [...top, ...bottom].join(' ')
 })
 
-/** Follows the browser's own fullscreen state, which Escape also leaves */
-function onFullscreenChange() {
-	fullscreen.value = document.fullscreenElement === root.value
-}
-
-/** The whole player goes fullscreen, controls and timeline included */
-function toggleFullscreen() {
-	if (fullscreen.value) {
-		document.exitFullscreen()
-	} else {
-		root.value?.requestFullscreen()
-	}
-}
-
 onMounted(() => {
 	window.addEventListener('keydown', onKey)
-	document.addEventListener('fullscreenchange', onFullscreenChange)
 })
 onBeforeUnmount(() => {
 	window.removeEventListener('keydown', onKey)
-	document.removeEventListener('fullscreenchange', onFullscreenChange)
 	stopReverse()
+	clearTimeout(flashTimer)
 })
 
 /** Follows the media element, and sends a looped Range back to its in Frame */
@@ -520,6 +565,15 @@ function widthOf(anchor) {
 	return ((anchor.outFrame - anchor.inFrame + 1) / durationFrames.value) * 100
 }
 
+/** A click right after a finger lifted was that finger's tap, handled already */
+function onVideoClick() {
+	if (touched.value) {
+		touched.value = false
+		return
+	}
+	playPause()
+}
+
 /** The time display: timecode, frame counter or seconds (story 22) */
 const MODE_LABELS = {
 	smpte: t('deliver', 'Timecode'),
@@ -547,32 +601,43 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 </script>
 
 <template>
-	<div ref="root" class="deliver-player" :class="{ 'deliver-player--fullscreen': fullscreen }">
-		<div class="deliver-player__stage">
-			<video
-				v-if="source"
-				ref="video"
-				class="deliver-player__video"
-				:src="source"
-				:muted="muted"
-				:loop="loopsWhole"
-				preload="metadata"
-				@loadedmetadata="onLoaded"
-				@timeupdate="onTimeUpdate"
-				@play="playing = true"
-				@pause="playing = reverse !== null"
-				@ended="pause"
-				@error="unplayable = true"
-				@click="playPause" />
-			<DrawingLayer
-				v-if="source && !version.audioOnly"
-				v-model:draft="draft"
-				:pictureWidth="picture.width"
-				:pictureHeight="picture.height"
-				:shown="shownDrawings"
-				:editing="drawing"
-				:tool="tool"
-				:color="color" />
+	<div ref="root" class="deliver-player" :class="{ 'deliver-player--fullscreen': fullscreen, 'deliver-player--filling': filling }">
+		<div class="deliver-player__stage" v-on="gestures">
+			<!-- Two fingers zoom the picture and its drawings together -->
+			<div
+				class="deliver-player__zoom"
+				:style="zoom.scale > 1 ? { transform: `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})` } : null">
+				<video
+					v-if="source"
+					ref="video"
+					class="deliver-player__video"
+					:src="source"
+					:muted="muted"
+					:loop="loopsWhole"
+					preload="metadata"
+					@loadedmetadata="onLoaded"
+					@timeupdate="onTimeUpdate"
+					@play="playing = true"
+					@pause="playing = reverse !== null"
+					@ended="pause"
+					@error="unplayable = true"
+					@click="onVideoClick" />
+				<DrawingLayer
+					v-if="source && !version.audioOnly"
+					v-model:draft="draft"
+					:pictureWidth="picture.width"
+					:pictureHeight="picture.height"
+					:shown="shownDrawings"
+					:editing="drawing"
+					:tool="tool"
+					:color="color" />
+			</div>
+			<div
+				v-if="flash"
+				class="deliver-player__flash"
+				:class="`deliver-player__flash--${flash.side < 0 ? 'left' : flash.side > 0 ? 'right' : 'middle'}`">
+				{{ flash.text }}
+			</div>
 			<div v-if="watermark" class="deliver-player__watermark" :style="{ backgroundImage: watermarkTile(watermark) }" />
 			<DrawToolbar
 				v-if="drawing"
@@ -707,7 +772,103 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 			</div>
 		</div>
 
-		<div class="deliver-player__controls">
+		<!-- A phone: Frame steps around Play, the rest of the settings in one menu -->
+		<div v-if="isMobile" class="deliver-player__controls">
+			<div class="deliver-player__group">
+				<NcButton
+					variant="tertiary"
+					:disabled="!source"
+					:aria-label="t('deliver', 'One Frame back')"
+					@click="step(-1)">
+					<template #icon>
+						<NcIconSvgWrapper :svg="stepBackIcon" />
+					</template>
+				</NcButton>
+				<NcButton
+					variant="tertiary"
+					:disabled="!source"
+					:aria-label="playing ? t('deliver', 'Pause') : t('deliver', 'Play')"
+					@click="playPause">
+					<template #icon>
+						<NcIconSvgWrapper :svg="playing ? pauseIcon : playIcon" />
+					</template>
+				</NcButton>
+				<NcButton
+					variant="tertiary"
+					:disabled="!source"
+					:aria-label="t('deliver', 'One Frame forward')"
+					@click="step(1)">
+					<template #icon>
+						<NcIconSvgWrapper :svg="stepForwardIcon" />
+					</template>
+				</NcButton>
+			</div>
+
+			<div class="deliver-player__group deliver-player__group--center">
+				<span class="deliver-player__timecode deliver-player__timecode--plain">{{ position }}</span>
+			</div>
+
+			<div class="deliver-player__group deliver-player__group--end">
+				<NcButton
+					variant="tertiary"
+					:aria-label="muted ? t('deliver', 'Sound on') : t('deliver', 'Mute')"
+					@click="muted = !muted">
+					<template #icon>
+						<NcIconSvgWrapper :svg="muted ? mutedIcon : volumeIcon" />
+					</template>
+				</NcButton>
+				<NcActions variant="tertiary" :aria-label="t('deliver', 'Playback settings')">
+					<template #icon>
+						<NcIconSvgWrapper :svg="moreIcon" />
+					</template>
+					<NcActionButton :modelValue="loop" type="checkbox" @click="loop = !loop">
+						{{ range?.outFrame != null ? t('deliver', 'Loop the Range') : t('deliver', 'Loop') }}
+					</NcActionButton>
+					<NcActionSeparator />
+					<NcActionButton
+						v-for="rate in SPEEDS"
+						:key="rate"
+						:modelValue="Math.abs(speed) === rate"
+						type="radio"
+						closeAfterClick
+						@click="setSpeed(rate)">
+						{{ t('deliver', 'Speed {rate}×', { rate }) }}
+					</NcActionButton>
+					<template v-if="original && proxy">
+						<NcActionSeparator />
+						<NcActionButton
+							v-for="each in sources"
+							:key="each.label"
+							:modelValue="useProxy === each.proxy"
+							type="radio"
+							closeAfterClick
+							@click="pickSource(each.proxy)">
+							{{ each.resolution ? each.label + ' · ' + each.resolution + 'p' : each.label }}
+						</NcActionButton>
+					</template>
+					<NcActionSeparator />
+					<NcActionButton
+						v-for="each in MODES"
+						:key="each"
+						:modelValue="clock.mode === each"
+						type="radio"
+						closeAfterClick
+						@click="emit('update:mode', each)">
+						{{ MODE_LABELS[each] }}
+					</NcActionButton>
+				</NcActions>
+				<NcButton
+					variant="tertiary"
+					:aria-label="fullscreen ? t('deliver', 'Leave fullscreen') : t('deliver', 'Fullscreen')"
+					@click="toggleFullscreen">
+					<template #icon>
+						<NcIconSvgWrapper :svg="fullscreen ? fullscreenExitIcon : fullscreenIcon" />
+					</template>
+				</NcButton>
+			</div>
+		</div>
+
+		<div v-else class="deliver-player__controls">
 			<div class="deliver-player__group">
 				<NcButton
 					variant="tertiary"
@@ -825,7 +986,43 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	position: relative;
 	flex: 1;
 	min-height: 160px;
+	overflow: hidden;
 	background: #000;
+	/* Fingers are the player's: no page scrolling or browser zoom on the picture */
+	touch-action: none;
+}
+
+/* What a double tap or a hold did, for a moment */
+.deliver-player__flash {
+	position: absolute;
+	top: 50%;
+	z-index: 2;
+	padding: 6px 14px;
+	border-radius: var(--border-radius-pill);
+	background: rgba(0, 0, 0, 0.6);
+	color: #fff;
+	font-size: 15px;
+	font-weight: bold;
+	transform: translate(-50%, -50%);
+	pointer-events: none;
+}
+
+.deliver-player__flash--left {
+	left: 20%;
+}
+
+.deliver-player__flash--middle {
+	left: 50%;
+}
+
+.deliver-player__flash--right {
+	left: 80%;
+}
+
+.deliver-player__zoom {
+	position: absolute;
+	inset: 0;
+	transform-origin: center;
 }
 
 .deliver-player__video {
@@ -1152,5 +1349,18 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 
 .deliver-player--fullscreen {
 	background: #000;
+}
+
+/* Fullscreen without the browser's help: the player covers the window, Nextcloud's header too */
+.deliver-player--filling {
+	position: fixed;
+	inset: 0;
+	z-index: 10000;
+	height: 100dvh;
+}
+
+.deliver-player__timecode--plain {
+	padding: 2px 8px;
+	font-size: 15px;
 }
 </style>
