@@ -426,7 +426,7 @@ class DerivedMedia {
 
 	/** Deletes the derived media and open jobs of a Version */
 	public function forget(int $versionId): void {
-		$this->jobs->deleteByVersion($versionId);
+		$this->jobs->deleteBy('version_id', $versionId);
 		$version = $this->versions->find($versionId);
 		if ($version !== null) {
 			$version->setProxyState(self::STATE_NONE);

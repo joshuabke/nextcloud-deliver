@@ -244,9 +244,9 @@ class StackService {
 		$this->reactions->deleteByComments($commentIds);
 		// Attached files stay in the folder, like every file when Deliver lets go
 		$this->attachments->deleteByComments($commentIds);
-		$this->comments->deleteByVersion($version->getId());
-		$this->seen->deleteByVersion($version->getId());
-		$this->approvals->deleteByVersion($version->getId());
+		$this->comments->deleteBy('version_id', $version->getId());
+		$this->seen->deleteBy('version_id', $version->getId());
+		$this->approvals->deleteBy('version_id', $version->getId());
 		$assetId = $version->getAssetId();
 		$this->versions->delete($version);
 		$this->dropIfEmpty($assetId);
@@ -257,9 +257,9 @@ class StackService {
 		foreach ($this->versions->findByProject($project->getId()) as $version) {
 			$this->purge($version);
 		}
-		$this->assets->deleteByProject($project->getId());
+		$this->assets->deleteBy('project_id', $project->getId());
 		$this->reviewers->deleteLinks(array_map(static fn ($reviewer) => $reviewer->getId(), $this->reviewers->findByProject($project->getId())));
-		$this->reviewers->deleteByProject($project->getId());
+		$this->reviewers->deleteBy('project_id', $project->getId());
 		$this->mutes->deleteByProject($project->getId());
 		$this->projects->delete($project);
 	}

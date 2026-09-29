@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Db;
 
-use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 
-/** @template-extends QBMapper<Job> */
-class JobMapper extends QBMapper {
+/** @template-extends Mapper<Job> */
+class JobMapper extends Mapper {
 	public function __construct(IDBConnection $db) {
 		parent::__construct($db, 'deliver_jobs', Job::class);
 	}
@@ -95,12 +94,5 @@ class JobMapper extends QBMapper {
 			->orderBy('finished_at', 'DESC')
 			->setMaxResults(1);
 		return $this->findEntities($qb)[0] ?? null;
-	}
-
-	public function deleteByVersion(int $versionId): void {
-		$qb = $this->db->getQueryBuilder();
-		$qb->delete($this->getTableName())
-			->where($qb->expr()->eq('version_id', $qb->createNamedParameter($versionId)))
-			->executeStatement();
 	}
 }
