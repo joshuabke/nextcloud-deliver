@@ -3,10 +3,11 @@ import { HOLD_MS, TAP_SLOP } from '../lib/gestures.js'
 /**
  * A long press opens what a right click opens (story 109): mobile Safari
  * sends no contextmenu event for it. The click that follows the press is
- * swallowed, so a card's link does not open as well.
+ * swallowed, so a card's link does not open as well. A phone also gets a
+ * button for the menu, which opens under it.
  *
  * @param {(where: {clientX: number, clientY: number}) => void} open - shows the menu there
- * @return {object} listeners for the element that answers to the press
+ * @return {{press: object, fromButton: (event: MouseEvent) => void}} listeners for the element that answers to the press, and the menu button's click
  */
 export function useLongPress(open) {
 	let timer = null
@@ -21,7 +22,7 @@ export function useLongPress(open) {
 		start = null
 	}
 
-	return {
+	const press = {
 		pointerdown(event) {
 			if (event.pointerType === 'mouse') {
 				return
@@ -46,6 +47,14 @@ export function useLongPress(open) {
 				event.preventDefault()
 				event.stopPropagation()
 			}
+		},
+	}
+
+	return {
+		press,
+		fromButton(event) {
+			const box = event.currentTarget.getBoundingClientRect()
+			open({ clientX: box.left, clientY: box.bottom })
 		},
 	}
 }
