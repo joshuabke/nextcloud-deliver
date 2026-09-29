@@ -7,6 +7,7 @@ import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcSettingsSection from '@nextcloud/vue/components/NcSettingsSection'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { errorMessage, getPipelineSettings, savePipelineSettings } from '../api.js'
+import { useBusy } from '../composables/busy.js'
 
 const ENCODERS = [
 	{ id: 'none', label: t('deliver', 'None: software (libx264)') },
@@ -17,8 +18,7 @@ const ENCODERS = [
 
 const settings = ref(null)
 const status = ref(null)
-const busy = ref(false)
-const error = ref(null)
+const { busy, error, run } = useBusy()
 /** Set after a save, so the encoder test result only shows once it has run */
 const saved = ref(false)
 
@@ -34,10 +34,8 @@ onMounted(async () => {
 })
 
 /** Saves everything; a hardware encoder is tested with a one-second encode on the server */
-async function save() {
-	busy.value = true
-	error.value = null
-	try {
+function save() {
+	return run(async () => {
 		const values = settings.value
 		;({ settings: settings.value, status: status.value } = await savePipelineSettings({
 			...values,
@@ -46,11 +44,7 @@ async function save() {
 			thumbCap: Number(values.thumbCap),
 		}))
 		saved.value = true
-	} catch (e) {
-		error.value = errorMessage(e)
-	} finally {
-		busy.value = false
-	}
+	})
 }
 </script>
 

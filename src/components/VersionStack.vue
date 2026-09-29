@@ -6,7 +6,8 @@ import NcActionInput from '@nextcloud/vue/components/NcActionInput'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
-import { errorMessage, regenerateVersion, unstackVersion, updateVersion, uploadNextVersion } from '../api.js'
+import { regenerateVersion, unstackVersion, updateVersion, uploadNextVersion } from '../api.js'
+import { useBusy } from '../composables/busy.js'
 import { previewUrl } from '../lib/preview.js'
 
 const props = defineProps({
@@ -19,24 +20,17 @@ const props = defineProps({
 
 const emit = defineEmits(['open', 'changed'])
 
-const busy = ref(false)
-const error = ref(null)
+const { busy, error, run: runBusy } = useBusy()
 const dragging = ref(false)
 
 /**
- * @param {() => Promise<unknown>} action - what to run while the Stack is busy
+ * @param {() => Promise<unknown>} action - a change to the Stack, which is reloaded after it
  */
-async function run(action) {
-	busy.value = true
-	error.value = null
-	try {
+function run(action) {
+	return runBusy(async () => {
 		await action()
 		emit('changed')
-	} catch (e) {
-		error.value = errorMessage(e)
-	} finally {
-		busy.value = false
-	}
+	})
 }
 
 /** Version id → the number typed into its menu, until it is submitted */

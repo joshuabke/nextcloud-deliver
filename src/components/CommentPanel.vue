@@ -21,6 +21,7 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import CommentItem from './CommentItem.vue'
 import { errorMessage } from '../api.js'
+import { useBusy } from '../composables/busy.js'
 import { sheet } from '../composables/panel.js'
 import { insertMention, mentionAt } from '../lib/mentions.js'
 import { formatAt } from '../lib/timecode.js'
@@ -58,8 +59,7 @@ const SHOW = {
 }
 const searching = ref(false)
 const query = ref('')
-const busy = ref(false)
-const error = ref(null)
+const { busy, error, run } = useBusy()
 const input = ref(null)
 const reviewerName = ref('')
 const reviewerEmail = ref('')
@@ -208,29 +208,24 @@ function stopWriting() {
 const vFocus = { mounted: (element) => element.focus() }
 
 /** Posts the Comment at the anchor */
-async function submit() {
+function submit() {
 	if (!body.value.trim()) {
 		return
 	}
-	busy.value = true
-	error.value = null
-	try {
-		await store.add({ ...props.anchor, body: body.value, annotation: props.draft.length ? props.draft : null, files: files.value })
+	return run(async () => {
+		try {
+			await store.add({ ...props.anchor, body: body.value, annotation: props.draft.length ? props.draft : null, files: files.value })
+		} catch (e) {
+			// Posted without an attachment is still posted
+			if (!e.commentPosted) {
+				throw e
+			}
+			error.value = t('deliver', 'The Comment is posted, but {name} could not be attached: {reason}', { name: e.fileName, reason: errorMessage(e) })
+		}
 		body.value = ''
 		files.value = []
 		emit('posted')
-	} catch (e) {
-		if (e.commentPosted) {
-			body.value = ''
-			files.value = []
-			emit('posted')
-			error.value = t('deliver', 'The Comment is posted, but {name} could not be attached: {reason}', { name: e.fileName, reason: errorMessage(e) })
-		} else {
-			error.value = errorMessage(e)
-		}
-	} finally {
-		busy.value = false
-	}
+	})
 }
 
 /**

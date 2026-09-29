@@ -6,8 +6,9 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
-import { errorMessage, inviteReviewer, listReviewers, setShareFlags } from '../api.js'
+import { inviteReviewer, listReviewers, setShareFlags } from '../api.js'
 import { copyLink } from '../clipboard.js'
+import { useBusy } from '../composables/busy.js'
 
 const props = defineProps({
 	/** One Share Link with Deliver's flags, as the server lists it */
@@ -19,28 +20,12 @@ const props = defineProps({
 
 const emit = defineEmits(['update', 'person'])
 
-const busy = ref(false)
-const error = ref(null)
+const { busy, error, run } = useBusy()
 /** The Project's Reviewers, each with their Personal Link through this share; null while loading */
 const reviewers = ref(null)
 const inviting = ref(false)
 const name = ref('')
 const email = ref('')
-
-/**
- * @param {() => Promise<unknown>} action - what to run while the link is busy
- */
-async function run(action) {
-	busy.value = true
-	error.value = null
-	try {
-		await action()
-	} catch (e) {
-		error.value = errorMessage(e)
-	} finally {
-		busy.value = false
-	}
-}
 
 /**
  * @param {object} flags - the Deliver flags to change: review, canComment, allowOlder, watermark

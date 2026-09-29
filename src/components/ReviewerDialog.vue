@@ -1,14 +1,15 @@
 <script setup>
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
-import { errorMessage, renewReviewerKey, updateReviewerAsMember } from '../api.js'
+import { renewReviewerKey, updateReviewerAsMember } from '../api.js'
 import { copyLink } from '../clipboard.js'
+import { useBusy } from '../composables/busy.js'
 import { confirmRemoval } from '../confirm.js'
 
 const props = defineProps({
@@ -37,22 +38,8 @@ const CHOICES = [
 	{ id: true, label: t('deliver', 'Yes') },
 	{ id: false, label: t('deliver', 'No') },
 ]
-const busy = ref(false)
-
-/**
- * @param {() => Promise<unknown>} action - what to do while the dialog is busy
- */
-async function run(action) {
-	busy.value = true
-	try {
-		await action()
-		emit('changed')
-	} catch (e) {
-		showError(errorMessage(e))
-	} finally {
-		busy.value = false
-	}
-}
+const { busy, error, run } = useBusy()
+watch(error, (message) => message && showError(message))
 
 /** Name, address and mail wishes, as a Member sets them for the Reviewer */
 function save() {
@@ -66,6 +53,7 @@ function save() {
 			rights: rights.value,
 		})
 		showSuccess(t('deliver', 'Saved'))
+		emit('changed')
 	})
 }
 
@@ -77,7 +65,10 @@ async function renew() {
 		t('deliver', 'New Personal Links'),
 	)
 	if (confirmed) {
-		await run(() => renewReviewerKey(props.reviewer.id))
+		await run(async () => {
+			await renewReviewerKey(props.reviewer.id)
+			emit('changed')
+		})
 	}
 }
 </script>

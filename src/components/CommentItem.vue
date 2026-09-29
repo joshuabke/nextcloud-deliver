@@ -17,7 +17,8 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDateTime from '@nextcloud/vue/components/NcDateTime'
 import NcEmojiPicker from '@nextcloud/vue/components/NcEmojiPicker'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
-import { attachmentUrl, errorMessage } from '../api.js'
+import { attachmentUrl } from '../api.js'
+import { useBusy } from '../composables/busy.js'
 import { linkify } from '../lib/links.js'
 import { splitMentions } from '../lib/mentions.js'
 import { formatAt } from '../lib/timecode.js'
@@ -44,8 +45,7 @@ const draft = ref('')
 const replying = ref(false)
 const showReplies = ref(true)
 const reply = ref('')
-const busy = ref(false)
-const error = ref(null)
+const { busy, error, run } = useBusy()
 
 const mine = computed(() => store.mine(props.comment))
 const unseen = computed(() => props.comment.createdAt > store.seenUntil && !mine.value)
@@ -76,21 +76,6 @@ const anchor = computed(() => {
 	const from = formatAt(props.comment.inFrame, props.clock)
 	return props.comment.outFrame === null ? from : from + ' – ' + formatAt(props.comment.outFrame, props.clock)
 })
-
-/**
- * @param {() => Promise<void>} action - what to run while the item is busy
- */
-async function run(action) {
-	busy.value = true
-	error.value = null
-	try {
-		await action()
-	} catch (e) {
-		error.value = errorMessage(e)
-	} finally {
-		busy.value = false
-	}
-}
 
 /** Opens the Comment for editing */
 function startEdit() {
