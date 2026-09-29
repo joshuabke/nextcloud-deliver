@@ -321,6 +321,11 @@ test.describe('Review view', () => {
 			await expect(page.locator(`.deliver-layout--${level}`)).toHaveCount(1)
 		}
 
+		// A tap on the timeline seeks and leaves no thumbnail behind
+		await page.locator('.deliver-player__timeline').tap()
+		await page.waitForTimeout(300)
+		await expect(page.locator('.deliver-player__hover')).toBeHidden()
+
 		// A double tap on the right jumps ahead, a tap goes fullscreen
 		const right = { x: stage.x + stage.width * 0.85, y: stage.y + stage.height / 2 }
 		await page.touchscreen.tap(right.x, right.y)

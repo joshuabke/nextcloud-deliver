@@ -155,6 +155,10 @@ onBeforeUnmount(() => {
 	flex-direction: column;
 	height: 100%;
 	background: var(--color-main-background);
+	/* A finger held on the picture must not select text or open the callout */
+	user-select: none;
+	-webkit-user-select: none;
+	-webkit-touch-callout: none;
 }
 
 .deliver-still__stage {
