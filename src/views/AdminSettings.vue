@@ -36,13 +36,7 @@ onMounted(async () => {
 /** Saves everything; a hardware encoder is tested with a one-second encode on the server */
 function save() {
 	return run(async () => {
-		const values = settings.value
-		;({ settings: settings.value, status: status.value } = await savePipelineSettings({
-			...values,
-			maxJobs: Number(values.maxJobs),
-			maxHeight: Number(values.maxHeight),
-			thumbCap: Number(values.thumbCap),
-		}))
+		({ settings: settings.value, status: status.value } = await savePipelineSettings(settings.value))
 		saved.value = true
 	})
 }
@@ -57,20 +51,20 @@ function save() {
 				<NcTextField v-model="settings.ffmpegPath" :label="t('deliver', 'Path to ffmpeg')" :placeholder="t('deliver', 'ffmpeg on the PATH')" />
 				<NcTextField v-model="settings.ffprobePath" :label="t('deliver', 'Path to ffprobe')" :placeholder="t('deliver', 'ffprobe on the PATH')" />
 				<NcTextField
-					v-model="settings.maxJobs"
+					v-model.number="settings.maxJobs"
 					type="number"
 					min="1"
 					max="16"
 					:label="t('deliver', 'Jobs running at the same time')" />
 				<NcTextField
-					v-model="settings.maxHeight"
+					v-model.number="settings.maxHeight"
 					type="number"
 					min="144"
 					max="2160"
 					:label="t('deliver', 'Proxy resolution: short side in pixels')"
 					:helperText="t('deliver', 'Originals that browsers play are always available. Larger ones also get a lighter Proxy to switch to.')" />
 				<NcTextField
-					v-model="settings.thumbCap"
+					v-model.number="settings.thumbCap"
 					type="number"
 					min="10"
 					max="5000"
@@ -90,7 +84,7 @@ function save() {
 					:label="t('deliver', 'Extra ffmpeg arguments for Proxies')"
 					:helperText="t('deliver', 'Added before the output file, for example -threads 4')" />
 				<div>
-					<NcButton variant="primary" :disabled="busy" @click="save">
+					<NcButton type="submit" variant="primary" :disabled="busy">
 						{{ busy ? t('deliver', 'Saving and testing…') : t('deliver', 'Save') }}
 					</NcButton>
 				</div>

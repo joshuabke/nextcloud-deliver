@@ -130,7 +130,7 @@ function invite() {
 				<form v-if="inviting" class="deliver-link__invite" @submit.prevent="invite">
 					<NcTextField v-model="name" :label="t('deliver', 'Name')" />
 					<NcTextField v-model="email" type="email" :label="t('deliver', 'Email for replies (optional)')" />
-					<NcButton variant="primary" :disabled="busy || !name.trim()" @click="invite">
+					<NcButton type="submit" variant="primary" :disabled="busy || !name.trim()">
 						{{ t('deliver', 'Invite') }}
 					</NcButton>
 				</form>
