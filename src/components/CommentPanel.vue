@@ -1,6 +1,7 @@
 <script setup>
 import filterIcon from '@mdi/svg/svg/chevron-down.svg?raw'
 import closeIcon from '@mdi/svg/svg/close.svg?raw'
+import moreIcon from '@mdi/svg/svg/dots-horizontal.svg?raw'
 import penIcon from '@mdi/svg/svg/draw.svg?raw'
 import searchIcon from '@mdi/svg/svg/magnify.svg?raw'
 import attachIcon from '@mdi/svg/svg/paperclip.svg?raw'
@@ -415,6 +416,49 @@ function claim() {
 						@focus="startWriting"
 						@input="onInput"
 						@click="onInput" />
+					<!-- A phone keeps the composer to one row: the tools in a menu, Send in the field -->
+					<span v-if="isMobile" class="deliver-comments__inline" @click.stop>
+						<NcActions variant="tertiary" :aria-label="t('deliver', 'Comment options')">
+							<template #icon>
+								<NcIconSvgWrapper :svg="moreIcon" />
+							</template>
+							<NcActionButton v-if="canDraw" closeAfterClick @click="emit('draw')">
+								<template #icon>
+									<NcIconSvgWrapper :svg="penIcon" />
+								</template>
+								{{ t('deliver', 'Draw on the picture') }}
+							</NcActionButton>
+							<template v-if="!clock.still">
+								<NcActionButton closeAfterClick @click="emit('range')">
+									<template #icon>
+										<NcIconSvgWrapper :svg="rangeIcon" />
+									</template>
+									{{ range === null ? t('deliver', 'Start a Range here') : t('deliver', 'End the Range here') }}
+								</NcActionButton>
+								<NcActionButton v-if="range !== null" closeAfterClick @click="emit('clearRange')">
+									<template #icon>
+										<NcIconSvgWrapper :svg="closeIcon" />
+									</template>
+									{{ t('deliver', 'Clear the Range') }}
+								</NcActionButton>
+							</template>
+							<NcActionButton :disabled="files.length >= MAX_FILES" closeAfterClick @click="fileInput.click()">
+								<template #icon>
+									<NcIconSvgWrapper :svg="attachIcon" />
+								</template>
+								{{ t('deliver', 'Attach files') }}
+							</NcActionButton>
+						</NcActions>
+						<NcButton
+							variant="primary"
+							:disabled="busy || !body.trim()"
+							:aria-label="t('deliver', 'Send (Enter)')"
+							@click="submit">
+							<template #icon>
+								<NcIconSvgWrapper :svg="sendIcon" />
+							</template>
+						</NcButton>
+					</span>
 				</div>
 				<ul v-if="files.length" class="deliver-comments__files">
 					<li v-for="(file, index) in files" :key="index">
@@ -441,9 +485,15 @@ function claim() {
 						<span>{{ member.name }}</span>
 					</li>
 				</ul>
-				<div class="deliver-comments__actions">
+				<input
+					ref="fileInput"
+					type="file"
+					multiple
+					hidden
+					@change="pickFiles">
+				<div v-if="!isMobile || draft.length || clock.still" class="deliver-comments__actions">
 					<NcButton
-						v-if="canDraw"
+						v-if="canDraw && !isMobile"
 						variant="tertiary"
 						:pressed="drawing"
 						:aria-label="t('deliver', 'Draw on the picture')"
@@ -453,7 +503,7 @@ function claim() {
 							<NcIconSvgWrapper :svg="penIcon" />
 						</template>
 					</NcButton>
-					<template v-if="!clock.still">
+					<template v-if="!clock.still && !isMobile">
 						<NcButton
 							variant="tertiary"
 							:pressed="range !== null"
@@ -479,6 +529,7 @@ function claim() {
 						</NcButton>
 					</template>
 					<NcButton
+						v-if="!isMobile"
 						variant="tertiary"
 						:disabled="files.length >= MAX_FILES"
 						:aria-label="t('deliver', 'Attach files')"
@@ -488,15 +539,10 @@ function claim() {
 							<NcIconSvgWrapper :svg="attachIcon" />
 						</template>
 					</NcButton>
-					<input
-						ref="fileInput"
-						type="file"
-						multiple
-						hidden
-						@change="pickFiles">
 					<span v-if="draft.length" class="deliver-comments__drawn">{{ n('deliver', '%n shape drawn', '%n shapes drawn', draft.length) }}</span>
 					<span v-if="!isMobile || clock.still" class="deliver-comments__hint">{{ clock.still ? t('deliver', 'The pencil points at a spot on the picture') : t('deliver', 'C comments on the Frame, I and O set a Range') }}</span>
 					<NcButton
+						v-if="!isMobile"
 						variant="primary"
 						:disabled="busy || !body.trim()"
 						:aria-label="t('deliver', 'Send (Enter)')"
@@ -658,6 +704,21 @@ function claim() {
 
 .deliver-comments__box:focus-within {
 	border-color: var(--color-primary-element);
+}
+
+/* One row on a phone: the hint in the empty field does not wrap */
+.deliver-comments__box textarea::placeholder {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.deliver-comments__inline {
+	display: flex;
+	align-items: center;
+	flex: none;
+	gap: 2px;
+	margin: -6px -8px -6px 0;
 }
 
 .deliver-comments__anchor {

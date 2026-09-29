@@ -290,7 +290,23 @@ body.deliver-review footer {
 }
 
 .deliver-layout--upright.deliver-layout--up .deliver-layout__panel {
+	position: relative;
 	flex: 1;
+}
+
+/* Up, the grabber sits in the middle of the list's head row, between its filter and its buttons */
+.deliver-layout--up .deliver-layout__grabber {
+	position: absolute;
+	top: 0;
+	left: 50%;
+	z-index: 1;
+	width: 72px;
+	height: 52px;
+	transform: translateX(-50%);
+}
+
+.deliver-layout--up .deliver-layout__grabber::after {
+	top: 24px;
 }
 
 .deliver-layout--up :deep(.deliver-player__stage),
