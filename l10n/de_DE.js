@@ -9,6 +9,7 @@ OC.L10N.register(
 		"A Version Number is a whole number from 1 up.": "Eine Versionsnummer ist eine ganze Zahl ab 1.",
 		"A file with this name is already in the folder.": "Im Ordner liegt schon eine Datei mit diesem Namen.",
 		"Ableton Live: add locators to a Live Set…": "Ableton Live: Locators in ein Live Set einfügen …",
+		"Actions for {name}": "Aktionen für {name}",
 		"Added before the output file, for example -threads 4": "Wird vor der Ausgabedatei eingefügt, zum Beispiel -threads 4",
 		"All": "Alle",
 		"All Assets": "Alle Assets",

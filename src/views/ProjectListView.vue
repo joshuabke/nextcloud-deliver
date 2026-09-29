@@ -67,7 +67,7 @@ const projects = computed(() => sortProjects(
 const menu = ref(null)
 
 /**
- * @param {MouseEvent} event - the right click
+ * @param {{clientX: number, clientY: number}} event - the right click, the long press or the menu button
  * @param {object} project - the Project under it
  */
 function openMenu(event, project) {
@@ -176,7 +176,8 @@ async function create() {
 				:key="project.id"
 				:project="project"
 				@settings="settings = project"
-				@contextmenu.prevent="openMenu($event, project)" />
+				@contextmenu.prevent="openMenu($event, project)"
+				@menu="openMenu($event, project)" />
 			<li>
 				<button type="button" class="deliver-projects__new" @click="create">
 					<NcIconSvgWrapper :svg="projects.length ? addIcon : icon" :size="projects.length ? 32 : 48" />

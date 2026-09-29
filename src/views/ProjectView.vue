@@ -6,10 +6,12 @@ import removeIcon from '@mdi/svg/svg/delete-outline.svg?raw'
 import filesIcon from '@mdi/svg/svg/folder-eye-outline.svg?raw'
 import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
 import newVersionIcon from '@mdi/svg/svg/layers-plus.svg?raw'
+import searchIcon from '@mdi/svg/svg/magnify.svg?raw'
 import openIcon from '@mdi/svg/svg/open-in-app.svg?raw'
 import uploadIcon from '@mdi/svg/svg/tray-arrow-up.svg?raw'
 import { t } from '@nextcloud/l10n'
 import { generateRemoteUrl, generateUrl } from '@nextcloud/router'
+import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -38,6 +40,9 @@ const store = useProjectsStore()
 const router = useRouter()
 const error = ref(null)
 const settingsOpen = ref(false)
+/** On a phone the header keeps icons; the search opens as a row of its own (story 109) */
+const isMobile = useIsMobile()
+const searchOpen = ref(false)
 const uploading = ref(false)
 const fileInput = ref(null)
 const versionInput = ref(null)
@@ -283,8 +288,18 @@ function dropped(event) {
 					</template>
 				</h2>
 				<span class="deliver-project__spacer" />
+				<NcButton
+					v-if="isMobile && project.assets.length"
+					variant="tertiary"
+					:pressed="searchOpen || query !== ''"
+					:aria-label="t('deliver', 'Find an Asset')"
+					@click="searchOpen = !searchOpen">
+					<template #icon>
+						<NcIconSvgWrapper :svg="searchIcon" />
+					</template>
+				</NcButton>
 				<NcTextField
-					v-if="project.assets.length"
+					v-else-if="project.assets.length"
 					v-model="query"
 					class="deliver-project__search"
 					:label="t('deliver', 'Find an Asset')"
@@ -293,13 +308,17 @@ function dropped(event) {
 					@trailingButtonClick="query = ''" />
 				<NcButton
 					v-if="project.canWrite"
+					:variant="isMobile ? 'tertiary' : 'secondary'"
 					:disabled="uploading"
+					:aria-label="t('deliver', 'Upload')"
 					@click="fileInput.click()">
 					<template #icon>
 						<NcLoadingIcon v-if="uploading" />
 						<NcIconSvgWrapper v-else :svg="uploadIcon" />
 					</template>
-					{{ t('deliver', 'Upload') }}
+					<template v-if="!isMobile">
+						{{ t('deliver', 'Upload') }}
+					</template>
 				</NcButton>
 				<input
 					ref="fileInput"
@@ -318,6 +337,13 @@ function dropped(event) {
 					</template>
 				</NcButton>
 			</div>
+			<NcTextField
+				v-if="isMobile && (searchOpen || query !== '')"
+				v-model="query"
+				:label="t('deliver', 'Find an Asset')"
+				type="search"
+				:showTrailingButton="query !== ''"
+				@trailingButtonClick="query = ''; searchOpen = false" />
 			<FilterBar
 				v-if="project.assets.length"
 				v-model:filter="filter"
@@ -345,7 +371,8 @@ function dropped(event) {
 						:asset="asset"
 						:candidates="suggestions.get(asset.id) ?? []"
 						@stack="accept"
-						@contextmenu.prevent="openMenu($event, asset)" />
+						@contextmenu.prevent="openMenu($event, asset)"
+						@menu="openMenu($event, asset)" />
 				</ul>
 			</section>
 			<input
@@ -393,7 +420,11 @@ function dropped(event) {
 }
 
 .deliver-project__head h2 {
+	min-width: 0;
 	margin: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	font-size: 20px;
 }
 
