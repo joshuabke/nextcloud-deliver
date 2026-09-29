@@ -400,6 +400,7 @@ function dropped(event) {
 				size="normal"
 				@closing="managing = null">
 				<VersionStack
+					class="deliver-project__stack"
 					:versions="managed.versions"
 					:assetId="managed.id"
 					:folderUrl="davFolder(managed.path)"
@@ -417,6 +418,10 @@ function dropped(event) {
 </template>
 
 <style scoped>
+.deliver-project__stack {
+	padding-bottom: calc(4 * var(--default-grid-baseline));
+}
+
 .deliver-project {
 	position: relative;
 	min-height: 100%;

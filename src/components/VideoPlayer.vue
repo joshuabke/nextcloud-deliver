@@ -355,10 +355,13 @@ function onDragStart(event) {
 }
 
 /**
- * @param {PointerEvent} event - the finger moves
+ * The mouse hovers and a finger drags; a tap leaves no hover behind, not
+ * even through the mouse events a touch browser sends after it
+ *
+ * @param {PointerEvent} event - the pointer moves
  */
-function onDragMove(event) {
-	if (dragging.value) {
+function onPointerMove(event) {
+	if (event.pointerType === 'mouse' || dragging.value) {
 		onHover(event)
 	}
 }
@@ -808,9 +811,8 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 			<div
 				class="deliver-player__timeline"
 				@click="scrub"
-				@mousemove="onHover"
 				@pointerdown="onDragStart"
-				@pointermove="onDragMove"
+				@pointermove="onPointerMove"
 				@pointerup="onDragEnd"
 				@pointercancel="onDragEnd">
 				<div class="deliver-player__track">
@@ -1108,6 +1110,10 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	flex-direction: column;
 	height: 100%;
 	background: var(--color-main-background);
+	/* Holding a finger down plays faster; it must not select text or open the callout */
+	user-select: none;
+	-webkit-user-select: none;
+	-webkit-touch-callout: none;
 }
 
 /* The picture on black, as large as the room allows, in its own shape */
