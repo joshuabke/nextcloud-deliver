@@ -389,7 +389,6 @@ function dropped(event) {
 					:versions="managed.versions"
 					:assetId="managed.id"
 					:folderUrl="davFolder(managed.path)"
-					canWrite
 					@open="router.push(`/versions/${$event}`)"
 					@changed="store.fetch(props.id)" />
 			</NcDialog>

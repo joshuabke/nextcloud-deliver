@@ -14,8 +14,7 @@ const props = defineProps({
 	versions: { type: Array, required: true },
 	assetId: { type: Number, required: true },
 	/** The WebDAV folder a dropped file goes to, next to the newest Version */
-	folderUrl: { type: String, default: null },
-	canWrite: { type: Boolean, default: false },
+	folderUrl: { type: String, required: true },
 })
 
 const emit = defineEmits(['open', 'changed'])
@@ -68,7 +67,7 @@ async function renumber(version) {
 async function drop(event) {
 	dragging.value = false
 	const file = event.dataTransfer?.files?.[0]
-	if (!file || !props.folderUrl || !props.canWrite) {
+	if (!file) {
 		return
 	}
 	await run(() => uploadNextVersion(props.folderUrl, file, props.assetId))
@@ -79,7 +78,7 @@ async function drop(event) {
 	<section
 		class="deliver-stack"
 		:class="{ 'deliver-stack--dragging': dragging }"
-		@dragover.prevent="dragging = canWrite"
+		@dragover.prevent="dragging = true"
 		@dragleave="dragging = false"
 		@drop.prevent="drop">
 		<NcNoteCard v-if="error" type="error">
@@ -106,7 +105,7 @@ async function drop(event) {
 						</span>
 					</button>
 					<span v-if="version.state === 'missing'" class="deliver-stack__badge">{{ t('deliver', 'Missing') }}</span>
-					<NcActions v-if="canWrite" :forceMenu="true">
+					<NcActions :forceMenu="true">
 						<NcActionInput
 							type="number"
 							:modelValue="String(numbers[version.id] ?? version.number)"
@@ -123,7 +122,7 @@ async function drop(event) {
 					</NcActions>
 				</div>
 				<!-- An automatic stack stays visible until a Member keeps or undoes it (story 13) -->
-				<div v-if="canWrite && version.autoStacked" class="deliver-stack__auto">
+				<div v-if="version.autoStacked" class="deliver-stack__auto">
 					<span>{{ t('deliver', 'Stacked automatically, going by its name') }}</span>
 					<NcButton variant="tertiary" :disabled="busy" @click="run(() => unstackVersion(version.id))">
 						{{ t('deliver', 'Undo') }}
@@ -135,7 +134,7 @@ async function drop(event) {
 			</li>
 		</ul>
 
-		<p v-if="canWrite && folderUrl" class="deliver-stack__drop">
+		<p class="deliver-stack__drop">
 			{{ t('deliver', 'Drop a file here to upload it next to the newest Version and stack it on top.') }}
 		</p>
 	</section>
