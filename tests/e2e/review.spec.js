@@ -303,11 +303,23 @@ test.describe('Review view', () => {
 		const panel = await page.locator('.deliver-layout__panel').boundingBox()
 		expect(panel.y).toBeGreaterThanOrEqual(stage.y + stage.height)
 		await expect(page.locator('.deliver-comments__head')).toBeHidden()
-		await page.locator('.deliver-layout__grabber').tap()
-		await expect(page.locator('.deliver-layout--up')).toHaveCount(1)
+		// Halfway a 16:9 picture fits above the list, then the list takes its place
+		const grabber = page.locator('.deliver-layout__grabber')
+		await grabber.tap()
+		await expect(page.locator('.deliver-layout--middle')).toHaveCount(1)
 		await expect(page.locator('.deliver-comments__head')).toBeVisible()
-		await page.locator('.deliver-layout__grabber').tap()
-		await expect(page.locator('.deliver-layout--up')).toHaveCount(0)
+		expect((await page.locator('.deliver-player__stage').boundingBox()).height).toBeCloseTo(390 * 9 / 16, 0)
+		await grabber.tap()
+		await expect(page.locator('.deliver-layout--up')).toHaveCount(1)
+		// A stroke down goes back a level at a time
+		for (const level of ['middle', 'down']) {
+			const box = await grabber.boundingBox()
+			await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+			await page.mouse.down()
+			await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 80)
+			await page.mouse.up()
+			await expect(page.locator(`.deliver-layout--${level}`)).toHaveCount(1)
+		}
 
 		// A double tap on the right jumps ahead, a tap goes fullscreen
 		const right = { x: stage.x + stage.width * 0.85, y: stage.y + stage.height / 2 }

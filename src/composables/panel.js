@@ -15,14 +15,16 @@ export function usePanelOpen() {
 }
 
 /**
- * On a phone (story 106): whether the Comment list is pulled up in place of
- * the picture, whether it is open beside the picture while the phone is held
+ * On a phone (story 106): how far the Comment list is pulled up while the
+ * phone is upright (0 only the field under the picture, 1 a 16:9 picture
+ * above the list, 2 the list in place of the picture), whether it is open
+ * beside the picture while the phone is held
  * sideways, and whether someone is writing, when the list steps aside so the
  * picture and the field both stay above the keyboard. One Review view is on
  * screen at a time, so the state is shared.
  */
 export const sheet = {
-	up: ref(false),
+	level: ref(0),
 	aside: ref(false),
 	writing: ref(false),
 }

@@ -191,7 +191,6 @@ const form = ref(null)
 /** On a phone, writing makes room for the keyboard: the list steps aside (story 106). Only the text field starts it; a tap on a button beside it must not move the form under the finger */
 function startWriting() {
 	if (isMobile.value) {
-		sheet.up.value = false
 		sheet.writing.value = true
 	}
 }

@@ -20,12 +20,27 @@ const panelOpen = defineModel('panelOpen', { type: Boolean, default: true })
 const isMobile = useIsMobile()
 const sideways = computed(() => isMobile.value && landscape.value)
 const upright = computed(() => isMobile.value && !landscape.value)
-const { up, aside, writing } = sheet
-/** The Review view takes the whole window; Nextcloud's header and footer step aside */
-onMounted(() => document.body.classList.add('deliver-review'))
+const { level, aside, writing } = sheet
+/**
+ * The Review view takes the whole window; Nextcloud's header and footer step
+ * aside. Down to the screen's edges too: without viewport-fit some browsers
+ * (Firefox on the iPhone) leave the strip by the rounded corners and the
+ * home indicator blank; the view pads its content out of it instead.
+ */
+const viewport = document.querySelector('meta[name=viewport]')
+const viewportBefore = viewport?.content
+onMounted(() => {
+	document.body.classList.add('deliver-review')
+	if (viewport) {
+		viewport.content = viewportBefore + ', viewport-fit=cover'
+	}
+})
 onBeforeUnmount(() => {
 	document.body.classList.remove('deliver-review')
-	up.value = false
+	if (viewport) {
+		viewport.content = viewportBefore
+	}
+	level.value = 0
 	writing.value = false
 })
 
@@ -51,7 +66,16 @@ function grabEnd(event) {
 	}
 	const dy = event.clientY - grab
 	grab = null
-	up.value = Math.abs(dy) < 10 ? !up.value : dy < 0
+	if (Math.abs(dy) < 10) {
+		step()
+	} else {
+		level.value = Math.max(0, Math.min(2, level.value + (dy < 0 ? 1 : -1)))
+	}
+}
+
+/** A tap: one level up, and from the top back to the middle */
+function step() {
+	level.value = level.value === 2 ? 1 : level.value + 1
 }
 </script>
 
@@ -66,7 +90,9 @@ function grabEnd(event) {
 				'deliver-layout--mobile': isMobile,
 				'deliver-layout--upright': upright,
 				'deliver-layout--sideways': sideways,
-				'deliver-layout--up': upright && up && !writing,
+				'deliver-layout--down': upright && level === 0,
+				'deliver-layout--middle': upright && level === 1 && !writing,
+				'deliver-layout--up': upright && level === 2 && !writing,
 				'deliver-layout--writing': isMobile && writing,
 			}">
 			<div v-if="!sideways" class="deliver-layout__bar">
@@ -116,12 +142,12 @@ function grabEnd(event) {
 						v-if="upright"
 						type="button"
 						class="deliver-layout__grabber"
-						:aria-label="up ? t('deliver', 'Show the picture') : t('deliver', 'Pull the Comments up')"
+						:aria-label="level === 2 ? t('deliver', 'Show the picture') : t('deliver', 'Pull the Comments up')"
 						@pointerdown="grabStart"
 						@pointerup="grabEnd"
 						@pointercancel="grab = null"
-						@keydown.enter.prevent="up = !up"
-						@keydown.space.prevent="up = !up" />
+						@keydown.enter.prevent="step"
+						@keydown.space.prevent="step" />
 					<slot name="panel" />
 				</div>
 			</div>
@@ -167,6 +193,7 @@ body.deliver-review footer {
 	inset: 0;
 	z-index: 1000;
 	display: flex;
+	padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 	flex-direction: column;
 	min-width: 0;
 	background: var(--color-main-background);
@@ -276,12 +303,16 @@ body.deliver-review footer {
 }
 
 /* Upright: the list waits below the grabber until it is pulled up */
-.deliver-layout--upright:not(.deliver-layout--up) :deep(.deliver-comments__head),
-.deliver-layout--upright:not(.deliver-layout--up) :deep(.deliver-comments__list),
-.deliver-layout--upright:not(.deliver-layout--up) :deep(.deliver-comments__empty),
-.deliver-layout--upright:not(.deliver-layout--up) :deep(.deliver-tabs),
-.deliver-layout--upright:not(.deliver-layout--up) :deep(.deliver-versions) {
+.deliver-layout--down :deep(.deliver-comments__head),
+.deliver-layout--down :deep(.deliver-comments__list),
+.deliver-layout--down :deep(.deliver-comments__empty) {
 	display: none;
+}
+
+/* Halfway: a 16:9 picture at full width with its timeline and controls (102 px on a phone), the list below */
+.deliver-layout--upright.deliver-layout--middle .deliver-layout__main {
+	flex: none;
+	height: calc(56.25vw + 102px);
 }
 
 /* Pulled up: of the player only its timeline and controls stay, the picture plays on unseen */
@@ -289,12 +320,14 @@ body.deliver-review footer {
 	flex: none;
 }
 
+.deliver-layout--upright.deliver-layout--middle .deliver-layout__panel,
 .deliver-layout--upright.deliver-layout--up .deliver-layout__panel {
 	position: relative;
 	flex: 1;
 }
 
-/* Up, the grabber sits in the middle of the list's head row, between its filter and its buttons */
+/* Pulled out, the grabber sits in the middle of the list's head row, between its filter and its buttons */
+.deliver-layout--middle .deliver-layout__grabber,
 .deliver-layout--up .deliver-layout__grabber {
 	position: absolute;
 	top: 0;
@@ -305,6 +338,7 @@ body.deliver-review footer {
 	transform: translateX(-50%);
 }
 
+.deliver-layout--middle .deliver-layout__grabber::after,
 .deliver-layout--up .deliver-layout__grabber::after {
 	top: 24px;
 }
@@ -319,7 +353,6 @@ body.deliver-review footer {
 .deliver-layout--writing :deep(.deliver-comments__head),
 .deliver-layout--writing :deep(.deliver-comments__list),
 .deliver-layout--writing :deep(.deliver-comments__empty),
-.deliver-layout--writing :deep(.deliver-tabs),
 .deliver-layout--writing .deliver-layout__grabber {
 	display: none;
 }

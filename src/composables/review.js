@@ -78,8 +78,10 @@ export function useReview({ version, projectMode, refresh }) {
 	 * @param {{inFrame: number}} comment - the Comment to seek to
 	 */
 	function jump(comment) {
-		// On a phone the list steps down, so the Frame shows
-		sheet.up.value = false
+		// On a phone a list in place of the picture steps down, so the Frame shows above it
+		if (sheet.level.value === 2) {
+			sheet.level.value = 1
+		}
 		panel.value?.reveal(comment.id)
 		if (player.value?.show) {
 			player.value.show(comment)
