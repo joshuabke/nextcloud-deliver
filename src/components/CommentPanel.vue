@@ -7,6 +7,7 @@ import attachIcon from '@mdi/svg/svg/paperclip.svg?raw'
 import sendIcon from '@mdi/svg/svg/send.svg?raw'
 import sortIcon from '@mdi/svg/svg/sort.svg?raw'
 import { n, t } from '@nextcloud/l10n'
+import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, ref, watch } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
@@ -39,6 +40,8 @@ const props = defineProps({
 const emit = defineEmits(['jump', 'claim', 'posted', 'typing', 'cleared', 'draw'])
 
 const store = useCommentsStore()
+/** A phone has no keyboard shortcuts to hint at */
+const isMobile = useIsMobile()
 const body = ref('')
 const newest = ref(false)
 /** Which Comments the list shows: all, open or resolved */
@@ -332,7 +335,7 @@ function claim() {
 		<p v-else class="deliver-comments__empty">
 			{{ store.threads.length
 				? (query ? t('deliver', 'No Comment matches.') : (show === 'open' ? t('deliver', 'Everything is resolved.') : t('deliver', 'Nothing resolved yet.')))
-				: (readOnly ? t('deliver', 'No Comments yet.') : t('deliver', 'No Comments yet. Press C while playing to comment on the current Frame.')) }}
+				: (readOnly || isMobile ? t('deliver', 'No Comments yet.') : t('deliver', 'No Comments yet. Press C while playing to comment on the current Frame.')) }}
 		</p>
 
 		<div class="deliver-comments__composer">
@@ -421,7 +424,7 @@ function claim() {
 						hidden
 						@change="pickFiles">
 					<span v-if="draft.length" class="deliver-comments__drawn">{{ n('deliver', '%n shape drawn', '%n shapes drawn', draft.length) }}</span>
-					<span class="deliver-comments__hint">{{ clock.still ? t('deliver', 'The pencil points at a spot on the picture') : t('deliver', 'C comments on the Frame, I and O set a Range') }}</span>
+					<span v-if="!isMobile || clock.still" class="deliver-comments__hint">{{ clock.still ? t('deliver', 'The pencil points at a spot on the picture') : t('deliver', 'C comments on the Frame, I and O set a Range') }}</span>
 					<NcButton
 						variant="primary"
 						:disabled="busy || !body.trim()"
@@ -447,14 +450,15 @@ function claim() {
 	min-height: 0;
 }
 
-/* The Comments stay visible, dimmed, under the name form */
+/* The Comments stay visible, dimmed, under the name form; on a small screen the form scrolls */
 .deliver-comments__gate {
 	position: absolute;
 	inset: 0;
 	z-index: 3;
 	display: flex;
-	align-items: center;
+	align-items: safe center;
 	justify-content: center;
+	overflow-y: auto;
 	padding: calc(3 * var(--default-grid-baseline));
 	background: rgba(20, 20, 22, 0.78);
 	backdrop-filter: blur(2px);
@@ -641,6 +645,11 @@ function claim() {
 	display: flex;
 	align-items: center;
 	gap: calc(2 * var(--default-grid-baseline));
+}
+
+/* Send sits at the end, with or without a hint before it */
+.deliver-comments__actions > :last-child {
+	margin-inline-start: auto;
 }
 
 .deliver-comments__files {

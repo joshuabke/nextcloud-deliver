@@ -1,7 +1,12 @@
 <script setup>
+import previousIcon from '@mdi/svg/svg/chevron-left.svg?raw'
+import nextIcon from '@mdi/svg/svg/chevron-right.svg?raw'
 import downloadIcon from '@mdi/svg/svg/download.svg?raw'
 import { getLanguage, t } from '@nextcloud/l10n'
+import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActionLink from '@nextcloud/vue/components/NcActionLink'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
@@ -28,6 +33,7 @@ const props = defineProps({
 
 const store = useCommentsStore()
 const panelOpen = usePanelOpen()
+const isMobile = useIsMobile()
 const context = ref(null)
 const error = ref(null)
 const personalLink = ref(null)
@@ -127,10 +133,13 @@ async function claim({ name, email, mail }) {
 		</NcEmptyContent>
 		<ReviewLayout v-else v-model:panelOpen="panelOpen">
 			<template #start>
-				<h2 class="deliver-public__title">
-					{{ context.asset?.name }}
-				</h2>
-				<DueDate :modelValue="context.asset?.dueDate ?? null" />
+				<div class="deliver-public__crumbs">
+					<h2 class="deliver-public__title">
+						{{ context.asset?.name }}
+					</h2>
+					<DueDate v-if="isMobile" :modelValue="context.asset?.dueDate ?? null" />
+				</div>
+				<DueDate v-if="!isMobile" :modelValue="context.asset?.dueDate ?? null" />
 			</template>
 			<template #center>
 				<AssetStepper :index="assetIndex" :count="newest.length" @step="step" />
@@ -139,7 +148,7 @@ async function claim({ name, email, mail }) {
 				<ApprovalControl />
 				<VersionPicker :versions="context.versions" :current="current" @select="current = $event" />
 				<NcButton
-					v-if="context.flags.canDownload && version?.url"
+					v-if="context.flags.canDownload && version?.url && !isMobile"
 					:href="version.url"
 					variant="tertiary"
 					:aria-label="t('deliver', 'Download the original')"
@@ -149,6 +158,35 @@ async function claim({ name, email, mail }) {
 						<NcIconSvgWrapper :svg="downloadIcon" />
 					</template>
 				</NcButton>
+			</template>
+
+			<template v-if="newest.length > 1 || (context.flags.canDownload && version?.url)" #menu>
+				<NcActionButton
+					v-if="newest.length > 1"
+					:disabled="assetIndex <= 0"
+					closeAfterClick
+					@click="step(-1)">
+					<template #icon>
+						<NcIconSvgWrapper :svg="previousIcon" />
+					</template>
+					{{ t('deliver', 'Previous Asset') }}
+				</NcActionButton>
+				<NcActionButton
+					v-if="newest.length > 1"
+					:disabled="assetIndex < 0 || assetIndex >= newest.length - 1"
+					closeAfterClick
+					@click="step(1)">
+					<template #icon>
+						<NcIconSvgWrapper :svg="nextIcon" />
+					</template>
+					{{ t('deliver', 'Next Asset') }}
+				</NcActionButton>
+				<NcActionLink v-if="context.flags.canDownload && version?.url" :href="version.url" download>
+					<template #icon>
+						<NcIconSvgWrapper :svg="downloadIcon" />
+					</template>
+					{{ t('deliver', 'Download the original') }}
+				</NcActionLink>
 			</template>
 
 			<template #notice>
@@ -223,6 +261,14 @@ async function claim({ name, email, mail }) {
 	overflow: hidden;
 }
 
+.deliver-public__crumbs {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	min-width: 0;
+	padding-inline-start: var(--default-grid-baseline);
+}
+
 .deliver-public__title {
 	margin: 0;
 	font-size: 16px;
@@ -242,9 +288,14 @@ async function claim({ name, email, mail }) {
 	overflow-wrap: anywhere;
 }
 
-@media (max-width: 1024px) {
+/* On a phone the review takes the whole window under Nextcloud's header */
+@media (max-width: 1023px) {
 	.deliver-public {
-		height: auto;
+		width: 100vw;
+		/* Nextcloud measures its floating footer on public pages; the review ends above it */
+		height: calc(100dvh - var(--header-height) - var(--footer-height, 0px) - 2 * var(--default-grid-baseline));
+		margin: 0;
+		border-radius: 0;
 	}
 }
 </style>
