@@ -118,6 +118,7 @@ function saveReply() {
 
 <template>
 	<li
+		:data-comment="comment.id"
 		class="deliver-comment"
 		:class="{
 			'deliver-comment--reply': isReply,
@@ -308,6 +309,7 @@ function saveReply() {
 <style scoped>
 .deliver-comment {
 	display: flex;
+	transition: border-color 0.3s;
 	gap: calc(3 * var(--default-grid-baseline));
 	padding: calc(3 * var(--default-grid-baseline));
 	border: 1px solid var(--color-border);

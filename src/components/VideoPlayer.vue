@@ -326,6 +326,58 @@ function onScrubSeeked() {
 	nextScrub()
 }
 
+/** Set while a finger drags along the bar */
+const dragging = ref(false)
+
+/**
+ * A finger on the bar scrubs as the mouse hovers: the exact Frame shows
+ * above it, and the player goes there when it lifts (story 105).
+ *
+ * @param {PointerEvent} event - a finger or pen comes down on the bar
+ */
+function onDragStart(event) {
+	if (event.pointerType === 'mouse' || !durationFrames.value) {
+		return
+	}
+	pause()
+	dragging.value = true
+	event.currentTarget.setPointerCapture(event.pointerId)
+	onHover(event)
+}
+
+/**
+ * @param {PointerEvent} event - the finger moves
+ */
+function onDragMove(event) {
+	if (dragging.value) {
+		onHover(event)
+	}
+}
+
+/** The finger lifts: the player goes to the Frame it showed */
+function onDragEnd() {
+	if (!dragging.value) {
+		return
+	}
+	dragging.value = false
+	if (hover.value) {
+		seekTo(hover.value.frame)
+	}
+	leaveScrubber()
+}
+
+/**
+ * The card over a marker is for the mouse and the keyboard; a finger taps straight through to the Comment
+ *
+ * @param {object} comment - the marker's Comment
+ * @param {PointerEvent|FocusEvent} event - the pointer entering, or focus
+ */
+function peekAt(comment, event) {
+	if (event.pointerType === 'mouse' || (event.type === 'focus' && event.currentTarget.matches(':focus-visible'))) {
+		showPeek(comment, event)
+	}
+}
+
 /** The pointer left the bar */
 function leaveScrubber() {
 	hover.value = null
@@ -601,7 +653,10 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 </script>
 
 <template>
-	<div ref="root" class="deliver-player" :class="{ 'deliver-player--fullscreen': fullscreen, 'deliver-player--filling': filling }">
+	<div
+		ref="root"
+		class="deliver-player"
+		:class="{ 'deliver-player--fullscreen': fullscreen, 'deliver-player--filling': filling, 'deliver-player--mobile': isMobile }">
 		<div class="deliver-player__stage" v-on="gestures">
 			<!-- Two fingers zoom the picture and its drawings together -->
 			<div
@@ -690,7 +745,11 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 			<div
 				class="deliver-player__timeline"
 				@click="scrub"
-				@mousemove="onHover">
+				@mousemove="onHover"
+				@pointerdown="onDragStart"
+				@pointermove="onDragMove"
+				@pointerup="onDragEnd"
+				@pointercancel="onDragEnd">
 				<div class="deliver-player__track">
 					<div class="deliver-player__progress" :style="{ width: progress + '%' }" />
 					<div
@@ -703,7 +762,8 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 						class="deliver-player__span"
 						:style="{ left: leftOf(each) + '%', width: widthOf(each) + '%' }" />
 				</div>
-				<div class="deliver-player__playhead" :style="{ left: progress + '%' }" />
+				<!-- While a finger drags, the playhead follows it -->
+				<div class="deliver-player__playhead" :style="{ left: dragging && hover ? hover.left + 'px' : progress + '%' }" />
 				<div v-show="hover" class="deliver-player__hover" :style="{ left: (hover?.left ?? 0) + 'px' }">
 					<canvas
 						v-show="scrubDrawn"
@@ -734,9 +794,9 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 					:class="{ 'deliver-player__marker--resolved': each.resolved }"
 					:style="{ left: leftOf(each) + '%' }"
 					:aria-label="each.author.name + ': ' + each.body"
-					@mouseenter="showPeek(each, $event)"
-					@mouseleave="peek = null"
-					@focus="showPeek(each, $event)"
+					@pointerenter="peekAt(each, $event)"
+					@pointerleave="peek = null"
+					@focus="peekAt(each, $event)"
 					@blur="peek = null"
 					@click="seekTo(each.inFrame); emit('jump', each)">
 					<NcAvatar
@@ -1081,15 +1141,40 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	color: var(--color-text-maxcontrast);
 }
 
-/* A thin line across the whole width; on hover it grows, to follow thumbnails */
+/* A thin line across the whole width; on hover it grows, to follow thumbnails. Inset so markers at either end stay whole */
 .deliver-player__scrubber {
 	position: relative;
+	margin-inline: 12px;
 }
 
 .deliver-player__timeline {
 	position: relative;
 	height: 16px;
 	cursor: pointer;
+	/* A finger drags along the bar instead of scrolling the page */
+	touch-action: none;
+}
+
+/* On a phone the bar is taller for a finger, and the playhead has a knob to take hold of */
+.deliver-player--mobile .deliver-player__timeline {
+	height: 32px;
+}
+
+.deliver-player--mobile .deliver-player__track {
+	top: 13px;
+	height: 6px;
+}
+
+.deliver-player--mobile .deliver-player__playhead::after {
+	content: '';
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	background: #fff;
+	transform: translate(-50%, -50%);
 }
 
 .deliver-player__track {

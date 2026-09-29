@@ -76,6 +76,7 @@ export function useReview({ version, projectMode, refresh }) {
 	 * @param {{inFrame: number}} comment - the Comment to seek to
 	 */
 	function jump(comment) {
+		panel.value?.reveal(comment.id)
 		if (player.value?.show) {
 			player.value.show(comment)
 		} else {
