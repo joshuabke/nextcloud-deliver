@@ -1,6 +1,5 @@
 <script setup>
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
-import { showSuccess } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
 import { ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -8,6 +7,7 @@ import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwit
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { errorMessage, inviteReviewer, listReviewers, setShareFlags } from '../api.js'
+import { copyLink } from '../clipboard.js'
 
 const props = defineProps({
 	/** One Share Link with Deliver's flags, as the server lists it */
@@ -66,14 +66,6 @@ function startInvite() {
 
 defineExpose({ startInvite, inviting })
 
-/**
- * @param {string} link - a Personal Link
- */
-async function copy(link) {
-	await navigator.clipboard.writeText(link)
-	showSuccess(t('deliver', 'Personal Link copied'))
-}
-
 /** Invites a Reviewer by name and gets their Personal Link (story 53) */
 function invite() {
 	return run(async () => {
@@ -131,7 +123,7 @@ function invite() {
 				<ul v-else-if="reviewers">
 					<li v-for="reviewer in reviewers" :key="reviewer.id" class="deliver-link__reviewer">
 						<span class="deliver-link__name">{{ reviewer.name }}</span>
-						<NcButton variant="tertiary" @click="copy(reviewer.link)">
+						<NcButton variant="tertiary" @click="copyLink(reviewer.link, t('deliver', 'Personal Link copied'))">
 							{{ t('deliver', 'Copy Personal Link') }}
 						</NcButton>
 						<NcButton

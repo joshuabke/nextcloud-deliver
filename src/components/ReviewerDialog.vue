@@ -8,6 +8,7 @@ import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { errorMessage, renewReviewerKey, updateReviewerAsMember } from '../api.js'
+import { copyLink } from '../clipboard.js'
 import { confirmRemoval } from '../confirm.js'
 
 const props = defineProps({
@@ -37,14 +38,6 @@ const CHOICES = [
 	{ id: false, label: t('deliver', 'No') },
 ]
 const busy = ref(false)
-
-/**
- * @param {string} url - a Personal Link
- */
-async function copy(url) {
-	await navigator.clipboard.writeText(url)
-	showSuccess(t('deliver', 'Personal Link copied'))
-}
 
 /**
  * @param {() => Promise<unknown>} action - what to do while the dialog is busy
@@ -135,7 +128,7 @@ async function renew() {
 			<ul>
 				<li v-for="each in reviewer.links" :key="each.shareId" class="deliver-reviewer__link">
 					<span>{{ links.find((share) => share.id === each.shareId)?.title }}</span>
-					<NcButton variant="tertiary" @click="copy(each.url)">
+					<NcButton variant="tertiary" @click="copyLink(each.url, t('deliver', 'Personal Link copied'))">
 						{{ t('deliver', 'Copy') }}
 					</NcButton>
 				</li>

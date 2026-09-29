@@ -9,7 +9,7 @@ import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
 import allIcon from '@mdi/svg/svg/folder-play-outline.svg?raw'
 import linkIcon from '@mdi/svg/svg/link-variant.svg?raw'
 import addIcon from '@mdi/svg/svg/plus.svg?raw'
-import { showError, showSuccess } from '@nextcloud/dialogs'
+import { showError } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -21,6 +21,7 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import ReviewerDialog from '../components/ReviewerDialog.vue'
 import ShareLinkDialog from '../components/ShareLinkDialog.vue'
 import { createShareLink, errorMessage, listProjectShares } from '../api.js'
+import { copyLink } from '../clipboard.js'
 import { folderTree } from '../lib/folders.js'
 import { useProjectsStore } from '../store/projects.js'
 
@@ -103,14 +104,6 @@ function open(folder) {
 	router.replace({ query: { ...route.query, folder: folder || undefined } })
 }
 
-/**
- * @param {string} link - a Share Link or a Personal Link
- */
-async function copy(link) {
-	await navigator.clipboard.writeText(link)
-	showSuccess(t('deliver', 'Link copied'))
-}
-
 /** Invitations and switches made in the dialog show up in the list */
 function closeEditing() {
 	editing.value = null
@@ -185,7 +178,7 @@ function personalLink(reviewer) {
 					<NcIconSvgWrapper :svg="iconOf(share)" />
 				</template>
 				<template #actions>
-					<NcActionButton :aria-label="t('deliver', 'Copy link')" @click="copy(share.url)">
+					<NcActionButton :aria-label="t('deliver', 'Copy link')" @click="copyLink(share.url, t('deliver', 'Link copied'))">
 						<template #icon>
 							<NcIconSvgWrapper :svg="copyIcon" />
 						</template>
@@ -225,7 +218,7 @@ function personalLink(reviewer) {
 						<NcIconSvgWrapper :svg="reviewerIcon" />
 					</template>
 					<template #actions>
-						<NcActionButton v-if="personalLink(reviewer)" :aria-label="t('deliver', 'Copy Personal Link')" @click="copy(personalLink(reviewer))">
+						<NcActionButton v-if="personalLink(reviewer)" :aria-label="t('deliver', 'Copy Personal Link')" @click="copyLink(personalLink(reviewer), t('deliver', 'Link copied'))">
 							<template #icon>
 								<NcIconSvgWrapper :svg="copyIcon" />
 							</template>
