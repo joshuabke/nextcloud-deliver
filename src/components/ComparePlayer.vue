@@ -185,6 +185,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 					ref="videoA"
 					:src="sourceA"
 					:muted="audio !== 'a'"
+					playsinline
 					preload="auto"
 					@loadedmetadata="onLoaded"
 					@timeupdate="onTimeUpdate"
@@ -198,6 +199,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 					ref="videoB"
 					:src="sourceB"
 					:muted="audio !== 'b'"
+					playsinline
 					preload="auto"
 					@loadedmetadata="seekTo(frame)" />
 				<span class="deliver-compare__label deliver-compare__label--b">{{ t('deliver', 'V{number}', { number: b.number }) }}</span>

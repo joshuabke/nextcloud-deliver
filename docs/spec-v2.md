@@ -147,6 +147,18 @@ After 0.2.0 the feature set grows to what a hosted review tool offers (FreeFrame
 101. As a Member, I want a right-click menu on a Project tile and on an Asset card with what I do there most (open, settings, mute, compare, upload a new Version, show in Files, remove), so that common steps take one click.
 102. As a Member with write access, I want to give a Reviewer their own rights to comment, to comment on older Versions and to see the Watermark, over those of the Share Link they come by, so that one person can be treated differently without a link of their own.
 
+### Phones and tablets
+
+The phone version follows the Frame.io iOS app, in the mobile browser: Deliver is a Nextcloud app and ships no native app. Below 1024 px wide (phones, and tablets upright) the Review view stacks; wider screens keep the desktop layout, with touch. On every screen the Review view takes the whole window, without Nextcloud's header.
+
+103. As a Reviewer or Member on a phone held upright, I want the Review view to give the picture all the room above the field to write in, with only back, name, Version and Approval in the bar and the rest in its menu, so that I watch big and concentrate on my own Comments.
+104. As a Reviewer or Member on a phone, I want to tap the picture into fullscreen and out again, play and step Frame by Frame with buttons, double-tap either side to jump five seconds, hold for double speed, pinch to zoom and swipe to the next Asset, so that the player works without a keyboard.
+105. As a Reviewer or Member on a phone, I want to drag the playhead with the exact Frame shown above my finger tap a Comment's marker to read it on the picture, also in fullscreen, until a tap on the picture closes it, and double-tap the marker to jump to its Frame, so that I find and read Comments without hovering.
+106. As a Reviewer or Member on a phone, I want to pull the Comment list up halfway, under a 16:9 picture that fits exactly, or all the way in place of the picture while upright, to have the picture fill the window with the list to open beside it, as a live chat, while sideways, and the list to step aside while I write, so that reading and writing both have room.
+107. As a Reviewer or Member, I want a Range button next to the field (on a phone in the field's menu, beside Send), to start a Range at the current Frame and end it where I scrub to, so that Ranges need no I and O keys.
+108. As a Reviewer or Member on a phone or tablet, I want to draw on the picture with a finger or a pen, so that Drawings work there too.
+109. As a Member on a phone, I want the Project list and Project view to fit: the navigation as a drawer, menus by a long press or a "…" button on each card, filters as a row to swipe, and upload by button, so that I can follow my Projects on the go.
+
 ## Implementation Decisions
 
 ### Repository and stack
@@ -206,7 +218,7 @@ One versioned REST surface under the app, used by the app page, the Files sideba
 
 ### Frontend surfaces
 
-- App page: Project list as tiles, without app navigation (story 97); Project view (Assets with stack badges, processing state, comment counts and Unseen Comments, filters and sorting, and an app navigation of its folders, Share Links and Personal Links); Review view without app navigation (player, marker strip, comment panel, version switcher, export menu, link management drawer).
+- App page: Project list as tiles, without app navigation (story 97); Project view (Assets with stack badges, processing state, comment counts and Unseen Comments, filters and sorting, a dialog from each Asset's menu to manage its Version Stack, where an automatic stack is kept or undone, and an app navigation of its folders, Share Links and Personal Links); Review view without app navigation (player, marker strip, comment panel, version switcher, export menu, link management drawer); managing a Version Stack is not part of it.
 - Public review page: the same Review view under the share token, with Reviewer identity prompt, Personal Link display and reduced controls. Deliver loads its script into Nextcloud's own public share page through `OCA\Files_Sharing\Event\BeforeTemplateRenderedEvent` and registers a Review file action there for shares carrying the review flag, so the Reviewer goes from the shared file list into the player in one click. Shares without the flag load nothing of Deliver's.
 - Files sidebar tab "Deliver": on a media file, the review toggle, stack position, comment count and "Open in Deliver"; on a folder, the Auto Intake toggle and the Project settings. Files action "Open in Deliver" on video and audio. The player never renders inside the sidebar.
 
@@ -248,6 +260,7 @@ CI runs php-cs-fixer, psalm, PHPUnit (unit and integration), Vitest and Playwrig
 - PDFs as Assets.
 - Watermarks burned into the picture (the Watermark is an overlay in the player).
 - Adaptive streaming, multiple Proxy renditions, 4K Proxies.
+- On phones: comparing Versions, Exports, managing Version Stacks and upload by drag and drop; they stay on larger screens.
 - External or GPU-farm transcoding workers over HTTP (job table is ready for it).
 - Direct push of markers into DaVinci Resolve.
 - Signed App Store release workflow and the certificate.

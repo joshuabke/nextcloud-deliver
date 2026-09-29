@@ -1,5 +1,6 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { isStill } from '../lib/media.js'
+import { sheet } from './panel.js'
 
 /** How long to wait before asking again while derived media is being made */
 const DERIVED_RECHECK = 10000
@@ -48,6 +49,7 @@ export function useReview({ version, projectMode, refresh }) {
 		pinnedByTyping = false
 		drawing.value = false
 		draft.value = []
+		player.value?.clearRange?.()
 	})
 
 	/** Drawing stops the picture and fixes the Frame the Comment goes to */
@@ -76,6 +78,11 @@ export function useReview({ version, projectMode, refresh }) {
 	 * @param {{inFrame: number}} comment - the Comment to seek to
 	 */
 	function jump(comment) {
+		// On a phone a list in place of the picture steps down, so the Frame shows above it
+		if (sheet.level.value === 2) {
+			sheet.level.value = 1
+		}
+		panel.value?.reveal(comment.id)
 		if (player.value?.show) {
 			player.value.show(comment)
 		} else {
@@ -102,6 +109,27 @@ export function useReview({ version, projectMode, refresh }) {
 		}
 	}
 
+	/** The Range being marked in the player, while it has one (story 107) */
+	const range = computed(() => player.value?.range ?? null)
+
+	/** The Range button: first its start at the Frame on screen, then its end, which pins it */
+	function markRange() {
+		if (range.value === null) {
+			player.value?.markIn()
+			return
+		}
+		player.value.markOut()
+		pin(player.value.range)
+	}
+
+	/** Drops the Range, and a pin on it */
+	function clearRange() {
+		player.value?.clearRange()
+		if (pinned.value && pinned.value.outFrame !== null) {
+			pinned.value = null
+		}
+	}
+
 	/** The pinned anchor is used up once its Comment is posted */
 	function posted() {
 		pinnedByTyping = false
@@ -120,5 +148,5 @@ export function useReview({ version, projectMode, refresh }) {
 	}, { immediate: true })
 	onBeforeUnmount(() => clearTimeout(recheck))
 
-	return { player, panel, mode, clock, anchor, pin, hold, release, jump, posted, drawing, draft, draw }
+	return { player, panel, mode, clock, anchor, pin, hold, release, jump, posted, drawing, draft, draw, range, markRange, clearRange }
 }

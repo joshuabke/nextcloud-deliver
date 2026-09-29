@@ -2,13 +2,16 @@
 import changesIcon from '@mdi/svg/svg/alert-circle-outline.svg?raw'
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import commentIcon from '@mdi/svg/svg/comment-outline.svg?raw'
+import moreIcon from '@mdi/svg/svg/dots-horizontal.svg?raw'
 import projectIcon from '@mdi/svg/svg/folder-play-outline.svg?raw'
 import { n, t } from '@nextcloud/l10n'
+import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDateTime from '@nextcloud/vue/components/NcDateTime'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DueDate from './DueDate.vue'
+import { useLongPress } from '../composables/longpress.js'
 import { previewUrl } from '../lib/preview.js'
 
 const props = defineProps({
@@ -16,7 +19,19 @@ const props = defineProps({
 	project: { type: Object, required: true },
 })
 
-const emit = defineEmits(['settings'])
+const emit = defineEmits(['settings', 'menu'])
+
+/** A phone has no hover and no right click: the menu has a button of its own, and a long press opens it too (story 109) */
+const isMobile = useIsMobile()
+const press = useLongPress((where) => emit('menu', where))
+
+/**
+ * @param {MouseEvent} event - the tap on the menu button
+ */
+function menuFromButton(event) {
+	const box = event.currentTarget.getBoundingClientRect()
+	emit('menu', { clientX: box.left, clientY: box.bottom })
+}
 
 /** Set when the server could not render the still; the icon stands in */
 const broken = ref(false)
@@ -31,7 +46,7 @@ const badges = computed(() => {
 </script>
 
 <template>
-	<li class="deliver-project-card">
+	<li class="deliver-project-card" v-on="press">
 		<RouterLink class="deliver-project-card__link" :to="`/projects/${project.id}`">
 			<div class="deliver-project-card__still">
 				<img
@@ -63,6 +78,17 @@ const badges = computed(() => {
 			<DueDate v-if="project.activity.nextDue" class="deliver-project-card__due" :modelValue="project.activity.nextDue" />
 		</RouterLink>
 		<NcButton
+			v-if="isMobile"
+			class="deliver-project-card__settings deliver-project-card__settings--shown"
+			variant="tertiary"
+			:aria-label="t('deliver', 'Actions for {name}', { name: project.name })"
+			@click="menuFromButton">
+			<template #icon>
+				<NcIconSvgWrapper :svg="moreIcon" />
+			</template>
+		</NcButton>
+		<NcButton
+			v-else
 			class="deliver-project-card__settings"
 			variant="tertiary"
 			:aria-label="t('deliver', 'Settings of {project}', { project: project.name })"
@@ -92,8 +118,14 @@ const badges = computed(() => {
 }
 
 .deliver-project-card:hover .deliver-project-card__settings,
-.deliver-project-card__settings:focus-visible {
+.deliver-project-card__settings:focus-visible,
+.deliver-project-card__settings--shown {
 	opacity: 1;
+}
+
+/* A long press opens the menu, not the phone's own link preview */
+.deliver-project-card__link {
+	-webkit-touch-callout: none;
 }
 
 .deliver-project-card__link {

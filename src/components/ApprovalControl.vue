@@ -3,6 +3,7 @@ import changesIcon from '@mdi/svg/svg/alert-circle-outline.svg?raw'
 import approvedIcon from '@mdi/svg/svg/check-decagram.svg?raw'
 import { showError } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
+import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
@@ -12,6 +13,8 @@ import { errorMessage } from '../api.js'
 import { useCommentsStore } from '../store/comments.js'
 
 const store = useCommentsStore()
+/** On a phone the bar has room for the button only, without its label and the faces */
+const isMobile = useIsMobile()
 
 const LABELS = {
 	approved: t('deliver', 'Approved'),
@@ -36,7 +39,7 @@ async function decide(status) {
 
 <template>
 	<div class="deliver-approval">
-		<ul v-if="store.approvals.length" class="deliver-approval__people">
+		<ul v-if="store.approvals.length && !isMobile" class="deliver-approval__people">
 			<li
 				v-for="approval in store.approvals"
 				:key="approval.author.type + approval.author.id"
@@ -57,9 +60,9 @@ async function decide(status) {
 			class="deliver-approval__menu"
 			:class="store.myDecision && `deliver-approval__menu--${store.myDecision}`"
 			:variant="store.myDecision ? 'primary' : 'secondary'"
-			:menuName="label"
-			:forceName="true"
-			:aria-label="t('deliver', 'Approval')">
+			:menuName="isMobile ? undefined : label"
+			:forceName="!isMobile"
+			:aria-label="isMobile ? label : t('deliver', 'Approval')">
 			<template #icon>
 				<NcIconSvgWrapper :svg="store.myDecision === 'changes' ? changesIcon : approvedIcon" />
 			</template>

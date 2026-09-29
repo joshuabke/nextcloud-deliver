@@ -1,12 +1,18 @@
 <script setup>
 import backIcon from '@mdi/svg/svg/arrow-left.svg?raw'
+import dueIcon from '@mdi/svg/svg/calendar-clock.svg?raw'
+import previousIcon from '@mdi/svg/svg/chevron-left.svg?raw'
+import nextIcon from '@mdi/svg/svg/chevron-right.svg?raw'
 import compareIcon from '@mdi/svg/svg/compare.svg?raw'
 import shareIcon from '@mdi/svg/svg/share-variant-outline.svg?raw'
 import uploadIcon from '@mdi/svg/svg/tray-arrow-up.svg?raw'
 import { t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
+import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActionLink from '@nextcloud/vue/components/NcActionLink'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
@@ -18,10 +24,8 @@ import CommentPanel from '../components/CommentPanel.vue'
 import DueDate from '../components/DueDate.vue'
 import ExportMenu from '../components/ExportMenu.vue'
 import ImageViewer from '../components/ImageViewer.vue'
-import PanelTabs from '../components/PanelTabs.vue'
 import ReviewLayout from '../components/ReviewLayout.vue'
 import VersionPicker from '../components/VersionPicker.vue'
-import VersionStack from '../components/VersionStack.vue'
 import VideoPlayer from '../components/VideoPlayer.vue'
 import { errorMessage, getVersion, listMembers, updateAsset, uploadNextVersion } from '../api.js'
 import { useLiveUpdates } from '../composables/live.js'
@@ -39,21 +43,19 @@ const router = useRouter()
 const store = useCommentsStore()
 const projects = useProjectsStore()
 const panelOpen = usePanelOpen()
+/** A phone gets the essentials in the bar and the rest in its menu; comparing, exporting and restacking stay on larger screens */
+const isMobile = useIsMobile()
 useLiveUpdates(store)
 const context = ref(null)
 const error = ref(null)
 const uploading = ref(false)
 const fileInput = ref(null)
+/** The phone's date picker for a first Due Date; once set, the date in the bar changes it */
+const dueInput = ref(null)
 /** Who can be mentioned in this Project */
 const members = ref([])
-/** The right panel shows the Comments or the Version Stack */
-const tab = ref('comments')
 
 const version = computed(() => context.value?.versions.find((each) => each.id === props.id) ?? null)
-const tabs = computed(() => [
-	{ id: 'comments', label: t('deliver', 'Comments') },
-	{ id: 'versions', label: t('deliver', 'Versions ({count})', { count: context.value?.versions.length ?? 0 }) },
-])
 
 /** The Project's Assets in the order the Project view shows them, to step through */
 const assets = computed(() => {
@@ -74,7 +76,7 @@ const shareUrl = computed(() => version.value?.url
 	? generateUrl('/apps/files/files/{fileId}', { fileId: version.value.fileId }) + '?' + new URLSearchParams({ dir: filesDir(version.value.url), opendetails: 'true' })
 	: null)
 
-const { player, panel, mode, clock, anchor, pin, hold, release, jump, posted, drawing, draft, draw } = useReview({
+const { player, panel, mode, clock, anchor, pin, hold, release, jump, posted, drawing, draft, draw, range, markRange, clearRange } = useReview({
 	version,
 	projectMode: computed(() => context.value?.project.timecodeMode ?? 'smpte'),
 	refresh: reload,
@@ -101,6 +103,15 @@ onBeforeUnmount(() => store.stop())
 /** Reloads the Version Stack after stacking, renumbering, a drop upload or new derived media */
 async function reload() {
 	context.value = await getVersion(props.id)
+}
+
+/** Opens the browser's own date picker */
+function pickDue() {
+	if (dueInput.value?.showPicker) {
+		dueInput.value.showPicker()
+	} else {
+		dueInput.value?.focus()
+	}
 }
 
 /**
@@ -174,14 +185,23 @@ async function upload(event) {
 				</template>
 			</NcButton>
 			<div class="deliver-review__crumbs">
-				<RouterLink class="deliver-review__project" :to="`/projects/${context.project.id}`">
-					{{ context.project.name }}
-				</RouterLink>
+				<div class="deliver-review__over">
+					<RouterLink class="deliver-review__project" :to="`/projects/${context.project.id}`">
+						{{ context.project.name }}
+					</RouterLink>
+					<DueDate
+						v-if="isMobile && context.asset.dueDate"
+						class="deliver-review__due"
+						:modelValue="context.asset.dueDate"
+						:editable="context.project.canWrite"
+						@update:modelValue="setDue" />
+				</div>
 				<h2 class="deliver-review__title" tabindex="-1">
 					{{ context.asset.name }}
 				</h2>
 			</div>
 			<DueDate
+				v-if="!isMobile"
 				:modelValue="context.asset.dueDate"
 				:editable="context.project.canWrite"
 				@update:modelValue="setDue" />
@@ -192,7 +212,7 @@ async function upload(event) {
 		<template #end>
 			<ApprovalControl />
 			<NcButton
-				v-if="context.versions.length > 1"
+				v-if="context.versions.length > 1 && !isMobile"
 				variant="tertiary"
 				:to="`/compare/${compareWith}/${id}`"
 				:aria-label="t('deliver', 'Compare with another Version')"
@@ -204,7 +224,7 @@ async function upload(event) {
 			<VersionPicker :versions="context.versions" :current="id" @select="$router.push(`/versions/${$event}`)" />
 			<template v-if="context.project.canWrite">
 				<NcButton
-					v-if="folderUrl"
+					v-if="folderUrl && !isMobile"
 					:disabled="uploading"
 					:title="t('deliver', 'Upload a new cut and stack it on top')"
 					@click="fileInput.click()">
@@ -215,17 +235,64 @@ async function upload(event) {
 					{{ t('deliver', 'New Version') }}
 				</NcButton>
 				<input
+					v-if="isMobile"
+					ref="dueInput"
+					class="deliver-review__due-input"
+					type="date"
+					tabindex="-1"
+					aria-hidden="true"
+					@change="setDue($event.target.value || null)">
+				<input
 					ref="fileInput"
 					type="file"
 					accept="video/*,audio/*"
 					hidden
 					@change="upload">
-				<NcButton v-if="shareUrl" :href="shareUrl" :title="t('deliver', 'Share in Files; switch on review in the link settings')">
+				<NcButton v-if="shareUrl && !isMobile" :href="shareUrl" :title="t('deliver', 'Share in Files; switch on review in the link settings')">
 					<template #icon>
 						<NcIconSvgWrapper :svg="shareIcon" />
 					</template>
 					{{ t('deliver', 'Share') }}
 				</NcButton>
+			</template>
+		</template>
+
+		<template #menu>
+			<NcActionButton :disabled="assetIndex <= 0" closeAfterClick @click="step(-1)">
+				<template #icon>
+					<NcIconSvgWrapper :svg="previousIcon" />
+				</template>
+				{{ t('deliver', 'Previous Asset') }}
+			</NcActionButton>
+			<NcActionButton :disabled="assetIndex < 0 || assetIndex >= assets.length - 1" closeAfterClick @click="step(1)">
+				<template #icon>
+					<NcIconSvgWrapper :svg="nextIcon" />
+				</template>
+				{{ t('deliver', 'Next Asset') }}
+			</NcActionButton>
+			<template v-if="context.project.canWrite">
+				<NcActionButton
+					v-if="folderUrl"
+					:disabled="uploading"
+					closeAfterClick
+					@click="fileInput.click()">
+					<template #icon>
+						<NcIconSvgWrapper :svg="uploadIcon" />
+					</template>
+					{{ t('deliver', 'New Version') }}
+				</NcActionButton>
+				<NcActionButton v-if="!context.asset.dueDate" closeAfterClick @click="pickDue">
+					<template #icon>
+						<NcIconSvgWrapper :svg="dueIcon" />
+					</template>
+					{{ t('deliver', 'Set a Due Date') }}
+				</NcActionButton>
+				<NcActionLink v-if="shareUrl" :href="shareUrl">
+					<template #icon>
+						<NcIconSvgWrapper :svg="shareIcon" />
+					</template>
+					{{ t('deliver', 'Share') }}
+				</NcActionLink>
 			</template>
 		</template>
 
@@ -246,8 +313,9 @@ async function upload(event) {
 			:version="version"
 			:comments="store.threads"
 			:canComment="store.canComment === true"
-			@comment="pin($event); tab = 'comments'; panelOpen = true"
-			@jump="jump" />
+			@comment="pin($event); panelOpen = true"
+			@jump="jump"
+			@swipe="step" />
 		<VideoPlayer
 			v-else-if="version"
 			ref="player"
@@ -259,12 +327,11 @@ async function upload(event) {
 			:clock="clock"
 			:canComment="store.canComment === true"
 			@comment="pin($event); tab = 'comments'; panelOpen = true"
-			@jump="jump" />
+			@jump="jump"
+			@swipe="step" />
 
 		<template #panel>
-			<PanelTabs v-model="tab" :tabs="tabs" />
 			<CommentPanel
-				v-show="tab === 'comments'"
 				ref="panel"
 				:clock="clock"
 				:anchor="anchor"
@@ -272,28 +339,22 @@ async function upload(event) {
 				:draft="draft"
 				:drawing="drawing"
 				:canDraw="!!version && !version.audioOnly"
+				:range="range"
 				@draw="draw"
+				@range="markRange"
+				@clearRange="clearRange"
 				@jump="jump"
 				@posted="posted"
 				@typing="hold"
 				@cleared="release">
 				<template #tools>
 					<ExportMenu
-						v-if="context.project.canWrite"
+						v-if="context.project.canWrite && !isMobile"
 						:versionId="id"
 						:audioOnly="version?.audioOnly ?? false"
 						:still="clock.still" />
 				</template>
 			</CommentPanel>
-			<VersionStack
-				v-if="tab === 'versions'"
-				class="deliver-review__stack"
-				:versions="context.versions"
-				:current="id"
-				:assetId="context.asset.id"
-				:canWrite="context.project.canWrite"
-				@open="$router.push(`/versions/${$event}`)"
-				@changed="reload" />
 		</template>
 	</ReviewLayout>
 </template>
@@ -307,6 +368,27 @@ async function upload(event) {
 }
 
 /* The Project this Asset belongs to, one click back */
+.deliver-review__over {
+	display: flex;
+	align-items: center;
+	gap: var(--default-grid-baseline);
+	min-width: 0;
+}
+
+.deliver-review__due {
+	flex: none;
+	font-size: 12px;
+}
+
+/* Only its picker is used; the field itself stays out of sight */
+.deliver-review__due-input {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+	pointer-events: none;
+}
+
 .deliver-review__project {
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -337,10 +419,4 @@ async function upload(event) {
 	margin: calc(var(--default-clickable-area) + 4 * var(--default-grid-baseline)) calc(4 * var(--default-grid-baseline));
 }
 
-.deliver-review__stack {
-	flex: 1;
-	min-height: 0;
-	padding: calc(3 * var(--default-grid-baseline));
-	overflow-y: auto;
-}
 </style>
