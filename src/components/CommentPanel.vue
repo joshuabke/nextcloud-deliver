@@ -162,7 +162,24 @@ watch(() => store.versionId, () => {
 	error.value = null
 })
 
-defineExpose({ focus: () => input.value?.focus() })
+const list = ref(null)
+
+/**
+ * Brings a Comment into view and marks it for a moment, for a tap on its marker
+ *
+ * @param {number} id - the Comment
+ */
+function reveal(id) {
+	const item = list.value?.querySelector(`[data-comment="${id}"]`)
+	if (!item) {
+		return
+	}
+	item.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+	item.classList.add('deliver-comment--revealed')
+	setTimeout(() => item.classList.remove('deliver-comment--revealed'), 1200)
+}
+
+defineExpose({ focus: () => input.value?.focus(), reveal })
 
 /** Focuses the search field as it opens */
 const vFocus = { mounted: (element) => element.focus() }
@@ -323,7 +340,7 @@ function claim() {
 			:placeholder="t('deliver', 'Search Comments')"
 			@keydown.esc="searching = false; query = ''">
 
-		<ul v-if="threads.length" class="deliver-comments__list">
+		<ul v-if="threads.length" ref="list" class="deliver-comments__list">
 			<CommentItem
 				v-for="thread in threads"
 				:key="thread.id"
@@ -544,6 +561,11 @@ function claim() {
 	flex-direction: column;
 	gap: calc(3 * var(--default-grid-baseline));
 	padding: var(--default-grid-baseline) calc(3 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline));
+}
+
+/* The Comment whose marker was tapped */
+.deliver-comments__list :deep(.deliver-comment--revealed) {
+	border-color: var(--color-primary-element);
 }
 
 .deliver-comments__empty {
