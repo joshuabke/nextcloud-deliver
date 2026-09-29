@@ -15,13 +15,11 @@ import { formatAt, frameToTime, timeToFrame } from '../lib/timecode.js'
 /** Frames B is ahead of A */
 const offset = defineModel('offset', { type: Number, default: 0 })
 
-/** side by side, or wipe */
-const mode = defineModel('mode', { type: String, default: 'side' })
-
-/** Whose sound plays: a or b */
-const audio = defineModel('audio', { type: String, default: 'a' })
-
 const props = defineProps({
+	/** side by side, or wipe */
+	mode: { type: String, default: 'side' },
+	/** Whose sound plays: a or b */
+	audio: { type: String, default: 'a' },
 	/** The leading side */
 	a: { type: Object, required: true },
 	/** The side that follows, shifted by the offset */
@@ -55,7 +53,7 @@ const markers = computed(() => [
 	...props.commentsB.map((comment) => ({ side: 'b', comment, at: frameOnA(comment.inFrame, props.a.fps, props.b.fps, offset.value) })),
 ])
 
-defineExpose({ seekTo, frame })
+defineExpose({ seekTo })
 
 /** Where side B belongs while A stands on its current Frame */
 function expectedB() {
@@ -128,7 +126,7 @@ function scrub(event) {
  * @param {PointerEvent} event - pressing on the stage
  */
 function startWipe(event) {
-	if (mode.value !== 'wipe') {
+	if (props.mode !== 'wipe') {
 		return
 	}
 	const move = (e) => {

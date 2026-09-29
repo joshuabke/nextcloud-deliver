@@ -31,6 +31,7 @@ const router = useRouter()
 const panelOpen = usePanelOpen()
 const context = ref(null)
 const error = ref(null)
+/** Each side's Comments, without their Replies */
 const comments = ref({})
 const player = ref(null)
 const offset = ref(0)
@@ -50,18 +51,23 @@ const clock = computed(() => ({
 	startFrame: versionA.value?.startFrame ?? 0,
 	dropFrame: versionA.value?.dropFrame ?? false,
 }))
+/** Side B's Comments read in its own Frames */
+const clockB = computed(() => ({ ...clock.value, fps: versionB.value?.fps, startFrame: versionB.value?.startFrame ?? 0 }))
 const tabs = computed(() => [versionA.value, versionB.value].filter(Boolean).map((version, index) => ({
 	id: index === 0 ? 'a' : 'b',
 	label: t('deliver', 'Comments on V{number}', { number: version.number }),
 })))
-const shown = computed(() => (comments.value[tab.value === 'a' ? props.a : props.b] ?? []).filter((comment) => comment.parentId === null))
+const commentsA = computed(() => comments.value[props.a] ?? [])
+const commentsB = computed(() => comments.value[props.b] ?? [])
+const shown = computed(() => tab.value === 'a' ? commentsA.value : commentsB.value)
 
 watch(() => [props.a, props.b], async ([a, b]) => {
 	error.value = null
 	try {
 		context.value = await getVersion(a)
 		const [listA, listB] = await Promise.all([listComments(a), listComments(b)])
-		comments.value = { [a]: listA.comments, [b]: listB.comments }
+		const topLevel = (list) => list.comments.filter((comment) => comment.parentId === null)
+		comments.value = { [a]: topLevel(listA), [b]: topLevel(listB) }
 	} catch (e) {
 		error.value = errorMessage(e)
 	}
@@ -159,13 +165,13 @@ function jump(comment) {
 		<ComparePlayer
 			ref="player"
 			v-model:offset="offset"
-			v-model:mode="mode"
-			v-model:audio="audio"
+			:mode="mode"
+			:audio="audio"
 			:a="versionA"
 			:b="versionB"
 			:clock="clock"
-			:commentsA="(comments[a] ?? []).filter((each) => each.parentId === null)"
-			:commentsB="(comments[b] ?? []).filter((each) => each.parentId === null)" />
+			:commentsA="commentsA"
+			:commentsB="commentsB" />
 
 		<template #panel>
 			<SegmentedControl
@@ -180,7 +186,7 @@ function jump(comment) {
 						type="button"
 						class="deliver-compare-view__anchor"
 						@click="jump(comment)">
-						{{ formatAt(comment.inFrame, tab === 'a' ? clock : { ...clock, fps: versionB.fps, startFrame: versionB.startFrame ?? 0 }) }}
+						{{ formatAt(comment.inFrame, tab === 'a' ? clock : clockB) }}
 					</button>
 					<span class="deliver-compare-view__author">{{ comment.author.name }}</span>
 					<p>{{ comment.body }}</p>
