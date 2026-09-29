@@ -11,8 +11,8 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import ComparePlayer from '../components/ComparePlayer.vue'
-import PanelTabs from '../components/PanelTabs.vue'
 import ReviewLayout from '../components/ReviewLayout.vue'
+import SegmentedControl from '../components/SegmentedControl.vue'
 import VersionPicker from '../components/VersionPicker.vue'
 import { errorMessage, getVersion, listComments } from '../api.js'
 import { usePanelOpen } from '../composables/panel.js'
@@ -37,6 +37,10 @@ const offset = ref(0)
 const mode = ref('side')
 const audio = ref('a')
 const tab = ref('a')
+const LAYOUTS = [
+	{ id: 'side', label: t('deliver', 'Side by side') },
+	{ id: 'wipe', label: t('deliver', 'Wipe') },
+]
 
 const versionA = computed(() => context.value?.versions.find((each) => each.id === props.a) ?? null)
 const versionB = computed(() => context.value?.versions.find((each) => each.id === props.b) ?? null)
@@ -138,22 +142,7 @@ function jump(comment) {
 				@select="open(a, $event)" />
 		</template>
 		<template #end>
-			<div class="deliver-compare-view__switch" role="radiogroup" :aria-label="t('deliver', 'Layout')">
-				<button
-					type="button"
-					role="radio"
-					:aria-checked="mode === 'side'"
-					@click="mode = 'side'">
-					{{ t('deliver', 'Side by side') }}
-				</button>
-				<button
-					type="button"
-					role="radio"
-					:aria-checked="mode === 'wipe'"
-					@click="mode = 'wipe'">
-					{{ t('deliver', 'Wipe') }}
-				</button>
-			</div>
+			<SegmentedControl v-model="mode" :options="LAYOUTS" :aria-label="t('deliver', 'Layout')" />
 			<NcButton
 				v-if="!isStill(versionA)"
 				variant="tertiary"
@@ -179,7 +168,11 @@ function jump(comment) {
 			:commentsB="(comments[b] ?? []).filter((each) => each.parentId === null)" />
 
 		<template #panel>
-			<PanelTabs v-model="tab" :tabs="tabs" />
+			<SegmentedControl
+				v-model="tab"
+				class="deliver-compare-view__tabs"
+				:options="tabs"
+				wide />
 			<ul v-if="shown.length" class="deliver-compare-view__list">
 				<li v-for="comment in shown" :key="comment.id">
 					<button
@@ -214,29 +207,8 @@ function jump(comment) {
 	margin: calc(var(--default-clickable-area) + 4 * var(--default-grid-baseline)) calc(4 * var(--default-grid-baseline));
 }
 
-.deliver-compare-view__switch {
-	display: flex;
-	padding: 3px;
-	border-radius: var(--border-radius-element);
-	background: var(--color-background-dark);
-}
-
-.deliver-compare-view__switch button {
-	min-height: 0;
-	margin: 0;
-	padding: 4px 10px;
-	border: none;
-	border-radius: calc(var(--border-radius-element) - 2px);
-	background: none;
-	color: var(--color-text-maxcontrast);
-	font-weight: normal;
-	cursor: pointer;
-}
-
-.deliver-compare-view__switch button[aria-checked='true'] {
-	background: var(--color-background-darker);
-	color: var(--color-main-text);
-	font-weight: bold;
+.deliver-compare-view__tabs {
+	margin: calc(3 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline)) var(--default-grid-baseline);
 }
 
 .deliver-compare-view__list {
