@@ -23,7 +23,7 @@ import CommentItem from './CommentItem.vue'
 import { errorMessage } from '../api.js'
 import { sheet } from '../composables/panel.js'
 import { insertMention, mentionAt } from '../lib/mentions.js'
-import { formatAt } from '../lib/timecode.js'
+import { formatRange } from '../lib/timecode.js'
 import { useCommentsStore } from '../store/comments.js'
 
 const props = defineProps({
@@ -138,10 +138,7 @@ watch(() => body.value.trim() === '', (empty, wasEmpty) => {
 	}
 })
 
-const anchorLabel = computed(() => {
-	const from = formatAt(props.anchor.inFrame, props.clock)
-	return props.anchor.outFrame === null ? from : from + ' – ' + formatAt(props.anchor.outFrame, props.clock)
-})
+const anchorLabel = computed(() => formatRange(props.anchor, props.clock))
 
 /** Comment id → its place in the order Comments were written */
 const numbers = computed(() => new Map([...store.threads]

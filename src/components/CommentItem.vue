@@ -20,7 +20,7 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import { attachmentUrl, errorMessage } from '../api.js'
 import { linkify } from '../lib/links.js'
 import { splitMentions } from '../lib/mentions.js'
-import { formatAt } from '../lib/timecode.js'
+import { formatRange } from '../lib/timecode.js'
 import { useCommentsStore } from '../store/comments.js'
 
 const props = defineProps({
@@ -72,10 +72,7 @@ function toggle(emoji) {
 }
 const pieces = computed(() => linkify(props.comment.body)
 	.flatMap((piece) => piece.href ? [piece] : splitMentions(piece.text, props.comment.mentions)))
-const anchor = computed(() => {
-	const from = formatAt(props.comment.inFrame, props.clock)
-	return props.comment.outFrame === null ? from : from + ' – ' + formatAt(props.comment.outFrame, props.clock)
-})
+const anchor = computed(() => formatRange(props.comment, props.clock))
 
 /**
  * @param {() => Promise<void>} action - what to run while the item is busy
