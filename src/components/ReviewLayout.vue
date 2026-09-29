@@ -2,20 +2,58 @@
 import panelIcon from '@mdi/svg/svg/dock-right.svg?raw'
 import { t } from '@nextcloud/l10n'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
+import { onBeforeUnmount } from 'vue'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import { sheet } from '../composables/panel.js'
 
 /** Whether the panel beside the player is open; on a phone it always is, under the player */
 const panelOpen = defineModel('panelOpen', { type: Boolean, default: true })
 
 /** Below 1024 px the player sits on top and the Comments below it; the bar keeps only what fits */
 const isMobile = useIsMobile()
+const { up, writing } = sheet
+onBeforeUnmount(() => {
+	up.value = false
+	writing.value = false
+})
+
+/** Where the finger came down on the grabber */
+let grab = null
+
+/**
+ * @param {PointerEvent} event - a finger on the grabber
+ */
+function grabStart(event) {
+	grab = event.clientY
+	event.currentTarget.setPointerCapture?.(event.pointerId)
+}
+
+/**
+ * Up or down by a stroke, either way by a tap (story 106)
+ *
+ * @param {PointerEvent} event - the finger lifts
+ */
+function grabEnd(event) {
+	if (grab === null) {
+		return
+	}
+	const dy = event.clientY - grab
+	grab = null
+	up.value = Math.abs(dy) < 10 ? !up.value : dy < 0
+}
 </script>
 
 <template>
 	<!-- The Review view is dark in any theme, like every video tool: the picture is what should stand out -->
-	<div class="deliver-layout" :class="{ 'deliver-layout--mobile': isMobile }">
+	<div
+		class="deliver-layout"
+		:class="{
+			'deliver-layout--mobile': isMobile,
+			'deliver-layout--up': isMobile && up && !writing,
+			'deliver-layout--writing': isMobile && writing,
+		}">
 		<div class="deliver-layout__bar">
 			<div class="deliver-layout__start">
 				<slot name="start" />
@@ -48,6 +86,16 @@ const isMobile = useIsMobile()
 				<slot />
 			</div>
 			<div v-show="panelOpen || isMobile" class="deliver-layout__panel">
+				<button
+					v-if="isMobile"
+					type="button"
+					class="deliver-layout__grabber"
+					:aria-label="up ? t('deliver', 'Show the picture') : t('deliver', 'Pull the Comments up')"
+					@pointerdown="grabStart"
+					@pointerup="grabEnd"
+					@pointercancel="grab = null"
+					@keydown.enter.prevent="up = !up"
+					@keydown.space.prevent="up = !up" />
 				<slot name="panel" />
 			</div>
 		</div>
@@ -160,6 +208,54 @@ const isMobile = useIsMobile()
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
+}
+
+/* The grabber: a short bar to pull the list up over the picture and back; the resets keep Nextcloud's button style away */
+.deliver-layout__grabber {
+	flex: none;
+	position: relative;
+	width: 100%;
+	height: 20px;
+	min-height: 0;
+	margin: 0;
+	padding: 0;
+	border: none;
+	border-radius: 0;
+	background: none;
+	cursor: grab;
+	touch-action: none;
+}
+
+.deliver-layout__grabber::after {
+	content: '';
+	position: absolute;
+	top: 8px;
+	left: 50%;
+	width: 40px;
+	height: 4px;
+	border-radius: 2px;
+	background: var(--color-border-maxcontrast);
+	transform: translateX(-50%);
+}
+
+/* Pulled up: of the player only its timeline and controls stay, the picture plays on unseen */
+.deliver-layout--mobile.deliver-layout--up .deliver-layout__main {
+	height: auto;
+}
+
+.deliver-layout--up :deep(.deliver-player__stage),
+.deliver-layout--up :deep(.deliver-still__stage) {
+	flex: 0 0 0;
+	min-height: 0;
+}
+
+/* Writing: the list steps aside, so the picture and the field both stay above the keyboard */
+.deliver-layout--writing :deep(.deliver-comments__head),
+.deliver-layout--writing :deep(.deliver-comments__list),
+.deliver-layout--writing :deep(.deliver-comments__empty),
+.deliver-layout--writing :deep(.deliver-tabs),
+.deliver-layout--writing .deliver-layout__grabber {
+	display: none;
 }
 
 /* A 16:9 picture at full width, plus its timeline and controls */

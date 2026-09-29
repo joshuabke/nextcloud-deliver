@@ -19,6 +19,7 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import CommentItem from './CommentItem.vue'
 import { errorMessage } from '../api.js'
+import { sheet } from '../composables/panel.js'
 import { insertMention, mentionAt } from '../lib/mentions.js'
 import { formatAt } from '../lib/timecode.js'
 import { useCommentsStore } from '../store/comments.js'
@@ -180,6 +181,25 @@ function reveal(id) {
 }
 
 defineExpose({ focus: () => input.value?.focus(), reveal })
+
+const form = ref(null)
+
+/** On a phone, writing makes room for the keyboard: the list steps aside (story 106) */
+function startWriting() {
+	if (isMobile.value) {
+		sheet.up.value = false
+		sheet.writing.value = true
+	}
+}
+
+/** Leaving the field ends it, but only once a tap on Send or Attach has landed */
+function stopWriting() {
+	setTimeout(() => {
+		if (!form.value?.contains(document.activeElement)) {
+			sheet.writing.value = false
+		}
+	}, 150)
+}
 
 /** Focuses the search field as it opens */
 const vFocus = { mounted: (element) => element.focus() }
@@ -368,7 +388,13 @@ function claim() {
 				{{ t('deliver', 'You can read the feedback on this Version, but not add to it.') }}
 			</p>
 
-			<form v-else class="deliver-comments__form" @submit.prevent="submit">
+			<form
+				v-else
+				ref="form"
+				class="deliver-comments__form"
+				@submit.prevent="submit"
+				@focusin="startWriting"
+				@focusout="stopWriting">
 				<div class="deliver-comments__box" @click="input?.focus()">
 					<label
 						v-if="!clock.still"
