@@ -53,19 +53,23 @@ const TOOL_ICONS = { pen: penIcon, arrow: arrowIcon, box: boxIcon }
 </template>
 
 <style scoped>
-/* The drawing tools float over the top of the picture */
+/* The drawing tools float over the top of the picture, centred; on a narrow picture they wrap */
 .deliver-drawbar {
 	position: absolute;
 	top: 12px;
-	left: 50%;
+	inset-inline: 0;
 	z-index: 1;
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
+	justify-content: center;
 	gap: 4px;
+	width: fit-content;
+	max-width: calc(100% - 16px);
+	margin-inline: auto;
 	padding: 4px 6px;
 	border-radius: var(--border-radius-large);
 	background: rgba(20, 20, 22, 0.9);
-	transform: translateX(-50%);
 }
 
 .deliver-drawbar button {

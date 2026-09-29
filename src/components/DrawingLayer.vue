@@ -59,7 +59,12 @@ function start(event) {
 		return
 	}
 	event.preventDefault()
-	root.value.setPointerCapture(event.pointerId)
+	try {
+		// Keeps the stroke going when the pen or finger leaves the picture
+		root.value.setPointerCapture(event.pointerId)
+	} catch {
+		// A pointer the browser does not track, as in synthetic tests
+	}
 	const point = pointOf(event)
 	current.value = { tool: props.tool, color: props.color, points: [point, point] }
 	if (props.tool === 'pen') {
