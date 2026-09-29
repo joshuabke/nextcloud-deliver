@@ -140,11 +140,6 @@ watch(() => body.value.trim() === '', (empty, wasEmpty) => {
 
 const anchorLabel = computed(() => formatRange(props.anchor, props.clock))
 
-/** Comment id → its place in the order Comments were written */
-const numbers = computed(() => new Map([...store.threads]
-	.sort((a, b) => a.createdAt - b.createdAt || a.id - b.id)
-	.map((thread, index) => [thread.id, index + 1])))
-
 /**
  * @param {object} thread - a Comment with its Replies
  * @return {boolean} whether it, or a Reply, holds the search words
@@ -366,7 +361,7 @@ function claim() {
 				:key="thread.id"
 				:comment="thread"
 				:clock="clock"
-				:number="numbers.get(thread.id)"
+				:number="store.numbers.get(thread.id)"
 				@jump="emit('jump', $event)" />
 		</ul>
 		<p v-else class="deliver-comments__empty">

@@ -5,7 +5,6 @@
  */
 
 export const COLORS = ['#ff3b30', '#ffcc00', '#34c759', '#0a84ff']
-export const TOOLS = ['pen', 'arrow', 'box']
 
 /**
  * Where a picture of one size sits inside a box when it is contained and centred.

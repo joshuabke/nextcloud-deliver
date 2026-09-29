@@ -83,33 +83,23 @@ export const savePipelineSettings = (settings) => axios.put(url('/admin/settings
 // Share Link only
 export const getPublicContext = (params) => axios.get(url('/context'), { params }).then(data)
 /**
+ * @param {{replies: boolean, comments: boolean, versions: boolean}} mail - what the Reviewer wants mailed
+ * @return {object} those wishes as the server takes them
+ */
+const mailFields = (mail) => ({ mailReplies: mail.replies, mailComments: mail.comments, mailVersions: mail.versions })
+/**
  * @param {string} name - how the Reviewer calls themselves
  * @param {string|null} email - where to mail them, if anywhere
  * @param {{replies: boolean, comments: boolean, versions: boolean}} mail - what to mail
  * @return {Promise<object>} the Reviewer, with their Personal Link
  */
-export function claimReviewer(name, email, mail) {
-	return axios.post(url('/reviewer'), {
-		name,
-		email,
-		mailReplies: mail.replies,
-		mailComments: mail.comments,
-		mailVersions: mail.versions,
-	}).then(data)
-}
+export const claimReviewer = (name, email, mail) => axios.post(url('/reviewer'), { name, email, ...mailFields(mail) }).then(data)
 /**
  * @param {string|null} email - the address, or null for none
  * @param {{replies: boolean, comments: boolean, versions: boolean}} mail - what to mail
  * @return {Promise<object>} the Reviewer as stored
  */
-export function updateReviewer(email, mail) {
-	return axios.put(url('/reviewer'), {
-		email,
-		mailReplies: mail.replies,
-		mailComments: mail.comments,
-		mailVersions: mail.versions,
-	}).then(data)
-}
+export const updateReviewer = (email, mail) => axios.put(url('/reviewer'), { email, ...mailFields(mail) }).then(data)
 /** Every file of the share that is an Asset: [{ fileId, versionId, assetId }], Versions of one Asset share its newest versionId */
 export const listPublicAssets = () => axios.get(url('/assets')).then(data)
 

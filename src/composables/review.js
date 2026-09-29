@@ -59,9 +59,7 @@ export function useReview({ version, projectMode, refresh }) {
 			return
 		}
 		player.value?.pause()
-		if (pinned.value === null) {
-			pinned.value = { inFrame: player.value?.frame ?? 0, outFrame: null }
-		}
+		pinned.value ??= anchor.value
 		drawing.value = true
 	}
 
@@ -100,7 +98,7 @@ export function useReview({ version, projectMode, refresh }) {
 	 */
 	function hold() {
 		if (pinned.value === null) {
-			pinned.value = { inFrame: player.value?.frame ?? 0, outFrame: null }
+			pinned.value = anchor.value
 			pinnedByTyping = true
 		}
 	}

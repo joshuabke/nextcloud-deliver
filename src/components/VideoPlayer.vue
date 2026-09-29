@@ -31,6 +31,7 @@ import { DOUBLE_TAP_MS } from '../lib/gestures.js'
 import { actionFor } from '../lib/hotkeys.js'
 import { formatAt, fpsValue, frameToTime, MODES, timeToFrame } from '../lib/timecode.js'
 import { watermarkTile } from '../lib/watermark.js'
+import { useCommentsStore } from '../store/comments.js'
 
 /** The drawing being made for the next Comment */
 const draft = defineModel('draft', { type: Array, default: () => [] })
@@ -53,6 +54,8 @@ const emit = defineEmits(['comment', 'jump', 'swipe', 'update:mode', 'update:dra
 
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2]
 
+/** For the Comments' numbers, the same as in the list */
+const store = useCommentsStore()
 const root = ref(null)
 const video = ref(null)
 const muted = ref(false)
@@ -92,10 +95,6 @@ const hover = ref(null)
 const scrubber = ref(null)
 /** The Comment whose card shows over the bar, and where */
 const peek = ref(null)
-/** Comment id → its place in the order Comments were written, as the panel numbers them */
-const numbers = computed(() => new Map([...props.comments]
-	.sort((a, b) => a.createdAt - b.createdAt || a.id - b.id)
-	.map((comment, index) => [comment.id, index + 1])))
 
 /** Half the card's width, to keep it inside the player */
 const PEEK_HALF = 160
@@ -898,7 +897,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 						<div class="deliver-player__peek-head">
 							<strong>{{ peek.comment.author.name }}</strong>
 							<NcDateTime :timestamp="peek.comment.createdAt * 1000" relativeTime="short" />
-							<span class="deliver-player__peek-number">#{{ numbers.get(peek.comment.id) }}</span>
+							<span class="deliver-player__peek-number">#{{ store.numbers.get(peek.comment.id) }}</span>
 						</div>
 						<p>
 							<span class="deliver-player__peek-time">{{ formatAt(peek.comment.inFrame, clock) }}</span>
