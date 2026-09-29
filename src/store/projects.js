@@ -14,9 +14,7 @@ export const useProjectsStore = defineStore('projects', {
 			this.loaded = true
 		},
 		async fetch(id) {
-			const project = await getProject(id)
-			this.details[id] = project
-			return project
+			this.details[id] = await getProject(id)
 		},
 		/**
 		 * @param {number} folderId - the folder to turn into a Project
