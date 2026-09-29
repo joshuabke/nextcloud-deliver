@@ -30,7 +30,7 @@ import VersionStack from '../components/VersionStack.vue'
 import { disableAsset, enableFile, errorMessage, stackVersion, uploadNextVersion, uploadVersion } from '../api.js'
 import { useQuery } from '../composables/query.js'
 import { confirmRemoval } from '../confirm.js'
-import { FILTERS, found, passes, sortAssets, SORTS } from '../lib/filters.js'
+import { FILTER_LABELS, FILTERS, found, passes, SORT_OPTIONS, sortAssets, SORTS } from '../lib/filters.js'
 import { groupByFolder, inFolder, projectDavPath, projectDir } from '../lib/folders.js'
 import { stackSuggestions } from '../lib/suggestions.js'
 import { useProjectsStore } from '../store/projects.js'
@@ -94,21 +94,6 @@ async function accept(asset, target) {
 	}
 }
 
-const LABELS = {
-	all: t('deliver', 'All'),
-	unseen: t('deliver', 'Unseen'),
-	changes: t('deliver', 'Changes requested'),
-	approved: t('deliver', 'Approved'),
-	due: t('deliver', 'Due'),
-}
-const SORT_LABELS = {
-	activity: t('deliver', 'Latest activity'),
-	name: t('deliver', 'Name'),
-	created: t('deliver', 'Newest first'),
-	due: t('deliver', 'Due Date'),
-}
-const sorts = SORTS.map((id) => ({ id, label: SORT_LABELS[id] }))
-
 /** Folder, filter, order and search live in the address, so the way back from a Review keeps them */
 const folder = useQuery('folder', null, '')
 const filter = useQuery('filter', FILTERS, 'all')
@@ -117,7 +102,7 @@ const query = useQuery('q', null, '')
 const inView = computed(() => (project.value?.assets ?? []).filter((asset) => inFolder(asset, folder.value)))
 const filters = computed(() => FILTERS.map((id) => ({
 	id,
-	label: LABELS[id],
+	label: FILTER_LABELS[id],
 	count: inView.value.filter((asset) => passes(asset, id)).length,
 })))
 const shown = computed(() => inView.value.filter((asset) => passes(asset, filter.value) && found(asset, query.value)))
@@ -356,7 +341,7 @@ function dropped(event) {
 				v-model:filter="filter"
 				v-model:sort="sort"
 				:filters="filters"
-				:sorts="sorts" />
+				:sorts="SORT_OPTIONS" />
 			<NcEmptyContent
 				v-if="project.assets.length && shown.length === 0"
 				:name="t('deliver', 'No Asset fits')" />

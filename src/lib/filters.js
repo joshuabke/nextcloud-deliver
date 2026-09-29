@@ -1,9 +1,20 @@
+import { t } from '@nextcloud/l10n'
+
 /**
  * The filters of the Project view (story 99). Each looks at the newest
  * Version of an Asset, except Unseen, which looks for Unseen Comments
  * anywhere in the Stack.
  */
 export const FILTERS = ['all', 'unseen', 'changes', 'approved', 'due']
+
+/** The names of the filters, of the Project view and the Project list alike */
+export const FILTER_LABELS = {
+	all: t('deliver', 'All'),
+	unseen: t('deliver', 'Unseen'),
+	changes: t('deliver', 'Changes requested'),
+	approved: t('deliver', 'Approved'),
+	due: t('deliver', 'Due'),
+}
 
 /**
  * @param {object} asset - an Asset with its Version Stack, newest first
@@ -42,6 +53,14 @@ export function found(asset, query) {
 
 /** The orders of the Project view, the latest activity first by default */
 export const SORTS = ['activity', 'name', 'created', 'due']
+
+/** The orders as the sort menu offers them */
+export const SORT_OPTIONS = [
+	{ id: 'activity', label: t('deliver', 'Latest activity') },
+	{ id: 'name', label: t('deliver', 'Name') },
+	{ id: 'created', label: t('deliver', 'Newest first') },
+	{ id: 'due', label: t('deliver', 'Due Date') },
+]
 
 /**
  * @param {object[]} assets - Assets with name, createdAt, lastActivity and dueDate
