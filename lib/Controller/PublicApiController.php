@@ -60,14 +60,10 @@ class PublicApiController extends PublicShareController {
 	/** One Version with its Version Stack, as far as the share shows it */
 	#[PublicPage]
 	#[NoCSRFRequired]
-	public function context(?int $versionId = null, ?int $fileId = null): Response {
-		return $this->guard(function () use ($versionId, $fileId) {
+	public function context(int $versionId): Response {
+		return $this->guard(function () use ($versionId) {
 			$share = $this->share();
-			$version = match (true) {
-				$versionId !== null => $this->sharing->version($share, $versionId),
-				$fileId !== null => $this->sharing->versionForFile($share, $fileId),
-				default => throw new NotFoundException('Version not found'),
-			};
+			$version = $this->sharing->version($share, $versionId);
 			$project = $this->sharing->project($share);
 			$stack = $this->sharing->assets($share)[$version->getAssetId()] ?? null;
 			$reviewer = $this->reviewer();
@@ -129,7 +125,8 @@ class PublicApiController extends PublicShareController {
 			$share = $this->share();
 			$version = $this->sharing->version($share, $versionId);
 			if ($kind !== 'original') {
-				return DerivedMediaResponse::of($this->media, $version, $kind, $this->request->getHeader('Range'));
+				// Not generated (yet) is a 404 as well; the player falls back to the original
+				return RangeFileResponse::ofSimpleFile($this->media->file($version, $kind), $this->request->getHeader('Range'));
 			}
 			$file = $this->originalFile($share, $version);
 			if ($file === null || !$this->mayPlayOriginal($version, $this->sharing->flags($share)['canDownload'])) {

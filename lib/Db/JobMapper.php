@@ -72,10 +72,6 @@ class JobMapper extends Mapper {
 			->executeStatement();
 	}
 
-	public function countRunning(): int {
-		return $this->countByState()[Job::STATE_RUNNING] ?? 0;
-	}
-
 	/** Puts back jobs whose worker died: running, but started before a cutoff */
 	public function requeueStale(int $startedBefore): void {
 		$qb = $this->db->getQueryBuilder();

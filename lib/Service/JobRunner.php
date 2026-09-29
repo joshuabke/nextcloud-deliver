@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Deliver\Service;
 
 use OCA\Deliver\AppInfo\Application;
+use OCA\Deliver\Db\Job;
 use OCA\Deliver\Db\JobMapper;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IAppConfig;
@@ -31,7 +32,7 @@ class JobRunner {
 		$now = $this->time->getTime();
 		$this->jobs->requeueStale($now - self::STALE_AFTER);
 		// ponytail: count, then claim; two workers can overshoot the cap by one at the same instant
-		if ($this->jobs->countRunning() >= max(1, $this->config->getValueInt(Application::APP_ID, 'max_jobs', 1))) {
+		if (($this->jobs->countByState()[Job::STATE_RUNNING] ?? 0) >= max(1, $this->config->getValueInt(Application::APP_ID, 'max_jobs', 1))) {
 			return false;
 		}
 		foreach ($this->jobs->findQueued(10) as $job) {

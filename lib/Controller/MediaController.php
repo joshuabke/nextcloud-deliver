@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Controller;
 
+use OCA\Deliver\Http\RangeFileResponse;
 use OCA\Deliver\Service\CommentService;
 use OCA\Deliver\Service\DerivedMedia;
 use OCA\Deliver\Service\ProjectService;
@@ -33,7 +34,8 @@ class MediaController extends Controller {
 	public function show(int $id, string $kind): Response {
 		try {
 			[, $version] = $this->projects->viewerForVersion((string)$this->userId, $id);
-			return DerivedMediaResponse::of($this->media, $version, $kind, $this->request->getHeader('Range'));
+			// Not generated (yet) is a 404 as well; the player falls back to the original
+			return RangeFileResponse::ofSimpleFile($this->media->file($version, $kind), $this->request->getHeader('Range'));
 		} catch (NotFoundException) {
 			return new Response(Http::STATUS_NOT_FOUND);
 		}

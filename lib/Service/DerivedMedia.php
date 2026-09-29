@@ -137,8 +137,6 @@ class DerivedMedia {
 		if ($probed === null) {
 			throw new \RuntimeException('ffprobe could not read this file');
 		}
-		$this->versions->update($version);
-
 		$playable = $this->browserPlays($probed);
 		$version->setPlayable($playable);
 		$this->versions->update($version);
@@ -442,14 +440,6 @@ class DerivedMedia {
 		}
 	}
 
-	/** @return array{states: array<string, int>, lastError: ?string} for the admin panel */
-	public function status(): array {
-		return [
-			'states' => $this->jobs->countByState(),
-			'lastError' => $this->jobs->findLastFailed()?->getStderrTail(),
-		];
-	}
-
 	public function maxHeight(): int {
 		return $this->config->getValueInt(Application::APP_ID, 'max_height', 1080);
 	}
@@ -466,12 +456,8 @@ class DerivedMedia {
 	}
 
 	private function fileOf(Version $version): ?File {
-		foreach ($this->root->getById($version->getFileId()) as $node) {
-			if ($node instanceof File) {
-				return $node;
-			}
-		}
-		return null;
+		$node = $this->root->getFirstNodeById($version->getFileId());
+		return $node instanceof File ? $node : null;
 	}
 
 	/** Sets the state of one kind on the Version; a failure also records its error */
