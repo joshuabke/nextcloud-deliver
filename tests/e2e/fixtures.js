@@ -3,7 +3,7 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-export const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'media')
+const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'media')
 /** WebM, because open-source Chromium builds carry no H.264 decoder */
 export const CLIP = join(FIXTURES, 'clip-25fps.webm')
 
