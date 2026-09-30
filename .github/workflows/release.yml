@@ -1,0 +1,72 @@
+name: Release
+
+# A tag v1.2.3 builds and signs the app, attaches it to a GitHub release and
+# publishes it in the App Store. Secrets and the manual steps behind it are in
+# docs/app-store.md: APP_PRIVATE_KEY (deliver.key) and APPSTORE_TOKEN.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag, info.xml and changelog agree
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          grep -q "<version>$VERSION</version>" appinfo/info.xml
+          grep -q "^## $VERSION" CHANGELOG.md
+          grep -q "^## $VERSION" CHANGELOG.de.md
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - run: make package
+
+      # appinfo/signature.json covers every file, so nothing may change after this
+      - name: Sign the code
+        env:
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+        run: |
+          printf '%s\n' "$APP_PRIVATE_KEY" > "$RUNNER_TEMP/deliver.key"
+          curl -fsSL -o "$RUNNER_TEMP/deliver.crt" https://raw.githubusercontent.com/nextcloud/app-certificate-requests/master/deliver/deliver.crt
+          # occ signs without an installed instance
+          curl -fsSL https://download.nextcloud.com/server/releases/latest-33.tar.bz2 | tar -xj -C "$RUNNER_TEMP"
+          php "$RUNNER_TEMP/nextcloud/occ" integrity:sign-app \
+            --privateKey="$RUNNER_TEMP/deliver.key" \
+            --certificate="$RUNNER_TEMP/deliver.crt" \
+            --path="$PWD/build/deliver"
+          tar -czf "build/deliver-$VERSION.tar.gz" -C build deliver
+
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # This version's section of the changelog is the release text
+          awk -v v="## $VERSION" '/^## /{p = index($0, v) == 1; next} p' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          # 1.0.0-beta.1 and the like: a pre-release here, the beta channel in the store
+          pre=false; case $VERSION in *-*) pre=true ;; esac
+          gh release create "v$VERSION" "build/deliver-$VERSION.tar.gz" \
+            --title "Deliver $VERSION" --notes-file "$RUNNER_TEMP/notes.md" --prerelease="$pre"
+
+      - name: App Store
+        env:
+          APPSTORE_TOKEN: ${{ secrets.APPSTORE_TOKEN }}
+        run: |
+          signature=$(openssl dgst -sha512 -sign "$RUNNER_TEMP/deliver.key" "build/deliver-$VERSION.tar.gz" | openssl base64 -A)
+          jq -n --arg download "https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION/deliver-$VERSION.tar.gz" \
+            --arg signature "$signature" '{$download, $signature}' |
+          curl -sS --fail-with-body -X POST https://apps.nextcloud.com/api/v1/apps/releases \
+            -H "Authorization: Token $APPSTORE_TOKEN" -H 'Content-Type: application/json' --data @-

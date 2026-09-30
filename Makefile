@@ -57,7 +57,7 @@ test-integration: composer
 
 # What the App Store gets: the built app, nothing of the workshop around it.
 # The archive holds one folder named after the app id, as the store requires.
-PACKAGE_CONTENT = appinfo lib templates img js css l10n LICENSE README.md
+PACKAGE_CONTENT = appinfo lib templates img js css l10n LICENSE README.md CHANGELOG.md CHANGELOG.de.md
 
 package: build
 	rm -rf build/deliver build/deliver.tar.gz

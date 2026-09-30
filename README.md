@@ -90,11 +90,11 @@ An hourly scan compares every Project with its folder, next to the file listener
 
 ## Release
 
-`make package` builds the frontend and writes `build/deliver.tar.gz`: one folder named after the app id, carrying `appinfo`, `lib`, `templates`, `img`, `js`, `l10n`, the licence and this README — and nothing of the workshop around it. Source maps are dropped. `make appinfo` validates `appinfo/info.xml` against the App Store schema (`dev/info.xsd`).
+`make package` builds the frontend and writes `build/deliver.tar.gz`: one folder named after the app id, carrying `appinfo`, `lib`, `templates`, `img`, `js`, `l10n`, the licence, the changelogs and this README — and nothing of the workshop around it. Source maps are dropped. `make appinfo` validates `appinfo/info.xml` against the App Store schema (`dev/info.xsd`).
 
 The built `js/` is gitignored, so a release is always `make package`, never `git archive`.
 
-Certificate, store registration and the release steps are in `docs/app-store.md`. Still open before an App Store submission (planned for 1.0.0): screenshots in `info.xml`, a release workflow, the German translation, and `@nextcloud/files` on a stable release instead of the pinned beta.
+A pushed tag `v1.2.3` builds, signs and publishes the release (`.github/workflows/release.yml`). Certificate, store registration, the secrets and the release steps are in `docs/app-store.md`.
 
 ## API
 

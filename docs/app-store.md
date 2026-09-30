@@ -47,21 +47,30 @@ Log in at apps.nextcloud.com (GitHub login works), open *Register app* and paste
 
 The store then lists you as the owner of `deliver`. Nothing is public until the first release.
 
-## 4. A release
+## 4. Secrets for the release workflow
 
-The planned release workflow does this; by hand it is:
+Once, after registration, from the machine that holds the key:
 
-1. `make package` builds `build/deliver/` and `build/deliver.tar.gz`.
-2. Sign the code before packing: run `occ integrity:sign-app --privateKey=… --certificate=… --path=…/build/deliver` against `build/deliver`, then pack the tarball again. The signature (`appinfo/signature.json`) covers every file, so nothing may change after signing. The store requires signed apps, and a signed app has to stay signed.
-3. Attach the tarball to a GitHub release (the download URL must be HTTPS).
-4. Sign the tarball:
+```bash
+gh secret set APP_PRIVATE_KEY -R joshuabke/nextcloud-deliver < ~/.nextcloud/certificates/deliver.key
+gh secret set APPSTORE_TOKEN -R joshuabke/nextcloud-deliver   # paste the token from apps.nextcloud.com → Account → API token
+```
+
+The certificate needs no secret: the workflow fetches the public `deliver.crt` from nextcloud/app-certificate-requests.
+
+## 5. A release
+
+1. Set the version in `appinfo/info.xml` and `package.json`, and give it a section `## 1.2.3 – 2026-10-01` in `CHANGELOG.md` and `CHANGELOG.de.md`. The store shows that section (the German one on German instances) and matches it to the version in `info.xml`. Merge.
+2. Tag the merge on `main` and push the tag:
 
    ```bash
-   openssl dgst -sha512 -sign ~/.nextcloud/certificates/deliver.key build/deliver.tar.gz | openssl base64
+   git tag v1.2.3 && git push origin v1.2.3
    ```
 
-5. Enter the download URL and the signature under *Upload app release* in the store, or `POST` them to the store API with the token from your store account.
+`.github/workflows/release.yml` takes it from there: it refuses a tag that disagrees with `info.xml` or the changelogs, runs `make package`, signs the code with `occ integrity:sign-app` from an unpacked Nextcloud 33 (no installed instance needed), creates the GitHub release with `deliver-1.2.3.tar.gz` and the changelog section as text, and posts the download URL and the tarball's signature to the store.
 
-The version comes from `appinfo/info.xml`. Versions with a pre-release part (`1.0.0-beta.1`) land in the beta channel, which only instances set to beta see.
+The code signature (`appinfo/signature.json`) covers every file, so nothing in the tarball may change after signing. The store requires signed apps, and a signed app has to stay signed.
+
+A version with a pre-release part (`1.0.0-beta.1`) becomes a pre-release on GitHub and lands in the store's beta channel, which only instances set to beta see.
 
 Once any instance has installed a store release, the database schema only moves forward through new migrations; the shipped migration is never rewritten again.
