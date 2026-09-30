@@ -1,6 +1,6 @@
 # Deliver — agent handover
 
-Deliver is a Nextcloud app for frame-accurate video review (a Frame.io / Clapshot replacement). The repo is mid-**rewrite**: everything on `main` up to tag `legacy-0.1.6` is the 0.1.x prototype and is reference only, never a base to extend.
+Deliver is a Nextcloud app for frame-accurate video and audio review (a Frame.io / Clapshot replacement). History starts at the v2 rewrite (0.2.0); the 0.1.x prototype lives only in the private `joshuabke/nextcloud-deliver-archive` (tag `legacy-0.1.6`), for ideas, never as a base.
 
 ## Read first, in this order
 
@@ -10,9 +10,8 @@ Deliver is a Nextcloud app for frame-accurate video review (a Frame.io / Clapsho
 
 ## Rewrite mechanics (settled, do not re-open)
 
-- `main` carries v2 since it replaced the legacy code; work on short branches off `main` in a worktree, one small PR each.
+- Work on short branches off `main` in a worktree, one small PR each.
 - Stack: PHP 8.2+ Nextcloud app framework, minimum Nextcloud 33 (the web-component sidebar tab API of `@nextcloud/files` 4 needs it), Vue 3 + @nextcloud/vue 9 + Pinia + Vite via @nextcloud/vite-config. Pinned versions live in `package.json`; verify against the Nextcloud developer docs and the server's own `package.json` before bumping.
-- Legacy code is gone on `main`; the old EDL writer is `git show legacy-0.1.6:lib/Service/EdlService.php`, for ideas only.
 - Nothing is released yet: the version in `appinfo/info.xml` and `package.json` stays below 1.0.0 until the first release. App id stays `deliver`. Author Joshua Böke, repo `git@github.com:joshuabke/nextcloud-deliver.git`.
 - No attribution lines of any kind in commits, PRs, issues or files.
 

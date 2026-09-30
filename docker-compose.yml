@@ -9,11 +9,10 @@ services:
     image: deliver-nextcloud:34-ffmpeg
     # Bound, not published to the world: the dev instance carries a known admin
     # password, and the trusted-domain check falls to a forged Host header.
-    # localhost for the tests on this machine, the tailnet address for the
-    # browser in its own container and for other machines in the tailnet.
+    # Further binds (a tailnet address for the browser in its own container)
+    # go into the gitignored docker-compose.override.yml.
     ports:
       - 127.0.0.1:8080:80
-      - 100.84.4.11:8080:80
     environment:
       - NEXTCLOUD_ADMIN_USER=admin
       - NEXTCLOUD_ADMIN_PASSWORD=adminadmin123
@@ -37,13 +36,12 @@ services:
       - mail
 
   # Catches every mail the instance sends, e.g. to Reviewers about Replies.
-  # Its inbox is bound like Nextcloud: this machine and the tailnet, not the LAN.
+  # Its inbox is bound like Nextcloud: this machine only, unless the override adds more.
   mail:
     image: axllent/mailpit:latest
     restart: unless-stopped
     ports:
       - 127.0.0.1:8025:8025
-      - 100.84.4.11:8025:8025
 
   db:
     image: postgres:17

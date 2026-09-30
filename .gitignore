@@ -9,6 +9,7 @@ css/
 # Docker instance data and local compose settings
 docker/
 .env
+docker-compose.override.yml
 
 # Browser test output and generated media fixtures
 test-results/
