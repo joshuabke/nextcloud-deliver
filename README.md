@@ -94,7 +94,7 @@ An hourly scan compares every Project with its folder, next to the file listener
 
 The built `js/` is gitignored, so a release is always `make package`, never `git archive`.
 
-Still open before an App Store submission (planned for 1.0.0): screenshots in `info.xml`, the signing certificate and a release workflow, the German translation, and `@nextcloud/files` on a stable release instead of the pinned beta.
+Certificate, store registration and the release steps are in `docs/app-store.md`. Still open before an App Store submission (planned for 1.0.0): screenshots in `info.xml`, a release workflow, the German translation, and `@nextcloud/files` on a stable release instead of the pinned beta.
 
 ## API
 
