@@ -246,7 +246,7 @@ class ContainerProbe {
 	}
 
 	private function size(): int {
-		return (int)(fstat($this->file)['size'] ?? 0);
+		return fstat($this->file)['size'] ?? 0;
 	}
 
 	private function gcd(int $a, int $b): int {
