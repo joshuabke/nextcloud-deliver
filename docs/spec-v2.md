@@ -163,9 +163,9 @@ The phone version follows the Frame.io iOS app, in the mobile browser: Deliver i
 
 ### Repository and stack
 
-- Fresh rewrite on branch `v2` in a worktree; current uncommitted work is committed to main and main is tagged `legacy-0.1.6` before the rewrite lands. Nothing from 0.1.x is inherited; the EDL generator and any useful test ideas are re-read, not copied.
+- A rewrite from scratch. Nothing from 0.1.x is inherited; the EDL generator and any useful test ideas are re-read, not copied.
 - Backend: Nextcloud app framework, PHP 8.2+, minimum Nextcloud 33: the Files sidebar tab is a web component registered through `@nextcloud/files` (`getSidebar().registerTab`), which exists from 33 on, and @nextcloud/vue 9 needs 31 or newer anyway; older releases are end of life. Frontend: Vue 3, @nextcloud/vue 9, Pinia, Vite via @nextcloud/vite-config. English source strings with `t()`, German translation shipped.
-- App id stays `deliver`, author Joshua Böke, repository github.com/joshxtra/nextcloud-deliver (remote switched to SSH).
+- App id stays `deliver`, author Joshua Böke, repository github.com/joshuabke/nextcloud-deliver.
 - Versioning restarts at 0.2.0. No signed release workflow yet.
 
 ### Domain model and persistence
@@ -264,11 +264,11 @@ CI runs php-cs-fixer, psalm, PHPUnit (unit and integration), Vitest and Playwrig
 - External or GPU-farm transcoding workers over HTTP (job table is ready for it).
 - Direct push of markers into DaVinci Resolve.
 - Signed App Store release workflow and the certificate.
-- Deploying Nextcloud on the Proxmox NAS; the repo ships only a generic `deploy/` compose example with ffmpeg and `/dev/dri`.
+- Deploying and running a particular Nextcloud server; the repo ships only a generic `deploy/` compose example with ffmpeg and `/dev/dri`.
 
 ## Further Notes
 
-- The user's own target host is a Proxmox box with an i9-9900K and an Intel UHD 630, so VAAPI is the hardware encoder to verify first; software x264 remains the default everywhere.
+- VAAPI (Intel and AMD graphics) is the hardware encoder to verify first; software x264 remains the default everywhere.
 - Frame anchors rely on the Proxy having exactly the source frame rate; this is a correctness invariant, not an optimisation.
 - Ranges are inclusive of the out Frame.
 - Comment sort default is by Frame with a newest-first switch; the Unseen badge exists precisely because Frame order hides recency.
