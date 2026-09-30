@@ -131,6 +131,18 @@ test.describe('Review view', () => {
 		await second.click({ button: 'right' })
 		await page.getByRole('menuitem', { name: 'Manage Versions' }).click()
 		await expect(page.getByRole('dialog', { name: 'Versions of second' })).toContainText('Version 1')
+		await page.keyboard.press('Escape')
+
+		// So is its Due Date, through a visible field: Safari opens no picker for a hidden one
+		await second.click({ button: 'right' })
+		await page.getByRole('menuitem', { name: 'Set a Due Date' }).click()
+		const due = page.getByRole('dialog', { name: 'Due Date' })
+		await due.getByLabel('Due Date').fill('2030-01-15')
+		await due.getByRole('button', { name: 'Save' }).click()
+		await expect(second.locator('.deliver-card__due')).toContainText('15')
+		await second.click({ button: 'right' })
+		await expect(page.getByRole('menuitem', { name: 'Change the Due Date' })).toBeVisible()
+		await page.keyboard.press('Escape')
 	})
 
 	test('comments on a Frame and on a Range, resolves and replies', async () => {
@@ -252,7 +264,10 @@ test.describe('Review view', () => {
 		await expect(page.locator('.deliver-drawing path')).toHaveCount(1)
 
 		// A Due Date set in the header shows there (story 93)
-		await page.locator('.deliver-due__input').fill('2030-01-31')
+		await page.locator('.deliver-due__button').click()
+		const due = page.getByRole('dialog', { name: 'Due Date' })
+		await due.getByLabel('Due Date').fill('2030-01-31')
+		await due.getByRole('button', { name: 'Save' }).click()
 		await expect(page.locator('.deliver-due')).toContainText('Due')
 		await expect(page.locator('.deliver-due__clear')).toBeVisible()
 
@@ -292,7 +307,15 @@ test.describe('Review view', () => {
 		const page = await phone.newPage()
 		await login(page)
 		await page.goto(`/apps/deliver/projects/${projectId}`)
-		// A card's menu has a button of its own on a phone
+		// A card's menu has a button of its own on a phone, with the Due Date in it
+		const clip = page.locator('.deliver-card', { hasText: 'clip' })
+		await clip.locator('.deliver-card__more').tap()
+		await page.getByRole('menuitem', { name: /Due Date/ }).tap()
+		const due = page.getByRole('dialog', { name: 'Due Date' })
+		await due.getByLabel('Due Date').fill('2030-02-20')
+		await due.getByRole('button', { name: 'Save' }).tap()
+		await expect(clip.locator('.deliver-card__due')).toContainText('20')
+
 		await page.locator('.deliver-card__more').first().tap()
 		await page.getByRole('menuitem', { name: 'Open', exact: true }).tap()
 		await expect(page).toHaveURL(/\/versions\/\d+$/)

@@ -4,6 +4,7 @@ import closeIcon from '@mdi/svg/svg/close.svg?raw'
 import { getLanguage, t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import DueDateDialog from './DueDateDialog.vue'
 import { dayOf, urgency } from '../lib/due.js'
 
 const props = defineProps({
@@ -15,7 +16,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-const input = ref(null)
+const picking = ref(false)
 const today = dayOf(new Date())
 
 const kind = computed(() => props.modelValue ? urgency(props.modelValue, today) : null)
@@ -28,17 +29,6 @@ const label = computed(() => {
 	return named ?? (kind.value === 'overdue' ? t('deliver', 'Was due {date}', { date }) : t('deliver', 'Due {date}', { date }))
 })
 
-/** Opens the browser's own date picker; read-only, the date is only text */
-function pick() {
-	if (!props.editable) {
-		return
-	}
-	if (input.value.showPicker) {
-		input.value.showPicker()
-	} else {
-		input.value.focus()
-	}
-}
 </script>
 
 <template>
@@ -51,19 +41,10 @@ function pick() {
 			:type="editable ? 'button' : undefined"
 			class="deliver-due__button"
 			:title="editable ? t('deliver', 'Set the Due Date; Members are reminded the day before and on the day') : undefined"
-			@click="pick">
+			@click="picking = editable">
 			<NcIconSvgWrapper :svg="calendarIcon" :size="16" inline />
 			<span>{{ label }}</span>
 		</component>
-		<input
-			v-if="editable"
-			ref="input"
-			class="deliver-due__input"
-			type="date"
-			tabindex="-1"
-			aria-hidden="true"
-			:value="modelValue ?? ''"
-			@change="emit('update:modelValue', $event.target.value || null)">
 		<button
 			v-if="editable && modelValue"
 			type="button"
@@ -73,12 +54,16 @@ function pick() {
 			@click="emit('update:modelValue', null)">
 			<NcIconSvgWrapper :svg="closeIcon" :size="14" inline />
 		</button>
+		<DueDateDialog
+			v-if="picking"
+			:modelValue="modelValue"
+			@update:modelValue="emit('update:modelValue', $event)"
+			@close="picking = false" />
 	</div>
 </template>
 
 <style scoped>
 .deliver-due {
-	position: relative;
 	display: inline-flex;
 	align-items: center;
 	flex-shrink: 0;
@@ -109,17 +94,6 @@ span.deliver-due__button {
 
 .deliver-due__clear {
 	padding: 3px 8px 3px 0;
-}
-
-/* The native picker opens from here, out of sight */
-.deliver-due__input {
-	position: absolute;
-	inset-inline-start: 0;
-	bottom: 0;
-	width: 1px;
-	height: 1px;
-	opacity: 0;
-	pointer-events: none;
 }
 
 .deliver-due--empty {
