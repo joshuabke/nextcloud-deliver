@@ -179,7 +179,6 @@ class Version1000Date20260929000000 extends SimpleMigrationStep {
 		$t->addColumn('reviewer_id', Types::BIGINT, ['notnull' => false]);
 		$t->addColumn('emoji', Types::STRING, ['notnull' => true, 'length' => 16]);
 		$t->setPrimaryKey(['id']);
-		$t->addIndex(['comment_id'], 'deliver_react_comment');
 		$t->addUniqueIndex(['comment_id', 'user_id', 'emoji'], 'deliver_react_user_uniq');
 		$t->addUniqueIndex(['comment_id', 'reviewer_id', 'emoji'], 'deliver_react_reviewer_uniq');
 

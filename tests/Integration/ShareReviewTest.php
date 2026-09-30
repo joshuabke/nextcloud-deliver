@@ -73,21 +73,21 @@ class ShareReviewTest extends TestCase {
 		$plainToken = $plain['data']['token'];
 
 		$asVisitor = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $plainToken);
-		self::assertSame(404, $asVisitor->page(), 'sharing a file that is enabled in Deliver stays an ordinary share');
+		self::assertSame(404, $asVisitor->raw('')['status'], 'sharing a file that is enabled in Deliver stays an ordinary share');
 		self::assertSame(404, $asVisitor->call('GET', '/api/context?versionId=' . $this->versionId)['status']);
 
 		$this->nc->ocsForm('DELETE', "/ocs/v2.php/apps/files_sharing/api/v1/shares/{$plain['data']['id']}");
 	}
 
 	public function testReviewCanBeSwitchedOffAgain(): void {
-		self::assertSame(200, $this->reviewer()->page(), 'review is on, so the page opens');
+		self::assertSame(200, $this->reviewer()->raw('')['status'], 'review is on, so the page opens');
 
 		$this->setFlags(['review' => false]);
-		self::assertSame(404, $this->reviewer()->page(), 'switched off, the same link shows nothing of Deliver');
+		self::assertSame(404, $this->reviewer()->raw('')['status'], 'switched off, the same link shows nothing of Deliver');
 		self::assertSame(404, $this->reviewer()->call('GET', '/api/context?versionId=' . $this->versionId)['status']);
 
 		$this->setFlags(['review' => true]);
-		self::assertSame(200, $this->reviewer()->page());
+		self::assertSame(200, $this->reviewer()->raw('')['status']);
 	}
 
 	public function testTheWatermarkIsAFlagOfTheLink(): void {
@@ -178,7 +178,7 @@ class ShareReviewTest extends TestCase {
 		self::assertSame(200, $protected['status'], json_encode($protected['data']));
 
 		$asReviewer = $this->reviewer();
-		self::assertSame(303, $asReviewer->page(), 'the page sends the Reviewer to the share\'s password prompt');
+		self::assertSame(303, $asReviewer->raw('')['status'], 'the page sends the Reviewer to the share\'s password prompt');
 		self::assertSame(404, $asReviewer->call('GET', '/api/context?versionId=' . $this->versionId)['status'], 'the API answers nothing until the password is given');
 	}
 

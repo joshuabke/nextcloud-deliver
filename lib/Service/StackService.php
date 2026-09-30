@@ -62,10 +62,7 @@ class StackService {
 		}
 		$suggestion = VersionNaming::parse($file->getName());
 		$target = $suggestion === null ? null : $this->onlyCandidate($project, $file, $suggestion['base']);
-		if ($target === null) {
-			return $this->register($project, $file, $suggestion['number'] ?? 1);
-		}
-		return $this->register($project, $file, $suggestion['number'], $target, true);
+		return $this->register($project, $file, $suggestion['number'] ?? 1, $target);
 	}
 
 	/**
@@ -89,16 +86,17 @@ class StackService {
 		if ($override !== null) {
 			return $override;
 		}
-		$stack = $this->versions->findByAsset($asset->getId());
-		$newest = end($stack);
-		return $newest === false ? '' : VersionNaming::assetName($newest->getName());
+		$newest = $this->versions->findNewest($asset->getId());
+		return $newest === null ? '' : VersionNaming::assetName($newest->getName());
 	}
 
 	/**
-	 * Inserts the Version, and a new Asset for it unless one is given. When a
-	 * concurrent request registered the same file first, that Version wins.
+	 * Inserts the Version, and a new Asset for it unless one is given: then it
+	 * is stacked automatically. When a concurrent request registered the same
+	 * file first, that Version wins.
 	 */
-	private function register(Project $project, File $file, int $number, ?Asset $asset = null, bool $stacked = false): Version {
+	private function register(Project $project, File $file, int $number, ?Asset $asset): Version {
+		$stacked = $asset !== null;
 		$this->db->beginTransaction();
 		try {
 			if ($asset === null) {
@@ -244,9 +242,9 @@ class StackService {
 		$this->reactions->deleteByComments($commentIds);
 		// Attached files stay in the folder, like every file when Deliver lets go
 		$this->attachments->deleteByComments($commentIds);
-		$this->comments->deleteByVersion($version->getId());
-		$this->seen->deleteByVersion($version->getId());
-		$this->approvals->deleteByVersion($version->getId());
+		$this->comments->deleteBy('version_id', $version->getId());
+		$this->seen->deleteBy('version_id', $version->getId());
+		$this->approvals->deleteBy('version_id', $version->getId());
 		$assetId = $version->getAssetId();
 		$this->versions->delete($version);
 		$this->dropIfEmpty($assetId);
@@ -257,9 +255,9 @@ class StackService {
 		foreach ($this->versions->findByProject($project->getId()) as $version) {
 			$this->purge($version);
 		}
-		$this->assets->deleteByProject($project->getId());
+		$this->assets->deleteBy('project_id', $project->getId());
 		$this->reviewers->deleteLinks(array_map(static fn ($reviewer) => $reviewer->getId(), $this->reviewers->findByProject($project->getId())));
-		$this->reviewers->deleteByProject($project->getId());
+		$this->reviewers->deleteBy('project_id', $project->getId());
 		$this->mutes->deleteByProject($project->getId());
 		$this->projects->delete($project);
 	}

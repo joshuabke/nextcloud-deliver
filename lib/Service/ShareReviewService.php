@@ -9,6 +9,7 @@ use OCA\Deliver\Db\AssetMapper;
 use OCA\Deliver\Db\Project;
 use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\Reviewer;
+use OCA\Deliver\Db\ReviewerMapper;
 use OCA\Deliver\Db\Version;
 use OCA\Deliver\Db\VersionMapper;
 use OCP\Constants;
@@ -42,6 +43,7 @@ class ShareReviewService {
 		private AssetMapper $assets,
 		private VersionMapper $versions,
 		private ReviewerService $reviewers,
+		private ReviewerMapper $reviewerMapper,
 		private IURLGenerator $urls,
 		private IConfig $config,
 	) {
@@ -94,10 +96,6 @@ class ShareReviewService {
 		return $this->shares->updateShare($share);
 	}
 
-	public function checkPassword(IShare $share, string $password): bool {
-		return $this->shares->checkPassword($share, $password);
-	}
-
 	/**
 	 * The user's Share Links of one node, with Deliver's flags, for the Files sidebar.
 	 *
@@ -123,8 +121,8 @@ class ShareReviewService {
 		// ponytail: one node lookup per link of the user; filter by path in SQL if people keep thousands
 		$shares = $this->shares->getSharesBy($uid, IShare::TYPE_LINK, null, true, -1);
 		$home = $this->root->getUserFolder($uid);
-		$reviewers = $this->reviewers->forProject($project);
-		$cameBy = $this->reviewers->byLink($reviewers);
+		$reviewers = $this->reviewerMapper->findByProject($project->getId());
+		$cameBy = $this->reviewerMapper->reviewersByLink(array_map(static fn (Reviewer $reviewer) => $reviewer->getId(), $reviewers));
 		$links = [];
 		$review = [];
 		foreach ($shares as $share) {
@@ -159,7 +157,7 @@ class ShareReviewService {
 	 */
 	public function createLink(string $uid, int $fileId): array {
 		$node = $this->userNode($uid, $fileId);
-		$this->assertWritable($node);
+		ProjectService::assertWritable($node);
 		$share = $this->shares->newShare();
 		$share->setNode($node);
 		$share->setShareType(IShare::TYPE_LINK);
@@ -181,7 +179,7 @@ class ShareReviewService {
 		$share = $this->ownShare($uid, $shareId);
 		return array_map(
 			fn (Reviewer $reviewer) => $this->reviewerWithLink($share, $reviewer),
-			$this->reviewers->forProject($this->project($share)),
+			$this->reviewerMapper->findByProject($this->project($share)->getId()),
 		);
 	}
 
@@ -263,7 +261,7 @@ class ShareReviewService {
 		if ($share->getSharedBy() !== $uid && $share->getShareOwner() !== $uid) {
 			throw new AccessDeniedException('Only the person who shared it can change this link');
 		}
-		$this->assertWritable($this->userNode($uid, $share->getNodeId()));
+		ProjectService::assertWritable($this->userNode($uid, $share->getNodeId()));
 		return $share;
 	}
 
@@ -276,13 +274,6 @@ class ShareReviewService {
 		return $node;
 	}
 
-	/** @throws AccessDeniedException review settings need write access (spec: Permissions) */
-	private function assertWritable(Node $node): void {
-		if (($node->getPermissions() & Constants::PERMISSION_UPDATE) === 0) {
-			throw new AccessDeniedException('Write permission is required');
-		}
-	}
-
 	public function serialize(IShare $share): array {
 		return [
 			'id' => (int)$share->getId(),
@@ -290,7 +281,6 @@ class ShareReviewService {
 			'url' => $this->shareUrl($share),
 			'label' => $share->getLabel(),
 			'hasPassword' => $share->getPassword() !== null,
-			'expiresAt' => $share->getExpirationDate()?->getTimestamp(),
 			// Whether Reviewers can be mailed about Replies at all (story 66)
 			'canMail' => ReviewerMail::configured($this->config),
 		] + $this->flags($share);
@@ -303,18 +293,7 @@ class ShareReviewService {
 	 * @throws NotFoundException the shared node is not in a Project
 	 */
 	public function project(IShare $share): Project {
-		$node = $this->node($share);
-		$folder = $node instanceof Folder ? $node : $node->getParent();
-		for (; $folder instanceof Folder; $folder = $folder->getParent()) {
-			$project = $this->projects->findByFolderId($folder->getId());
-			if ($project !== null) {
-				return $project;
-			}
-			if ($folder->getPath() === '' || $folder->getPath() === '/') {
-				break;
-			}
-		}
-		throw new NotFoundException('This link does not reach into a Project');
+		return $this->projects->findAbove($this->node($share)) ?? throw new NotFoundException('This link does not reach into a Project');
 	}
 
 	/**
@@ -374,11 +353,11 @@ class ShareReviewService {
 				? $this->urls->getAbsoluteURL('/public.php/dav/files/' . $share->getToken())
 				: null;
 		}
-		$found = $node instanceof Folder ? $node->getById($version->getFileId()) : [];
-		if ($found === []) {
+		$found = $node instanceof Folder ? $node->getFirstNodeById($version->getFileId()) : null;
+		if ($found === null) {
 			return null;
 		}
-		$relative = substr($found[0]->getPath(), strlen($node->getPath()));
+		$relative = substr($found->getPath(), strlen($node->getPath()));
 		return $this->urls->getAbsoluteURL('/public.php/dav/files/' . $share->getToken() . implode(
 			'/',
 			array_map('rawurlencode', explode('/', $relative)),

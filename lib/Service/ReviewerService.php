@@ -89,14 +89,6 @@ class ReviewerService {
 		$this->reviewers->recordLink($reviewer->getId(), $shareId, $this->time->getTime());
 	}
 
-	/**
-	 * @param list<Reviewer> $reviewers
-	 * @return array<int, list<int>> Share Link id → the Reviewers who were invited through it or came in by it
-	 */
-	public function byLink(array $reviewers): array {
-		return $this->reviewers->reviewersByLink(array_map(static fn (Reviewer $reviewer) => $reviewer->getId(), $reviewers));
-	}
-
 	/** @throws InvalidRequestException the name is empty */
 	private static function name(string $name): string {
 		$name = trim($name);
@@ -140,11 +132,6 @@ class ReviewerService {
 		}
 		$reviewer = $this->reviewers->findByKey($key);
 		return $reviewer?->getProjectId() === $project->getId() ? $reviewer : null;
-	}
-
-	/** @return Reviewer[] */
-	public function forProject(Project $project): array {
-		return $this->reviewers->findByProject($project->getId());
 	}
 
 	public function serialize(Reviewer $reviewer): array {

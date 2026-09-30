@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Db;
 
-use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 
-/** @template-extends QBMapper<Approval> */
-class ApprovalMapper extends QBMapper {
+/** @template-extends Mapper<Approval> */
+class ApprovalMapper extends Mapper {
 	public function __construct(IDBConnection $db) {
 		parent::__construct($db, 'deliver_approvals', Approval::class);
 	}
@@ -25,7 +24,7 @@ class ApprovalMapper extends QBMapper {
 
 	/**
 	 * @param list<int> $versionIds
-	 * @return array<int, array{approved: int, changes: int}> per Version, those with decisions only
+	 * @return array<int, array{approved: int, changes: int}> per Version asked for, zero where nobody decided
 	 */
 	public function countByVersions(array $versionIds): array {
 		if ($versionIds === []) {
@@ -36,20 +35,12 @@ class ApprovalMapper extends QBMapper {
 			->from($this->getTableName())
 			->where($qb->expr()->in('version_id', $qb->createNamedParameter($versionIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->groupBy('version_id', 'status');
-		$counts = [];
+		$counts = array_fill_keys($versionIds, ['approved' => 0, 'changes' => 0]);
 		$result = $qb->executeQuery();
 		while ($row = $result->fetch()) {
-			$counts[(int)$row['version_id']] ??= ['approved' => 0, 'changes' => 0];
 			$counts[(int)$row['version_id']][$row['status']] = (int)$row['n'];
 		}
 		$result->closeCursor();
 		return $counts;
-	}
-
-	public function deleteByVersion(int $versionId): void {
-		$qb = $this->db->getQueryBuilder();
-		$qb->delete($this->getTableName())
-			->where($qb->expr()->eq('version_id', $qb->createNamedParameter($versionId)))
-			->executeStatement();
 	}
 }

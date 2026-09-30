@@ -4,21 +4,13 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Db;
 
-use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 
-/** @template-extends QBMapper<Comment> */
-class CommentMapper extends QBMapper {
+/** @template-extends Mapper<Comment> */
+class CommentMapper extends Mapper {
 	public function __construct(IDBConnection $db) {
 		parent::__construct($db, 'deliver_comments', Comment::class);
-	}
-
-	public function find(int $id): ?Comment {
-		$qb = $this->db->getQueryBuilder();
-		$qb->select('*')->from($this->getTableName())
-			->where($qb->expr()->eq('id', $qb->createNamedParameter($id)));
-		return $this->findEntities($qb)[0] ?? null;
 	}
 
 	/**
@@ -125,12 +117,5 @@ class CommentMapper extends QBMapper {
 		}
 		$result->closeCursor();
 		return $counts;
-	}
-
-	public function deleteByVersion(int $versionId): void {
-		$qb = $this->db->getQueryBuilder();
-		$qb->delete($this->getTableName())
-			->where($qb->expr()->eq('version_id', $qb->createNamedParameter($versionId)))
-			->executeStatement();
 	}
 }

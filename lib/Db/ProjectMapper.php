@@ -6,6 +6,8 @@ namespace OCA\Deliver\Db;
 
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Db\QBMapper;
+use OCP\Files\Folder;
+use OCP\Files\Node;
 use OCP\IDBConnection;
 
 /** @template-extends QBMapper<Project> */
@@ -38,5 +40,16 @@ class ProjectMapper extends QBMapper {
 		} catch (DoesNotExistException) {
 			return null;
 		}
+	}
+
+	/** The nearest Project at or above a node: the node itself when it is a folder, else from its folder up */
+	public function findAbove(Node $node): ?Project {
+		for ($folder = $node instanceof Folder ? $node : $node->getParent(); $folder instanceof Folder; $folder = $folder->getParent()) {
+			$project = $this->findByFolderId($folder->getId());
+			if ($project !== null || $folder->getPath() === '' || $folder->getPath() === '/') {
+				return $project;
+			}
+		}
+		return null;
 	}
 }

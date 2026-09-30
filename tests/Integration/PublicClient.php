@@ -46,7 +46,7 @@ class PublicClient {
 	}
 
 	/**
-	 * Uploads one file as the form field `file`, or fetches a path raw.
+	 * Uploads one file as the form field `file`, or fetches a path raw; '' is the review page itself.
 	 *
 	 * @return array{status: int, body: string, type: string}
 	 */
@@ -66,18 +66,5 @@ class PublicClient {
 			'body' => $body,
 			'type' => (string)curl_getinfo($ch, CURLINFO_CONTENT_TYPE),
 		];
-	}
-
-	/** The review page itself, as a browser would ask for it */
-	public function page(string $path = ''): int {
-		$ch = curl_init($this->baseUrl . '/apps/deliver/s/' . $this->token . $path);
-		curl_setopt_array($ch, [
-			CURLOPT_RETURNTRANSFER => true,
-			CURLOPT_COOKIEJAR => $this->jar,
-			CURLOPT_COOKIEFILE => $this->jar,
-		]);
-		curl_exec($ch);
-		$status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-		return $status;
 	}
 }

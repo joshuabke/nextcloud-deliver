@@ -86,6 +86,15 @@ class ApprovalService {
 		return $this->list($version);
 	}
 
+	/**
+	 * Approved, with nobody asking for changes
+	 *
+	 * @param array{approved: int, changes: int} $counts
+	 */
+	public static function isApproved(array $counts): bool {
+		return $counts['approved'] > 0 && $counts['changes'] === 0;
+	}
+
 	private function mine(Viewer $viewer, Version $version): ?Approval {
 		foreach ($this->approvals->findByVersion($version->getId()) as $approval) {
 			if ($viewer->reviewerId !== null ? $approval->getReviewerId() === $viewer->reviewerId : $approval->getUserId() === $viewer->uid) {

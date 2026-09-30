@@ -6,7 +6,6 @@ namespace OCA\Deliver\Service;
 
 use OCA\Deliver\AppInfo\Application;
 use OCA\Deliver\Db\Comment;
-use OCA\Deliver\Db\CommentMapper;
 use OCA\Deliver\Db\Reviewer;
 use OCA\Deliver\Db\ReviewerMapper;
 use OCA\Deliver\Db\Version;
@@ -25,7 +24,6 @@ class ReviewerMail {
 		private IMailer $mailer,
 		private IConfig $config,
 		private IFactory $l10n,
-		private CommentMapper $comments,
 		private ReviewerMapper $reviewers,
 		private ShareReviewService $sharing,
 		private LoggerInterface $logger,
@@ -42,17 +40,16 @@ class ReviewerMail {
 	}
 
 	/** Mails the Reply to the Reviewer who wrote the Comment it answers, if they want Replies (story 65) */
-	public function replied(Comment $reply, Version $version, string $author): void {
-		$parent = $reply->getParentId() === null ? null : $this->comments->find($reply->getParentId());
-		$reviewer = $parent?->getReviewerId() === null ? null : $this->reviewers->find((int)$parent->getReviewerId());
+	public function replied(Comment $reply, Comment $parent, Version $version, string $author): void {
+		$reviewer = $parent->getReviewerId() === null ? null : $this->reviewers->find((int)$parent->getReviewerId());
 		if ($reviewer === null || $reply->getReviewerId() === $reviewer->getId() || !$reviewer->mailWishes()['replies']) {
 			return;
 		}
 		$l = $this->l10n->get(Application::APP_ID);
 		$this->send($reviewer, $version, 'deliver.ReviewerReply',
 			$l->t('%s replied to your Comment', [$author]),
+			[$l->t('Your Comment:') . ' ' . $parent->getBody(), $author . ': ' . $reply->getBody()],
 			$l->t('%s replied to your Comment on %s', [$author, $version->getName()]),
-			[$l->t('Your Comment:') . ' ' . (string)$parent?->getBody(), $author . ': ' . $reply->getBody()],
 		);
 	}
 
@@ -60,8 +57,7 @@ class ReviewerMail {
 	 * Mails a new Comment or Reply to the Reviewers who want every Comment,
 	 * but not to its author, nor to the one a Reply already reached.
 	 */
-	public function commented(Comment $comment, Version $version, string $author): void {
-		$parent = $comment->getParentId() === null ? null : $this->comments->find($comment->getParentId());
+	public function commented(Comment $comment, ?Comment $parent, Version $version, string $author): void {
 		$l = $this->l10n->get(Application::APP_ID);
 		foreach ($this->reviewers->findByProject($version->getProjectId()) as $reviewer) {
 			$repliedTo = $parent !== null && $parent->getReviewerId() === $reviewer->getId() && $reviewer->mailWishes()['replies'];
@@ -69,7 +65,6 @@ class ReviewerMail {
 				continue;
 			}
 			$this->send($reviewer, $version, 'deliver.ReviewerComment',
-				$l->t('%s commented on %s', [$author, $version->getName()]),
 				$l->t('%s commented on %s', [$author, $version->getName()]),
 				[$author . ': ' . $comment->getBody()],
 			);
@@ -82,7 +77,6 @@ class ReviewerMail {
 		foreach ($this->reviewers->findByProject($version->getProjectId()) as $reviewer) {
 			if ($reviewer->mailWishes()['versions']) {
 				$this->send($reviewer, $version, 'deliver.ReviewerVersion',
-					$l->t('Version %s of %s is ready for review', [(string)$version->getNumber(), $version->getName()]),
 					$l->t('Version %s of %s is ready for review', [(string)$version->getNumber(), $version->getName()]),
 					[],
 				);
@@ -97,8 +91,9 @@ class ReviewerMail {
 	 * ponytail: sent in the request, one by one; move to a job if Projects get many Reviewers
 	 *
 	 * @param list<string> $paragraphs
+	 * @param ?string $heading over the text, when it says more than the subject
 	 */
-	private function send(Reviewer $reviewer, Version $version, string $kind, string $subject, string $heading, array $paragraphs): void {
+	private function send(Reviewer $reviewer, Version $version, string $kind, string $subject, array $paragraphs, ?string $heading = null): void {
 		$email = $reviewer->getEmail();
 		if ($email === null || !self::configured($this->config)) {
 			return;
@@ -111,7 +106,7 @@ class ReviewerMail {
 		$template = $this->mailer->createEMailTemplate($kind, ['version' => $version->getId()]);
 		$template->setSubject($subject);
 		$template->addHeader();
-		$template->addHeading($heading);
+		$template->addHeading($heading ?? $subject);
 		foreach ($paragraphs as $paragraph) {
 			$template->addBodyText($paragraph);
 		}
