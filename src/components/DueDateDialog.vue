@@ -59,8 +59,18 @@ function done(value) {
 }
 
 .deliver-due-date input {
+	box-sizing: border-box;
 	width: 100%;
+	/* Safari on iOS gives a date field a native width of its own that overflows the dialog */
+	min-width: 0;
 	margin: 0;
+	min-height: var(--default-clickable-area);
+	-webkit-appearance: none;
+	appearance: none;
+}
+
+.deliver-due-date input::-webkit-date-and-time-value {
+	text-align: start;
 }
 
 .deliver-due-date__hint {
