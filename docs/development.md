@@ -25,17 +25,17 @@ CI (`.github/workflows/ci.yml`) runs the same checks on every pull request, then
 
 `docker/` holds the instance data and is gitignored. Every mail the instance sends lands in a Mailpit container instead of going out; its inbox is on port 8025, bound like Nextcloud. `dev/opcache.ini` makes the container pick up PHP edits immediately.
 
-The instance carries a known admin password and Nextcloud's trusted-domain check falls to a forged `Host` header, so the port is bound to `127.0.0.1` instead of being published to the whole network. Another address (the machine's tailnet address, say) goes into a gitignored `docker-compose.override.yml`, which Compose merges on its own — and then it is reachable by whoever can route there:
+The instance carries a known admin password and Nextcloud's trusted-domain check falls to a forged `Host` header, so the port is bound to `127.0.0.1` instead of being published to the whole network. Another address (a LAN or VPN address of the machine, say) goes into a gitignored `docker-compose.override.yml`, which Compose merges on its own — and then it is reachable by whoever can route there:
 
 ```yaml
 services:
   nextcloud:
-    ports: ["100.x.y.z:8080:80"]
+    ports: ["192.0.2.10:8080:80"]
   mail:
-    ports: ["100.x.y.z:8025:8025"]
+    ports: ["192.0.2.10:8025:8025"]
 ```
 
-Links in mails and from background jobs use `DELIVER_URL` (default `http://localhost:8080`); set it in `.env` to the address people open, e.g. `DELIVER_URL=http://factory.example.ts.net:8080`, and `docker compose up -d`.
+Links in mails and from background jobs use `DELIVER_URL` (default `http://localhost:8080`); set it in `.env` to the address people open, e.g. `DELIVER_URL=http://dev.example.test:8080`, and `docker compose up -d`.
 
 To reach the dev instance under another host name or address, put it into a gitignored `.env` next to `docker-compose.yml` before the first `make up` (space-separated, e.g. `DELIVER_EXTRA_TRUSTED_DOMAINS=192.168.1.20 dev.example.test`). Nextcloud reads trusted domains only at install time; on an existing instance use `make occ ARGS="config:system:set trusted_domains 2 --value=192.168.1.20"` instead.
 

@@ -1,4 +1,4 @@
-# The dev instance for CI runners: no GPU, no tailnet, only this machine.
+# The dev instance for CI runners: no GPU, no extra binds, only this machine.
 services:
   nextcloud:
     ports: !override

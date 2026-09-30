@@ -9,7 +9,7 @@ services:
     image: deliver-nextcloud:34-ffmpeg
     # Bound, not published to the world: the dev instance carries a known admin
     # password, and the trusted-domain check falls to a forged Host header.
-    # Further binds (a tailnet address for the browser in its own container)
+    # Further binds (another address of the host, e.g. for a browser in its own container)
     # go into the gitignored docker-compose.override.yml.
     ports:
       - 127.0.0.1:8080:80
