@@ -17,7 +17,7 @@ Deliver is a Nextcloud app for frame-accurate video and audio review (a Frame.io
 
 ## Dev environment
 
-- Commands and the test setup are in `README.md` and the `Makefile` (`make up`, `make build`, `make test-integration`). The dev image is `deploy/Dockerfile` built for Nextcloud 34 (ffmpeg and the VAAPI drivers); change it there, never in the running container. `docker/` is the bind-mounted instance and gitignored.
+- Commands and the test setup are in `docs/development.md` and the `Makefile` (`make up`, `make build`, `make test-integration`). The dev image is `deploy/Dockerfile` built for Nextcloud 34 (ffmpeg and the VAAPI drivers); change it there, never in the running container. `docker/` is the bind-mounted instance and gitignored.
 - `dev/opcache.ini` is mounted into the container so PHP edits apply immediately. Built bundles are cached by the browser under Nextcloud's `?v=` parameter: hard-reload after `npm run build`.
 - Nothing is released yet, so the code carries no backwards compatibility of any kind: no second input shape, no fallback for older data, no migration chain. The schema is one migration, changed in place until the first release. To apply a change on the dev instance, alter its tables by hand to match (or reset it: `make down`, delete `docker/`, `make up`); a fresh instance, as in CI, runs the migration as it stands.
 - Routes are cached per PHP process: after editing `appinfo/routes.php`, `docker compose restart nextcloud`, otherwise new verbs answer 405 and new paths 404.
