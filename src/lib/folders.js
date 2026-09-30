@@ -38,3 +38,50 @@ export function filesDir(davUrl) {
 	const parts = inHome.split('/').slice(1, -1)
 	return '/' + parts.join('/')
 }
+
+/**
+ * @param {string} path - a Project's path as the server has it, /<user>/files/<path>
+ * @return {string} the folder as Files shows it, such as /Clients/Showreel
+ */
+export function projectDir(path) {
+	return '/' + path.split('/').slice(3).join('/')
+}
+
+/**
+ * @param {string} path - a Project's path as the server has it, /<user>/files/<path>
+ * @return {string} the folder under the WebDAV files root, encoded, such as me/Clients/Show%20reel
+ */
+export function projectDavPath(path) {
+	const [, user, , ...rest] = path.split('/')
+	return [user, ...rest].map(encodeURIComponent).join('/')
+}
+
+/**
+ * Every folder of a Project that holds Assets, with the folders around them,
+ * for the Project's navigation (story 100).
+ *
+ * @param {Array<{path: string}>} assets - the Assets of a Project
+ * @return {Array<{path: string, name: string, depth: number, count: number}>} sorted by path, the Project folder itself left out
+ */
+export function folderTree(assets) {
+	const counts = new Map()
+	for (const asset of assets) {
+		const parts = asset.path.split('/').filter(Boolean)
+		parts.forEach((part, index) => {
+			const path = parts.slice(0, index + 1).join('/')
+			counts.set(path, (counts.get(path) ?? 0) + 1)
+		})
+	}
+	return [...counts.entries()]
+		.sort(([a], [b]) => a.localeCompare(b))
+		.map(([path, count]) => ({ path, name: path.split('/').pop(), depth: path.split('/').length - 1, count }))
+}
+
+/**
+ * @param {{path: string}} asset - an Asset
+ * @param {string} folder - a folder of the Project, '' for all of it
+ * @return {boolean} whether the Asset lies in that folder or below
+ */
+export function inFolder(asset, folder) {
+	return folder === '' || asset.path === folder || asset.path.startsWith(folder + '/')
+}

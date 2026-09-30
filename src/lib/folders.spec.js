@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filesDir, groupByFolder, uploadFolder } from './folders.js'
+import { filesDir, folderTree, groupByFolder, inFolder, projectDavPath, projectDir, uploadFolder } from './folders.js'
 
 describe('folders', () => {
 	it('groups Assets by folder, the Project folder first', () => {
@@ -15,5 +15,23 @@ describe('folders', () => {
 	it('finds the Files folder of a WebDAV URL', () => {
 		expect(filesDir('http://x/remote.php/dav/files/me/Synthese%20Quartet/Video/No.%204.mp4')).toBe('/Synthese Quartet/Video')
 		expect(filesDir('http://x/remote.php/dav/files/me/a.mov')).toBe('/')
+	})
+
+	it('finds the Files folder of a Project', () => {
+		expect(projectDir('/me/files/Clients/Showreel')).toBe('/Clients/Showreel')
+		expect(projectDavPath('/me/files/Clients/Show reel')).toBe('me/Clients/Show%20reel')
+	})
+
+	it('lists the folders of a Project with the ones around them and counts what lies below', () => {
+		const tree = folderTree([{ path: '' }, { path: 'Interviews/Raw' }, { path: 'Interviews' }, { path: 'B-Roll' }])
+		expect(tree).toEqual([
+			{ path: 'B-Roll', name: 'B-Roll', depth: 0, count: 1 },
+			{ path: 'Interviews', name: 'Interviews', depth: 0, count: 2 },
+			{ path: 'Interviews/Raw', name: 'Raw', depth: 1, count: 1 },
+		])
+	})
+
+	it('keeps a folder\'s Assets and those below it', () => {
+		expect([inFolder({ path: 'Interviews/Raw' }, 'Interviews'), inFolder({ path: 'Interviews 2' }, 'Interviews'), inFolder({ path: '' }, '')]).toEqual([true, false, true])
 	})
 })

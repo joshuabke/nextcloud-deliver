@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatFrame, frameToTime, smpte, timeToFrame } from './timecode.js'
+import { formatAt, formatRange, frameToTime, smpte, timeToFrame } from './timecode.js'
 
 const PAL = { num: 25, den: 1 }
 const FILM = { num: 24000, den: 1001 }
@@ -36,15 +36,20 @@ describe('timecode display', () => {
 	})
 
 	it('follows the Project setting', () => {
-		expect(formatFrame(50, PAL, 'frames')).toBe('50')
-		expect(formatFrame(50, PAL, 'seconds')).toBe('2.00 s')
-		expect(formatFrame(50, PAL, 'smpte')).toBe('00:00:02:00')
+		expect(formatAt(50, { fps: PAL, mode: 'frames' })).toBe('50')
+		expect(formatAt(50, { fps: PAL, mode: 'seconds' })).toBe('2.00 s')
+		expect(formatAt(50, { fps: PAL, mode: 'smpte' })).toBe('00:00:02:00')
 	})
 
 	it('starts SMPTE at the embedded start timecode, and only SMPTE', () => {
-		const hourOne = { startFrame: 90000 }
-		expect(formatFrame(50, PAL, 'smpte', hourOne)).toBe('01:00:02:00')
-		expect(formatFrame(50, PAL, 'frames', hourOne)).toBe('50')
-		expect(formatFrame(50, PAL, 'seconds', hourOne)).toBe('2.00 s')
+		const hourOne = { fps: PAL, startFrame: 90000 }
+		expect(formatAt(50, { ...hourOne, mode: 'smpte' })).toBe('01:00:02:00')
+		expect(formatAt(50, { ...hourOne, mode: 'frames' })).toBe('50')
+		expect(formatAt(50, { ...hourOne, mode: 'seconds' })).toBe('2.00 s')
+	})
+
+	it('writes a Range from its in to its out Frame', () => {
+		expect(formatRange({ inFrame: 25, outFrame: null }, { fps: PAL })).toBe('00:00:01:00')
+		expect(formatRange({ inFrame: 25, outFrame: 50 }, { fps: PAL, mode: 'frames' })).toBe('25 – 50')
 	})
 })

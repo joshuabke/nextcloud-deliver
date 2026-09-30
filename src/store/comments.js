@@ -1,18 +1,21 @@
 import { defineStore } from 'pinia'
 import {
+	attachFile,
 	commentChanges,
 	createComment,
+	decideVersion,
 	deleteComment,
 	listComments,
 	markSeen,
+	reactComment,
 	resolveComment,
 	updateComment,
 } from '../api.js'
 import { mergeComments } from '../lib/merge.js'
 
 /** How often the Review view asks for changes, in ms; a hidden tab asks less often */
-export const POLL_INTERVAL = 5000
-export const POLL_INTERVAL_HIDDEN = 30000
+const POLL_INTERVAL = 5000
+const POLL_INTERVAL_HIDDEN = 30000
 
 export const useCommentsStore = defineStore('comments', {
 	state: () => ({
@@ -29,6 +32,8 @@ export const useCommentsStore = defineStore('comments', {
 		 * the person clears the badges, so a badge does not vanish while it is read.
 		 */
 		seenUntil: 0,
+		/** Who approved or requested changes: [{ author, status, updatedAt }] */
+		approvals: [],
 		/**
 		 * Server time of the last answer, and the `since` of the next poll.
 		 * Inclusive, because timestamps count whole seconds: "newer than"
@@ -48,6 +53,14 @@ export const useCommentsStore = defineStore('comments', {
 				...comment,
 				replies: state.comments.filter((reply) => reply.parentId === comment.id),
 			})),
+		/**
+		 * @return {Map<number, number>} Comment id → its place in the order Comments were written, as the list and the markers number them
+		 */
+		numbers() {
+			return new Map([...this.threads]
+				.sort((a, b) => a.createdAt - b.createdAt || a.id - b.id)
+				.map((thread, index) => [thread.id, index + 1]))
+		},
 		mine: (state) => (comment) => state.me !== null
 			&& comment.author.type === state.me.type
 			&& comment.author.id === state.me.id,
@@ -55,6 +68,9 @@ export const useCommentsStore = defineStore('comments', {
 		 * @param {object} state - the store state
 		 * @return {number} how many Comments by others are Unseen
 		 */
+		myDecision(state) {
+			return state.approvals.find((approval) => this.mine(approval))?.status ?? null
+		},
 		unseenCount(state) {
 			return state.comments.filter((comment) => comment.createdAt > state.seenUntil && !this.mine(comment)).length
 		},
@@ -64,6 +80,7 @@ export const useCommentsStore = defineStore('comments', {
 			this.stop()
 			this.versionId = versionId
 			this.comments = []
+			this.approvals = []
 			await this.reload()
 			if (this.versionId !== versionId) {
 				// Another Version was opened while this one loaded
@@ -93,6 +110,7 @@ export const useCommentsStore = defineStore('comments', {
 			this.canComment = answer.canComment
 			this.me = answer.me
 			this.seenUntil = answer.seenUntil
+			this.approvals = answer.approvals
 			this.now = answer.now
 			this.onScreen()
 		},
@@ -104,6 +122,7 @@ export const useCommentsStore = defineStore('comments', {
 					return
 				}
 				this.comments = mergeComments(this.comments, answer.comments, answer.ids)
+				this.approvals = answer.approvals
 				this.now = answer.now
 				this.onScreen()
 			} catch {
@@ -116,9 +135,32 @@ export const useCommentsStore = defineStore('comments', {
 				markSeen(this.versionId, this.now).catch(() => {})
 			}
 		},
-		async add({ inFrame, outFrame = null, body, parentId = null }) {
-			const comment = await createComment(this.versionId, { inFrame, outFrame, body, parentId })
+		/**
+		 * Posts a Comment, then attaches its files one by one (story 92)
+		 *
+		 * @param {object} fields - the Comment
+		 * @param {number} fields.inFrame - its Frame, or where its Range starts
+		 * @param {number|null} fields.outFrame - where its Range ends
+		 * @param {string} fields.body - its text
+		 * @param {number|null} fields.parentId - the Comment it replies to
+		 * @param {Array|null} fields.annotation - its Drawing
+		 * @param {File[]} fields.files - what to attach
+		 * @return {Promise<object>} the Comment as it ended up
+		 */
+		async add({ inFrame, outFrame = null, body, parentId = null, annotation = null, files = [] }) {
+			let comment = await createComment(this.versionId, { inFrame, outFrame, body, parentId, annotation })
 			this.comments = mergeComments(this.comments, [comment], null)
+			for (const file of files) {
+				try {
+					comment = await attachFile(comment.id, file)
+				} catch (e) {
+					// The Comment stands; sending again would post it twice
+					e.commentPosted = true
+					e.fileName = file.name
+					throw e
+				}
+				this.comments = mergeComments(this.comments, [comment], null)
+			}
 			return comment
 		},
 		async edit(id, body) {
@@ -129,8 +171,17 @@ export const useCommentsStore = defineStore('comments', {
 			const gone = new Set([id, ...this.comments.filter((comment) => comment.parentId === id).map((comment) => comment.id)])
 			this.comments = this.comments.filter((comment) => !gone.has(comment.id))
 		},
+		async react(id, emoji, on) {
+			this.comments = mergeComments(this.comments, [await reactComment(id, emoji, on)], null)
+		},
 		async setResolved(id, resolved) {
 			this.comments = mergeComments(this.comments, [await resolveComment(id, resolved)], null)
+		},
+		/**
+		 * @param {string|null} status - approved, changes, or null to take my decision back
+		 */
+		async decide(status) {
+			this.approvals = await decideVersion(this.versionId, status)
 		},
 		/** Clears the Unseen badges on screen */
 		clearUnseen() {

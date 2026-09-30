@@ -29,6 +29,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setResolved(bool $resolved)
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
+ * @method ?string getAnnotation()
+ * @method void setAnnotation(?string $annotation)
  * @method int getUpdatedAt()
  * @method void setUpdatedAt(int $updatedAt)
  */
@@ -44,6 +46,8 @@ class Comment extends Entity {
 	protected ?bool $resolved = null;
 	protected ?int $createdAt = null;
 	protected ?int $updatedAt = null;
+	/** A drawing on the Frame, as JSON (Annotation) */
+	protected ?string $annotation = null;
 
 	public function __construct() {
 		$this->addType('versionId', 'integer');

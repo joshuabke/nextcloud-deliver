@@ -4,21 +4,13 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Db;
 
-use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 
-/** @template-extends QBMapper<Comment> */
-class CommentMapper extends QBMapper {
+/** @template-extends Mapper<Comment> */
+class CommentMapper extends Mapper {
 	public function __construct(IDBConnection $db) {
 		parent::__construct($db, 'deliver_comments', Comment::class);
-	}
-
-	public function find(int $id): ?Comment {
-		$qb = $this->db->getQueryBuilder();
-		$qb->select('*')->from($this->getTableName())
-			->where($qb->expr()->eq('id', $qb->createNamedParameter($id)));
-		return $this->findEntities($qb)[0] ?? null;
 	}
 
 	/**
@@ -66,6 +58,58 @@ class CommentMapper extends QBMapper {
 			->from($this->getTableName())
 			->where($qb->expr()->in('version_id', $qb->createNamedParameter($versionIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->groupBy('version_id');
+		return $this->amounts($qb);
+	}
+
+	/**
+	 * Comments and Replies by others that came after the person's Unseen mark,
+	 * or all of them where the person never had the Version on screen.
+	 *
+	 * @param list<int> $versionIds
+	 * @return array<int, int> Version id → how many are Unseen
+	 */
+	public function countUnseenByVersions(array $versionIds, string $uid): array {
+		if ($versionIds === []) {
+			return [];
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('c.version_id')->selectAlias($qb->func()->count('*'), 'amount')
+			->from($this->getTableName(), 'c')
+			->leftJoin('c', 'deliver_seen', 's', $qb->expr()->andX(
+				$qb->expr()->eq('s.version_id', 'c.version_id'),
+				$qb->expr()->eq('s.user_id', $qb->createNamedParameter($uid)),
+			))
+			->where($qb->expr()->in('c.version_id', $qb->createNamedParameter($versionIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->orX(
+				$qb->expr()->isNull('c.user_id'),
+				$qb->expr()->neq('c.user_id', $qb->createNamedParameter($uid)),
+			))
+			->andWhere($qb->expr()->orX(
+				$qb->expr()->isNull('s.seen_until'),
+				$qb->expr()->gt('c.created_at', 's.seen_until'),
+			))
+			->groupBy('c.version_id');
+		return $this->amounts($qb);
+	}
+
+	/**
+	 * @param list<int> $versionIds
+	 * @return array<int, int> Version id → when its newest Comment or Reply was written
+	 */
+	public function latestByVersions(array $versionIds): array {
+		if ($versionIds === []) {
+			return [];
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('version_id')->selectAlias($qb->func()->max('created_at'), 'amount')
+			->from($this->getTableName())
+			->where($qb->expr()->in('version_id', $qb->createNamedParameter($versionIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->groupBy('version_id');
+		return $this->amounts($qb);
+	}
+
+	/** @return array<int, int> version_id → amount of a grouped query */
+	private function amounts(IQueryBuilder $qb): array {
 		$result = $qb->executeQuery();
 		$counts = [];
 		foreach ($result->fetchAll() as $row) {
@@ -73,12 +117,5 @@ class CommentMapper extends QBMapper {
 		}
 		$result->closeCursor();
 		return $counts;
-	}
-
-	public function deleteByVersion(int $versionId): void {
-		$qb = $this->db->getQueryBuilder();
-		$qb->delete($this->getTableName())
-			->where($qb->expr()->eq('version_id', $qb->createNamedParameter($versionId)))
-			->executeStatement();
 	}
 }

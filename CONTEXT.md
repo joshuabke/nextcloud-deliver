@@ -15,8 +15,12 @@ A Project setting that makes every media file in the folder an Asset, including 
 _Avoid_: Watch mode, auto scan, sync
 
 **Asset**:
-A media file inside a Project that has been enabled for review, by a Member or by Auto Intake. A single Asset may have several Versions.
+A video, audio or picture file inside a Project that has been enabled for review, by a Member or by Auto Intake. A single Asset may have several Versions.
 _Avoid_: Video, clip, item, media
+
+**Still**:
+An Asset that is a picture (PNG, JPEG, WebP, GIF, AVIF). It has one Frame, so every Comment anchors to Frame 0 and Drawings do the pointing; no timecode, no derived media.
+_Avoid_: Image asset, photo
 
 **Version**:
 One concrete file that represents one iteration of an Asset, carrying a Version Number chosen by a Member. Comments belong to a Version, never to the Asset as a whole.
@@ -51,6 +55,34 @@ _Avoid_: Thread, child comment
 **Resolved**:
 A state on a top-level Comment meaning the editor considers it handled. Replies are not resolved individually.
 _Avoid_: Done, closed, completed
+
+**Drawing**:
+Pen strokes, arrows and boxes on the Frame a Comment anchors to, in coordinates across the picture; shown whenever the player stands still on that Comment.
+_Avoid_: Annotation (in the UI), sketch, markup
+
+**Mention**:
+A Member named in a Comment with `@`, who is notified even from a muted Project. Reviewers can be read but not mentioned, as they have no account.
+_Avoid_: Tag, ping
+
+**Watermark**:
+The Reviewer's name and the date, repeated across the picture on a Share Link that asks for it. An overlay in the player, not burned into the media.
+_Avoid_: Stamp, overlay (alone)
+
+**Due Date**:
+The calendar day an Asset should be through by. Members are reminded the day before and on the day, unless its newest Version is approved with nobody asking for changes.
+_Avoid_: Deadline
+
+**Attachment**:
+A file added to a Comment, up to five of 25 MB. It lives in the Project folder under `.deliver-attachments/<Comment id>/`, is never an Asset, and goes with its Comment.
+_Avoid_: Upload, file (alone)
+
+**Reaction**:
+One person's emoji on a Comment or Reply, from a small fixed set; agreement without a Reply.
+_Avoid_: Like, vote
+
+**Approval**:
+One person's decision on a Version: approved, or changes requested. Whoever may comment decides; a decision can be changed or taken back.
+_Avoid_: Sign-off, status, vote
 
 ### People
 
@@ -117,3 +149,11 @@ The German translation (`l10n/de` with "du", `l10n/de_DE` with "Sie") uses these
 | Proxy, Thumbnail Strip, Waveform | Proxy, Vorschauleiste, Wellenform |
 | Missing | Fehlt |
 | Export | Export |
+| Drawing | Zeichnung |
+| Reaction | Reaktion |
+| Mention | Erwähnung |
+| Attachment | Anhang |
+| Due Date | Fälligkeitsdatum |
+| Watermark | Wasserzeichen |
+| Still | Standbild |
+| Approval (approved, changes requested) | Abnahme (abgenommen, Änderungen gewünscht) |

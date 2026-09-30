@@ -7,6 +7,8 @@ namespace OCA\Deliver\Controller;
 use OCA\Deliver\Db\Reviewer;
 use OCA\Deliver\Db\Version;
 use OCA\Deliver\Http\RangeFileResponse;
+use OCA\Deliver\Service\AccessDeniedException;
+use OCA\Deliver\Service\ApprovalService;
 use OCA\Deliver\Service\CommentService;
 use OCA\Deliver\Service\DerivedMedia;
 use OCA\Deliver\Service\ProjectService;
@@ -50,6 +52,7 @@ class PublicApiController extends PublicShareController {
 		private StackService $stacks,
 		private IURLGenerator $urls,
 		private IUserSession $userSession,
+		private ApprovalService $approvals,
 	) {
 		parent::__construct($appName, $request, $session);
 	}
@@ -57,17 +60,17 @@ class PublicApiController extends PublicShareController {
 	/** One Version with its Version Stack, as far as the share shows it */
 	#[PublicPage]
 	#[NoCSRFRequired]
-	public function context(?int $versionId = null, ?int $fileId = null): Response {
-		return $this->guard(function () use ($versionId, $fileId) {
+	public function context(int $versionId): Response {
+		return $this->guard(function () use ($versionId) {
 			$share = $this->share();
-			$version = match (true) {
-				$versionId !== null => $this->sharing->version($share, $versionId),
-				$fileId !== null => $this->sharing->versionForFile($share, $fileId),
-				default => throw new NotFoundException('Version not found'),
-			};
+			$version = $this->sharing->version($share, $versionId);
 			$project = $this->sharing->project($share);
-			$flags = $this->sharing->flags($share);
 			$stack = $this->sharing->assets($share)[$version->getAssetId()] ?? null;
+			$reviewer = $this->reviewer();
+			if ($reviewer !== null) {
+				$this->reviewers->cameBy($reviewer, (int)$share->getId());
+			}
+			$flags = $this->flags($share, $reviewer);
 			return [
 				'versionId' => $version->getId(),
 				'flags' => $flags,
@@ -76,7 +79,7 @@ class PublicApiController extends PublicShareController {
 					'fps' => ['num' => $project->getFpsNum(), 'den' => $project->getFpsDen()],
 					'timecodeMode' => $project->getTimecodeMode(),
 				],
-				'asset' => $stack === null ? null : ['id' => $stack['asset']->getId(), 'name' => $this->stacks->nameOf($stack['asset'])],
+				'asset' => $stack === null ? null : ['id' => $stack['asset']->getId(), 'name' => $this->stacks->nameOf($stack['asset']), 'dueDate' => $stack['asset']->getDueDate()],
 				'versions' => $stack === null ? [] : array_map(
 					fn (Version $each) => $this->describe($share, $each, $flags['canDownload']),
 					$stack['versions'],
@@ -97,7 +100,13 @@ class PublicApiController extends PublicShareController {
 			$result = [];
 			foreach ($this->sharing->assets($this->share()) as ['asset' => $asset, 'versions' => $versions]) {
 				foreach ($versions as $version) {
-					$result[] = ['fileId' => $version->getFileId(), 'versionId' => $versions[0]->getId(), 'assetId' => $asset->getId()];
+					// The Review button opens the file's own Version; stepping through Assets lands on the newest
+					$result[] = [
+						'fileId' => $version->getFileId(),
+						'versionId' => $version->getId(),
+						'newestId' => $versions[0]->getId(),
+						'assetId' => $asset->getId(),
+					];
 				}
 			}
 			return $result;
@@ -116,7 +125,8 @@ class PublicApiController extends PublicShareController {
 			$share = $this->share();
 			$version = $this->sharing->version($share, $versionId);
 			if ($kind !== 'original') {
-				return DerivedMediaResponse::of($this->media, $version, $kind, $this->request->getHeader('Range'));
+				// Not generated (yet) is a 404 as well; the player falls back to the original
+				return RangeFileResponse::ofSimpleFile($this->media->file($version, $kind), $this->request->getHeader('Range'));
 			}
 			$file = $this->originalFile($share, $version);
 			if ($file === null || !$this->mayPlayOriginal($version, $this->sharing->flags($share)['canDownload'])) {
@@ -131,10 +141,12 @@ class PublicApiController extends PublicShareController {
 	/** A Reviewer names themselves once; the answer carries their Personal Link (story 54) */
 	#[PublicPage]
 	#[NoCSRFRequired]
-	public function claim(string $name, ?string $email = null): Response {
-		return $this->guard(function () use ($name, $email) {
+	public function claim(string $name, ?string $email = null, ?bool $mailReplies = null, ?bool $mailComments = null, ?bool $mailVersions = null): Response {
+		return $this->guard(function () use ($name, $email, $mailReplies, $mailComments, $mailVersions) {
 			$share = $this->share();
-			$reviewer = $this->reviewers->claim($this->sharing->project($share), $name, $email);
+			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
+			$reviewer = $this->reviewers->claim($this->sharing->project($share), $name, $email, $wishes);
+			$this->reviewers->cameBy($reviewer, (int)$share->getId());
 			// A JSONResponse, because a DataResponse loses its cookies on the way out
 			$response = new JSONResponse(
 				$this->reviewers->serialize($reviewer) + ['link' => $this->sharing->personalLink($share, $reviewer)],
@@ -142,6 +154,17 @@ class PublicApiController extends PublicShareController {
 			);
 			$this->rememberReviewer($response, $reviewer->getSecretKey());
 			return $response;
+		});
+	}
+
+	/** A Reviewer changes their address or what they want mailed */
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function settings(?string $email = null, ?bool $mailReplies = null, ?bool $mailComments = null, ?bool $mailVersions = null): Response {
+		return $this->guard(function () use ($email, $mailReplies, $mailComments, $mailVersions) {
+			$reviewer = $this->reviewer() ?? throw new AccessDeniedException('Give a name first');
+			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
+			return $this->reviewers->serialize($this->reviewers->updateSettings($reviewer, $email, $wishes));
 		});
 	}
 
@@ -159,12 +182,18 @@ class PublicApiController extends PublicShareController {
 
 	#[PublicPage]
 	#[NoCSRFRequired]
-	public function create(int $versionId, int $inFrame, ?int $outFrame = null, string $body = '', ?int $parentId = null): Response {
+	public function create(int $versionId, int $inFrame, ?int $outFrame = null, string $body = '', ?int $parentId = null, mixed $annotation = null): Response {
 		return $this->onVersion(
 			$versionId,
-			fn ($viewer, $version) => $this->comments->create($viewer, $version, $inFrame, $outFrame, $body, $parentId),
+			fn ($viewer, $version) => $this->comments->create($viewer, $version, $inFrame, $outFrame, $body, $parentId, $annotation),
 			Http::STATUS_CREATED,
 		);
+	}
+
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function approve(int $versionId, ?string $status = null): Response {
+		return $this->onVersion($versionId, fn ($viewer, $version) => $this->approvals->decide($viewer, $version, $status));
 	}
 
 	#[PublicPage]
@@ -177,6 +206,32 @@ class PublicApiController extends PublicShareController {
 	#[NoCSRFRequired]
 	public function update(int $id, string $body): Response {
 		return $this->onComment($id, fn ($viewer, $version) => $this->comments->update($viewer, $version, $id, $body));
+	}
+
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function react(int $id, string $emoji, bool $on = true): Response {
+		return $this->onComment($id, fn ($viewer, $version) => $this->comments->react($viewer, $version, $id, $emoji, $on));
+	}
+
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function attach(int $id): Response {
+		return $this->onComment($id, fn ($viewer, $version) => $this->comments->attach($viewer, $version, $id, $this->request->getUploadedFile('file')), Http::STATUS_CREATED);
+	}
+
+	/** An attached file, shown in the browser where it can be */
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function attachment(int $id): Response {
+		try {
+			$share = $this->share();
+			$version = $this->sharing->version($share, $this->comments->versionIdOfAttachment($id));
+			[$file, $attachment] = $this->comments->attachment($version, $id);
+			return AttachmentResponse::of($file, $attachment);
+		} catch (NotFoundException) {
+			return new Response(Http::STATUS_NOT_FOUND);
+		}
 	}
 
 	#[PublicPage]
@@ -220,7 +275,7 @@ class PublicApiController extends PublicShareController {
 		return $reviewer === null
 			// A logged-in visitor gets their display name offered (story 58)
 			? ['type' => 'unnamed', 'name' => $this->userSession->getUser()?->getDisplayName() ?? '']
-			: ['type' => 'reviewer', 'id' => $reviewer->getId(), 'name' => $reviewer->getName()];
+			: ['type' => 'reviewer', 'id' => $reviewer->getId(), 'name' => $reviewer->getName(), 'email' => $reviewer->getEmail(), 'mail' => $reviewer->mailWishes()];
 	}
 
 	private function reviewer(): ?Reviewer {
@@ -228,14 +283,23 @@ class PublicApiController extends PublicShareController {
 		return $this->reviewers->byKey(is_string($key) ? $key : null, $this->sharing->project($this->share()));
 	}
 
-	/** A Reviewer comments while the share allows it, and never resolves */
+	/**
+	 * The link's review flags, with the Reviewer's own rights over them
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function flags(IShare $share, ?Reviewer $reviewer): array {
+		$flags = $this->sharing->flags($share);
+		return $reviewer === null ? $flags : $reviewer->over($flags);
+	}
+
+	/** A Reviewer comments while the share or their own rights allow it, and never resolves */
 	private function viewer(IShare $share): Viewer {
 		$reviewer = $this->reviewer();
-		if ($reviewer === null) {
-			return Viewer::unnamed();
-		}
-		$flags = $this->sharing->flags($share);
-		return Viewer::reviewer($reviewer->getId(), $flags['canComment'], $flags['allowOlder']);
+		$flags = $this->flags($share, $reviewer);
+		return $reviewer === null
+			? Viewer::unnamed($flags['canComment'], $flags['allowOlder'])
+			: Viewer::reviewer($reviewer->getId(), $flags['canComment'], $flags['allowOlder']);
 	}
 
 	private function onVersion(int $versionId, callable $action, int $status = Http::STATUS_OK): Response {
@@ -245,10 +309,10 @@ class PublicApiController extends PublicShareController {
 		}, $status);
 	}
 
-	private function onComment(int $id, callable $action): Response {
+	private function onComment(int $id, callable $action, int $status = Http::STATUS_OK): Response {
 		return $this->guard(function () use ($id, $action) {
 			$share = $this->share();
 			return $action($this->viewer($share), $this->sharing->version($share, $this->comments->versionIdOf($id)));
-		});
+		}, $status);
 	}
 }

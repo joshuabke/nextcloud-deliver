@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Service;
 
+use OCA\Deliver\Db\ApprovalMapper;
 use OCA\Deliver\Db\Asset;
 use OCA\Deliver\Db\AssetMapper;
+use OCA\Deliver\Db\AttachmentMapper;
 use OCA\Deliver\Db\CommentMapper;
 use OCA\Deliver\Db\MuteMapper;
 use OCA\Deliver\Db\Project;
 use OCA\Deliver\Db\ProjectMapper;
+use OCA\Deliver\Db\ReactionMapper;
 use OCA\Deliver\Db\ReviewerMapper;
 use OCA\Deliver\Db\SeenMapper;
 use OCA\Deliver\Db\Version;
@@ -34,9 +37,13 @@ class StackService {
 		private VersionMapper $versions,
 		private CommentMapper $comments,
 		private SeenMapper $seen,
+		private ApprovalMapper $approvals,
+		private ReactionMapper $reactions,
+		private AttachmentMapper $attachments,
 		private ReviewerMapper $reviewers,
 		private DerivedMedia $media,
 		private NotificationService $notifications,
+		private ReviewerMail $reviewerMail,
 		private MuteMapper $mutes,
 		private IRootFolder $root,
 		private ITimeFactory $time,
@@ -55,10 +62,7 @@ class StackService {
 		}
 		$suggestion = VersionNaming::parse($file->getName());
 		$target = $suggestion === null ? null : $this->onlyCandidate($project, $file, $suggestion['base']);
-		if ($target === null) {
-			return $this->register($project, $file, $suggestion['number'] ?? 1);
-		}
-		return $this->register($project, $file, $suggestion['number'], $target, true);
+		return $this->register($project, $file, $suggestion['number'] ?? 1, $target);
 	}
 
 	/**
@@ -82,16 +86,17 @@ class StackService {
 		if ($override !== null) {
 			return $override;
 		}
-		$stack = $this->versions->findByAsset($asset->getId());
-		$newest = end($stack);
-		return $newest === false ? '' : VersionNaming::assetName($newest->getName());
+		$newest = $this->versions->findNewest($asset->getId());
+		return $newest === null ? '' : VersionNaming::assetName($newest->getName());
 	}
 
 	/**
-	 * Inserts the Version, and a new Asset for it unless one is given. When a
-	 * concurrent request registered the same file first, that Version wins.
+	 * Inserts the Version, and a new Asset for it unless one is given: then it
+	 * is stacked automatically. When a concurrent request registered the same
+	 * file first, that Version wins.
 	 */
-	private function register(Project $project, File $file, int $number, ?Asset $asset = null, bool $stacked = false): Version {
+	private function register(Project $project, File $file, int $number, ?Asset $asset): Version {
+		$stacked = $asset !== null;
 		$this->db->beginTransaction();
 		try {
 			if ($asset === null) {
@@ -112,6 +117,7 @@ class StackService {
 			$this->db->commit();
 			$this->media->queue($version->getId());
 			$this->notifications->versionArrived($version);
+			$this->reviewerMail->versionArrived($version);
 			return $version;
 		} catch (DbException $e) {
 			$this->db->rollBack();
@@ -227,13 +233,18 @@ class StackService {
 	}
 
 	/**
-	 * Deletes a Version with its Comments, Unseen marks and derived media, and
+	 * Deletes a Version with its Comments, Unseen marks, Approvals and derived media, and
 	 * its Asset if that was the last Version (stories 4 and 19). The file stays.
 	 */
 	public function purge(Version $version): void {
 		$this->media->forget($version->getId());
-		$this->comments->deleteByVersion($version->getId());
-		$this->seen->deleteByVersion($version->getId());
+		$commentIds = array_map(static fn ($comment) => $comment->getId(), $this->comments->findByVersion($version->getId()));
+		$this->reactions->deleteByComments($commentIds);
+		// Attached files stay in the folder, like every file when Deliver lets go
+		$this->attachments->deleteByComments($commentIds);
+		$this->comments->deleteBy('version_id', $version->getId());
+		$this->seen->deleteBy('version_id', $version->getId());
+		$this->approvals->deleteBy('version_id', $version->getId());
 		$assetId = $version->getAssetId();
 		$this->versions->delete($version);
 		$this->dropIfEmpty($assetId);
@@ -244,8 +255,9 @@ class StackService {
 		foreach ($this->versions->findByProject($project->getId()) as $version) {
 			$this->purge($version);
 		}
-		$this->assets->deleteByProject($project->getId());
-		$this->reviewers->deleteByProject($project->getId());
+		$this->assets->deleteBy('project_id', $project->getId());
+		$this->reviewers->deleteLinks(array_map(static fn ($reviewer) => $reviewer->getId(), $this->reviewers->findByProject($project->getId())));
+		$this->reviewers->deleteBy('project_id', $project->getId());
 		$this->mutes->deleteByProject($project->getId());
 		$this->projects->delete($project);
 	}

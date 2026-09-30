@@ -1,26 +1,28 @@
 <script setup>
-import { DialogBuilder } from '@nextcloud/dialogs'
+import { emit } from '@nextcloud/event-bus'
 import { Permission } from '@nextcloud/files'
+import { getClient, getDefaultPropfind, getRootPath, resultToNode } from '@nextcloud/files/dav'
 import { n, t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import { computed, ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
-import NcSelect from '@nextcloud/vue/components/NcSelect'
+import ProjectSettingsFields from '../components/ProjectSettingsFields.vue'
 import ShareLinkItem from '../components/ShareLinkItem.vue'
 import {
 	createProject,
 	createShareLink,
 	disableAsset,
 	enableFile,
-	errorMessage,
 	getAssetForFile,
 	getProjectForFolder,
 	listShares,
 	removeProject,
 	updateProject,
 } from '../api.js'
+import { useBusy } from '../composables/busy.js'
+import { confirmProjectRemoval, confirmRemoval } from '../confirm.js'
 
 // The Files app also sets folder, view and active on the web component; only node is used
 const props = defineProps({
@@ -28,31 +30,13 @@ const props = defineProps({
 	node: { type: Object, default: null },
 })
 
-/** Frame rates a Project can default to, for Assets whose own rate is unknown (story 7) */
-const RATES = [
-	{ id: '24000/1001', label: '23.976' },
-	{ id: '24/1', label: '24' },
-	{ id: '25/1', label: '25' },
-	{ id: '30000/1001', label: '29.97' },
-	{ id: '30/1', label: '30' },
-	{ id: '50/1', label: '50' },
-	{ id: '60000/1001', label: '59.94' },
-	{ id: '60/1', label: '60' },
-]
-const MODES = [
-	{ id: 'smpte', label: t('deliver', 'Timecode') },
-	{ id: 'frames', label: t('deliver', 'Frame counter') },
-	{ id: 'seconds', label: t('deliver', 'Seconds') },
-]
-
 /** On a folder: its Project, or null */
 const project = ref(null)
 /** On a media file: its Asset, or null */
 const asset = ref(null)
 /** The Share Links of this node; review is a switch on each (ADR 0004) */
 const shares = ref([])
-const busy = ref(false)
-const error = ref(null)
+const { busy, error, run } = useBusy()
 
 const isFolder = computed(() => props.node?.type === 'folder')
 const canWrite = computed(() => ((props.node?.permissions ?? 0) & Permission.UPDATE) !== 0)
@@ -66,10 +50,8 @@ const appUrl = computed(() => {
 	}
 	return projectId.value ? generateUrl('/apps/deliver/projects/{id}', { id: projectId.value }) : null
 })
-const rate = computed(() => RATES.find((each) => each.id === `${project.value?.fps.num}/${project.value?.fps.den}`) ?? null)
-const mode = computed(() => MODES.find((each) => each.id === project.value?.timecodeMode) ?? null)
 
-watch(() => props.node?.fileid, async (fileid) => {
+watch(() => props.node?.fileid, (fileid) => {
 	project.value = null
 	asset.value = null
 	shares.value = []
@@ -77,8 +59,7 @@ watch(() => props.node?.fileid, async (fileid) => {
 	if (!fileid) {
 		return
 	}
-	busy.value = true
-	try {
+	run(async () => {
 		const [found, links] = await Promise.all([
 			(isFolder.value ? getProjectForFolder(fileid) : getAssetForFile(fileid)).catch((e) => {
 				if (e?.response?.status === 404) {
@@ -94,45 +75,8 @@ watch(() => props.node?.fileid, async (fileid) => {
 			asset.value = isFolder.value ? null : found
 			shares.value = links
 		}
-	} catch (e) {
-		error.value = errorMessage(e)
-	} finally {
-		busy.value = false
-	}
-}, { immediate: true })
-
-/**
- * @param {string} title - dialog title
- * @param {string} text - what gets deleted
- * @param {string} confirm - label of the destructive button
- * @return {Promise<boolean>} whether the person confirmed
- */
-function confirmRemoval(title, text, confirm) {
-	return new Promise((resolve) => {
-		new DialogBuilder(title)
-			.setText(text)
-			.addButton({ label: t('deliver', 'Cancel'), callback: () => resolve(false) })
-			.addButton({ label: confirm, variant: 'error', callback: () => resolve(true) })
-			.build()
-			.show()
-			.then(() => resolve(false))
 	})
-}
-
-/**
- * @param {() => Promise<unknown>} action - what to run while the tab is busy
- */
-async function run(action) {
-	error.value = null
-	busy.value = true
-	try {
-		await action()
-	} catch (e) {
-		error.value = errorMessage(e)
-	} finally {
-		busy.value = false
-	}
-}
+}, { immediate: true })
 
 /**
  * On a folder the switch is Auto Intake (stories 2 and 3), on a file it
@@ -172,6 +116,9 @@ function saveSettings(settings) {
 function addLink() {
 	return run(async () => {
 		shares.value = [...shares.value, await createShareLink(props.node.fileid)]
+		// The file list shows the new link's share icon once it has the node again, as Nextcloud's own sharing tab does
+		const { data } = await getClient().stat(getRootPath() + props.node.path, { details: true, data: getDefaultPropfind() })
+		emit('files:node:updated', resultToNode(data))
 	})
 }
 
@@ -184,12 +131,7 @@ function replaceShare(updated) {
 
 /** Removes the Project with all its review data (story 9) */
 async function remove() {
-	const confirmed = await confirmRemoval(
-		t('deliver', 'Remove Project?'),
-		t('deliver', 'Its Comments and Version Stacks are deleted. The files stay untouched.'),
-		t('deliver', 'Remove Project'),
-	)
-	if (confirmed) {
+	if (await confirmProjectRemoval()) {
 		await run(async () => {
 			await removeProject(project.value.id)
 			project.value = null
@@ -229,26 +171,7 @@ async function remove() {
 
 		<section v-if="isFolder && project && canWrite" class="deliver-tab__section">
 			<h4>{{ t('deliver', 'Project settings') }}</h4>
-			<NcSelect
-				:modelValue="rate"
-				:options="RATES"
-				:clearable="false"
-				:disabled="busy"
-				:inputLabel="t('deliver', 'Frame rate when a file does not tell')"
-				@update:modelValue="saveSettings({ fpsNum: Number($event.id.split('/')[0]), fpsDen: Number($event.id.split('/')[1]) })" />
-			<NcSelect
-				:modelValue="mode"
-				:options="MODES"
-				:clearable="false"
-				:disabled="busy"
-				:inputLabel="t('deliver', 'Show time as')"
-				@update:modelValue="saveSettings({ timecodeMode: $event.id })" />
-			<NcCheckboxRadioSwitch
-				:modelValue="project.allowOlder"
-				:disabled="busy"
-				@update:modelValue="saveSettings({ allowOlder: $event })">
-				{{ t('deliver', 'Members may comment on older Versions') }}
-			</NcCheckboxRadioSwitch>
+			<ProjectSettingsFields :project="project" :disabled="busy" @save="saveSettings" />
 		</section>
 
 		<section v-if="projectId" class="deliver-tab__section">
@@ -287,7 +210,7 @@ async function remove() {
 .deliver-tab {
 	display: flex;
 	flex-direction: column;
-	gap: calc(var(--default-grid-baseline, 4px) * 2);
+	gap: calc(var(--default-grid-baseline) * 2);
 	align-items: flex-start;
 }
 
@@ -298,9 +221,9 @@ async function remove() {
 .deliver-tab__section {
 	display: flex;
 	flex-direction: column;
-	gap: var(--default-grid-baseline, 4px);
+	gap: var(--default-grid-baseline);
 	width: 100%;
 	border-top: 1px solid var(--color-border);
-	padding-top: calc(var(--default-grid-baseline, 4px) * 2);
+	padding-top: calc(var(--default-grid-baseline) * 2);
 }
 </style>

@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Listener;
 
-use OCA\Deliver\Db\Project;
 use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\Version;
 use OCA\Deliver\Db\VersionMapper;
+use OCA\Deliver\Service\Reviewable;
 use OCA\Deliver\Service\StackService;
 use OCA\Files_Trashbin\Events\MoveToTrashEvent;
 use OCA\Files_Trashbin\Events\NodeRestoredEvent;
@@ -57,8 +57,8 @@ class FileEventsListener implements IEventListener {
 
 	/** With Auto Intake a new media file becomes an Asset; without it a Member enables files one by one */
 	private function arrived(Node $node): void {
-		$project = $this->projectOf($node);
-		if ($node instanceof File && $project?->getAutoIntake() === true && $this->isMedia($node)) {
+		$project = $this->projects->findAbove($node);
+		if ($node instanceof File && $project?->getAutoIntake() === true && Reviewable::file($node)) {
 			$this->stacks->intake($project, $node);
 		}
 	}
@@ -71,7 +71,7 @@ class FileEventsListener implements IEventListener {
 			$this->arrived($target);
 			return;
 		}
-		$project = $this->projectOf($target);
+		$project = $this->projects->findAbove($target);
 		if ($project === null || $project->getId() !== $version->getProjectId()) {
 			// Moved out of its Project: Missing there, and perhaps an Asset of another
 			$this->stacks->markMissing($version);
@@ -124,24 +124,5 @@ class FileEventsListener implements IEventListener {
 	/** A file is one Version at most, since Projects never nest */
 	private function versionOf(Node $node): ?Version {
 		return $this->versions->findByFile($node->getId())[0] ?? null;
-	}
-
-	/** The nearest Project at or above a node */
-	private function projectOf(Node $node): ?Project {
-		$folder = $node instanceof Folder ? $node : $node->getParent();
-		for ($depth = 0; $folder instanceof Folder && $depth < 64; $folder = $folder->getParent(), $depth++) {
-			$project = $this->projects->findByFolderId($folder->getId());
-			if ($project !== null) {
-				return $project;
-			}
-			if ($folder->getPath() === '' || $folder->getPath() === '/') {
-				return null;
-			}
-		}
-		return null;
-	}
-
-	private function isMedia(Node $node): bool {
-		return preg_match('#^(video|audio)/#', $node->getMimeType()) === 1;
 	}
 }

@@ -1,4 +1,6 @@
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { isStill } from '../lib/media.js'
+import { sheet } from './panel.js'
 
 /** How long to wait before asking again while derived media is being made */
 const DERIVED_RECHECK = 10000
@@ -27,6 +29,8 @@ export function useReview({ version, projectMode, refresh }) {
 		mode: mode.value,
 		startFrame: version.value?.startFrame ?? 0,
 		dropFrame: version.value?.dropFrame ?? false,
+		/** A still has no time to show (story 95) */
+		still: isStill(version.value),
 	}))
 
 	/**
@@ -37,25 +41,55 @@ export function useReview({ version, projectMode, refresh }) {
 	/** Whether typing set the pin, so emptying the field lets go of it again */
 	let pinnedByTyping = false
 	const anchor = computed(() => pinned.value ?? { inFrame: player.value?.frame ?? 0, outFrame: null })
+	/** Drawing on the picture, and the shapes drawn so far for the next Comment (story 89) */
+	const drawing = ref(false)
+	const draft = ref([])
 	watch(() => version.value?.id, () => {
 		pinned.value = null
 		pinnedByTyping = false
+		drawing.value = false
+		draft.value = []
+		player.value?.clearRange?.()
 	})
 
+	/** Drawing stops the picture and fixes the Frame the Comment goes to */
+	function draw() {
+		if (drawing.value) {
+			drawing.value = false
+			return
+		}
+		player.value?.pause()
+		pinned.value ??= anchor.value
+		drawing.value = true
+	}
+
 	/**
+	 * The field gets the focus once a hidden panel is out; on a phone held
+	 * sideways the list comes out beside the picture for it
+	 *
 	 * @param {{inFrame: number, outFrame: ?number}} where - the Frame or Range to comment on
 	 */
 	function pin(where) {
 		pinnedByTyping = false
 		pinned.value = where
-		panel.value?.focus()
+		sheet.aside.value = true
+		nextTick(() => panel.value?.focus())
 	}
 
 	/**
 	 * @param {{inFrame: number}} comment - the Comment to seek to
 	 */
 	function jump(comment) {
-		player.value?.seekTo(comment.inFrame)
+		// On a phone a list in place of the picture steps down, so the Frame shows above it
+		if (sheet.level.value === 2) {
+			sheet.level.value = 1
+		}
+		panel.value?.reveal(comment.id)
+		if (player.value?.show) {
+			player.value.show(comment)
+		} else {
+			player.value?.seekTo(comment.inFrame)
+		}
 	}
 
 	/**
@@ -64,7 +98,7 @@ export function useReview({ version, projectMode, refresh }) {
 	 */
 	function hold() {
 		if (pinned.value === null) {
-			pinned.value = { inFrame: player.value?.frame ?? 0, outFrame: null }
+			pinned.value = anchor.value
 			pinnedByTyping = true
 		}
 	}
@@ -77,10 +111,33 @@ export function useReview({ version, projectMode, refresh }) {
 		}
 	}
 
+	/** The Range being marked in the player, while it has one (story 107) */
+	const range = computed(() => player.value?.range ?? null)
+
+	/** The Range button: first its start at the Frame on screen, then its end, which pins it */
+	function markRange() {
+		if (range.value === null) {
+			player.value?.markIn()
+			return
+		}
+		player.value.markOut()
+		pin(player.value.range)
+	}
+
+	/** Drops the Range, and a pin on it */
+	function clearRange() {
+		player.value?.clearRange()
+		if (pinned.value && pinned.value.outFrame !== null) {
+			pinned.value = null
+		}
+	}
+
 	/** The pinned anchor is used up once its Comment is posted */
 	function posted() {
 		pinnedByTyping = false
 		pinned.value = null
+		drawing.value = false
+		draft.value = []
 	}
 
 	let recheck = null
@@ -93,5 +150,5 @@ export function useReview({ version, projectMode, refresh }) {
 	}, { immediate: true })
 	onBeforeUnmount(() => clearTimeout(recheck))
 
-	return { player, panel, mode, clock, anchor, pin, hold, release, jump, posted }
+	return { player, panel, mode, clock, anchor, pin, hold, release, jump, posted, drawing, draft, draw, range, markRange, clearRange }
 }

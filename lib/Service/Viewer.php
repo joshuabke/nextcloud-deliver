@@ -20,6 +20,8 @@ final class Viewer {
 		public readonly bool $canComment,
 		/** Comment on a Version that is not the newest in its Stack */
 		public readonly bool $canCommentOnOlder,
+		/** Someone on a Share Link who may comment as soon as they give a name */
+		public readonly bool $canCommentOnceNamed = false,
 	) {
 	}
 
@@ -32,9 +34,13 @@ final class Viewer {
 		return new self(null, $reviewerId, false, $canComment, $canCommentOnOlder);
 	}
 
-	/** Someone on a Share Link who has not given a name yet: reads, but does not write */
-	public static function unnamed(): self {
-		return new self(null, null, false, false, false);
+	/**
+	 * Someone on a Share Link who has not given a name yet: reads, but does
+	 * not write. Where the link takes Comments, the Review view asks for the
+	 * name instead of saying that commenting is off.
+	 */
+	public static function unnamed(bool $shareTakesComments, bool $canCommentOnOlder): self {
+		return new self(null, null, false, false, $canCommentOnOlder, $shareTakesComments);
 	}
 
 	public function owns(Comment $comment): bool {

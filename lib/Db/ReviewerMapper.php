@@ -4,20 +4,14 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Db;
 
-use OCP\AppFramework\Db\QBMapper;
+use OCP\DB\Exception as DbException;
+use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 
-/** @template-extends QBMapper<Reviewer> */
-class ReviewerMapper extends QBMapper {
+/** @template-extends Mapper<Reviewer> */
+class ReviewerMapper extends Mapper {
 	public function __construct(IDBConnection $db) {
 		parent::__construct($db, 'deliver_reviewers', Reviewer::class);
-	}
-
-	public function find(int $id): ?Reviewer {
-		$qb = $this->db->getQueryBuilder();
-		$qb->select('*')->from($this->getTableName())
-			->where($qb->expr()->eq('id', $qb->createNamedParameter($id)));
-		return $this->findEntities($qb)[0] ?? null;
 	}
 
 	/** The key of a Personal Link identifies its Reviewer */
@@ -37,10 +31,51 @@ class ReviewerMapper extends QBMapper {
 		return $this->findEntities($qb);
 	}
 
-	public function deleteByProject(int $projectId): void {
+	/** Remembers that the Reviewer was invited through or came in by this Share Link; once is enough */
+	public function recordLink(int $reviewerId, int $shareId, int $at): void {
 		$qb = $this->db->getQueryBuilder();
-		$qb->delete($this->getTableName())
-			->where($qb->expr()->eq('project_id', $qb->createNamedParameter($projectId)))
+		$qb->insert('deliver_reviewer_links')->values([
+			'reviewer_id' => $qb->createNamedParameter($reviewerId),
+			'share_id' => $qb->createNamedParameter($shareId),
+			'created_at' => $qb->createNamedParameter($at),
+		]);
+		try {
+			$qb->executeStatement();
+		} catch (DbException $e) {
+			if ($e->getReason() !== DbException::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
+				throw $e;
+			}
+		}
+	}
+
+	/**
+	 * @param list<int> $reviewerIds
+	 * @return array<int, list<int>> Share Link id → the Reviewers who came by it
+	 */
+	public function reviewersByLink(array $reviewerIds): array {
+		if ($reviewerIds === []) {
+			return [];
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('reviewer_id', 'share_id')->from('deliver_reviewer_links')
+			->where($qb->expr()->in('reviewer_id', $qb->createNamedParameter($reviewerIds, IQueryBuilder::PARAM_INT_ARRAY)));
+		$result = $qb->executeQuery();
+		$byLink = [];
+		foreach ($result->fetchAll() as $row) {
+			$byLink[(int)$row['share_id']][] = (int)$row['reviewer_id'];
+		}
+		$result->closeCursor();
+		return $byLink;
+	}
+
+	/** @param list<int> $reviewerIds */
+	public function deleteLinks(array $reviewerIds): void {
+		if ($reviewerIds === []) {
+			return;
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete('deliver_reviewer_links')
+			->where($qb->expr()->in('reviewer_id', $qb->createNamedParameter($reviewerIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->executeStatement();
 	}
 }

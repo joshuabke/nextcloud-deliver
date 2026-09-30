@@ -10,8 +10,5 @@ export default defineConfig({
 	globalSetup: './tests/e2e/fixtures.js',
 	timeout: 60000,
 	expect: { timeout: 10000 },
-	use: {
-		baseURL: process.env.DELIVER_TEST_URL ?? 'http://localhost:8080',
-	},
 	reporter: process.env.CI ? 'github' : 'list',
 })

@@ -5,7 +5,7 @@ ARG NEXTCLOUD_VERSION=33
 FROM nextcloud:${NEXTCLOUD_VERSION}-apache
 
 RUN apt-get update \
-	&& apt-get install -y --no-install-recommends ffmpeg va-driver-all \
+	&& apt-get install -y --no-install-recommends ffmpeg va-driver-all vainfo \
 	&& rm -rf /var/lib/apt/lists/*
 
 # The group that owns /dev/dri/renderD128 on the host (`stat -c %g /dev/dri/renderD128`).

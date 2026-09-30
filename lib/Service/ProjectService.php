@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Service;
 
+use OCA\Deliver\Db\ApprovalMapper;
 use OCA\Deliver\Db\AssetMapper;
 use OCA\Deliver\Db\CommentMapper;
 use OCA\Deliver\Db\MuteMapper;
@@ -35,12 +36,15 @@ class ProjectService {
 		private AssetMapper $assets,
 		private VersionMapper $versions,
 		private CommentMapper $comments,
+		private ApprovalMapper $approvals,
 		private MuteMapper $mutes,
 		private StackService $stacks,
 		private DerivedMedia $media,
 		private IRootFolder $root,
 		private IURLGenerator $urls,
 		private ITimeFactory $time,
+		private Members $members,
+		private Authors $authors,
 	) {
 	}
 
@@ -52,7 +56,10 @@ class ProjectService {
 		foreach ($this->projects->findAll() as $project) {
 			$folder = $userFolder->getFirstNodeById($project->getFolderId());
 			if ($folder instanceof Folder) {
-				$result[] = $this->serialize($project, $folder);
+				$result[] = $this->serialize($project, $folder) + [
+					'muted' => $this->mutes->isMuted($project->getId(), $uid),
+					'activity' => $this->activity($project, $uid),
+				];
 			}
 		}
 		return $result;
@@ -74,7 +81,7 @@ class ProjectService {
 		$this->scan($project, $folder);
 		return $this->serialize($project, $folder) + [
 			'muted' => $this->mutes->isMuted($project->getId(), $uid),
-			'assets' => $this->assetTree($project, $folder),
+			'assets' => $this->assetTree($project, $folder, $uid),
 		];
 	}
 
@@ -83,6 +90,18 @@ class ProjectService {
 		[$project] = $this->resolve($uid, $id);
 		$this->mutes->set($project->getId(), $uid, $muted);
 		return ['muted' => $muted];
+	}
+
+	/**
+	 * Who can be @mentioned in this Project (story 90): its Members, by name.
+	 *
+	 * @return list<array{id: string, name: string}>
+	 */
+	public function members(string $uid, int $id): array {
+		[$project] = $this->resolve($uid, $id);
+		$names = $this->authors->names($this->members->of($project->getFolderId()));
+		asort($names, SORT_NATURAL | SORT_FLAG_CASE);
+		return array_map(static fn (string $id, string $name) => ['id' => $id, 'name' => $name], array_keys($names), array_values($names));
 	}
 
 	/**
@@ -187,11 +206,11 @@ class ProjectService {
 		if ($file === null) {
 			throw new NotFoundException('File not found');
 		}
-		if (!$file instanceof File || !$this->isMedia($file)) {
-			throw new ProjectConflictException('Only a video or audio file can be enabled for review');
+		if (!$file instanceof File || !Reviewable::file($file)) {
+			throw new ProjectConflictException('Only a video, audio or picture file can be enabled for review');
 		}
 		$this->assertWritable($file);
-		$project = $this->findProjectForFile($userFolder, $file);
+		$project = $this->projects->findAbove($file);
 		if ($project === null) {
 			$parent = $file->getParent();
 			$this->assertNotNested($userFolder, $parent);
@@ -214,7 +233,7 @@ class ProjectService {
 		if (!$file instanceof File) {
 			throw new NotFoundException('File not found');
 		}
-		$project = $this->findProjectForFile($userFolder, $file);
+		$project = $this->projects->findAbove($file);
 		$version = $project === null ? null : $this->versions->findByProjectAndFile($project->getId(), $fileId);
 		if ($project === null || $version === null) {
 			throw new NotFoundException('File is not enabled for review');
@@ -238,11 +257,7 @@ class ProjectService {
 	 * @throws NotFoundException the Version is gone or its Project folder is out of reach
 	 */
 	public function viewerForVersion(string $uid, int $versionId): array {
-		$version = $this->versions->find($versionId);
-		if ($version === null) {
-			throw new NotFoundException('Version not found');
-		}
-		[$project, $folder] = $this->resolve($uid, $version->getProjectId());
+		[$version, $project, $folder] = $this->reachVersion($uid, $versionId);
 		return [Viewer::member($uid, $this->canWrite($folder), (bool)$project->getAllowOlder()), $version];
 	}
 
@@ -277,16 +292,45 @@ class ProjectService {
 
 	/**
 	 * @return array{0: Version, 1: Project, 2: Folder}
+	 * @throws NotFoundException the Version is gone or its Project folder is out of reach
+	 */
+	private function reachVersion(string $uid, int $versionId): array {
+		$version = $this->versions->find($versionId) ?? throw new NotFoundException('Version not found');
+		return [$version, ...$this->resolve($uid, $version->getProjectId())];
+	}
+
+	/**
+	 * @return array{0: Version, 1: Project, 2: Folder}
 	 * @throws AccessDeniedException the folder is read-only for this user
 	 */
 	private function writableVersion(string $uid, int $versionId): array {
-		$version = $this->versions->find($versionId);
-		if ($version === null) {
-			throw new NotFoundException('Version not found');
-		}
-		[$project, $folder] = $this->resolve($uid, $version->getProjectId());
+		$reached = $this->reachVersion($uid, $versionId);
+		$this->assertWritable($reached[2]);
+		return $reached;
+	}
+
+	/**
+	 * Sets or clears an Asset's Due Date (story 93). A new date earns new reminders.
+	 *
+	 * @param ?string $dueDate YYYY-MM-DD, or null for none
+	 * @throws InvalidRequestException not a calendar day
+	 */
+	public function setDueDate(string $uid, int $assetId, ?string $dueDate): array {
+		$asset = $this->assets->find($assetId) ?? throw new NotFoundException('Asset not found');
+		[, $folder] = $this->resolve($uid, $asset->getProjectId());
 		$this->assertWritable($folder);
-		return [$version, $project, $folder];
+		if ($dueDate !== null) {
+			$day = \DateTimeImmutable::createFromFormat('!Y-m-d', $dueDate);
+			if ($day === false || $day->format('Y-m-d') !== $dueDate) {
+				throw new InvalidRequestException('A Due Date is a day like 2026-10-31');
+			}
+		}
+		if ($asset->getDueDate() !== $dueDate) {
+			$asset->setDueDate($dueDate);
+			$asset->setDueReminded(null);
+			$this->assets->update($asset);
+		}
+		return ['id' => $asset->getId(), 'dueDate' => $asset->getDueDate()];
 	}
 
 	/** Regenerates the derived media of a Version (story 80) */
@@ -303,21 +347,14 @@ class ProjectService {
 	 * @throws NotFoundException the Version is gone or its Project folder is out of reach
 	 */
 	public function versionContext(string $uid, int $versionId): array {
-		$version = $this->versions->find($versionId);
-		if ($version === null) {
-			throw new NotFoundException('Version not found');
-		}
-		[$project, $folder] = $this->resolve($uid, $version->getProjectId());
-		$asset = $this->assets->find($version->getAssetId());
-		if ($asset === null) {
-			throw new NotFoundException('Asset not found');
-		}
+		[$version, $project, $folder] = $this->reachVersion($uid, $versionId);
+		$asset = $this->assets->find($version->getAssetId()) ?? throw new NotFoundException('Asset not found');
 		$stack = array_reverse($this->versions->findByAsset($asset->getId()));
 		$name = $this->stacks->nameOf($asset);
 		return [
 			'versionId' => $versionId,
 			'project' => $this->serialize($project, $folder),
-			'asset' => ['id' => $asset->getId(), 'name' => $name],
+			'asset' => ['id' => $asset->getId(), 'name' => $name, 'dueDate' => $asset->getDueDate()],
 			'versions' => array_map(fn (Version $each) => $this->versionPayload($each, $project, $folder, $uid), $stack),
 		];
 	}
@@ -364,11 +401,13 @@ class ProjectService {
 				'den' => $version->getFpsDen() ?? $project->getFpsDen(),
 			],
 			'startFrame' => $version->getStartFrame() ?? 0,
+			// Known once probed; the player uses it before the media element has loaded
+			'durationFrames' => $version->getDurationFrames(),
 			'dropFrame' => (bool)$version->getDropFrame(),
 			// False when browsers cannot play the original, null while nobody knows yet
 			'playable' => $version->getPlayable(),
 			// Audio without a picture, once ffprobe has looked; null before
-			'audioOnly' => $version->getPlayable() === null ? null : !$version->getHasVideo(),
+			'audioOnly' => $version->getPlayable() === null ? null : !$version->getHasVideo() && (bool)$version->getHasAudio(),
 			'width' => $version->getWidth(),
 			'height' => $version->getHeight(),
 			// The short side in pixels, as in "1080p"
@@ -406,10 +445,7 @@ class ProjectService {
 	 * @throws AccessDeniedException the folder is read-only for this user
 	 */
 	public function disableAsset(string $uid, int $assetId): void {
-		$asset = $this->assets->find($assetId);
-		if ($asset === null) {
-			throw new NotFoundException('Asset not found');
-		}
+		$asset = $this->assets->find($assetId) ?? throw new NotFoundException('Asset not found');
 		[$project, $folder] = $this->resolve($uid, $asset->getProjectId());
 		$this->assertWritable($folder);
 		foreach ($this->versions->findByAsset($assetId) as $version) {
@@ -453,25 +489,6 @@ class ProjectService {
 		}
 	}
 
-	/** The nearest Project at or above the file's folder, in this user's view */
-	private function findProjectForFile(Folder $userFolder, File $file): ?Project {
-		$top = rtrim($userFolder->getPath(), '/') . '/';
-		for ($node = $file->getParent(); $node instanceof Folder; $node = $node->getParent()) {
-			if (!str_starts_with(rtrim($node->getPath(), '/') . '/', $top)) {
-				return null;
-			}
-			$project = $this->projects->findByFolderId($node->getId());
-			if ($project !== null) {
-				return $project;
-			}
-		}
-		return null;
-	}
-
-	private function isMedia(Node $node): bool {
-		return preg_match('#^(video|audio)/#', $node->getMimeType()) === 1;
-	}
-
 	/**
 	 * The Project and its folder as this user sees it; the folder's
 	 * permissions are the Project's permissions (ADR 0002).
@@ -492,13 +509,13 @@ class ProjectService {
 		return [$project, $folder];
 	}
 
-	public function canWrite(Node $node): bool {
+	public static function canWrite(Node $node): bool {
 		return ($node->getPermissions() & Constants::PERMISSION_UPDATE) !== 0;
 	}
 
 	/** @throws AccessDeniedException the node is read-only for this user */
-	private function assertWritable(Node $node): void {
-		if (!$this->canWrite($node)) {
+	public static function assertWritable(Node $node): void {
+		if (!self::canWrite($node)) {
 			throw new AccessDeniedException('Write permission is required');
 		}
 	}
@@ -594,24 +611,22 @@ class ProjectService {
 	private function mediaFiles(Folder $folder): \Generator {
 		foreach ($folder->getDirectoryListing() as $node) {
 			if ($node instanceof Folder) {
-				if ($this->projects->findByFolderId($node->getId()) === null) {
+				if ($node->getName() !== Reviewable::ATTACHMENTS && $this->projects->findByFolderId($node->getId()) === null) {
 					yield from $this->mediaFiles($node);
 				}
-			} elseif ($node instanceof File && $this->isMedia($node)) {
+			} elseif ($node instanceof File && Reviewable::file($node)) {
 				yield $node;
 			}
 		}
 	}
 
 	/** @return list<array<string, mixed>> the Assets with their Version Stacks, newest Version first */
-	private function assetTree(Project $project, Folder $folder): array {
-		$versionsByAsset = [];
-		$versionIds = [];
-		foreach ($this->versions->findByProject($project->getId()) as $version) {
-			$versionsByAsset[$version->getAssetId()][] = $version;
-			$versionIds[] = $version->getId();
-		}
+	private function assetTree(Project $project, Folder $folder, string $uid): array {
+		[$versionsByAsset, $versionIds] = $this->stacks($project);
 		$commentCounts = $this->comments->countByVersions($versionIds);
+		$approvalCounts = $this->approvals->countByVersions($versionIds);
+		$unseen = $this->comments->countUnseenByVersions($versionIds, $uid);
+		$latestComments = $this->comments->latestByVersions($versionIds);
 		$result = [];
 		foreach ($this->assets->findByProject($project->getId()) as $asset) {
 			$stack = $versionsByAsset[$asset->getId()] ?? [];
@@ -632,9 +647,10 @@ class ProjectService {
 					'state' => $version->getState(),
 					'name' => $version->getName(),
 					'mimeType' => $file?->getMimeType(),
-					'size' => $file?->getSize(),
 					'autoStacked' => (bool)$version->getAutoStacked(),
 					'comments' => $commentCounts[$version->getId()] ?? 0,
+					'unseen' => $unseen[$version->getId()] ?? 0,
+					'approvals' => $approvalCounts[$version->getId()],
 					// Queued or running derived media, with the running job's progress
 					'processing' => array_intersect(
 						[$version->getProxyState(), $version->getThumbsState(), $version->getWaveformState()],
@@ -647,11 +663,68 @@ class ProjectService {
 				'name' => $this->stacks->nameOf($asset),
 				'path' => $path ?? '',
 				'parentId' => $asset->getParentId(),
+				'dueDate' => $asset->getDueDate(),
+				// For sorting: when its first Version arrived, and when anything last happened on it
+				'createdAt' => min(array_map(static fn (Version $version) => $version->getCreatedAt(), $stack)),
+				'lastActivity' => max(array_map(
+					static fn (Version $version) => max($version->getCreatedAt(), $latestComments[$version->getId()] ?? 0),
+					$stack,
+				)),
 				'versions' => $versions,
 			];
 		}
 		usort($result, static fn (array $a, array $b) => [$a['path'], $a['name']] <=> [$b['path'], $b['name']]);
 		return $result;
+	}
+
+	/** @return array{0: array<int, non-empty-list<Version>>, 1: list<int>} the Version Stacks by Asset id, newest Version first, and all their ids */
+	private function stacks(Project $project): array {
+		$versionsByAsset = [];
+		$versionIds = [];
+		foreach ($this->versions->findByProject($project->getId()) as $version) {
+			$versionsByAsset[$version->getAssetId()][] = $version;
+			$versionIds[] = $version->getId();
+		}
+		return [$versionsByAsset, $versionIds];
+	}
+
+	/**
+	 * A Project's state at a glance, for its tile in the Project list: its
+	 * Unseen Comments, what waits for changes, the next Due Date, the latest
+	 * activity and the newest video for a picture.
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function activity(Project $project, string $uid): array {
+		[$versionsByAsset, $versionIds] = $this->stacks($project);
+		$newest = array_values(array_map(static fn (array $stack) => $stack[0], $versionsByAsset));
+		$approvals = $this->approvals->countByVersions(array_map(static fn (Version $version) => $version->getId(), $newest));
+		$dueDates = [];
+		foreach ($this->assets->findByProject($project->getId()) as $asset) {
+			$dueDates[$asset->getId()] = $asset->getDueDate();
+		}
+		$changes = 0;
+		$nextDue = null;
+		foreach ($newest as $version) {
+			$decided = $approvals[$version->getId()];
+			$changes += $decided['changes'] > 0 ? 1 : 0;
+			$due = $dueDates[$version->getAssetId()] ?? null;
+			if ($due !== null && !ApprovalService::isApproved($decided) && ($nextDue === null || $due < $nextDue)) {
+				$nextDue = $due;
+			}
+		}
+		// The latest arrival first, for the tile's picture
+		usort($newest, static fn (Version $a, Version $b) => $b->getCreatedAt() <=> $a->getCreatedAt());
+		$videos = array_filter($newest, static fn (Version $version) => $version->getState() === Version::STATE_READY && $version->getHasVideo());
+		$latestComments = $this->comments->latestByVersions($versionIds);
+		return [
+			'assets' => count($newest),
+			'unseenComments' => array_sum($this->comments->countUnseenByVersions($versionIds, $uid)),
+			'changes' => $changes,
+			'nextDue' => $nextDue,
+			'lastActivity' => max($project->getCreatedAt(), ($newest[0] ?? null)?->getCreatedAt() ?? 0, ...array_values($latestComments)),
+			'still' => (array_values($videos)[0] ?? null)?->getFileId(),
+		];
 	}
 
 	private function serialize(Project $project, Folder $folder): array {

@@ -73,21 +73,44 @@ class ShareReviewTest extends TestCase {
 		$plainToken = $plain['data']['token'];
 
 		$asVisitor = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $plainToken);
-		self::assertSame(404, $asVisitor->page(), 'sharing a file that is enabled in Deliver stays an ordinary share');
+		self::assertSame(404, $asVisitor->raw('')['status'], 'sharing a file that is enabled in Deliver stays an ordinary share');
 		self::assertSame(404, $asVisitor->call('GET', '/api/context?versionId=' . $this->versionId)['status']);
 
 		$this->nc->ocsForm('DELETE', "/ocs/v2.php/apps/files_sharing/api/v1/shares/{$plain['data']['id']}");
 	}
 
 	public function testReviewCanBeSwitchedOffAgain(): void {
-		self::assertSame(200, $this->reviewer()->page(), 'review is on, so the page opens');
+		self::assertSame(200, $this->reviewer()->raw('')['status'], 'review is on, so the page opens');
 
 		$this->setFlags(['review' => false]);
-		self::assertSame(404, $this->reviewer()->page(), 'switched off, the same link shows nothing of Deliver');
+		self::assertSame(404, $this->reviewer()->raw('')['status'], 'switched off, the same link shows nothing of Deliver');
 		self::assertSame(404, $this->reviewer()->call('GET', '/api/context?versionId=' . $this->versionId)['status']);
 
 		$this->setFlags(['review' => true]);
-		self::assertSame(200, $this->reviewer()->page());
+		self::assertSame(200, $this->reviewer()->raw('')['status']);
+	}
+
+	public function testTheWatermarkIsAFlagOfTheLink(): void {
+		$context = fn () => $this->reviewer()->call('GET', '/api/context?versionId=' . $this->versionId)['data']['flags'];
+		self::assertFalse($context()['watermark'], 'off unless asked for');
+		$this->setFlags(['watermark' => true]);
+		self::assertTrue($context()['watermark']);
+		$listed = $this->nc->ocs('GET', "/files/{$this->nc->fileId($this->root)}/shares")['data'];
+		self::assertTrue($listed[0]['watermark'], 'the sidebar shows the switch on');
+	}
+
+	public function testAReviewerAttachesToTheirComment(): void {
+		$asReviewer = $this->reviewer();
+		$asReviewer->call('POST', '/api/reviewer', ['name' => 'Mara']);
+		$comment = $this->comment($asReviewer, ['inFrame' => 3, 'body' => 'like this frame']);
+
+		$attached = $asReviewer->raw("/api/comments/{$comment['id']}/attachments", 'mood.jpg', 'jpeg bytes');
+		self::assertSame(201, $attached['status'], $attached['body']);
+		$id = json_decode($attached['body'], true)['attachments'][0]['id'];
+
+		$fetched = $asReviewer->raw("/attachments/$id");
+		self::assertSame([200, 'jpeg bytes'], [$fetched['status'], $fetched['body']]);
+		self::assertSame(404, $asReviewer->raw('/attachments/999999999')['status']);
 	}
 
 	public function testReviewerNamesThemselvesBeforeCommenting(): void {
@@ -96,6 +119,9 @@ class ShareReviewTest extends TestCase {
 		$context = $asReviewer->call('GET', '/api/context?versionId=' . $this->versionId);
 		self::assertSame(200, $context['status'], json_encode($context['data']));
 		self::assertSame('unnamed', $context['data']['me']['type'], 'nobody has said who they are yet');
+		// The Review view asks for the name, rather than saying commenting is off
+		$listed = $asReviewer->call('GET', "/api/versions/{$this->versionId}/comments");
+		self::assertTrue($listed['data']['canComment'], 'commenting is on, once there is a name');
 		self::assertSame('cut', $context['data']['asset']['name']);
 
 		$refused = $asReviewer->call('POST', "/api/versions/{$this->versionId}/comments", ['inFrame' => 10, 'body' => 'who am I']);
@@ -152,7 +178,7 @@ class ShareReviewTest extends TestCase {
 		self::assertSame(200, $protected['status'], json_encode($protected['data']));
 
 		$asReviewer = $this->reviewer();
-		self::assertSame(303, $asReviewer->page(), 'the page sends the Reviewer to the share\'s password prompt');
+		self::assertSame(303, $asReviewer->raw('')['status'], 'the page sends the Reviewer to the share\'s password prompt');
 		self::assertSame(404, $asReviewer->call('GET', '/api/context?versionId=' . $this->versionId)['status'], 'the API answers nothing until the password is given');
 	}
 
@@ -208,5 +234,74 @@ class ShareReviewTest extends TestCase {
 		$url = (string)$context['data']['versions'][0]['url'];
 		self::assertStringContainsString('/media/', $url, 'without a Proxy the original still plays, but through Deliver');
 		self::assertStringNotContainsString('/dav/', $url);
+	}
+
+	public function testAProjectListsItsLinksAndWhoCameByThem(): void {
+		$fileLink = $this->nc->ocs('POST', "/files/{$this->nc->fileId("{$this->root}/cut.mp4")}/shares");
+		self::assertSame(201, $fileLink['status'], json_encode($fileLink['data']));
+		$invited = $this->nc->ocs('POST', "/shares/{$this->shareId}/reviewers", ['name' => 'Kim']);
+		self::assertSame(201, $invited['status'], json_encode($invited['data']));
+		// A Reviewer who names themselves on the file's link came by that one
+		$walkIn = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $fileLink['data']['token']);
+		self::assertSame(201, $walkIn->call('POST', '/api/reviewer', ['name' => 'Lea'])['status']);
+
+		$listed = $this->nc->ocs('GET', "/projects/{$this->projectId}/shares");
+		self::assertSame(200, $listed['status'], json_encode($listed['data']));
+		$links = array_column($listed['data']['links'], null, 'id');
+		self::assertSame([$this->root, true], [$links[$this->shareId]['name'], $links[$this->shareId]['isProject']]);
+		self::assertSame(['cut.mp4', false, '/' . $this->root], [$links[$fileLink['data']['id']]['name'], $links[$fileLink['data']['id']]['isProject'], $links[$fileLink['data']['id']]['dir']]);
+
+		$reviewers = array_column($listed['data']['reviewers'], null, 'name');
+		self::assertSame([$reviewers['Kim']['id']], $links[$this->shareId]['reviewerIds'], 'invited through the folder link');
+		self::assertSame([$reviewers['Lea']['id']], $links[$fileLink['data']['id']]['reviewerIds'], 'named themselves on the file link');
+		$kimLinks = array_column($reviewers['Kim']['links'], 'url', 'shareId');
+		self::assertStringContainsString($fileLink['data']['token'], $kimLinks[$fileLink['data']['id']], 'every Reviewer has a Personal Link through every review link');
+	}
+
+	public function testAMemberEditsAReviewerAndRenewsTheirLink(): void {
+		$invited = $this->nc->ocs('POST', "/shares/{$this->shareId}/reviewers", ['name' => 'Kim']);
+		$id = $invited['data']['id'];
+		$edited = $this->nc->ocs('PUT', "/reviewers/$id", ['name' => 'Kim Kunde', 'email' => 'kim@example.com', 'mailVersions' => true]);
+		self::assertSame(200, $edited['status'], json_encode($edited['data']));
+		self::assertSame(['Kim Kunde', 'kim@example.com', true], [$edited['data']['name'], $edited['data']['email'], $edited['data']['mail']['versions']]);
+
+		$renewed = $this->nc->ocs('POST', "/reviewers/$id/key");
+		self::assertSame(200, $renewed['status'], json_encode($renewed['data']));
+		self::assertNotSame($invited['data']['key'], $renewed['data']['key']);
+		$old = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $this->token);
+		self::assertSame('unnamed', $old->call('GET', "/api/context?versionId={$this->versionId}&r=" . $invited['data']['key'])['data']['me']['type'], 'the old Personal Link names nobody any more');
+	}
+
+	public function testTheReviewButtonOpensTheVersionOfTheFileItSitsOn(): void {
+		$this->nc->put("{$this->root}/cut_v2.mp4", 'the second cut');
+		$stack = array_column($this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'], 'versions', 'name')['cut'];
+		self::assertSame(['cut_v2.mp4', 'cut.mp4'], array_column($stack, 'name'), 'the new file stacks on the old one');
+
+		$listed = $this->reviewer()->call('GET', '/api/assets');
+		self::assertSame(200, $listed['status'], json_encode($listed['data']));
+		$byFile = array_column($listed['data'], null, 'fileId');
+		self::assertSame($stack[1]['id'], $byFile[$stack[1]['fileId']]['versionId'], 'Review on the first cut opens the first cut');
+		self::assertSame($stack[0]['id'], $byFile[$stack[1]['fileId']]['newestId'], 'and knows the newest');
+	}
+
+	public function testAReviewersOwnRightsGoOverThoseOfTheLink(): void {
+		$invited = $this->nc->ocs('POST', "/shares/{$this->shareId}/reviewers", ['name' => 'Kim']);
+		$key = $invited['data']['key'];
+		$asKim = $this->reviewer();
+		$post = fn () => $asKim->call('POST', "/api/versions/{$this->versionId}/comments?r=$key", ['inFrame' => 1, 'body' => 'hi'])['status'];
+		$rights = fn (array $rights) => $this->nc->ocs('PUT', "/reviewers/{$invited['data']['id']}", ['name' => 'Kim', 'rights' => $rights]);
+
+		self::assertSame(201, $post(), 'the link lets Reviewers comment');
+		self::assertSame([false, null], [$rights(['canComment' => false])['data']['rights']['canComment'], $rights(['canComment' => false])['data']['rights']['watermark']]);
+		self::assertSame(403, $post(), 'Kim may not, whatever the link says');
+		self::assertFalse($asKim->call('GET', "/api/context?versionId={$this->versionId}&r=$key")['data']['flags']['canComment']);
+
+		$this->setFlags(['canComment' => false]);
+		$rights(['canComment' => true, 'watermark' => true]);
+		self::assertSame(201, $post(), 'Kim may, though the link does not let anyone else');
+		self::assertTrue($asKim->call('GET', "/api/context?versionId={$this->versionId}&r=$key")['data']['flags']['watermark']);
+
+		$rights([]);
+		self::assertSame(403, $post(), 'without rights of their own, the link decides again');
 	}
 }

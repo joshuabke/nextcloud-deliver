@@ -2,22 +2,39 @@
 import menuIcon from '@mdi/svg/svg/chevron-down.svg?raw'
 import caretIcon from '@mdi/svg/svg/chevron-up.svg?raw'
 import closeIcon from '@mdi/svg/svg/close.svg?raw'
+import moreIcon from '@mdi/svg/svg/dots-horizontal.svg?raw'
 import fullscreenExitIcon from '@mdi/svg/svg/fullscreen-exit.svg?raw'
 import fullscreenIcon from '@mdi/svg/svg/fullscreen.svg?raw'
 import pauseIcon from '@mdi/svg/svg/pause.svg?raw'
 import playIcon from '@mdi/svg/svg/play.svg?raw'
 import loopIcon from '@mdi/svg/svg/repeat.svg?raw'
+import stepBackIcon from '@mdi/svg/svg/step-backward.svg?raw'
+import stepForwardIcon from '@mdi/svg/svg/step-forward.svg?raw'
 import volumeIcon from '@mdi/svg/svg/volume-high.svg?raw'
 import mutedIcon from '@mdi/svg/svg/volume-off.svg?raw'
 import { t } from '@nextcloud/l10n'
+import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
+import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcDateTime from '@nextcloud/vue/components/NcDateTime'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import DrawingLayer from './DrawingLayer.vue'
+import DrawToolbar from './DrawToolbar.vue'
+import { useFullscreen } from '../composables/fullscreen.js'
+import { useGestures } from '../composables/gestures.js'
+import { COLORS, drawingsAt } from '../lib/drawing.js'
+import { DOUBLE_TAP_MS } from '../lib/gestures.js'
 import { actionFor } from '../lib/hotkeys.js'
 import { formatAt, fpsValue, frameToTime, MODES, timeToFrame } from '../lib/timecode.js'
+import { watermarkTile } from '../lib/watermark.js'
+import { useCommentsStore } from '../store/comments.js'
+
+/** The drawing being made for the next Comment */
+const draft = defineModel('draft', { type: Array, default: () => [] })
 
 const props = defineProps({
 	/** The Version to play, with its URLs and frame rate */
@@ -27,16 +44,24 @@ const props = defineProps({
 	/** How time is shown: { fps, mode, startFrame, dropFrame } */
 	clock: { type: Object, required: true },
 	canComment: { type: Boolean, default: false },
+	/** Text shown across the picture on a Share Link that asks for it (story 94) */
+	watermark: { type: String, default: null },
+	/** Whether the pointer draws on the picture (story 89) */
+	drawing: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['comment', 'jump', 'update:mode'])
+const emit = defineEmits(['comment', 'jump', 'swipe', 'update:mode', 'update:drawing'])
 
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2]
 
+/** For the Comments' numbers, the same as in the list */
+const store = useCommentsStore()
 const root = ref(null)
 const video = ref(null)
 const muted = ref(false)
-const fullscreen = ref(false)
+/** On a phone the bar is shorter and the picture answers to fingers */
+const isMobile = useIsMobile()
+const { fullscreen, filling, toggle: toggleFullscreen } = useFullscreen(root)
 const frame = ref(0)
 const durationFrames = ref(0)
 const playing = ref(false)
@@ -67,19 +92,104 @@ const strip = ref(null)
 /** The Waveform, one value per slice of the timeline */
 const peaks = ref([])
 const hover = ref(null)
+const scrubber = ref(null)
+/** The Comment whose card shows over the bar, and where */
+const peek = ref(null)
+
+/** Half the card's width, to keep it inside the player */
+const PEEK_HALF = 160
+
+/**
+ * @param {object} comment - the Comment under the pointer
+ * @param {Event} event - hovering or focusing its avatar
+ */
+function showPeek(comment, event) {
+	const box = scrubber.value.getBoundingClientRect()
+	const marker = event.currentTarget.getBoundingClientRect()
+	const centre = marker.left + marker.width / 2 - box.left
+	peek.value = { comment, left: Math.min(box.width - PEEK_HALF - 4, Math.max(PEEK_HALF + 4, centre)) }
+}
+const tool = ref('pen')
+const color = ref(COLORS[0])
+/** The picture's own size, for placing drawings on it */
+const picture = ref({ width: 0, height: 0 })
+/** Drawings of the Comments on this Frame, while the picture stands still */
+const shownDrawings = computed(() => playing.value || props.drawing
+	? []
+	: drawingsAt(props.comments, frame.value).map((comment) => comment.annotation))
 
 const position = computed(() => formatAt(frame.value, props.clock))
 const duration = computed(() => formatAt(durationFrames.value, props.clock))
 const range = computed(() => inPoint.value === null ? null : { inFrame: inPoint.value, outFrame: outPoint.value })
 const progress = computed(() => durationFrames.value ? (frame.value / durationFrames.value) * 100 : 0)
 
-defineExpose({ seekTo, frame })
+defineExpose({ seekTo, frame, pause, range, markIn, markOut, clearRange })
+
+/** What a gesture did, shown for a moment over the picture */
+const flash = ref(null)
+let flashTimer = null
+
+/**
+ * @param {string} text - what to show
+ * @param {number} side - -1 on the left, 1 on the right, 0 in the middle
+ */
+function showFlash(text, side = 0) {
+	clearTimeout(flashTimer)
+	flash.value = { text, side }
+	flashTimer = setTimeout(() => {
+		flash.value = null
+	}, 600)
+}
+
+/** The speed and state to go back to when a held finger lifts */
+let beforeHold = null
+
+const JUMP_SECONDS = 5
+
+/** Touch on the picture (story 104); drawing takes the fingers for itself */
+const { zoom, touched, reset: resetZoom, listeners: gestures } = useGestures({
+	// A card opened from a marker only closes; otherwise on a phone a tap goes in and out of fullscreen, as in the Frame.io app
+	tap: () => {
+		if (peek.value?.tapped) {
+			peek.value = null
+		} else if (isMobile.value) {
+			toggleFullscreen()
+		} else {
+			playPause()
+		}
+	},
+	doubleTap: (side) => {
+		if (side === 0) {
+			return
+		}
+		seekTo(frame.value + side * Math.round(JUMP_SECONDS * fpsValue(fps.value)))
+		showFlash(side < 0 ? t('deliver', '−{seconds} s', { seconds: JUMP_SECONDS }) : t('deliver', '+{seconds} s', { seconds: JUMP_SECONDS }), side)
+	},
+	holdStart: () => {
+		beforeHold = { playing: playing.value, speed: speed.value }
+		speed.value = 2
+		play()
+		showFlash('2×')
+	},
+	holdEnd: () => {
+		if (beforeHold) {
+			setSpeed(beforeHold.speed)
+			if (!beforeHold.playing) {
+				pause()
+			}
+			beforeHold = null
+		}
+	},
+	swipe: (step) => emit('swipe', step),
+}, computed(() => !props.drawing))
 
 watch(() => props.version.id, async (id) => {
 	pause()
 	useProxy.value = false
 	resumeAt = null
 	frame.value = 0
+	// The server knows the length already; the media element confirms it once it loads
+	durationFrames.value = props.version.durationFrames ?? 0
 	inPoint.value = null
 	outPoint.value = null
 	loop.value = false
@@ -87,6 +197,7 @@ watch(() => props.version.id, async (id) => {
 	strip.value = null
 	peaks.value = []
 	hover.value = null
+	resetZoom()
 	const [loadedStrip, loadedPeaks] = await Promise.all([loadStrip(), loadWaveform()])
 	// A later Version may have been opened in the meantime
 	if (props.version.id === id) {
@@ -98,13 +209,6 @@ watch(() => props.version.id, async (id) => {
 watch(source, () => {
 	unplayable.value = false
 })
-
-/** Switches between the original and the Proxy at the same Frame */
-function toggleSource() {
-	resumeAt = frame.value
-	pause()
-	useProxy.value = !useProxy.value
-}
 
 /**
  * @return {Promise<object|null>} the tile grid of the Thumbnail Strip, for hover previews
@@ -167,6 +271,165 @@ function onHover(event) {
 	const at = frameAt(event)
 	const box = event.currentTarget.getBoundingClientRect()
 	hover.value = { frame: at, left: event.clientX - box.left, tile: tileFor(at) }
+	peekFrame(at)
+}
+
+/*
+ * The exact Frame under the pointer, as Frame.io shows it: a hidden second
+ * video, the lighter Proxy where there is one, seeks there and is copied
+ * into a canvas. One seek at a time; the pointer's latest Frame goes next.
+ * Until the first copy, the Thumbnail Strip's nearest picture stands in.
+ */
+const scrubVideo = ref(null)
+const scrubCanvas = ref(null)
+const scrubSource = computed(() => props.version.audioOnly ? null : (proxy.value ?? source.value))
+/** Whether the canvas holds a Frame from this hover */
+const scrubDrawn = ref(false)
+const scrubSize = ref({ width: 176, height: 99 })
+let scrubBusy = false
+let scrubWanted = null
+
+/**
+ * @param {number} at - the Frame to show
+ */
+function peekFrame(at) {
+	scrubWanted = at
+	if (!scrubBusy) {
+		nextScrub()
+	}
+}
+
+/** Sends the hidden video to the Frame asked for last */
+function nextScrub() {
+	const element = scrubVideo.value
+	if (scrubWanted === null || !element || element.readyState < 1) {
+		scrubBusy = false
+		return
+	}
+	scrubBusy = true
+	element.currentTime = frameToTime(scrubWanted, fps.value)
+	scrubWanted = null
+}
+
+/** The hidden video knows its size: the canvas takes its shape */
+function onScrubLoaded() {
+	const element = scrubVideo.value
+	if (element.videoWidth) {
+		scrubSize.value = { width: 176, height: Math.round(176 * element.videoHeight / element.videoWidth) }
+	}
+	nextScrub()
+}
+
+/** The hidden video stands on the Frame: copy it and go on to the next */
+function onScrubSeeked() {
+	scrubCanvas.value?.getContext('2d')?.drawImage(scrubVideo.value, 0, 0, scrubSize.value.width, scrubSize.value.height)
+	scrubDrawn.value = true
+	nextScrub()
+}
+
+/** Set while a finger drags along the bar */
+const dragging = ref(false)
+
+/**
+ * A finger on the bar scrubs as the mouse hovers: the exact Frame shows
+ * above it, and the player goes there when it lifts (story 105).
+ *
+ * @param {PointerEvent} event - a finger or pen comes down on the bar
+ */
+function onDragStart(event) {
+	if (event.pointerType === 'mouse' || !durationFrames.value) {
+		return
+	}
+	pause()
+	dragging.value = true
+	event.currentTarget.setPointerCapture(event.pointerId)
+	onHover(event)
+}
+
+/**
+ * The mouse hovers and a finger drags; a tap leaves no hover behind, not
+ * even through the mouse events a touch browser sends after it
+ *
+ * @param {PointerEvent} event - the pointer moves
+ */
+function onPointerMove(event) {
+	if (event.pointerType === 'mouse' || dragging.value) {
+		onHover(event)
+	}
+}
+
+/** The finger lifts: the player goes to the Frame it showed */
+function onDragEnd() {
+	if (!dragging.value) {
+		return
+	}
+	dragging.value = false
+	if (hover.value) {
+		seekTo(hover.value.frame)
+	}
+	leaveScrubber()
+}
+
+/**
+ * The card over a marker follows the mouse and the keyboard; a finger opens it with a tap, below
+ *
+ * @param {object} comment - the marker's Comment
+ * @param {PointerEvent|FocusEvent} event - the pointer entering, or focus
+ */
+function peekAt(comment, event) {
+	if (event.pointerType === 'mouse' || (event.type === 'focus' && event.currentTarget.matches(':focus-visible'))) {
+		showPeek(comment, event)
+	}
+}
+
+/** Whether the last press on a marker was a finger's or a pen's */
+let tappedMarker = false
+
+/**
+ * @param {PointerEvent} event - a press on a marker
+ */
+function pressMarker(event) {
+	tappedMarker = event.pointerType !== 'mouse'
+}
+
+/** The last tap on a marker, to tell a double tap */
+let lastTap = { id: null, at: 0 }
+
+/**
+ * A marker clicked goes to its Frame, through the view's jump. A tap only opens its card, to be read
+ * also in fullscreen, until it is tapped away or playback starts; a double
+ * tap goes to the Frame.
+ *
+ * @param {object} comment - the marker's Comment
+ * @param {MouseEvent} event - the click
+ */
+function openMarker(comment, event) {
+	const again = lastTap.id === comment.id && event.timeStamp - lastTap.at < DOUBLE_TAP_MS
+	lastTap = { id: comment.id, at: event.timeStamp }
+	if (!tappedMarker || again) {
+		emit('jump', comment)
+	}
+	if (tappedMarker) {
+		showPeek(comment, event)
+		peek.value.tapped = true
+	}
+}
+
+watch(playing, (now) => {
+	if (now && peek.value?.tapped) {
+		peek.value = null
+	}
+})
+
+/** The pointer left the bar */
+function leaveScrubber() {
+	hover.value = null
+	// A card opened by a tap stays until it is tapped away
+	if (!peek.value?.tapped) {
+		peek.value = null
+	}
+	scrubDrawn.value = false
+	scrubWanted = null
 }
 
 /**
@@ -198,7 +461,8 @@ const waveformPoints = computed(() => {
 	if (peaks.value.length === 0) {
 		return ''
 	}
-	const loudest = Math.max(0.05, ...peaks.value)
+	// Scaled to its loudest peak, but near-silence stays a thin line rather than a band
+	const loudest = Math.max(0.15, ...peaks.value)
 	const step = 100 / peaks.value.length
 	const height = (peak) => (peak / loudest) * 48
 	const top = peaks.value.map((peak, i) => `${(i * step).toFixed(3)},${(50 - height(peak)).toFixed(2)}`)
@@ -206,28 +470,13 @@ const waveformPoints = computed(() => {
 	return [...top, ...bottom].join(' ')
 })
 
-/** Follows the browser's own fullscreen state, which Escape also leaves */
-function onFullscreenChange() {
-	fullscreen.value = document.fullscreenElement === root.value
-}
-
-/** The whole player goes fullscreen, controls and timeline included */
-function toggleFullscreen() {
-	if (fullscreen.value) {
-		document.exitFullscreen()
-	} else {
-		root.value?.requestFullscreen()
-	}
-}
-
 onMounted(() => {
 	window.addEventListener('keydown', onKey)
-	document.addEventListener('fullscreenchange', onFullscreenChange)
 })
 onBeforeUnmount(() => {
 	window.removeEventListener('keydown', onKey)
-	document.removeEventListener('fullscreenchange', onFullscreenChange)
 	stopReverse()
+	clearTimeout(flashTimer)
 })
 
 /** Follows the media element, and sends a looped Range back to its in Frame */
@@ -351,24 +600,33 @@ function onKey(event) {
 		stepBack: () => step(-1),
 		shuttleForward: () => shuttle(1),
 		shuttleBack: () => shuttle(-1),
-		markIn: () => {
-			inPoint.value = frame.value
-			if (outPoint.value !== null && outPoint.value < frame.value) {
-				outPoint.value = null
-			}
-		},
-		markOut: () => {
-			outPoint.value = Math.max(frame.value, inPoint.value ?? 0)
-			inPoint.value ??= frame.value
-		},
+		markIn,
+		markOut,
 		comment,
-		clearRange: () => {
-			inPoint.value = null
-			outPoint.value = null
-			loop.value = false
-		},
+		clearRange,
 	}
 	actions[action]()
+}
+
+/** I, or the Range button: the Range starts here */
+function markIn() {
+	inPoint.value = frame.value
+	if (outPoint.value !== null && outPoint.value < frame.value) {
+		outPoint.value = null
+	}
+}
+
+/** O, or the Range button again: the Range ends here */
+function markOut() {
+	outPoint.value = Math.max(frame.value, inPoint.value ?? 0)
+	inPoint.value ??= frame.value
+}
+
+/** Escape, or the Range's ✕ */
+function clearRange() {
+	inPoint.value = null
+	outPoint.value = null
+	loop.value = false
 }
 
 /** C, or the Comment button: the Range if one is set, else the current Frame */
@@ -388,6 +646,7 @@ function scrub(event) {
 /** The media element knows the length once its metadata is in */
 function onLoaded() {
 	durationFrames.value = timeToFrame(video.value.duration, fps.value)
+	picture.value = { width: video.value.videoWidth, height: video.value.videoHeight }
 	if (resumeAt !== null) {
 		seekTo(resumeAt)
 		resumeAt = null
@@ -413,6 +672,15 @@ function widthOf(anchor) {
 	return ((anchor.outFrame - anchor.inFrame + 1) / durationFrames.value) * 100
 }
 
+/** A click right after a finger lifted was that finger's tap, handled already */
+function onVideoClick() {
+	if (touched.value) {
+		touched.value = false
+		return
+	}
+	playPause()
+}
+
 /** The time display: timecode, frame counter or seconds (story 22) */
 const MODE_LABELS = {
 	smpte: t('deliver', 'Timecode'),
@@ -425,38 +693,83 @@ const sources = computed(() => [
 	{ proxy: false, label: t('deliver', 'Original'), resolution: props.version.resolution },
 	{ proxy: true, label: t('deliver', 'Proxy'), resolution: props.version.derived?.proxy?.resolution },
 ])
+const currentSource = computed(() => sources.value.find((each) => each.proxy === useProxy.value))
 
 /**
+ * @param {{label: string, resolution: ?number}} each - one of the sources
+ * @return {string} its name in the quality menu, with its height when known
+ */
+function sourceLabel(each) {
+	return each.resolution ? each.label + ' · ' + each.resolution + 'p' : each.label
+}
+
+/**
+ * Switches between the original and the Proxy at the same Frame
+ *
  * @param {boolean} wanted - whether the Proxy should play
  */
 function pickSource(wanted) {
 	if (wanted !== useProxy.value) {
-		toggleSource()
+		resumeAt = frame.value
+		pause()
+		useProxy.value = wanted
 	}
 }
 
 /** Loops the Range when one is set, else the whole Version */
 const loopsWhole = computed(() => loop.value && outPoint.value === null)
+const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') : t('deliver', 'Loop the Range'))
 </script>
 
 <template>
-	<div ref="root" class="deliver-player" :class="{ 'deliver-player--fullscreen': fullscreen }">
-		<div class="deliver-player__stage">
-			<video
-				v-if="source"
-				ref="video"
-				class="deliver-player__video"
-				:src="source"
-				:muted="muted"
-				:loop="loopsWhole"
-				preload="metadata"
-				@loadedmetadata="onLoaded"
-				@timeupdate="onTimeUpdate"
-				@play="playing = true"
-				@pause="playing = reverse !== null"
-				@ended="pause"
-				@error="unplayable = true"
-				@click="playPause" />
+	<div
+		ref="root"
+		class="deliver-player"
+		:class="{ 'deliver-player--fullscreen': fullscreen, 'deliver-player--filling': filling, 'deliver-player--mobile': isMobile }">
+		<div class="deliver-player__stage" v-on="gestures">
+			<!-- Two fingers zoom the picture and its drawings together -->
+			<div
+				class="deliver-player__zoom"
+				:style="zoom.scale > 1 ? { transform: `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})` } : null">
+				<video
+					v-if="source"
+					ref="video"
+					class="deliver-player__video"
+					:src="source"
+					:muted="muted"
+					:loop="loopsWhole"
+					playsinline
+					preload="metadata"
+					@loadedmetadata="onLoaded"
+					@timeupdate="onTimeUpdate"
+					@play="playing = true"
+					@pause="playing = reverse !== null"
+					@ended="pause"
+					@error="unplayable = true"
+					@click="onVideoClick" />
+				<DrawingLayer
+					v-if="source && !version.audioOnly"
+					v-model:draft="draft"
+					:pictureWidth="picture.width"
+					:pictureHeight="picture.height"
+					:shown="shownDrawings"
+					:editing="drawing"
+					:tool="tool"
+					:color="color" />
+			</div>
+			<div
+				v-if="flash"
+				class="deliver-player__flash"
+				:class="`deliver-player__flash--${flash.side < 0 ? 'left' : flash.side > 0 ? 'right' : 'middle'}`">
+				{{ flash.text }}
+			</div>
+			<div v-if="watermark" class="deliver-player__watermark" :style="{ backgroundImage: watermarkTile(watermark) }" />
+			<DrawToolbar
+				v-if="drawing"
+				v-model:tool="tool"
+				v-model:color="color"
+				v-model:draft="draft"
+				@done="emit('update:drawing', false)" />
 			<!-- Audio has no picture, so its Waveform takes the stage -->
 			<div v-if="version.audioOnly && peaks.length" class="deliver-player__sound" @click="scrub">
 				<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
@@ -487,61 +800,211 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 			</p>
 		</div>
 
-		<div
-			class="deliver-player__timeline"
-			@click="scrub"
-			@mousemove="onHover"
-			@mouseleave="hover = null">
-			<div class="deliver-player__track">
-				<div class="deliver-player__progress" :style="{ width: progress + '%' }" />
-				<div
-					v-if="range"
-					class="deliver-player__range"
-					:style="{ left: leftOf(range) + '%', width: widthOf(range) + '%' }" />
-				<div
-					v-for="each in comments.filter((c) => c.outFrame !== null)"
-					:key="'r' + each.id"
-					class="deliver-player__span"
-					:style="{ left: leftOf(each) + '%', width: widthOf(each) + '%' }" />
+		<!-- The bar, its Comments and, on hover, its Waveform and a thicker bar to follow thumbnails -->
+		<div ref="scrubber" class="deliver-player__scrubber" @mouseleave="leaveScrubber">
+			<video
+				v-if="scrubSource"
+				ref="scrubVideo"
+				class="deliver-player__scrub-video"
+				:src="scrubSource"
+				muted
+				playsinline
+				preload="metadata"
+				aria-hidden="true"
+				@loadedmetadata="onScrubLoaded"
+				@seeked="onScrubSeeked" />
+			<div
+				class="deliver-player__timeline"
+				@click="scrub"
+				@pointerdown="onDragStart"
+				@pointermove="onPointerMove"
+				@pointerup="onDragEnd"
+				@pointercancel="onDragEnd">
+				<div class="deliver-player__track">
+					<div class="deliver-player__progress" :style="{ width: progress + '%' }" />
+					<div
+						v-if="range"
+						class="deliver-player__range"
+						:style="{ left: leftOf(range) + '%', width: widthOf(range) + '%' }" />
+					<div
+						v-for="each in comments.filter((c) => c.outFrame !== null)"
+						:key="'r' + each.id"
+						class="deliver-player__span"
+						:style="{ left: leftOf(each) + '%', width: widthOf(each) + '%' }" />
+				</div>
+				<!-- While a finger drags, the playhead follows it -->
+				<div class="deliver-player__playhead" :style="{ left: dragging && hover ? hover.left + 'px' : progress + '%' }" />
+				<div v-show="hover" class="deliver-player__hover" :style="{ left: (hover?.left ?? 0) + 'px' }">
+					<canvas
+						v-show="scrubDrawn"
+						ref="scrubCanvas"
+						class="deliver-player__tile"
+						:width="scrubSize.width"
+						:height="scrubSize.height" />
+					<div v-if="hover?.tile && !scrubDrawn" class="deliver-player__tile" :style="hover.tile" />
+					<span v-if="hover" class="deliver-player__hover-time">{{ formatAt(hover.frame, clock) }}</span>
+				</div>
 			</div>
-			<div v-if="hover" class="deliver-player__hover" :style="{ left: hover.left + 'px' }">
-				<div v-if="hover.tile" class="deliver-player__tile" :style="hover.tile" />
-				<span class="deliver-player__hover-time">{{ formatAt(hover.frame, clock) }}</span>
+
+			<!-- One avatar per Comment, centred under its Frame; hovering shows the Comment -->
+			<div class="deliver-player__markers">
+				<svg
+					v-if="peaks.length && !version.audioOnly"
+					class="deliver-player__waveform"
+					viewBox="0 0 100 100"
+					preserveAspectRatio="none"
+					aria-hidden="true">
+					<polygon :points="waveformPoints" />
+				</svg>
+				<button
+					v-for="each in comments"
+					:key="each.id"
+					type="button"
+					class="deliver-player__marker"
+					:class="{ 'deliver-player__marker--resolved': each.resolved }"
+					:style="{ left: leftOf(each) + '%' }"
+					:aria-label="each.author.name + ': ' + each.body"
+					@pointerdown="pressMarker"
+					@pointerenter="peekAt(each, $event)"
+					@pointerleave="$event.pointerType === 'mouse' && (peek = null)"
+					@focus="peekAt(each, $event)"
+					@blur="peek?.tapped || (peek = null)"
+					@click="openMarker(each, $event)">
+					<NcAvatar
+						:user="each.author.type === 'user' ? each.author.id : undefined"
+						:displayName="each.author.name"
+						:isNoUser="each.author.type !== 'user'"
+						:size="20"
+						hideStatus
+						disableMenu
+						disableTooltip />
+				</button>
+				<div
+					v-if="peek"
+					class="deliver-player__peek"
+					:class="{ 'deliver-player__peek--tapped': peek.tapped }"
+					:style="{ left: peek.left + 'px' }"
+					@click="peek = null">
+					<NcAvatar
+						:user="peek.comment.author.type === 'user' ? peek.comment.author.id : undefined"
+						:displayName="peek.comment.author.name"
+						:isNoUser="peek.comment.author.type !== 'user'"
+						:size="32"
+						hideStatus
+						disableMenu
+						disableTooltip />
+					<div class="deliver-player__peek-content">
+						<div class="deliver-player__peek-head">
+							<strong>{{ peek.comment.author.name }}</strong>
+							<NcDateTime :timestamp="peek.comment.createdAt * 1000" relativeTime="short" />
+							<span class="deliver-player__peek-number">#{{ store.numbers.get(peek.comment.id) }}</span>
+						</div>
+						<p>
+							<span class="deliver-player__peek-time">{{ formatAt(peek.comment.inFrame, clock) }}</span>
+							{{ peek.comment.body }}
+						</p>
+					</div>
+				</div>
 			</div>
 		</div>
 
-		<!-- One avatar per Comment, where it sits on the timeline -->
-		<div class="deliver-player__markers">
-			<button
-				v-for="each in comments"
-				:key="each.id"
-				type="button"
-				class="deliver-player__marker"
-				:class="{ 'deliver-player__marker--resolved': each.resolved }"
-				:style="{ left: leftOf(each) + '%' }"
-				:title="each.author.name + ': ' + each.body"
-				@click="seekTo(each.inFrame); emit('jump', each)">
-				<NcAvatar
-					:user="each.author.type === 'user' ? each.author.id : undefined"
-					:displayName="each.author.name"
-					:isNoUser="each.author.type !== 'user'"
-					:size="20"
-					hideStatus
-					disableMenu
-					disableTooltip />
-			</button>
+		<!-- A phone: Frame steps around Play, the rest of the settings in one menu -->
+		<div v-if="isMobile" class="deliver-player__controls">
+			<div class="deliver-player__group">
+				<NcButton
+					variant="tertiary"
+					:disabled="!source"
+					:aria-label="t('deliver', 'One Frame back')"
+					@click="step(-1)">
+					<template #icon>
+						<NcIconSvgWrapper :svg="stepBackIcon" />
+					</template>
+				</NcButton>
+				<NcButton
+					variant="tertiary"
+					:disabled="!source"
+					:aria-label="playing ? t('deliver', 'Pause') : t('deliver', 'Play')"
+					@click="playPause">
+					<template #icon>
+						<NcIconSvgWrapper :svg="playing ? pauseIcon : playIcon" />
+					</template>
+				</NcButton>
+				<NcButton
+					variant="tertiary"
+					:disabled="!source"
+					:aria-label="t('deliver', 'One Frame forward')"
+					@click="step(1)">
+					<template #icon>
+						<NcIconSvgWrapper :svg="stepForwardIcon" />
+					</template>
+				</NcButton>
+			</div>
+
+			<div class="deliver-player__group deliver-player__group--center">
+				<span class="deliver-player__timecode deliver-player__timecode--plain">{{ position }}</span>
+			</div>
+
+			<div class="deliver-player__group deliver-player__group--end">
+				<NcButton
+					variant="tertiary"
+					:aria-label="muted ? t('deliver', 'Sound on') : t('deliver', 'Mute')"
+					@click="muted = !muted">
+					<template #icon>
+						<NcIconSvgWrapper :svg="muted ? mutedIcon : volumeIcon" />
+					</template>
+				</NcButton>
+				<NcActions variant="tertiary" :aria-label="t('deliver', 'Playback settings')">
+					<template #icon>
+						<NcIconSvgWrapper :svg="moreIcon" />
+					</template>
+					<NcActionButton :modelValue="loop" type="checkbox" @click="loop = !loop">
+						{{ loopLabel }}
+					</NcActionButton>
+					<NcActionSeparator />
+					<NcActionButton
+						v-for="rate in SPEEDS"
+						:key="rate"
+						:modelValue="Math.abs(speed) === rate"
+						type="radio"
+						closeAfterClick
+						@click="setSpeed(rate)">
+						{{ t('deliver', 'Speed {rate}×', { rate }) }}
+					</NcActionButton>
+					<template v-if="original && proxy">
+						<NcActionSeparator />
+						<NcActionButton
+							v-for="each in sources"
+							:key="each.label"
+							:modelValue="useProxy === each.proxy"
+							type="radio"
+							closeAfterClick
+							@click="pickSource(each.proxy)">
+							{{ sourceLabel(each) }}
+						</NcActionButton>
+					</template>
+					<NcActionSeparator />
+					<NcActionButton
+						v-for="each in MODES"
+						:key="each"
+						:modelValue="clock.mode === each"
+						type="radio"
+						closeAfterClick
+						@click="emit('update:mode', each)">
+						{{ MODE_LABELS[each] }}
+					</NcActionButton>
+				</NcActions>
+				<NcButton
+					variant="tertiary"
+					:aria-label="fullscreen ? t('deliver', 'Leave fullscreen') : t('deliver', 'Fullscreen')"
+					@click="toggleFullscreen">
+					<template #icon>
+						<NcIconSvgWrapper :svg="fullscreen ? fullscreenExitIcon : fullscreenIcon" />
+					</template>
+				</NcButton>
+			</div>
 		</div>
 
-		<svg
-			v-if="peaks.length && !version.audioOnly"
-			class="deliver-player__waveform"
-			viewBox="0 0 100 100"
-			preserveAspectRatio="none"
-			aria-hidden="true">
-			<polygon :points="waveformPoints" />
-		</svg>
-
-		<div class="deliver-player__controls">
+		<div v-else class="deliver-player__controls">
 			<div class="deliver-player__group">
 				<NcButton
 					variant="tertiary"
@@ -556,8 +1019,8 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 				<NcButton
 					variant="tertiary"
 					:pressed="loop"
-					:aria-label="range?.outFrame != null ? t('deliver', 'Loop the Range') : t('deliver', 'Loop')"
-					:title="range?.outFrame != null ? t('deliver', 'Loop the Range') : t('deliver', 'Loop')"
+					:aria-label="loopLabel"
+					:title="loopLabel"
 					@click="loop = !loop">
 					<template #icon>
 						<NcIconSvgWrapper :svg="loopIcon" />
@@ -609,15 +1072,15 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 						type="button"
 						:aria-label="t('deliver', 'Clear the Range (Esc)')"
 						:title="t('deliver', 'Clear the Range (Esc)')"
-						@click="inPoint = null; outPoint = null; loop = false">
+						@click="clearRange">
 						<NcIconSvgWrapper :svg="closeIcon" :size="16" inline />
 					</button>
 				</div>
 				<NcActions
 					v-if="original && proxy"
 					variant="tertiary"
-					class="deliver-player__quality"
-					:menuName="(useProxy ? version.derived.proxy.resolution : version.resolution) ? (useProxy ? version.derived.proxy.resolution : version.resolution) + 'p' : t('deliver', 'Original')"
+					class="deliver-player__quality deliver-caret-after"
+					:menuName="currentSource.resolution ? currentSource.resolution + 'p' : currentSource.label"
 					:aria-label="t('deliver', 'Quality')">
 					<template #icon>
 						<NcIconSvgWrapper :svg="menuIcon" :size="18" />
@@ -629,7 +1092,7 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 						type="radio"
 						closeAfterClick
 						@click="pickSource(each.proxy)">
-						{{ each.resolution ? each.label + ' · ' + each.resolution + 'p' : each.label }}
+						{{ sourceLabel(each) }}
 					</NcActionButton>
 				</NcActions>
 				<NcButton
@@ -652,6 +1115,10 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	flex-direction: column;
 	height: 100%;
 	background: var(--color-main-background);
+	/* Holding a finger down plays faster; it must not select text or open the callout */
+	user-select: none;
+	-webkit-user-select: none;
+	-webkit-touch-callout: none;
 }
 
 /* The picture on black, as large as the room allows, in its own shape */
@@ -659,7 +1126,43 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	position: relative;
 	flex: 1;
 	min-height: 160px;
+	overflow: hidden;
 	background: #000;
+	/* Fingers are the player's: no page scrolling or browser zoom on the picture */
+	touch-action: none;
+}
+
+/* What a double tap or a hold did, for a moment */
+.deliver-player__flash {
+	position: absolute;
+	top: 50%;
+	z-index: 2;
+	padding: 6px 14px;
+	border-radius: var(--border-radius-pill);
+	background: rgba(0, 0, 0, 0.6);
+	color: #fff;
+	font-size: 15px;
+	font-weight: bold;
+	transform: translate(-50%, -50%);
+	pointer-events: none;
+}
+
+.deliver-player__flash--left {
+	left: 20%;
+}
+
+.deliver-player__flash--middle {
+	left: 50%;
+}
+
+.deliver-player__flash--right {
+	left: 80%;
+}
+
+.deliver-player__zoom {
+	position: absolute;
+	inset: 0;
+	transform-origin: center;
 }
 
 .deliver-player__video {
@@ -673,7 +1176,7 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 
 .deliver-player__sound {
 	position: absolute;
-	inset: 15% calc(4 * var(--default-grid-baseline, 4px));
+	inset: 15% calc(4 * var(--default-grid-baseline));
 	cursor: pointer;
 }
 
@@ -699,6 +1202,13 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	pointer-events: none;
 }
 
+/* Over the picture and the drawings, under the tools; the pointer goes through */
+.deliver-player__watermark {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+}
+
 .deliver-player__notice {
 	position: absolute;
 	inset: 0;
@@ -706,30 +1216,84 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	align-items: center;
 	justify-content: center;
 	margin: 0;
-	padding: calc(4 * var(--default-grid-baseline, 4px));
+	padding: calc(4 * var(--default-grid-baseline));
 	text-align: center;
 	color: var(--color-text-maxcontrast);
 }
 
-/* A thin line across the whole width; taller to the pointer than to the eye */
+/* A thin line across the whole width; on hover it grows, to follow thumbnails. Inset so markers at either end stay whole */
+.deliver-player__scrubber {
+	position: relative;
+	margin-inline: 12px;
+}
+
 .deliver-player__timeline {
 	position: relative;
-	height: 12px;
+	height: 16px;
 	cursor: pointer;
+	/* A finger drags along the bar instead of scrolling the page */
+	touch-action: none;
+}
+
+/* On a phone the bar is taller for a finger, and the playhead has a knob to take hold of */
+.deliver-player--mobile .deliver-player__timeline {
+	height: 32px;
+}
+
+.deliver-player--mobile .deliver-player__track {
+	top: 13px;
+	height: 6px;
+}
+
+.deliver-player--mobile .deliver-player__playhead::after {
+	content: '';
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	background: #fff;
+	transform: translate(-50%, -50%);
 }
 
 .deliver-player__track {
 	position: absolute;
 	inset-inline: 0;
-	top: 4px;
+	top: 6px;
 	height: 4px;
 	background: rgba(255, 255, 255, 0.14);
-	transition: height 0.1s, top 0.1s;
+	transition: height 0.12s, top 0.12s;
 }
 
-.deliver-player__timeline:hover .deliver-player__track {
-	top: 3px;
-	height: 6px;
+.deliver-player__scrubber:hover .deliver-player__track {
+	top: 2px;
+	height: 12px;
+}
+
+/* Where the player stands: a white line, right above the centre of an avatar on that Frame */
+.deliver-player__playhead {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 2px;
+	margin-inline-start: -1px;
+	border-radius: 1px;
+	background: #fff;
+	pointer-events: none;
+}
+
+/* The Waveform, faint, behind the avatars */
+.deliver-player__waveform {
+	position: absolute;
+	inset: 2px 0;
+	width: 100%;
+	height: calc(100% - 4px);
+	pointer-events: none;
+}
+
+.deliver-player__waveform polygon {
+	fill: rgba(255, 255, 255, 0.16);
 }
 
 .deliver-player__progress {
@@ -763,25 +1327,32 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	z-index: 1;
 }
 
+.deliver-player__scrub-video {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+	pointer-events: none;
+}
+
 .deliver-player__tile {
 	border: 2px solid #fff;
-	border-radius: var(--border-radius, 4px);
+	border-radius: var(--border-radius);
 	background-color: #000;
 }
 
 .deliver-player__hover-time {
 	padding: 1px 6px;
-	border-radius: var(--border-radius, 4px);
+	border-radius: var(--border-radius);
 	background: rgba(0, 0, 0, 0.85);
 	color: #fff;
-	font-family: var(--font-face-monospace, monospace);
+	font-family: monospace;
 	font-size: 12px;
 }
 
 .deliver-player__markers {
 	position: relative;
 	height: 28px;
-	border-bottom: 1px solid var(--color-border);
 }
 
 /* The resets keep Nextcloud's button style away */
@@ -789,18 +1360,23 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	position: absolute;
 	top: 2px;
 	min-height: 0;
+	z-index: 1;
+	/* Two quick taps are a double tap here, not a zoom */
+	touch-action: manipulation;
 	width: 24px;
 	height: 24px;
-	margin: 0 0 0 -12px;
+	margin: 0;
 	padding: 0;
 	border: 2px solid var(--color-main-background);
 	border-radius: 50%;
 	background: none;
 	cursor: pointer;
+	/* Centred on its Frame; a negative margin loses against Nextcloud's button style */
+	transform: translateX(-50%);
 }
 
 .deliver-player__marker:hover {
-	z-index: 1;
+	z-index: 2;
 	border-color: var(--color-main-text);
 }
 
@@ -808,23 +1384,79 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	opacity: 0.45;
 }
 
-.deliver-player__waveform {
-	display: block;
-	width: 100%;
-	height: 28px;
-	border-bottom: 1px solid var(--color-border);
+/* The Comment under the pointer, as a card over the bar */
+.deliver-player__peek {
+	position: absolute;
+	bottom: calc(100% + 22px);
+	z-index: 2;
+	display: flex;
+	gap: 10px;
+	width: 320px;
+	padding: 12px 14px;
+	border: 1px solid var(--color-border-dark);
+	border-radius: var(--border-radius-large);
+	background: var(--deliver-card, #19191c);
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+	transform: translateX(-50%);
+	pointer-events: none;
 }
 
-.deliver-player__waveform polygon {
-	fill: rgba(255, 255, 255, 0.3);
+/* Opened by a tap, it is tapped away */
+.deliver-player__peek--tapped {
+	pointer-events: auto;
+}
+
+.deliver-player__peek-content {
+	flex: 1;
+	min-width: 0;
+}
+
+.deliver-player__peek-head {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	color: var(--color-text-maxcontrast);
+	font-size: 13px;
+}
+
+.deliver-player__peek-head strong {
+	overflow: hidden;
+	color: var(--color-main-text);
+	font-size: 15px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.deliver-player__peek-number {
+	margin-inline-start: auto;
+}
+
+.deliver-player__peek p {
+	display: -webkit-box;
+	margin: 6px 0 0;
+	overflow: hidden;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 3;
+	line-height: 1.6;
+	overflow-wrap: anywhere;
+}
+
+.deliver-player__peek-time {
+	margin-inline-end: 4px;
+	padding: 2px 6px;
+	border-radius: var(--border-radius);
+	background: rgba(245, 197, 24, 0.16);
+	color: #f5c518;
+	font-family: monospace;
+	font-size: 13px;
 }
 
 .deliver-player__controls {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 	align-items: center;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
-	padding: var(--default-grid-baseline, 4px) calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
+	padding: var(--default-grid-baseline) calc(2 * var(--default-grid-baseline));
 }
 
 .deliver-player__group {
@@ -841,10 +1473,10 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 .deliver-player__timecode {
 	display: flex;
 	align-items: center;
-	padding-inline-start: calc(3 * var(--default-grid-baseline, 4px));
-	border-radius: var(--border-radius-element, 8px);
+	padding-inline-start: calc(3 * var(--default-grid-baseline));
+	border-radius: var(--border-radius-element);
 	background: var(--color-background-dark);
-	font-family: var(--font-face-monospace, monospace);
+	font-family: monospace;
 	font-size: 16px;
 	letter-spacing: 0.04em;
 }
@@ -854,9 +1486,9 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	align-items: center;
 	gap: 2px;
 	padding: 2px 4px 2px 10px;
-	border-radius: var(--border-radius-pill, 20px);
+	border-radius: var(--border-radius-pill);
 	background: var(--color-primary-element-light);
-	font-family: var(--font-face-monospace, monospace);
+	font-family: monospace;
 	font-size: 13px;
 }
 
@@ -883,11 +1515,20 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 	font-weight: normal;
 }
 
-.deliver-player__quality :deep(.button-vue__wrapper) {
-	flex-direction: row-reverse;
-}
-
 .deliver-player--fullscreen {
 	background: #000;
+}
+
+/* Fullscreen without the browser's help: the player covers the window */
+.deliver-player--filling {
+	position: fixed;
+	inset: 0;
+	padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+	z-index: 10000;
+}
+
+.deliver-player__timecode--plain {
+	padding: 2px 8px;
+	font-size: 15px;
 }
 </style>

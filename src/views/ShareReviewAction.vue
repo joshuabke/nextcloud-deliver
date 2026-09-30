@@ -22,49 +22,50 @@ const props = defineProps({
 const reviewable = ref(false)
 const initial = computed(() => {
 	const attribute = (key) => props.share?.attributes?.find((each) => each.scope === 'deliver' && each.key === key)?.value
-	return { review: attribute('review') === true, canComment: attribute('comment') !== false }
+	return { review: attribute('review') === true, canComment: attribute('comment') !== false, watermark: attribute('watermark') === true }
 })
-const review = ref(initial.value.review)
-const canComment = ref(initial.value.canComment)
+/** The flags as switched here, saved with the share if they differ */
+const flags = ref({ ...initial.value })
 
 onMounted(async () => {
 	const fileid = props.node?.fileid
-	try {
-		await (props.node?.type === 'folder' ? getProjectForFolder(fileid) : getAssetForFile(fileid))
-		reviewable.value = true
-	} catch {
-		reviewable.value = false
-	}
+	reviewable.value = await (props.node?.type === 'folder' ? getProjectForFolder(fileid) : getAssetForFile(fileid)).then(() => true, () => false)
 	props.onSave?.(async () => {
 		const id = props.share?.id
-		if (!reviewable.value || !id || (review.value === initial.value.review && canComment.value === initial.value.canComment)) {
+		const changed = Object.keys(flags.value).some((key) => flags.value[key] !== initial.value[key])
+		if (!reviewable.value || !id || !changed) {
 			return
 		}
-		await setShareFlags(id, { review: review.value, canComment: canComment.value })
+		await setShareFlags(id, flags.value)
 	})
 })
 </script>
 
 <template>
 	<div v-if="reviewable" class="deliver-share-review">
-		<NcCheckboxRadioSwitch v-model="review" type="switch">
+		<NcCheckboxRadioSwitch v-model="flags.review" type="switch">
 			{{ t('deliver', 'Review in Deliver') }}
 		</NcCheckboxRadioSwitch>
 		<p class="deliver-share-review__hint">
-			{{ review
+			{{ flags.review
 				? t('deliver', 'People with this link get a Review button and can leave frame-accurate Comments.')
 				: t('deliver', 'An ordinary link: people see and play the files, but no Comments.') }}
 		</p>
-		<NcCheckboxRadioSwitch v-if="review" v-model="canComment">
-			{{ t('deliver', 'Reviewers may comment') }}
-		</NcCheckboxRadioSwitch>
+		<template v-if="flags.review">
+			<NcCheckboxRadioSwitch v-model="flags.canComment">
+				{{ t('deliver', 'Reviewers may comment') }}
+			</NcCheckboxRadioSwitch>
+			<NcCheckboxRadioSwitch v-model="flags.watermark">
+				{{ t('deliver', 'Watermark with the Reviewer\'s name') }}
+			</NcCheckboxRadioSwitch>
+		</template>
 	</div>
 </template>
 
 <style scoped>
 .deliver-share-review__hint {
-	margin: 0 0 var(--default-grid-baseline, 4px);
-	padding-inline-start: calc(var(--default-clickable-area, 34px) + var(--default-grid-baseline, 4px));
+	margin: 0 0 var(--default-grid-baseline);
+	padding-inline-start: calc(var(--default-clickable-area) + var(--default-grid-baseline));
 	color: var(--color-text-maxcontrast);
 }
 </style>

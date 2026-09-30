@@ -111,7 +111,7 @@ class DerivedMedia {
 			}
 			$this->running = ['job' => $job, 'seconds' => $this->durationSeconds($version), 'percent' => 0, 'written' => 0];
 			match ($job->getKind()) {
-				Job::KIND_PROBE => $this->runProbe($version, $path),
+				Job::KIND_PROBE => Reviewable::image($file->getMimeType()) ? $this->measureImage($version, $path) : $this->runProbe($version, $path),
 				Job::KIND_PROXY => $this->runProxy($version, $path),
 				Job::KIND_THUMBS => $this->runThumbs($version, $path),
 				Job::KIND_WAVEFORM => $this->runWaveform($version, $path),
@@ -137,8 +137,6 @@ class DerivedMedia {
 		if ($probed === null) {
 			throw new \RuntimeException('ffprobe could not read this file');
 		}
-		$this->versions->update($version);
-
 		$playable = $this->browserPlays($probed);
 		$version->setPlayable($playable);
 		$this->versions->update($version);
@@ -152,6 +150,21 @@ class DerivedMedia {
 		if ($version->getHasAudio()) {
 			$this->enqueue($version->getId(), Job::KIND_WAVEFORM);
 		}
+	}
+
+	/**
+	 * A still needs no ffprobe and no derived media: its size is all there is
+	 * to know, and it is one Frame long, so every Comment anchors to Frame 0.
+	 */
+	private function measureImage(Version $version, string $path): void {
+		$size = @getimagesize($path);
+		$version->setWidth($size === false ? 0 : $size[0]);
+		$version->setHeight($size === false ? 0 : $size[1]);
+		$version->setDurationFrames(1);
+		$version->setHasVideo(false);
+		$version->setHasAudio(false);
+		$version->setPlayable(true);
+		$this->versions->update($version);
 	}
 
 	/**
@@ -411,7 +424,7 @@ class DerivedMedia {
 
 	/** Deletes the derived media and open jobs of a Version */
 	public function forget(int $versionId): void {
-		$this->jobs->deleteByVersion($versionId);
+		$this->jobs->deleteBy('version_id', $versionId);
 		$version = $this->versions->find($versionId);
 		if ($version !== null) {
 			$version->setProxyState(self::STATE_NONE);
@@ -425,14 +438,6 @@ class DerivedMedia {
 		} catch (NotFoundException) {
 			// nothing was generated
 		}
-	}
-
-	/** @return array{states: array<string, int>, lastError: ?string} for the admin panel */
-	public function status(): array {
-		return [
-			'states' => $this->jobs->countByState(),
-			'lastError' => $this->jobs->findLastFailed()?->getStderrTail(),
-		];
 	}
 
 	public function maxHeight(): int {
@@ -451,12 +456,8 @@ class DerivedMedia {
 	}
 
 	private function fileOf(Version $version): ?File {
-		foreach ($this->root->getById($version->getFileId()) as $node) {
-			if ($node instanceof File) {
-				return $node;
-			}
-		}
-		return null;
+		$node = $this->root->getFirstNodeById($version->getFileId());
+		return $node instanceof File ? $node : null;
 	}
 
 	/** Sets the state of one kind on the Version; a failure also records its error */

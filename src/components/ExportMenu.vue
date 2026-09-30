@@ -17,6 +17,8 @@ const props = defineProps({
 	versionId: { type: Number, required: true },
 	/** Audio gets the formats of audio workstations, video those of editing applications */
 	audioOnly: { type: Boolean, default: false },
+	/** A still has no timeline, so only the list makes sense (story 95) */
+	still: { type: Boolean, default: false },
 })
 
 const VIDEO_FORMATS = [
@@ -35,18 +37,13 @@ const AUDIO_FORMATS = [
 const unresolvedOnly = ref(false)
 const zeroBased = ref(false)
 const liveSetInput = ref(null)
-const formats = computed(() => props.audioOnly ? AUDIO_FORMATS : VIDEO_FORMATS)
+const formats = computed(() => props.still ? VIDEO_FORMATS.filter((format) => format.id === 'csv') : props.audioOnly ? AUDIO_FORMATS : VIDEO_FORMATS)
 
-/** @return {URLSearchParams} the options every export takes */
+/** @return {URLSearchParams} the options every export takes, those switched on */
 function options() {
-	const query = new URLSearchParams()
-	if (unresolvedOnly.value) {
-		query.set('unresolvedOnly', '1')
-	}
-	if (zeroBased.value) {
-		query.set('zeroBased', '1')
-	}
-	return query
+	return new URLSearchParams(Object.entries({ unresolvedOnly: unresolvedOnly.value, zeroBased: zeroBased.value })
+		.filter(([, on]) => on)
+		.map(([name]) => [name, '1']))
 }
 
 /**
@@ -54,9 +51,7 @@ function options() {
  * @return {string} the download URL with the chosen options
  */
 function href(format) {
-	const url = generateUrl('/apps/deliver/versions/{id}/export/{format}', { id: props.versionId, format })
-	const query = options()
-	return query.size ? `${url}?${query}` : url
+	return generateUrl('/apps/deliver/versions/{id}/export/{format}', { id: props.versionId, format }) + '?' + options()
 }
 
 /**

@@ -34,13 +34,18 @@ class Notifier implements INotifier {
 		}
 		$l = $this->l10n->get(Application::APP_ID, $languageCode);
 		$p = $notification->getSubjectParameters();
-		$where = ['{asset}' => $p['asset'] ?? '', '{number}' => $p['number'] ?? ''];
+		$where = ['{asset}' => $p['asset'], '{number}' => $p['number']];
 		$subject = match ($notification->getSubject()) {
 			NotificationService::COMMENT => $l->t('{author} commented on {asset}, Version {number}'),
 			NotificationService::REPLY => $l->t('{author} replied on {asset}, Version {number}'),
 			NotificationService::VERSION => $l->t('New Version {number} of {asset}'),
 			NotificationService::AUTO_STACK => $l->t('{file} was stacked as Version {number} of {asset}, going by its name'),
 			NotificationService::MISSING => $l->t('The file of {asset}, Version {number}, is missing'),
+			NotificationService::DUE_TOMORROW => $l->t('{asset} is due tomorrow'),
+			NotificationService::DUE_TODAY => $l->t('{asset} is due today'),
+			NotificationService::MENTION => $l->t('{author} mentioned you on {asset}, Version {number}'),
+			NotificationService::APPROVED => $l->t('{author} approved {asset}, Version {number}'),
+			NotificationService::CHANGES => $l->t('{author} requested changes on {asset}, Version {number}'),
 			default => throw new UnknownNotificationException(),
 		};
 		$notification->setParsedSubject(strtr($subject, $where + [
@@ -50,7 +55,10 @@ class Notifier implements INotifier {
 		if (($p['body'] ?? '') !== '') {
 			$notification->setParsedMessage($p['body']);
 		}
-		$notification->setLink($this->urls->linkToRouteAbsolute('deliver.page.index') . 'versions/' . ($p['versionId'] ?? ''));
+		// An automatic stack is kept or undone where Version Stacks are managed: in the Project view
+		$notification->setLink($this->urls->linkToRouteAbsolute('deliver.page.index') . ($notification->getSubject() === NotificationService::AUTO_STACK
+			? 'projects/' . $p['projectId']
+			: 'versions/' . $p['versionId']));
 		$notification->setIcon($this->urls->getAbsoluteURL($this->urls->imagePath(Application::APP_ID, 'app-dark.svg')));
 		return $notification;
 	}

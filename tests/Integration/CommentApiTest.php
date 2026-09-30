@@ -72,6 +72,75 @@ class CommentApiTest extends TestCase {
 		return $created['data'];
 	}
 
+	public function testACommentCarriesADrawing(): void {
+		$shapes = [['tool' => 'arrow', 'color' => '#ff0000', 'points' => [[0.1, 0.1], [0.5, 0.4]]]];
+		$drawn = $this->comment($this->nc, ['inFrame' => 12, 'body' => 'this logo', 'annotation' => $shapes]);
+		self::assertSame($shapes, $drawn['annotation']);
+		$listed = $this->nc->ocs('GET', "/versions/{$this->versionId}/comments")['data']['comments'];
+		self::assertSame($shapes, $listed[0]['annotation']);
+
+		$broken = $this->nc->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 1, 'body' => 'x', 'annotation' => [['tool' => 'spray']]]);
+		self::assertSame(400, $broken['status']);
+		$reply = $this->nc->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 1, 'body' => 'x', 'parentId' => $drawn['id'], 'annotation' => $shapes]);
+		self::assertSame(400, $reply['status'], 'a Reply carries no drawing');
+		self::assertNull($this->comment($this->nc, ['inFrame' => 3, 'body' => 'plain'])['annotation']);
+	}
+
+	public function testReactionsToggleAndTravelWithTheComment(): void {
+		$comment = $this->comment($this->nc, ['inFrame' => 4, 'body' => 'nice grade']);
+		$reader = $this->member(1);
+		$react = static fn (NextcloudClient $who, string $emoji, bool $on) => $who->ocs('PUT', "/comments/{$comment['id']}/reactions", ['emoji' => $emoji, 'on' => $on]);
+
+		$react($this->nc, '👍', true);
+		$reacted = $react($reader, '👍', true);
+		self::assertSame(200, $reacted['status'], json_encode($reacted['data']));
+		self::assertSame('👍', $reacted['data']['reactions'][0]['emoji']);
+		self::assertCount(2, $reacted['data']['reactions'][0]['authors']);
+		// Twice is still once
+		self::assertCount(2, $react($reader, '👍', true)['data']['reactions'][0]['authors']);
+
+		// The Comment counts as changed, so the next poll brings it
+		$changes = $this->nc->ocs('GET', "/versions/{$this->versionId}/changes?since=" . (time() - 1))['data']['comments'];
+		self::assertSame([$comment['id']], array_column($changes, 'id'));
+
+		// Taking mine back leaves the other person's
+		$left = $react($this->nc, '👍', false)['data']['reactions'];
+		self::assertCount(1, $left[0]['authors']);
+		self::assertNotSame('admin', $left[0]['authors'][0]['id']);
+		self::assertSame(200, $react($this->nc, '🦷', true)['status'], 'any emoji');
+		$given = $react($this->nc, '👍🏽', true)['data']['reactions'];
+		self::assertSame(['👍', '🦷', '👍🏽'], array_column($given, 'emoji'), 'the usual ones first, then as they were given');
+		self::assertSame(400, $react($this->nc, 'ok', true)['status'], 'text is no reaction');
+		self::assertSame(400, $react($this->nc, '<b>👍</b>', true)['status']);
+	}
+
+	public function testAttachmentsLiveInTheProjectFolder(): void {
+		$comment = $this->comment($this->nc, ['inFrame' => 7, 'body' => 'like this']);
+		$attached = $this->nc->upload("/comments/{$comment['id']}/attachments", 'reference.png', 'not really a picture');
+		self::assertSame(201, $attached['status'], json_encode($attached['data']));
+		self::assertSame(['reference.png', 20], [$attached['data']['attachments'][0]['name'], $attached['data']['attachments'][0]['size']]);
+		$id = $attached['data']['attachments'][0]['id'];
+
+		// The file sits in the Project folder, and is no Asset even with Auto Intake
+		$again = $this->nc->upload("/comments/{$comment['id']}/attachments", 'reference.png', 'a second one');
+		self::assertSame('reference (2).png', $again['data']['attachments'][1]['name']);
+		self::assertSame(['cut'], array_column($this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'], 'name'));
+		$downloaded = $this->nc->request('GET', "/index.php/apps/deliver/attachments/$id");
+		self::assertSame([200, 'not really a picture'], [$downloaded['status'], $downloaded['body']]);
+
+		$odd = $this->nc->upload("/comments/{$comment['id']}/attachments", '..', 'x');
+		self::assertSame([201, 'attachment'], [$odd['status'], $odd['data']['attachments'][2]['name']], 'a name that is only dots becomes a plain one');
+
+		// Someone else's Comment takes no attachments from me
+		$reader = $this->member(1);
+		self::assertSame(403, $reader->upload("/comments/{$comment['id']}/attachments", 'x.txt', 'x')['status']);
+		self::assertSame(200, $reader->request('GET', "/index.php/apps/deliver/attachments/$id")['status'], 'but it may read them');
+
+		// Deleting the Comment deletes its files
+		$this->nc->ocs('DELETE', "/comments/{$comment['id']}");
+		self::assertSame(404, $this->nc->request('GET', "/index.php/apps/deliver/attachments/$id")['status']);
+	}
+
 	public function testCommentsAnchorToFramesAndRanges(): void {
 		$frame = $this->comment($this->nc, ['inFrame' => 120, 'body' => 'colour is off here']);
 		self::assertSame([120, null], [$frame['inFrame'], $frame['outFrame']]);

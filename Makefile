@@ -1,4 +1,4 @@
-.PHONY: up down enable occ build watch composer lint-php fix-php test-integration package appinfo
+.PHONY: up down enable occ build composer lint-php fix-php test-integration package appinfo
 
 COMPOSE = docker compose
 OCC = $(COMPOSE) exec -u www-data nextcloud php occ
@@ -7,6 +7,9 @@ OCC = $(COMPOSE) exec -u www-data nextcloud php occ
 up:
 	$(COMPOSE) up -d --build
 	@until $(OCC) status 2>/dev/null | grep -q 'installed: true'; do echo "waiting for Nextcloud install…"; sleep 5; done
+	# The image's entrypoint writes config.php until it hands over to Apache;
+	# settings made before that can be overwritten, so wait for Apache to answer
+	@until $(COMPOSE) exec -T nextcloud php -r 'exit(@file_get_contents("http://localhost/status.php") === false ? 1 : 0);'; do echo "waiting for Apache…"; sleep 2; done
 	$(OCC) app:disable firstrunwizard
 	# Integration tests knock on invalid Share Link tokens on purpose; the
 	# bruteforce protection would answer 429 from the tenth knock on. Reset first:
@@ -35,12 +38,9 @@ build:
 	npm ci
 	npm run build
 
-watch:
-	npm run watch
-
 # PHP dev dependencies (PHPUnit) without a local PHP: vendor/ is gitignored
 composer:
-	docker run --rm -u $(shell id -u):$(shell id -g) -v $(CURDIR):/app -w /app composer:2 install --ignore-platform-req=php
+	docker run --rm -u $(shell id -u):$(shell id -g) -v $(CURDIR):/app -w /app composer:2 install
 
 # Coding standard and Psalm, as CI runs them, in a throwaway PHP container
 PHP = docker run --rm -u $(shell id -u):$(shell id -g) -v $(CURDIR):/app -w /app php:8.3-cli php -d memory_limit=2G

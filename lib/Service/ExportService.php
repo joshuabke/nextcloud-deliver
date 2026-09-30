@@ -106,7 +106,7 @@ class ExportService {
 		$replies = [];
 		foreach ($comments as $comment) {
 			if ($comment['parentId'] !== null) {
-				$replies[$comment['parentId']][] = ['author' => $comment['author']['name'], 'body' => $comment['body']];
+				$replies[$comment['parentId']][] = ['author' => $comment['author']['name'], 'body' => self::readable($comment)];
 			}
 		}
 		$markers = [];
@@ -118,7 +118,7 @@ class ExportService {
 				'in' => $comment['inFrame'],
 				'out' => $comment['outFrame'],
 				'author' => $comment['author']['name'],
-				'body' => $comment['body'],
+				'body' => self::readable($comment),
 				'resolved' => (bool)$comment['resolved'],
 				'replies' => $replies[$comment['id']] ?? [],
 			];
@@ -127,18 +127,37 @@ class ExportService {
 		return $markers;
 	}
 
+	/** A Comment's body with its @mentions as display names */
+	private static function readable(array $comment): string {
+		return Mentions::render((string)$comment['body'], (array)($comment['mentions'] ?? []));
+	}
+
 	/** The marker text: author, body and Replies on one line, as marker notes are single lines */
 	public static function note(array $marker): string {
 		$text = $marker['author'] . ': ' . $marker['body'];
 		foreach ($marker['replies'] as $reply) {
 			$text .= ' / ' . $reply['author'] . ': ' . $reply['body'];
 		}
-		return trim((string)preg_replace('/\s+/', ' ', $text));
+		return self::oneLine($text);
 	}
 
 	/** A Range is inclusive, so its duration counts the out Frame; a single Frame lasts one */
 	private static function duration(array $marker): int {
 		return $marker['out'] === null ? 1 : $marker['out'] - $marker['in'] + 1;
+	}
+
+	/** The clip's length in Frames, long enough for its last marker */
+	private static function length(array $clip, array $markers): int {
+		$lastMarker = 0;
+		foreach ($markers as $marker) {
+			$lastMarker = max($lastMarker, $marker['in'] + self::duration($marker));
+		}
+		return max((int)$clip['duration'], $lastMarker, 1);
+	}
+
+	/** The timecode of a Frame, counted from the clip's start */
+	private static function tc(array $clip, int $frame): string {
+		return Timecode::format($clip['start'] + $frame, $clip['num'], $clip['den'], $clip['dropFrame']);
 	}
 
 	/**
@@ -148,15 +167,14 @@ class ExportService {
 	 * @param list<array<string, mixed>> $markers
 	 */
 	public static function edl(array $clip, array $markers): string {
-		$tc = static fn (int $frame) => Timecode::format($clip['start'] + $frame, $clip['num'], $clip['den'], $clip['dropFrame']);
 		$lines = [
 			'TITLE: ' . self::oneLine($clip['title']),
 			'FCM: ' . ($clip['dropFrame'] ? 'DROP FRAME' : 'NON-DROP FRAME'),
 			'',
 		];
 		foreach ($markers as $index => $marker) {
-			$in = $tc($marker['in']);
-			$out = $tc($marker['in'] + self::duration($marker));
+			$in = self::tc($clip, $marker['in']);
+			$out = self::tc($clip, $marker['in'] + self::duration($marker));
 			$lines[] = sprintf('%03d  001      V     C        %s %s %s %s', $index + 1, $in, $out, $in, $out);
 			// Resolve splits marker fields at "|", so the note must not contain one
 			$lines[] = sprintf(
@@ -174,11 +192,7 @@ class ExportService {
 	public static function fcpXml(array $clip, array $markers): string {
 		$ntsc = $clip['den'] === 1001 ? 'TRUE' : 'FALSE';
 		$timebase = Timecode::nominal($clip['num'], $clip['den']);
-		$lastMarker = 0;
-		foreach ($markers as $marker) {
-			$lastMarker = max($lastMarker, $marker['in'] + self::duration($marker));
-		}
-		$duration = max((int)$clip['duration'], $lastMarker, 1);
+		$duration = self::length($clip, $markers);
 
 		$xml = new \XMLWriter();
 		$xml->openMemory();
@@ -195,7 +209,7 @@ class ExportService {
 		self::rate($xml, $timebase, $ntsc);
 		$xml->startElement('timecode');
 		self::rate($xml, $timebase, $ntsc);
-		$xml->writeElement('string', Timecode::format($clip['start'], $clip['num'], $clip['den'], $clip['dropFrame']));
+		$xml->writeElement('string', self::tc($clip, 0));
 		$xml->writeElement('frame', (string)$clip['start']);
 		$xml->writeElement('displayformat', $clip['dropFrame'] ? 'DF' : 'NDF');
 		$xml->endElement();
@@ -255,11 +269,7 @@ class ExportService {
 			$denominator = intdiv($clip['num'], $divisor);
 			return intdiv($numerator, $divisor) . ($denominator === 1 ? '' : '/' . $denominator) . 's';
 		};
-		$lastMarker = 0;
-		foreach ($markers as $marker) {
-			$lastMarker = max($lastMarker, $marker['in'] + self::duration($marker));
-		}
-		$duration = $time(max((int)$clip['duration'], $lastMarker, 1));
+		$duration = $time(self::length($clip, $markers));
 		$start = $time($clip['start']);
 
 		$xml = new \XMLWriter();
@@ -338,15 +348,14 @@ class ExportService {
 
 	/** One row per Comment, Replies in one column (story 69) */
 	public static function csv(array $clip, array $markers): string {
-		$tc = static fn (int $frame) => Timecode::format($clip['start'] + $frame, $clip['num'], $clip['den'], $clip['dropFrame']);
 		$handle = fopen('php://temp', 'r+');
 		fputcsv($handle, ['frame_in', 'frame_out', 'timecode_in', 'timecode_out', 'author', 'comment', 'replies', 'resolved'], ',', '"', '');
 		foreach ($markers as $marker) {
 			fputcsv($handle, [
 				$marker['in'],
 				$marker['out'] ?? '',
-				$tc($marker['in']),
-				$marker['out'] === null ? '' : $tc($marker['out']),
+				self::tc($clip, $marker['in']),
+				$marker['out'] === null ? '' : self::tc($clip, $marker['out']),
 				$marker['author'],
 				$marker['body'],
 				implode("\n", array_map(static fn (array $reply) => $reply['author'] . ': ' . $reply['body'], $marker['replies'])),

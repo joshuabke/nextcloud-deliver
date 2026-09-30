@@ -239,4 +239,41 @@ class ProjectApiTest extends TestCase {
 		self::assertSame(409, $this->nc->ocs('POST', '/projects', ['folderId' => $fileId])['status']);
 		self::assertSame(404, $this->nc->ocs('POST', '/projects', ['folderId' => 999999999])['status']);
 	}
+
+	/** @return array<string, mixed> the Project's tile data as the client lists it */
+	private function activity(NextcloudClient $client, int $projectId): array {
+		$listed = $client->ocs('GET', '/projects');
+		self::assertSame(200, $listed['status'], json_encode($listed['data']));
+		return array_column($listed['data'], 'activity', 'id')[$projectId];
+	}
+
+	public function testProjectListTellsEachMemberWhatIsUnseen(): void {
+		$this->nc->put("{$this->root}/cut.mp4", 'not really a video');
+		$project = $this->createProject($this->nc, $this->nc->fileId($this->root));
+		$member = $this->createUser();
+		$shared = $this->nc->ocsForm('POST', '/ocs/v2.php/apps/files_sharing/api/v1/shares', [
+			'path' => "/{$this->root}",
+			'shareType' => 0,
+			'shareWith' => $member->user,
+			'permissions' => 31,
+		]);
+		self::assertSame(200, $shared['status'], json_encode($shared['data']));
+		$cut = $this->stacks($this->nc, $project['id'])['cut'][0]['id'];
+
+		$comment = $member->ocs('POST', "/versions/$cut/comments", ['inFrame' => 3, 'body' => 'too dark']);
+		self::assertSame(201, $comment['status'], json_encode($comment['data']));
+		self::assertSame(200, $member->ocs('PUT', "/versions/$cut/approval", ['status' => 'changes'])['status']);
+		$asset = $this->nc->ocs('GET', "/projects/{$project['id']}")['data']['assets'][0];
+		self::assertSame(200, $this->nc->ocs('PUT', "/assets/{$asset['id']}", ['dueDate' => '2030-01-31'])['status']);
+
+		$mine = $this->activity($this->nc, $project['id']);
+		self::assertSame([1, 1, 1, '2030-01-31', null], [$mine['assets'], $mine['unseenComments'], $mine['changes'], $mine['nextDue'], $mine['still']], 'no video has been probed, so no still');
+		self::assertSame(0, $this->activity($member, $project['id'])['unseenComments'], 'one\'s own Comment is not news');
+		self::assertGreaterThanOrEqual($comment['data']['createdAt'], $mine['lastActivity']);
+		self::assertGreaterThanOrEqual($comment['data']['createdAt'], $asset['lastActivity'], 'an Asset sorts by its latest Comment too');
+		self::assertLessThanOrEqual($asset['lastActivity'], $asset['createdAt']);
+
+		self::assertSame(200, $this->nc->ocs('POST', "/versions/$cut/seen")['status']);
+		self::assertSame(0, $this->activity($this->nc, $project['id'])['unseenComments'], 'having it on screen clears it');
+	}
 }

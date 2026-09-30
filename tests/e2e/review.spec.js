@@ -9,11 +9,21 @@ const ADMIN_PASSWORD = process.env.DELIVER_TEST_PASSWORD ?? 'adminadmin123'
 /** A user of its own, in English: the tests find buttons by their names, whatever language the admin speaks */
 const USER = 'deliver-e2e'
 const PASSWORD = 'deliver-e2e-' + randomBytes(12).toString('hex')
+/** A second Member, someone to mention */
+const MATE = 'deliver-e2e-mate'
 const CDP = process.env.DELIVER_CDP ?? 'http://127.0.0.1:9222'
 /** The browser may sit in its own container, where localhost is not Nextcloud */
 const BROWSER_URL = process.env.DELIVER_BROWSER_URL ?? URL
 
 const auth = { username: USER, password: PASSWORD, send: 'always' }
+/** An iPhone as Nextcloud accepts it: a current Safari, touch, and its size */
+const PHONE = {
+	viewport: { width: 390, height: 844 },
+	deviceScaleFactor: 3,
+	isMobile: true,
+	hasTouch: true,
+	userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Mobile/15E148 Safari/604.1',
+}
 const ocsHeaders = { 'OCS-APIREQUEST': 'true', Accept: 'application/json' }
 
 test.describe('Review view', () => {
@@ -31,6 +41,10 @@ test.describe('Review view', () => {
 		const dav = `/remote.php/dav/files/${USER}/${folder}`
 		expect((await api.fetch(dav, { method: 'MKCOL' })).status()).toBe(201)
 		expect((await api.fetch(`${dav}/clip.webm`, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(201)
+		const shared = await api.post('/ocs/v2.php/apps/files_sharing/api/v1/shares?format=json', {
+			form: { path: `/${folder}`, shareType: 0, shareWith: MATE, permissions: 1 },
+		})
+		expect(shared.ok()).toBe(true)
 
 		const created = await api.post('/ocs/v2.php/apps/deliver/api/v1/projects?format=json', {
 			data: { folderId: await fileId(api, dav), autoIntake: true },
@@ -46,22 +60,97 @@ test.describe('Review view', () => {
 		await login(page)
 	})
 
-	test.afterAll(async () => {
-		const api = await test.request?.newContext?.({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+	test.afterAll(async ({ playwright }) => {
 		await context?.close()
 		await browser?.close()
-		if (api) {
-			await api.delete(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)
-			await api.fetch(`/remote.php/dav/files/${USER}/${folder}`, { method: 'DELETE' })
-			await api.dispose()
-		}
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		await api.delete(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)
+		await api.fetch(`/remote.php/dav/files/${USER}/${folder}`, { method: 'DELETE' })
+		await api.dispose()
+	})
+
+	test('the Project list leads into a Review and back', async () => {
+		await page.goto('/apps/deliver/')
+		const tile = page.locator('.deliver-project-card', { hasText: folder })
+		await expect(tile).toContainText('1 Asset')
+		await tile.click()
+		await expect(page).toHaveURL(new RegExp(`/projects/${projectId}$`))
+		await page.locator('.deliver-card__link').first().click()
+		await expect(page).toHaveURL(new RegExp(`/versions/${versionId}$`))
+		await page.getByRole('link', { name: folder, exact: true }).click()
+		await expect(page).toHaveURL(new RegExp(`/projects/${projectId}$`))
+
+		// The Project list finds a Project by name, and a right click opens it too
+		await page.goto('/apps/deliver/')
+		await page.getByRole('searchbox', { name: 'Find a Project' }).fill(folder)
+		await expect(page.locator('.deliver-project-card')).toHaveCount(1)
+		await tile.click({ button: 'right' })
+		await page.getByRole('menuitem', { name: 'Open', exact: true }).click()
+		await expect(page).toHaveURL(new RegExp(`/projects/${projectId}$`))
+	})
+
+	test('uploads into the Project, then filters and finds its Assets', async () => {
+		await page.goto(`/apps/deliver/projects/${projectId}`)
+		await page.locator('input[type=file][multiple]').setInputFiles({ name: 'second.webm', mimeType: 'video/webm', buffer: readFileSync(CLIP) })
+		const second = page.locator('.deliver-card', { hasText: 'second.webm' })
+		await expect(second).toBeVisible()
+		// Auto Intake would take the file anyway; the upload itself must not fail
+		await expect(page.locator('.deliver-project .notecard')).toHaveCount(0)
+
+		await page.getByRole('button', { name: /^Changes requested/ }).click()
+		await expect(page).toHaveURL(/filter=changes/)
+		await expect(second).toHaveCount(0)
+		await page.getByRole('button', { name: /^All/ }).click()
+
+		// The latest activity comes first, until the order is by name
+		await expect(page.locator('.deliver-card__name').first()).toHaveText('second')
+		await page.getByRole('button', { name: 'Latest activity' }).click()
+		await page.getByRole('menuitemradio', { name: 'Name' }).click()
+		await expect(page).toHaveURL(/sort=name/)
+		await expect(page.locator('.deliver-card__name').first()).toHaveText('clip')
+
+		await page.getByRole('searchbox', { name: 'Find an Asset' }).fill('SECOND')
+		await expect(page.locator('.deliver-card')).toHaveCount(1)
+
+		// Dropped files go the same way; anything but media stays out
+		await page.getByRole('searchbox', { name: 'Find an Asset' }).fill('')
+		await page.evaluate((bytes) => {
+			const files = new DataTransfer()
+			files.items.add(new File([new Uint8Array(bytes)], 'third.webm', { type: 'video/webm' }))
+			files.items.add(new File(['notes'], 'notes.txt', { type: 'text/plain' }))
+			const view = document.querySelector('.deliver-project')
+			for (const type of ['dragenter', 'dragover', 'drop']) {
+				view.dispatchEvent(new DragEvent(type, { dataTransfer: files, bubbles: true, cancelable: true }))
+			}
+		}, [...readFileSync(CLIP)])
+		await expect(page.locator('.deliver-card', { hasText: 'third.webm' })).toBeVisible()
+		await expect(page.locator('.deliver-project .notecard')).toContainText('Only video, audio and image files')
+		await expect(page.locator('.deliver-card', { hasText: 'notes' })).toHaveCount(0)
+
+		// A Version Stack is managed from its card, not in the Review view
+		await second.click({ button: 'right' })
+		await page.getByRole('menuitem', { name: 'Manage Versions' }).click()
+		await expect(page.getByRole('dialog', { name: 'Versions of second' })).toContainText('Version 1')
+		await page.keyboard.press('Escape')
+
+		// So is its Due Date, through a visible field: Safari opens no picker for a hidden one
+		await second.click({ button: 'right' })
+		await page.getByRole('menuitem', { name: 'Set a Due Date' }).click()
+		const due = page.getByRole('dialog', { name: 'Due Date' })
+		await due.getByLabel('Due Date').fill('2030-01-15')
+		await due.getByRole('button', { name: 'Save' }).click()
+		await expect(second.locator('.deliver-card__due')).toContainText('15')
+		await second.click({ button: 'right' })
+		await expect(page.getByRole('menuitem', { name: 'Change the Due Date' })).toBeVisible()
+		await page.keyboard.press('Escape')
 	})
 
 	test('comments on a Frame and on a Range, resolves and replies', async () => {
 		await page.goto(`/apps/deliver/versions/${versionId}`)
-		await expect(page.locator('video')).toHaveJSProperty('readyState', 4)
+		await expect(page.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
 
-		// Frame stepping is exact: five steps at 25 fps land on 00:00:00:05
+		// Frame stepping is exact: five steps at 25 fps land on 00:00:00:05; C brings hidden Comments back
+		await page.getByRole('button', { name: 'Hide Comments' }).click()
 		// Focus the page without touching the player
 		await page.locator('.deliver-review__title').click()
 		for (let i = 0; i < 5; i++) {
@@ -70,9 +159,10 @@ test.describe('Review view', () => {
 		await expect(page.locator('.deliver-player__timecode')).toContainText('00:00:00:05')
 
 		await page.keyboard.press('c')
+		await expect(page.locator('#deliver-comment-body')).toBeFocused()
 		await expect(page.locator('.deliver-comments__anchor')).toHaveText(/00:00:00:05/)
 		await page.locator('#deliver-comment-body').fill('sound starts too early')
-		await page.locator('.deliver-comments__form button').click()
+		await page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
 
 		const first = page.locator('.deliver-comment').first()
 		await expect(first).toContainText('sound starts too early')
@@ -91,7 +181,7 @@ test.describe('Review view', () => {
 		await page.keyboard.press('c')
 		await expect(page.locator('.deliver-comments__anchor')).toHaveText(/–/)
 		await page.locator('#deliver-comment-body').fill('shorten this passage')
-		await page.locator('.deliver-comments__form button').click()
+		await page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
 		await expect(page.locator('.deliver-player__marker')).toHaveCount(2)
 
 		// Resolving hides it from the unresolved filter, a Reply stays with its parent
@@ -132,8 +222,221 @@ test.describe('Review view', () => {
 		await expect(page.locator('.deliver-player__timecode')).not.toContainText('00:00:00:05')
 		await expect(page.locator('.deliver-comments__anchor')).toHaveText(/00:00:00:05/)
 		await page.locator('#deliver-comment-body').fill('typed while the player moved on')
-		await page.locator('.deliver-comments__form button').click()
+		await page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
 		await expect(page.locator('.deliver-comment').filter({ hasText: 'typed while the player moved on' }).locator('.deliver-comment__anchor')).toHaveText('00:00:00:05')
+
+		// A reaction shows as a pill with its count, mine highlighted (story 91)
+		const reacted = page.locator('.deliver-comment').filter({ hasText: 'shorten this passage' }).first()
+		await reacted.getByRole('button', { name: 'React' }).click()
+		await page.locator('.emoji-mart input').fill('tooth')
+		await page.locator('.emoji-mart .emoji-mart-scroll .emoji-mart-emoji').first().click()
+		await expect(reacted.locator('.deliver-comment__reaction--mine')).toHaveText('🦷 1')
+
+		// Typing @ offers the Members; the Comment shows the name (story 90)
+		await page.locator('#deliver-comment-body').fill('')
+		await page.locator('#deliver-comment-body').pressSequentially('look @Ma')
+		await page.getByRole('option', { name: 'Mara Mate' }).click()
+		await expect(page.locator('#deliver-comment-body')).toHaveValue(`look @${MATE} `)
+		await page.locator('#deliver-comment-body').pressSequentially('here')
+		await page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
+		await expect(page.locator('.deliver-comment__mention').first()).toHaveText('@Mara Mate')
+
+		// An attached picture shows under its Comment (story 92)
+		const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64')
+		await page.locator('.deliver-comments__form input[type=file]').setInputFiles({ name: 'reference.png', mimeType: 'image/png', buffer: pixel })
+		await expect(page.locator('.deliver-comments__files li')).toHaveText('reference.png')
+		await page.locator('#deliver-comment-body').fill('like this')
+		await page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
+		const picture = page.locator('.deliver-comment').filter({ hasText: 'like this' }).locator('.deliver-comment__attachments img')
+		await expect(picture).toHaveJSProperty('naturalWidth', 1)
+
+		// A drawing goes with the Comment and shows while the player stands on it (story 89)
+		await page.getByRole('button', { name: 'Draw on the picture' }).click()
+		const stage = await page.locator('.deliver-player__stage').boundingBox()
+		await page.mouse.move(stage.x + stage.width * 0.3, stage.y + stage.height * 0.3)
+		await page.mouse.down()
+		await page.mouse.move(stage.x + stage.width * 0.6, stage.y + stage.height * 0.5, { steps: 8 })
+		await page.mouse.up()
+		await expect(page.locator('.deliver-comments__drawn')).toHaveText('1 shape drawn')
+		await page.locator('#deliver-comment-body').fill('this corner')
+		await page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
+		await expect(page.locator('.deliver-comment').filter({ hasText: 'this corner' })).toBeVisible()
+		await expect(page.locator('.deliver-drawing path')).toHaveCount(1)
+
+		// A Due Date set in the header shows there (story 93)
+		await page.locator('.deliver-due__button').click()
+		const due = page.getByRole('dialog', { name: 'Due Date' })
+		await due.getByLabel('Due Date').fill('2030-01-31')
+		await due.getByRole('button', { name: 'Save' }).click()
+		await expect(page.locator('.deliver-due')).toContainText('Due')
+		await expect(page.locator('.deliver-due__clear')).toBeVisible()
+
+		// Approving shows the decision next to the menu (story 88)
+		await page.locator('.deliver-approval__menu button').click()
+		await page.getByRole('menuitemradio', { name: 'Approve this Version' }).click()
+		await expect(page.locator('.deliver-approval__people li')).toHaveCount(1)
+		await expect(page.locator('.deliver-approval__menu button')).toContainText('Approved')
+	})
+
+	test('compares two Versions in step', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		expect((await api.fetch(`/remote.php/dav/files/${USER}/${folder}/clip_v2.webm`, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(201)
+		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
+		await api.dispose()
+		const stack = project.ocs.data.assets[0].versions
+		expect(stack).toHaveLength(2)
+
+		await page.goto(`/apps/deliver/compare/${stack[1].id}/${stack[0].id}`)
+		const videos = page.locator('.deliver-compare video')
+		await expect(videos).toHaveCount(2)
+		await expect(videos.first()).toHaveJSProperty('readyState', 4)
+		await page.locator('.deliver-layout__bar h2').click()
+		await page.keyboard.press('ArrowRight')
+		await page.keyboard.press('ArrowRight')
+		await expect(page.locator('.deliver-compare__timecode')).toContainText('00:00:00:02')
+		// B follows A to the same Frame
+		const times = await videos.evaluateAll((all) => all.map((video) => video.currentTime))
+		expect(times[1]).toBeCloseTo(times[0], 3)
+
+		await page.getByRole('radio', { name: 'Wipe' }).click()
+		await expect(page.locator('.deliver-compare__handle')).toBeVisible()
+	})
+
+	test('on a phone: stacked, by touch, and a Reviewer comments on a Range', async ({ playwright }) => {
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const page = await phone.newPage()
+		await login(page)
+		await page.goto(`/apps/deliver/projects/${projectId}`)
+		// A card's menu has a button of its own on a phone, with the Due Date in it
+		const clip = page.locator('.deliver-card', { hasText: 'clip' })
+		await clip.locator('.deliver-card__more').tap()
+		await page.getByRole('menuitem', { name: /Due Date/ }).tap()
+		const due = page.getByRole('dialog', { name: 'Due Date' })
+		await due.getByLabel('Due Date').fill('2030-02-20')
+		await due.getByRole('button', { name: 'Save' }).tap()
+		await expect(clip.locator('.deliver-card__due')).toContainText('20')
+
+		await page.locator('.deliver-card__more').first().tap()
+		await page.getByRole('menuitem', { name: 'Open', exact: true }).tap()
+		await expect(page).toHaveURL(/\/versions\/\d+$/)
+		const video = page.locator('video.deliver-player__video')
+		await expect(video).toHaveJSProperty('readyState', 4)
+
+		// Upright, only the field sits under the picture, without Nextcloud's header; the list pulls up in its place
+		await expect(page.locator('#header')).toBeHidden()
+		const stage = await page.locator('.deliver-player__stage').boundingBox()
+		const panel = await page.locator('.deliver-layout__panel').boundingBox()
+		expect(panel.y).toBeGreaterThanOrEqual(stage.y + stage.height)
+		await expect(page.locator('.deliver-comments__head')).toBeHidden()
+		// Halfway a 16:9 picture fits above the list, then the list takes its place
+		const grabber = page.locator('.deliver-layout__grabber')
+		await grabber.tap()
+		await expect(page.locator('.deliver-layout--middle')).toHaveCount(1)
+		await expect(page.locator('.deliver-comments__head')).toBeVisible()
+		expect((await page.locator('.deliver-player__stage').boundingBox()).height).toBeCloseTo(390 * 9 / 16, 0)
+		await grabber.tap()
+		await expect(page.locator('.deliver-layout--up')).toHaveCount(1)
+		// A stroke down goes back a level at a time
+		for (const level of ['middle', 'down']) {
+			const box = await grabber.boundingBox()
+			await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+			await page.mouse.down()
+			await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 80)
+			await page.mouse.up()
+			await expect(page.locator(`.deliver-layout--${level}`)).toHaveCount(1)
+		}
+
+		// A tap on the timeline seeks and leaves no thumbnail behind
+		await page.locator('.deliver-player__timeline').tap()
+		await page.waitForTimeout(300)
+		await expect(page.locator('.deliver-player__hover')).toBeHidden()
+
+		// A double tap on the right jumps ahead, a tap goes fullscreen
+		const right = { x: stage.x + stage.width * 0.85, y: stage.y + stage.height / 2 }
+		await page.touchscreen.tap(right.x, right.y)
+		await page.touchscreen.tap(right.x, right.y)
+		await expect(page.locator('.deliver-player__flash')).toContainText('+5')
+		await page.waitForTimeout(700)
+		await page.touchscreen.tap(stage.x + stage.width / 2, right.y)
+		await expect(page.locator('.deliver-player--fullscreen')).toHaveCount(1)
+		await page.waitForTimeout(700)
+		await page.touchscreen.tap(stage.x + stage.width / 2, right.y)
+		await expect(page.locator('.deliver-player--fullscreen')).toHaveCount(0)
+
+		// Sideways, the picture fills the window and the list opens beside it
+		await page.setViewportSize({ width: PHONE.viewport.height, height: PHONE.viewport.width })
+		await expect(page.locator('.deliver-layout__bar')).toHaveCount(0)
+		await expect(page.locator('.deliver-layout__panel')).toBeHidden()
+		await page.getByRole('button', { name: 'Show Comments' }).tap()
+		await expect(page.locator('.deliver-comments__head')).toBeVisible()
+		await phone.close()
+
+		// A Reviewer on a phone: name first, then a Range by its button
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const folderId = await fileId(api, `/remote.php/dav/files/${USER}/${folder}`)
+		const link = (await (await api.post(`/ocs/v2.php/apps/deliver/api/v1/files/${folderId}/shares?format=json`)).json()).ocs.data
+		// Only the newest Version takes Comments on this link
+		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
+		const newest = project.ocs.data.assets.find((asset) => asset.versions.some((version) => version.id === versionId)).versions[0].id
+		await api.dispose()
+		const guest = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const reviewer = await guest.newPage()
+		await reviewer.goto(`/apps/deliver/s/${link.token}/versions/${newest}`)
+		await reviewer.locator('#deliver-reviewer-name').fill('Pia')
+		await reviewer.getByRole('button', { name: 'Start reviewing' }).tap()
+		await expect(reviewer.locator('.deliver-comments__gate')).toHaveCount(0)
+		// The composer's tools sit in its menu
+		const options = reviewer.getByRole('button', { name: 'Comment options' })
+		await options.tap()
+		await reviewer.getByRole('menuitem', { name: 'Start a Range here' }).tap()
+		for (let i = 0; i < 3; i++) {
+			await reviewer.getByRole('button', { name: 'One Frame forward' }).tap()
+		}
+		await options.tap()
+		await reviewer.getByRole('menuitem', { name: 'End the Range here' }).tap()
+		await expect(reviewer.locator('.deliver-comments__anchor')).toContainText('–')
+		await reviewer.locator('#deliver-comment-body').fill('on the phone')
+		await reviewer.getByRole('button', { name: 'Send (Enter)' }).tap()
+		await expect(reviewer.locator('.deliver-comment').filter({ hasText: 'on the phone' })).toContainText('Pia')
+		// A tap on its marker opens the Comment on the picture
+		await reviewer.locator('.deliver-player__marker[aria-label^="Pia"]').tap()
+		await expect(reviewer.locator('.deliver-player__peek--tapped')).toContainText('on the phone')
+		// A tap on the picture then only closes it
+		await reviewer.waitForTimeout(700)
+		await reviewer.locator('.deliver-player__stage').tap({ position: { x: 40, y: 40 } })
+		await expect(reviewer.locator('.deliver-player__peek')).toHaveCount(0)
+		await reviewer.waitForTimeout(700)
+		await expect(reviewer.locator('.deliver-player--fullscreen')).toHaveCount(0)
+		await guest.close()
+	})
+
+	test('a Reviewer names themselves and comments through a Share Link', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const folderId = await fileId(api, `/remote.php/dav/files/${USER}/${folder}`)
+		const link = (await (await api.post(`/ocs/v2.php/apps/deliver/api/v1/files/${folderId}/shares?format=json`)).json()).ocs.data
+		// Only the newest Version takes Comments on this link
+		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
+		const newest = project.ocs.data.assets[0].versions[0].id
+		await api.dispose()
+
+		// A browser that has never been here
+		const visitor = await browser.newContext({ baseURL: BROWSER_URL })
+		const reviewer = await visitor.newPage()
+		await reviewer.goto(`/apps/deliver/s/${link.token}/versions/${newest}`)
+		// The name comes first, over the Comments; with an address come the mail wishes
+		await expect(reviewer.locator('.deliver-comments__gate')).toBeVisible()
+		await reviewer.locator('#deliver-reviewer-name').fill('Mara')
+		await reviewer.locator('.deliver-comments__claim input[type=email]').fill('mara@example.test')
+		await reviewer.getByText('New Versions').click()
+		await reviewer.getByRole('button', { name: 'Start reviewing' }).click()
+		await expect(reviewer.locator('.deliver-comments__gate')).toHaveCount(0)
+		await reviewer.getByRole('button', { name: 'Mail settings' }).click()
+		await expect(reviewer.getByRole('checkbox', { name: 'New Versions' })).toBeChecked()
+		await reviewer.keyboard.press('Escape')
+		await reviewer.locator('#deliver-comment-body').fill('from the client')
+		await reviewer.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
+		await expect(reviewer.locator('.deliver-comment').filter({ hasText: 'from the client' })).toContainText('Mara')
+		await visitor.close()
 	})
 })
 
@@ -154,6 +457,8 @@ async function testUser(playwright) {
 		expect((await admin.put(`${users}/${USER}?format=json`, { form: { key: 'password', value: PASSWORD } })).ok()).toBe(true)
 	}
 	expect((await admin.put(`${users}/${USER}?format=json`, { form: { key: 'language', value: 'en' } })).ok()).toBe(true)
+	// The mate never logs in; a random password it is
+	await admin.post(`${users}?format=json`, { form: { userid: MATE, password: 'mate-' + randomBytes(12).toString('hex'), displayName: 'Mara Mate' } })
 	await admin.dispose()
 }
 

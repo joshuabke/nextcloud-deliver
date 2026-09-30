@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Controller;
 
+use OCA\Deliver\Service\ApprovalService;
 use OCA\Deliver\Service\CommentService;
 use OCA\Deliver\Service\ProjectService;
 use OCA\Deliver\Service\Viewer;
@@ -22,6 +23,7 @@ class CommentApiController extends OCSController {
 		IRequest $request,
 		private CommentService $service,
 		private ProjectService $projects,
+		private ApprovalService $approvals,
 		private ?string $userId,
 	) {
 		parent::__construct($appName, $request);
@@ -38,10 +40,10 @@ class CommentApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
-	public function create(int $versionId, int $inFrame, ?int $outFrame = null, string $body = '', ?int $parentId = null): Response {
+	public function create(int $versionId, int $inFrame, ?int $outFrame = null, string $body = '', ?int $parentId = null, mixed $annotation = null): Response {
 		return $this->onVersion(
 			$versionId,
-			fn ($viewer, $version) => $this->service->create($viewer, $version, $inFrame, $outFrame, $body, $parentId),
+			fn ($viewer, $version) => $this->service->create($viewer, $version, $inFrame, $outFrame, $body, $parentId, $annotation),
 			Http::STATUS_CREATED,
 		);
 	}
@@ -49,6 +51,12 @@ class CommentApiController extends OCSController {
 	#[NoAdminRequired]
 	public function seen(int $versionId, ?int $at = null): Response {
 		return $this->onVersion($versionId, fn ($viewer, $version) => $this->service->markSeen($viewer, $version, $at));
+	}
+
+	/** Approves the Version, requests changes, or takes the decision back with no status (story 88) */
+	#[NoAdminRequired]
+	public function approve(int $versionId, ?string $status = null): Response {
+		return $this->onVersion($versionId, fn ($viewer, $version) => $this->approvals->decide($viewer, $version, $status));
 	}
 
 	#[NoAdminRequired]
@@ -64,6 +72,18 @@ class CommentApiController extends OCSController {
 		});
 	}
 
+	/** My reaction on a Comment, on or off (story 91) */
+	#[NoAdminRequired]
+	public function react(int $id, string $emoji, bool $on = true): Response {
+		return $this->onComment($id, fn ($viewer, $version) => $this->service->react($viewer, $version, $id, $emoji, $on));
+	}
+
+	/** Attaches the uploaded `file` to my Comment (story 92) */
+	#[NoAdminRequired]
+	public function attach(int $id): Response {
+		return $this->onComment($id, fn ($viewer, $version) => $this->service->attach($viewer, $version, $id, $this->request->getUploadedFile('file')), Http::STATUS_CREATED);
+	}
+
 	#[NoAdminRequired]
 	public function resolve(int $id, bool $resolved): Response {
 		return $this->onComment($id, fn ($viewer, $version) => $this->service->setResolved($viewer, $version, $id, $resolved));
@@ -76,13 +96,13 @@ class CommentApiController extends OCSController {
 		}, $status);
 	}
 
-	private function onComment(int $id, callable $action): Response {
+	private function onComment(int $id, callable $action, int $status = Http::STATUS_OK): Response {
 		return $this->guard(function () use ($id, $action) {
 			[$viewer, $version] = $this->projects->viewerForVersion(
 				(string)$this->userId,
 				$this->service->versionIdOf($id),
 			);
 			return $action($viewer, $version);
-		});
+		}, $status);
 	}
 }

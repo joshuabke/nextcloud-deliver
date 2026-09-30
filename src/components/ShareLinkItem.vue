@@ -1,54 +1,55 @@
 <script setup>
+import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import { t } from '@nextcloud/l10n'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
-import { errorMessage, inviteReviewer, listReviewers, setShareFlags } from '../api.js'
+import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import NcTextField from '@nextcloud/vue/components/NcTextField'
+import { inviteReviewer, listReviewers, setShareFlags } from '../api.js'
+import { copyLink } from '../clipboard.js'
+import { useBusy } from '../composables/busy.js'
 
 const props = defineProps({
 	/** One Share Link with Deliver's flags, as the server lists it */
 	share: { type: Object, required: true },
 	canWrite: { type: Boolean, default: false },
+	/** In the Project's link dialog: each Reviewer's settings are offered, and the dialog's own button invites */
+	inDialog: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['update'])
+const emit = defineEmits(['update', 'person'])
 
-const busy = ref(false)
-const error = ref(null)
-/** Null until the list is opened */
+const { busy, error, run } = useBusy()
+/** The Project's Reviewers, each with their Personal Link through this share; null while loading */
 const reviewers = ref(null)
 const inviting = ref(false)
 const name = ref('')
 const email = ref('')
 
 /**
- * @param {() => Promise<unknown>} action - what to run while the link is busy
- */
-async function run(action) {
-	busy.value = true
-	error.value = null
-	try {
-		await action()
-	} catch (e) {
-		error.value = errorMessage(e)
-	} finally {
-		busy.value = false
-	}
-}
-
-/**
- * @param {object} flags - the Deliver flags to change: review, canComment, allowOlder
+ * @param {object} flags - the Deliver flags to change: review, canComment, allowOlder, watermark
  */
 function setFlags(flags) {
 	return run(async () => emit('update', await setShareFlags(props.share.id, flags)))
 }
 
-/** Lists the Project's Reviewers with a Personal Link through this share (story 55) */
-function showReviewers() {
-	return run(async () => {
-		reviewers.value = await listReviewers(props.share.id)
-	})
+// Every Reviewer shows with their Personal Link through this share (story 55)
+watch(() => [props.share.id, props.share.review, props.canWrite], ([id, review, canWrite]) => {
+	reviewers.value = null
+	if (review && canWrite) {
+		run(async () => {
+			reviewers.value = await listReviewers(id)
+		})
+	}
+}, { immediate: true })
+
+/** Opens the form to invite a Reviewer, for a button outside */
+function startInvite() {
+	inviting.value = true
 }
+
+defineExpose({ startInvite, inviting })
 
 /** Invites a Reviewer by name and gets their Personal Link (story 53) */
 function invite() {
@@ -87,6 +88,12 @@ function invite() {
 					{{ t('deliver', 'Reviewers may comment') }}
 				</NcCheckboxRadioSwitch>
 				<NcCheckboxRadioSwitch
+					:modelValue="share.watermark"
+					:disabled="busy || !canWrite"
+					@update:modelValue="setFlags({ watermark: $event })">
+					{{ t('deliver', 'Watermark with the Reviewer\'s name') }}
+				</NcCheckboxRadioSwitch>
+				<NcCheckboxRadioSwitch
 					:modelValue="share.allowOlder"
 					:disabled="busy || !canWrite || !share.canComment"
 					@update:modelValue="setFlags({ allowOlder: $event })">
@@ -95,35 +102,40 @@ function invite() {
 			</div>
 
 			<div v-if="canWrite" class="deliver-link__reviewers">
-				<NcButton
-					v-if="reviewers === null"
-					variant="tertiary"
-					:disabled="busy"
-					@click="showReviewers">
-					{{ t('deliver', 'Reviewers and Personal Links') }}
-				</NcButton>
-				<template v-else>
-					<p v-if="reviewers.length === 0" class="deliver-link__hint">
-						{{ t('deliver', 'No Reviewers yet.') }}
-					</p>
-					<div v-for="reviewer in reviewers" :key="reviewer.id" class="deliver-link__reviewer">
-						<strong>{{ reviewer.name }}</strong>
-						<code>{{ reviewer.link }}</code>
-					</div>
-					<p v-if="reviewers.length" class="deliver-link__hint">
-						{{ t('deliver', 'A Personal Link makes whoever opens it that Reviewer, forever. Give each one to its person only.') }}
-					</p>
-				</template>
+				<p v-if="reviewers?.length === 0" class="deliver-link__hint">
+					{{ t('deliver', 'No Reviewers yet.') }}
+				</p>
+				<ul v-else-if="reviewers">
+					<li v-for="reviewer in reviewers" :key="reviewer.id" class="deliver-link__reviewer">
+						<span class="deliver-link__name">{{ reviewer.name }}</span>
+						<NcButton variant="tertiary" @click="copyLink(reviewer.link, t('deliver', 'Personal Link copied'))">
+							{{ t('deliver', 'Copy Personal Link') }}
+						</NcButton>
+						<NcButton
+							v-if="inDialog"
+							variant="tertiary"
+							:aria-label="t('deliver', 'Settings of {name}', { name: reviewer.name })"
+							:title="t('deliver', 'Settings of {name}', { name: reviewer.name })"
+							@click="emit('person', reviewer.id)">
+							<template #icon>
+								<NcIconSvgWrapper :svg="settingsIcon" />
+							</template>
+						</NcButton>
+					</li>
+				</ul>
+				<p v-if="reviewers?.length" class="deliver-link__hint">
+					{{ t('deliver', 'A Personal Link makes whoever opens it that Reviewer, forever. Give each one to its person only.') }}
+				</p>
 
 				<form v-if="inviting" class="deliver-link__invite" @submit.prevent="invite">
-					<input v-model="name" type="text" :placeholder="t('deliver', 'Name')">
-					<input v-model="email" type="email" :placeholder="t('deliver', 'Email for replies (optional)')">
-					<NcButton variant="primary" :disabled="busy || !name.trim()" @click="invite">
+					<NcTextField v-model="name" :label="t('deliver', 'Name')" />
+					<NcTextField v-model="email" type="email" :label="t('deliver', 'Email for replies (optional)')" />
+					<NcButton type="submit" variant="primary" :disabled="busy || !name.trim()">
 						{{ t('deliver', 'Invite') }}
 					</NcButton>
 				</form>
 				<NcButton
-					v-else
+					v-else-if="!inDialog"
 					variant="tertiary"
 					:disabled="busy"
 					@click="inviting = true">
@@ -142,29 +154,34 @@ function invite() {
 .deliver-link {
 	display: flex;
 	flex-direction: column;
-	gap: var(--default-grid-baseline, 4px);
+	gap: var(--default-grid-baseline);
 	overflow-wrap: anywhere;
 }
 
 .deliver-link__flags,
 .deliver-link__reviewers {
-	padding-inline-start: calc(var(--default-grid-baseline, 4px) * 4);
+	padding-inline-start: calc(var(--default-grid-baseline) * 4);
 }
 
 .deliver-link__reviewer {
 	display: flex;
-	flex-direction: column;
-	margin-block: var(--default-grid-baseline, 4px);
+	align-items: center;
+	gap: var(--default-grid-baseline);
 }
 
-.deliver-link__reviewer code {
-	user-select: all;
+.deliver-link__name {
+	flex: 1;
 }
 
 .deliver-link__invite {
 	display: flex;
-	flex-direction: column;
-	gap: var(--default-grid-baseline, 4px);
+	align-items: flex-end;
+	gap: calc(2 * var(--default-grid-baseline));
+	margin-top: calc(2 * var(--default-grid-baseline));
+}
+
+.deliver-link__invite > :last-child {
+	flex: none;
 }
 
 .deliver-link__hint {
@@ -172,6 +189,6 @@ function invite() {
 }
 
 .deliver-link__error {
-	color: var(--color-error-text, var(--color-error));
+	color: var(--color-error-text);
 }
 </style>

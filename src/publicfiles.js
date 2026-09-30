@@ -3,6 +3,7 @@ import { loadState } from '@nextcloud/initial-state'
 import { t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import icon from '../img/app.svg?raw'
+import { reviewable } from './lib/media.js'
 
 /**
  * Runs on Nextcloud's own public share page when the share has review on
@@ -16,26 +17,15 @@ if (reviewUrl !== null) {
 	window.location.replace(reviewUrl)
 }
 
-/** File id → the id of its Asset's newest Version (story 61); null until loaded */
-let reviewable = null
+/** File id → the id of its own Version (story 61); null until loaded. By hand: api.js would bring axios onto the share page */
+let versionOf = null
 const loading = fetch(generateUrl('/apps/deliver/s/{token}/api/assets', { token }))
 	.then((response) => response.ok ? response.json() : [])
 	.catch(() => [])
 	.then((list) => {
-		reviewable = new Map(list.map(({ fileId, versionId }) => [fileId, versionId]))
-		return reviewable
+		versionOf = new Map(list.map(({ fileId, versionId }) => [fileId, versionId]))
+		return versionOf
 	})
-
-/**
- * @nextcloud/files 4 hands the action one context object; older file lists
- * pass the nodes themselves.
- *
- * @param {object|Array} context - what the file list handed over
- * @return {Array<object>} the nodes the action is asked about
- */
-function selected(context) {
-	return Array.isArray(context) ? context : (context?.nodes ?? [])
-}
 
 registerFileAction({
 	id: 'deliver-review',
@@ -43,17 +33,17 @@ registerFileAction({
 	iconSvgInline: () => icon,
 	order: -50,
 	enabled(context) {
-		const nodes = selected(context)
+		const nodes = context.nodes
 		if (nodes.length !== 1) {
 			return false
 		}
-		// The list usually arrives after the file ids; until then, offer it on every media file
-		return reviewable === null
-			? /^(video|audio)\//.test(nodes[0].mime ?? '')
-			: reviewable.has(nodes[0].fileid)
+		// The list usually arrives after the file ids; until then, offer it on every file Deliver reviews
+		return versionOf === null
+			? reviewable(nodes[0].mime)
+			: versionOf.has(nodes[0].fileid)
 	},
 	async exec(context) {
-		const versionId = (await loading).get(selected(context)[0].fileid)
+		const versionId = (await loading).get(context.nodes[0].fileid)
 		if (versionId !== undefined) {
 			window.location.href = generateUrl('/apps/deliver/s/{token}/versions/{versionId}', { token, versionId })
 		}

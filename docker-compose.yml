@@ -3,9 +3,9 @@ name: nextcloud-deliver
 services:
   nextcloud:
     build:
-      context: ./docker-image
+      context: ./deploy
       args:
-        RENDER_GID: "992"
+        NEXTCLOUD_VERSION: "34"
     image: deliver-nextcloud:34-ffmpeg
     # Bound, not published to the world: the dev instance carries a known admin
     # password, and the trusted-domain check falls to a forged Host header.
@@ -18,6 +18,8 @@ services:
       - NEXTCLOUD_ADMIN_USER=admin
       - NEXTCLOUD_ADMIN_PASSWORD=adminadmin123
       - NEXTCLOUD_TRUSTED_DOMAINS=localhost 127.0.0.1 ${DELIVER_EXTRA_TRUSTED_DOMAINS:-}
+      # The address links in mails and background jobs point to (overwrite.cli.url)
+      - OVERWRITECLIURL=${DELIVER_URL:-http://localhost:8080}
       - POSTGRES_HOST=db
       - POSTGRES_DB=nextcloud
       - POSTGRES_USER=nextcloud
@@ -25,8 +27,6 @@ services:
     # The host's iGPU, for the hardware encoder Deliver probes (ADR 0003)
     devices:
       - /dev/dri:/dev/dri
-    group_add:
-      - "992"
     volumes:
       - ./docker/nextcloud:/var/www/html
       - .:/var/www/html/custom_apps/deliver

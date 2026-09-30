@@ -1,46 +1,36 @@
 <script setup>
 import { t } from '@nextcloud/l10n'
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionInput from '@nextcloud/vue/components/NcActionInput'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
-import { errorMessage, regenerateVersion, unstackVersion, updateVersion, uploadNextVersion } from '../api.js'
-import { uploadFolder } from '../lib/folders.js'
+import { regenerateVersion, unstackVersion, updateVersion, uploadNextVersion } from '../api.js'
+import { useBusy } from '../composables/busy.js'
 import { previewUrl } from '../lib/preview.js'
 
 const props = defineProps({
 	/** The Version Stack of the Asset, newest first */
 	versions: { type: Array, required: true },
-	current: { type: Number, required: true },
 	assetId: { type: Number, required: true },
-	canWrite: { type: Boolean, default: false },
+	/** The WebDAV folder a dropped file goes to, next to the newest Version */
+	folderUrl: { type: String, required: true },
 })
 
 const emit = defineEmits(['open', 'changed'])
 
-const busy = ref(false)
-const error = ref(null)
+const { busy, error, run: runBusy } = useBusy()
 const dragging = ref(false)
 
-/** Where a dropped file goes: the folder of the newest Version that still has a file */
-const folderUrl = computed(() => uploadFolder(props.versions))
-
 /**
- * @param {() => Promise<unknown>} action - what to run while the Stack is busy
+ * @param {() => Promise<unknown>} action - a change to the Stack, which is reloaded after it
  */
-async function run(action) {
-	busy.value = true
-	error.value = null
-	try {
+function run(action) {
+	return runBusy(async () => {
 		await action()
 		emit('changed')
-	} catch (e) {
-		error.value = errorMessage(e)
-	} finally {
-		busy.value = false
-	}
+	})
 }
 
 /** Version id → the number typed into its menu, until it is submitted */
@@ -71,10 +61,10 @@ async function renumber(version) {
 async function drop(event) {
 	dragging.value = false
 	const file = event.dataTransfer?.files?.[0]
-	if (!file || !folderUrl.value || !props.canWrite) {
+	if (!file) {
 		return
 	}
-	await run(() => uploadNextVersion(folderUrl.value, file, props.assetId))
+	await run(() => uploadNextVersion(props.folderUrl, file, props.assetId))
 }
 </script>
 
@@ -82,7 +72,7 @@ async function drop(event) {
 	<section
 		class="deliver-stack"
 		:class="{ 'deliver-stack--dragging': dragging }"
-		@dragover.prevent="dragging = canWrite"
+		@dragover.prevent="dragging = true"
 		@dragleave="dragging = false"
 		@drop.prevent="drop">
 		<NcNoteCard v-if="error" type="error">
@@ -93,8 +83,7 @@ async function drop(event) {
 			<li
 				v-for="version in versions"
 				:key="version.id"
-				class="deliver-stack__item"
-				:class="{ 'deliver-stack__item--current': version.id === current }">
+				class="deliver-stack__item">
 				<div class="deliver-stack__row">
 					<button type="button" class="deliver-stack__open" @click="emit('open', version.id)">
 						<img
@@ -110,7 +99,7 @@ async function drop(event) {
 						</span>
 					</button>
 					<span v-if="version.state === 'missing'" class="deliver-stack__badge">{{ t('deliver', 'Missing') }}</span>
-					<NcActions v-if="canWrite" :forceMenu="true">
+					<NcActions :forceMenu="true">
 						<NcActionInput
 							type="number"
 							:modelValue="String(numbers[version.id] ?? version.number)"
@@ -127,7 +116,7 @@ async function drop(event) {
 					</NcActions>
 				</div>
 				<!-- An automatic stack stays visible until a Member keeps or undoes it (story 13) -->
-				<div v-if="canWrite && version.autoStacked" class="deliver-stack__auto">
+				<div v-if="version.autoStacked" class="deliver-stack__auto">
 					<span>{{ t('deliver', 'Stacked automatically, going by its name') }}</span>
 					<NcButton variant="tertiary" :disabled="busy" @click="run(() => unstackVersion(version.id))">
 						{{ t('deliver', 'Undo') }}
@@ -139,7 +128,7 @@ async function drop(event) {
 			</li>
 		</ul>
 
-		<p v-if="canWrite && folderUrl" class="deliver-stack__drop">
+		<p class="deliver-stack__drop">
 			{{ t('deliver', 'Drop a file here to upload it next to the newest Version and stack it on top.') }}
 		</p>
 	</section>
@@ -149,37 +138,32 @@ async function drop(event) {
 .deliver-stack {
 	display: flex;
 	flex-direction: column;
-	gap: calc(3 * var(--default-grid-baseline, 4px));
+	gap: calc(3 * var(--default-grid-baseline));
 	overflow-y: auto;
 }
 
 .deliver-stack__list {
 	display: flex;
 	flex-direction: column;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
 }
 
 .deliver-stack__item {
-	padding: calc(2 * var(--default-grid-baseline, 4px));
+	padding: calc(2 * var(--default-grid-baseline));
 	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius-large, 12px);
-}
-
-.deliver-stack__item--current {
-	border-color: var(--color-primary-element);
-	box-shadow: 0 0 0 1px var(--color-primary-element);
+	border-radius: var(--border-radius-large);
 }
 
 .deliver-stack__row {
 	display: flex;
 	align-items: center;
-	gap: calc(2 * var(--default-grid-baseline, 4px));
+	gap: calc(2 * var(--default-grid-baseline));
 }
 
 .deliver-stack__open {
 	display: flex;
 	align-items: center;
-	gap: calc(3 * var(--default-grid-baseline, 4px));
+	gap: calc(3 * var(--default-grid-baseline));
 	flex: 1;
 	min-width: 0;
 	margin: 0;
@@ -196,7 +180,7 @@ async function drop(event) {
 	width: 80px;
 	height: 45px;
 	object-fit: cover;
-	border-radius: var(--border-radius, 4px);
+	border-radius: var(--border-radius);
 	background: var(--color-background-dark);
 }
 
@@ -216,18 +200,18 @@ async function drop(event) {
 
 .deliver-stack__badge {
 	padding: 0 8px;
-	border-radius: var(--border-radius-pill, 20px);
+	border-radius: var(--border-radius-pill);
 	background: var(--color-warning);
-	color: var(--color-warning-text, #000);
+	color: var(--color-warning-text);
 	font-size: 12px;
 }
 
 .deliver-stack__auto {
 	display: flex;
 	align-items: center;
-	gap: var(--default-grid-baseline, 4px);
-	margin-top: calc(2 * var(--default-grid-baseline, 4px));
-	padding-top: calc(2 * var(--default-grid-baseline, 4px));
+	gap: var(--default-grid-baseline);
+	margin-top: calc(2 * var(--default-grid-baseline));
+	padding-top: calc(2 * var(--default-grid-baseline));
 	border-top: 1px solid var(--color-border);
 	font-size: 13px;
 }
@@ -237,9 +221,9 @@ async function drop(event) {
 }
 
 .deliver-stack__drop {
-	padding: calc(4 * var(--default-grid-baseline, 4px));
+	padding: calc(4 * var(--default-grid-baseline));
 	border: 2px dashed var(--color-border-dark);
-	border-radius: var(--border-radius-large, 12px);
+	border-radius: var(--border-radius-large);
 	color: var(--color-text-maxcontrast);
 	text-align: center;
 }

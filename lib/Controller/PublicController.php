@@ -19,6 +19,7 @@ use OCP\IRequest;
 use OCP\ISession;
 use OCP\IURLGenerator;
 use OCP\IUserSession;
+use OCP\Share\IManager as IShareManager;
 use OCP\Share\IShare;
 use OCP\Util;
 
@@ -35,6 +36,7 @@ class PublicController extends AuthPublicShareController {
 		private ProjectService $projects,
 		private IUserSession $userSession,
 		private IInitialState $initialState,
+		private IShareManager $shares,
 	) {
 		parent::__construct($appName, $request, $session, $urls);
 	}
@@ -107,6 +109,6 @@ class PublicController extends AuthPublicShareController {
 	}
 
 	protected function verifyPassword(string $password): bool {
-		return $this->sharing->checkPassword($this->share(), $password);
+		return $this->shares->checkPassword($this->share(), $password);
 	}
 }

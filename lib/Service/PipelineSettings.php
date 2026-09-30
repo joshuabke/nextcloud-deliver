@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Deliver\Service;
 
 use OCA\Deliver\AppInfo\Application;
+use OCA\Deliver\Db\JobMapper;
 use OCP\IAppConfig;
 
 /**
@@ -28,7 +29,7 @@ class PipelineSettings {
 		private IAppConfig $config,
 		private Ffmpeg $ffmpeg,
 		private Encoder $encoder,
-		private DerivedMedia $media,
+		private JobMapper $jobs,
 	) {
 	}
 
@@ -110,6 +111,8 @@ class PipelineSettings {
 			'ffmpeg' => $this->ffmpeg->version($this->ffmpeg->ffmpeg()),
 			'ffprobe' => $this->ffmpeg->version($this->ffmpeg->ffprobe()),
 			'encoder' => $this->encoder->active(),
-		] + $this->media->status();
+			'states' => $this->jobs->countByState(),
+			'lastError' => $this->jobs->findLastFailed()?->getStderrTail(),
+		];
 	}
 }
