@@ -140,6 +140,10 @@ class DerivedMedia {
 		$playable = $this->browserPlays($probed);
 		$version->setPlayable($playable);
 		$this->versions->update($version);
+		// Read without ffprobe: there is no ffmpeg either, so nothing to queue that could only fail
+		if ($probed['fallback'] ?? false) {
+			return;
+		}
 		// A Proxy either makes the Version playable at all or is the lighter choice next to a large original
 		if ($version->getHasVideo() && (!$playable || $this->oversized($probed))) {
 			$this->enqueue($version->getId(), Job::KIND_PROXY);
