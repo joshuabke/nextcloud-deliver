@@ -1,5 +1,6 @@
 <script setup>
 import backIcon from '@mdi/svg/svg/arrow-left.svg?raw'
+import dueIcon from '@mdi/svg/svg/calendar-clock.svg?raw'
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import compareIcon from '@mdi/svg/svg/compare.svg?raw'
 import removeIcon from '@mdi/svg/svg/delete-outline.svg?raw'
@@ -24,10 +25,11 @@ import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import AssetCard from '../components/AssetCard.vue'
 import ContextMenu from '../components/ContextMenu.vue'
+import DueDateDialog from '../components/DueDateDialog.vue'
 import FilterBar from '../components/FilterBar.vue'
 import ProjectSettingsDialog from '../components/ProjectSettingsDialog.vue'
 import VersionStack from '../components/VersionStack.vue'
-import { disableAsset, enableFile, errorMessage, stackVersion, uploadNextVersion, uploadVersion } from '../api.js'
+import { disableAsset, enableFile, errorMessage, stackVersion, updateAsset, uploadNextVersion, uploadVersion } from '../api.js'
 import { useQuery } from '../composables/query.js'
 import { confirmRemoval } from '../confirm.js'
 import { FILTER_LABELS, FILTERS, found, passes, SORT_OPTIONS, sortAssets, SORTS } from '../lib/filters.js'
@@ -51,6 +53,8 @@ const fileInput = ref(null)
 const versionInput = ref(null)
 /** The right-click menu: where, and for which Asset */
 const menu = ref(null)
+/** The Asset whose Due Date is being set */
+const dueFor = ref(null)
 /** The Asset a new Version is picked for */
 const stackOn = ref(null)
 const project = computed(() => store.details[props.id])
@@ -158,6 +162,7 @@ function openMenu(event, asset) {
 			{ label: t('deliver', 'Open'), icon: openIcon, action: () => router.push(`/versions/${newest.id}`) },
 			previous && { label: t('deliver', 'Compare with the Version before'), icon: compareIcon, action: () => router.push(`/compare/${previous.id}/${newest.id}`) },
 			project.value.canWrite && { label: t('deliver', 'Upload a new Version'), icon: newVersionIcon, action: () => pickVersion(asset) },
+			project.value.canWrite && { label: asset.dueDate ? t('deliver', 'Change the Due Date') : t('deliver', 'Set a Due Date'), icon: dueIcon, action: () => { dueFor.value = asset } },
 			project.value.canWrite && !isMobile.value && { label: t('deliver', 'Manage Versions'), icon: stackIcon, action: () => { managing.value = asset.id } },
 			{
 				label: t('deliver', 'Show in Files'),
@@ -198,6 +203,18 @@ async function uploadStacked(event) {
 		uploading.value = false
 		await store.fetch(props.id).catch(() => {})
 	}
+}
+
+/**
+ * @param {string|null} dueDate - the new Due Date of dueFor, or null
+ */
+async function setDue(dueDate) {
+	try {
+		await updateAsset(dueFor.value.id, { dueDate })
+	} catch (e) {
+		error.value = errorMessage(e)
+	}
+	await store.fetch(props.id).catch(() => {})
 }
 
 /**
@@ -392,6 +409,11 @@ function dropped(event) {
 					@open="router.push(`/versions/${$event}`)"
 					@changed="store.fetch(props.id)" />
 			</NcDialog>
+			<DueDateDialog
+				v-if="dueFor"
+				:modelValue="dueFor.dueDate"
+				@update:modelValue="setDue"
+				@close="dueFor = null" />
 			<ProjectSettingsDialog
 				v-if="settingsOpen"
 				:project="project"

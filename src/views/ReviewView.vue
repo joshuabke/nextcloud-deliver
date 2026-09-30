@@ -22,6 +22,7 @@ import ApprovalControl from '../components/ApprovalControl.vue'
 import AssetStepper from '../components/AssetStepper.vue'
 import CommentPanel from '../components/CommentPanel.vue'
 import DueDate from '../components/DueDate.vue'
+import DueDateDialog from '../components/DueDateDialog.vue'
 import ExportMenu from '../components/ExportMenu.vue'
 import ImageViewer from '../components/ImageViewer.vue'
 import ReviewLayout from '../components/ReviewLayout.vue'
@@ -51,7 +52,7 @@ const error = ref(null)
 const uploading = ref(false)
 const fileInput = ref(null)
 /** The phone's date picker for a first Due Date; once set, the date in the bar changes it */
-const dueInput = ref(null)
+const pickingDue = ref(false)
 /** Who can be mentioned in this Project */
 const members = ref([])
 
@@ -103,15 +104,6 @@ onBeforeUnmount(() => store.stop())
 /** Reloads the Version Stack after stacking, renumbering, a drop upload or new derived media */
 async function reload() {
 	context.value = await getVersion(props.id)
-}
-
-/** Opens the browser's own date picker */
-function pickDue() {
-	if (dueInput.value?.showPicker) {
-		dueInput.value.showPicker()
-	} else {
-		dueInput.value?.focus()
-	}
 }
 
 /**
@@ -235,14 +227,6 @@ async function upload(event) {
 					{{ t('deliver', 'New Version') }}
 				</NcButton>
 				<input
-					v-if="isMobile"
-					ref="dueInput"
-					class="deliver-review__due-input"
-					type="date"
-					tabindex="-1"
-					aria-hidden="true"
-					@change="setDue($event.target.value || null)">
-				<input
 					ref="fileInput"
 					type="file"
 					accept="video/*,audio/*"
@@ -281,7 +265,7 @@ async function upload(event) {
 					</template>
 					{{ t('deliver', 'New Version') }}
 				</NcActionButton>
-				<NcActionButton v-if="!context.asset.dueDate" closeAfterClick @click="pickDue">
+				<NcActionButton v-if="!context.asset.dueDate" closeAfterClick @click="pickingDue = true">
 					<template #icon>
 						<NcIconSvgWrapper :svg="dueIcon" />
 					</template>
@@ -357,6 +341,11 @@ async function upload(event) {
 			</CommentPanel>
 		</template>
 	</ReviewLayout>
+	<DueDateDialog
+		v-if="pickingDue && context"
+		:modelValue="context.asset.dueDate"
+		@update:modelValue="setDue"
+		@close="pickingDue = false" />
 </template>
 
 <style scoped>
@@ -378,15 +367,6 @@ async function upload(event) {
 .deliver-review__due {
 	flex: none;
 	font-size: 12px;
-}
-
-/* Only its picker is used; the field itself stays out of sight */
-.deliver-review__due-input {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	opacity: 0;
-	pointer-events: none;
 }
 
 .deliver-review__project {
