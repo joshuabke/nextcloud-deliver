@@ -1,157 +1,49 @@
 # Deliver
 
-Frame-accurate video review inside Nextcloud Files. A media file enabled for review becomes an Asset, the folder it lies in becomes a Project, and Members and Reviewers leave Comments anchored to Frames. Vocabulary: [CONTEXT.md](CONTEXT.md). Spec for 0.2.0: [docs/spec-v2.md](docs/spec-v2.md). Agent handover: [CLAUDE.md](CLAUDE.md).
+**Frame-accurate video and audio review, right where your files already are.**
 
-## Requirements
+Deliver turns Nextcloud into a review tool for cuts, mixes and stills, in the spirit of Frame.io, but on your own server. Your team and your clients comment on exact Frames, draw on the picture, compare Versions and sign them off. The feedback goes back into the editing application as markers. Nothing is uploaded anywhere else and nothing is copied: Nextcloud Files stays the source of truth.
 
-- Nextcloud 33 or newer (the Files sidebar tab API this app uses shipped with 33)
-- PHP 8.2 or newer
-- ffmpeg/ffprobe are optional and only needed for derived media (Proxies, Thumbnail Strips, Waveforms)
-- For the still that identifies an Asset in a list, Nextcloud's own Movie preview provider has to be enabled by an admin (`occ config:system:set enabledPreviewProviders N --value 'OC\Preview\Movie'`); without it the list falls back to an icon
+![The Review view: a Comment on a Range with a Drawing, Replies and Reactions](docs/screenshots/review.png)
 
-## Development
+## What it does
 
-Everything runs in Docker; no local PHP is needed. Node 22 builds the frontend.
+- **Review in place.** Enable a video, audio or image file from the Files sidebar, or let a whole folder take in everything new. The folder becomes a Project, every file an Asset.
+- **Comments on the Frame.** Anchor a Comment to a Frame or a Range, draw on the picture with pen, arrow or box, reply, react, mention a colleague, attach a reference, and resolve it once it is done.
+- **Versions that stack.** A new cut named `…_v2` next to `…_v1` lands on top of it by itself. Compare two Versions side by side or under a wipe, playing in sync.
+- **Sign-off.** Approve a Version or request changes, set Due Dates with reminders, and see at a glance what is unseen, approved or due.
+- **Clients without accounts.** Review runs on ordinary Nextcloud Share Links. Every Reviewer gets a Personal Link, rights of their own and, if you like, a Watermark with their name over the picture.
+- **Back into the edit.** Export the Comments as markers for DaVinci Resolve (EDL), Premiere Pro (FCP7 XML), Final Cut Pro (FCPXML) or as CSV; for audio as WAV markers, MIDI, REAPER regions or into an Ableton Live Set.
+- **Heavy media, light browser.** With ffmpeg on the server, Deliver makes Proxies for formats a browser will not play, Thumbnail Strips for the timeline and Waveforms, with hardware encoding if you have it. Without ffmpeg, browser-native files play as they are.
+- **Everywhere.** Live updates without reloading, a Review view made for phones, English and German.
 
-The dev image is `deploy/Dockerfile` built for Nextcloud 34: ffmpeg and the VAAPI drivers, with `/dev/dri` passed in, so the hardware encoder of ADR 0003 can be tried on real hardware (`vainfo --display drm --device /dev/dri/renderD128`).
+| Compare two Versions under a wipe | A client on a Share Link, with Watermark |
+| --- | --- |
+| ![Compare view: the flat v1 against the graded v2](docs/screenshots/compare.png) | ![A Reviewer's page with a Watermark and the Approval "Changes requested"](docs/screenshots/reviewer.png) |
+| **A Project: filters, Approvals, Due Dates** | **On a phone** |
+| ![A Project with its Assets as cards](docs/screenshots/project.png) | <img src="docs/screenshots/phone.png" alt="The Review view on a phone" width="260"> |
 
-```sh
-make up               # Nextcloud 34 + ffmpeg + Postgres on http://localhost:8080 (admin / adminadmin123), enables the app
-make build            # npm ci && vite build → js/
-npm run watch         # rebuild on change
-make test-integration # PHPUnit over the HTTP API, run inside the Nextcloud container
-npm run test:unit     # vitest, pure client logic only
-npm run test:e2e      # playwright against the dev instance
-npm run lint          # eslint
-make lint-php         # PHP coding standard and Psalm; make fix-php applies the standard
-make down
-```
+## Installation
 
-CI (`.github/workflows/ci.yml`) runs the same checks on every pull request, then starts the dev instance with `.github/compose.ci.yml` (no GPU, bound to localhost only) for the integration and browser tests.
+Install **Deliver** from the Nextcloud App Store: *Apps → Multimedia → Deliver*. It needs Nextcloud 33 or newer and PHP 8.2 or newer.
 
-`docker/` holds the instance data and is gitignored. Every mail the instance sends lands in a Mailpit container instead of going out; its inbox is on port 8025, bound like Nextcloud. `dev/opcache.ini` makes the container pick up PHP edits immediately.
+Everything else is optional:
 
-The instance carries a known admin password and Nextcloud's trusted-domain check falls to a forged `Host` header, so the port is bound to `127.0.0.1` instead of being published to the whole network. Another address (the machine's tailnet address, say) goes into a gitignored `docker-compose.override.yml`, which Compose merges on its own — and then it is reachable by whoever can route there:
+- **ffmpeg and ffprobe** on the server for Proxies, Thumbnail Strips and Waveforms, and for hardware encoding. Shared hosting without them works for browser-native files.
+- **The Movie preview provider**, so that lists show a still of each video instead of an icon.
+- **[notify_push](https://github.com/nextcloud/notify_push)**, so that new Comments reach open Review views at once instead of within seconds.
 
-```yaml
-services:
-  nextcloud:
-    ports: ["100.x.y.z:8080:80"]
-  mail:
-    ports: ["100.x.y.z:8025:8025"]
-```
+The details are in [docs/admin.md](docs/admin.md); a Compose setup for a server of your own is in [deploy/](deploy/README.md).
 
-Links in mails and from background jobs use `DELIVER_URL` (default `http://localhost:8080`); set it in `.env` to the address people open, e.g. `DELIVER_URL=http://factory.example.ts.net:8080`, and `docker compose up -d`.
+## Documentation
 
-To reach the dev instance under another host name or address, put it into a gitignored `.env` next to `docker-compose.yml` before the first `make up` (space-separated, e.g. `DELIVER_EXTRA_TRUSTED_DOMAINS=192.168.1.20 dev.example.test`). Nextcloud reads trusted domains only at install time; on an existing instance use `make occ ARGS="config:system:set trusted_domains 2 --value=192.168.1.20"` instead.
-
-### Tests
-
-`tests/Integration` is PHPUnit talking to the running dev instance over WebDAV and the OCS API, as a person or client would. `make test-integration` installs PHPUnit into `vendor/` through the Composer Docker image and runs it inside the Nextcloud container, where the instance is reachable as `http://localhost`. Override the target with the `DELIVER_TEST_URL`, `DELIVER_TEST_USER` and `DELIVER_TEST_PASSWORD` environment variables in `phpunit.xml`.
-
-`tests/e2e` drives a real browser through the same instance with Playwright. Without a Chrome on the machine, run one in Docker and let the tests attach to it over CDP:
-
-```sh
-docker run -d --name deliver-chrome --shm-size=1g -p 127.0.0.1:9222:9222 chromedp/headless-shell
-DELIVER_BROWSER_URL=http://<address the container can reach>:8080 npm run test:e2e
-```
-
-`DELIVER_CDP` points at the browser (default `http://127.0.0.1:9222`), `DELIVER_BROWSER_URL` at Nextcloud **as the browser sees it** — inside a container that is not `localhost`. The tests' own API calls go to `DELIVER_TEST_URL` (default `http://localhost:8080`), so an instance on another port needs that one too. The media fixtures are generated by ffmpeg on first run into the gitignored `tests/e2e/media/`; they are WebM because open-source Chromium builds carry no H.264 decoder.
-
-`npm run test:unit` is vitest on pure client logic only (timecode math, the keyboard map, the polling merge, the filename convention). Component rendering is covered by the browser tests instead; `vitest.config.js` keeps it to `src/`.
-
-PHPUnit has two tiers: `tests/Unit` for pure PHP (filename convention, timecode, export writers, pipeline arithmetic) and `tests/Integration` for everything that needs a running Nextcloud. `make test-integration` runs both; `--testsuite Unit` runs the fast one alone.
-
-## Live updates
-
-The Review view asks for changes every five seconds (thirty in a hidden tab). Where Nextcloud runs the [notify_push](https://github.com/nextcloud/notify_push) app, every new or changed Comment, Reaction or Approval is pushed to the Project's Members as well, and their open Review views update at once. Reviewers on a Share Link have no account to push to and keep polling.
-
-## Derived media
-
-`ffprobe` reads the frame rate as a fraction, the start timecode and the duration in Frames; `ffmpeg` makes a Proxy for anything a browser will not play, a WebP Thumbnail Strip for the timeline and a Waveform for the audio. Everything lands in app data, never in a user folder, and is served with byte ranges so the player can seek.
-
-```sh
-make occ ARGS="deliver:worker --once"              # work through the queue and stop
-make occ ARGS="deliver:worker"                     # keep working as jobs arrive
-make occ ARGS="deliver:regenerate --project-id=1"  # delete and rebuild; also --version-id, or neither for everything
-```
-
-Cron takes jobs from the same queue every five minutes, for up to four minutes per run. The app setting `max_jobs` (default 1) caps how many ffmpeg processes run at once across cron and all workers; a job whose worker died is queued again after two hours. Without ffmpeg the app keeps working: browser-native files play as they are, and a Version has no derived media.
-
-Admins configure the pipeline under *Administration → Deliver*: the paths to ffmpeg and ffprobe (empty means whatever is on the PATH), how many jobs run at once, the maximum Proxy height, the Thumbnail Strip cap, extra ffmpeg arguments for Proxies, and a hardware encoder (VAAPI with its device path, NVENC or VideoToolbox). Saving runs a one-second test encode; a hardware encoder that fails it stays configured but unused, and a Proxy it fails on later is made again with libx264. The same page shows the ffmpeg versions, the queue and the stderr of the last failed job. `max_jobs`, `max_height` and friends are ordinary app config values, so `occ config:app:set deliver …` works as well.
-
-For VAAPI in Docker, pass `/dev/dri` into the container **and** put the web server's user into the group that owns `/dev/dri/renderD128`: `group_add` in compose only reaches the container's first process, and Apache drops it when it switches to `www-data`. `deploy/Dockerfile` does this with the build argument `RENDER_GID`.
-
-An hourly scan compares every Project with its folder, next to the file listener: it catches deletions from the trash, which fire no event Deliver can hear, and purges Projects whose folder is gone for good.
-
-## Deployment
-
-`deploy/` has a Compose example for a server of your own: Nextcloud with ffmpeg and the VAAPI drivers, Postgres, Redis, a cron container and an optional derived-media worker. See `deploy/README.md`.
-
-## Release
-
-`make package` builds the frontend and writes `build/deliver.tar.gz`: one folder named after the app id, carrying `appinfo`, `lib`, `templates`, `img`, `js`, `l10n`, the licence, the changelogs and this README — and nothing of the workshop around it. Source maps are dropped. `make appinfo` validates `appinfo/info.xml` against the App Store schema (`dev/info.xsd`).
-
-The built `js/` is gitignored, so a release is always `make package`, never `git archive`.
-
-A pushed tag `v1.2.3` builds, signs and publishes the release (`.github/workflows/release.yml`). Certificate, store registration, the secrets and the release steps are in `docs/app-store.md`.
-
-## API
-
-OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| GET | `/projects` | Projects whose folder the user can reach |
-| POST | `/projects` `{folderId}` | Turn a folder into a Project |
-| GET | `/folders/{folderId}/project` | The Project of a folder, or 404 |
-| GET | `/projects/{id}` | Project with its Asset tree; rescans the folder |
-| PUT | `/projects/{id}` `{autoIntake, allowOlder, fpsNum, fpsDen, timecodeMode}` | Project settings, each field optional |
-| PUT | `/projects/{id}/mute` `{muted}` | Mute or unmute the Project's notifications for oneself |
-| DELETE | `/projects/{id}` | Remove the Project, files stay untouched |
-| GET | `/files/{fileId}/asset` | The Asset of a file, or 404 |
-| POST | `/assets` `{fileId}` | Enable one media file for review |
-| DELETE | `/assets/{id}` | Take a file out of Deliver, the file stays |
-| GET | `/versions/{id}` | Project, Asset and Version Stack for the Review view |
-| PUT | `/versions/{id}` `{number, autoStacked}` | Set the Version Number, or take note of an automatic stack |
-| POST | `/versions/{id}/stack` `{assetId, number}` | Stack a Version onto another Asset |
-| POST | `/versions/{id}/unstack` | Take a Version out of its Stack, which is also the undo |
-| POST | `/versions/{id}/regenerate` | Delete the Version's derived media and queue it again |
-| GET | `/admin/settings` | Pipeline settings and status, admins only |
-| PUT | `/admin/settings` `{ffmpegPath, ffprobePath, maxJobs, maxHeight, thumbCap, hwEncoder, hwDevice, extraArgs}` | Save and test the encoder, admins only |
-| GET | `/apps/deliver/versions/{id}/export/{format}` `?unresolvedOnly=1&zeroBased=1` | The Comments as `edl` (DaVinci Resolve markers), `fcpxml` (FCP7 XML, Premiere Pro) or `csv`, and for audio as `wav` (embedded markers), `midi` (marker meta events) or `reaper` (Region/Marker Manager CSV); needs write access |
-| POST | `/apps/deliver/versions/{id}/export/ableton` (multipart `set`) | An Ableton Live Set back with the Comments as locators |
-| GET | `/apps/deliver/versions/{id}/media/{kind}` | Proxy, Thumbnail Strip, its index or the Waveform, with byte ranges |
-| GET | `/versions/{id}/comments` | Comments of a Version, Frame order |
-| POST | `/versions/{id}/comments` `{inFrame, outFrame, body, parentId}` | Comment on a Frame or a Range, or a Reply |
-| GET | `/versions/{id}/changes?since=` | What changed, plus the ids that still exist |
-| POST | `/versions/{id}/seen` `{at}` | Move the Unseen mark forward |
-| PUT | `/comments/{id}` `{body}` | Edit one's own Comment |
-| DELETE | `/comments/{id}` | Remove a Comment, with its Replies |
-| PUT | `/comments/{id}/resolved` `{resolved}` | Resolve or unresolve, needs write access |
-| GET | `/files/{fileId}/shares` | The Share Links of a file or folder, with Deliver's flags |
-| POST | `/files/{fileId}/shares` | A Share Link with review already on |
-| PUT | `/shares/{shareId}` `{review, canComment, allowOlder}` | Switch review on a Share Link and set its flags |
-| GET | `/shares/{shareId}/reviewers` | The Project's Reviewers, each with a Personal Link through this share |
-| POST | `/shares/{shareId}/reviewers` `{name, email}` | Invite a Reviewer; the answer carries the Personal Link |
-
-Missing write access answers 403; a request that clashes with the current state (a nested Project, a taken Version Number, an older Version closed for Comments) answers 409.
-
-A Personal Link is the share URL plus the Reviewer's key, `/s/{token}?r={key}`. Opening it stores the key in a cookie for that share, so the browser keeps the identity.
-
-Reviewers never touch OCS. Their surface hangs off the share token, needs no account, and is checked by the public-share middleware before Deliver sees it:
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| GET | `/apps/deliver/s/{token}` | The review page; `?fileId=` opens a specific file |
-| GET | `/apps/deliver/s/{token}/versions/{versionId}` | The review page on one Version |
-| GET | `/apps/deliver/s/{token}/api/context` | Project settings, Asset and Version Stack behind the link |
-| GET | `/apps/deliver/s/{token}/api/assets` | What the link shows, for the Review button in the file list |
-| GET | `/apps/deliver/s/{token}/media/{versionId}/{kind}` | Derived media, or `original` where the share hides downloads and no Proxy is made |
-| POST | `/apps/deliver/s/{token}/api/reviewer` `{name, email}` | Name yourself; the answer carries the Personal Link |
-| GET/POST | `/apps/deliver/s/{token}/api/versions/{id}/comments` | Read and write Comments as a Reviewer |
-| PUT/DELETE | `/apps/deliver/s/{token}/api/comments/{id}` | Change or remove one's own Comment |
+- [Running Deliver](docs/admin.md): requirements, the derived-media pipeline, hardware encoders, live updates
+- [Developing Deliver](docs/development.md): the dev instance, tests, packaging and releases
+- [API](docs/api.md): the OCS API and the Reviewer's surface
+- [App Store](docs/app-store.md): certificate, registration and publishing
+- [Glossary](CONTEXT.md), [decisions](docs/adr/) and the [spec](docs/spec-v2.md)
+- [Changelog](CHANGELOG.md)
 
 ## License
 
-AGPL-3.0-or-later
+AGPL-3.0-or-later. The footage in the screenshots is from *Tears of Steel*, (CC) Blender Foundation | [mango.blender.org](https://mango.blender.org), CC BY 3.0.
