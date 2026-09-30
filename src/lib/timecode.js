@@ -49,12 +49,10 @@ function pad(value, width = 2) {
  * the first frame of the file.
  *
  * @param {number} frame - frame index, zero-based
- * @param {{num: number, den: number}} fps - frame rate
- * @param {string} mode - 'smpte', 'frames' or 'seconds'
- * @param {{startFrame?: number, dropFrame?: boolean}} timecode - the Version's start timecode, in Frames
- * @return {string} the position as text
+ * @param {{fps: {num: number, den: number}, mode?: string, startFrame?: number, dropFrame?: boolean}} clock - how the Review view shows time: 'smpte', 'frames' or 'seconds', and the Version's start timecode in Frames
+ * @return {string} the Frame as the Review view shows it
  */
-export function formatFrame(frame, fps, mode = 'smpte', { startFrame = 0, dropFrame = false } = {}) {
+export function formatAt(frame, { fps, mode = 'smpte', startFrame = 0, dropFrame = false }) {
 	if (mode === 'frames') {
 		return String(frame)
 	}
@@ -64,17 +62,17 @@ export function formatFrame(frame, fps, mode = 'smpte', { startFrame = 0, dropFr
 	return smpte(frame + startFrame, fps, dropFrame)
 }
 
+/**
+ * @param {{inFrame: number, outFrame: ?number}} anchor - a Frame, or a Range when it has an out Frame
+ * @param {object} clock - as for formatAt
+ * @return {string} the Frame, or the Range from its in to its out Frame
+ */
+export function formatRange({ inFrame, outFrame }, clock) {
+	return formatAt(inFrame, clock) + (outFrame === null ? '' : ' – ' + formatAt(outFrame, clock))
+}
+
 /** The display modes, in the order the player's toggle steps through them */
 export const MODES = ['smpte', 'frames', 'seconds']
-
-/**
- * @param {number} frame - frame index, zero-based
- * @param {{fps: {num: number, den: number}, mode: string, startFrame?: number, dropFrame?: boolean}} clock - how the Review view shows time
- * @return {string} the Frame as the Review view shows it
- */
-export function formatAt(frame, clock) {
-	return formatFrame(frame, clock.fps, clock.mode, clock)
-}
 
 /**
  * SMPTE timecode. Fractional rates count whole frames per timecode second

@@ -14,8 +14,8 @@ import {
 import { mergeComments } from '../lib/merge.js'
 
 /** How often the Review view asks for changes, in ms; a hidden tab asks less often */
-export const POLL_INTERVAL = 5000
-export const POLL_INTERVAL_HIDDEN = 30000
+const POLL_INTERVAL = 5000
+const POLL_INTERVAL_HIDDEN = 30000
 
 export const useCommentsStore = defineStore('comments', {
 	state: () => ({
@@ -53,6 +53,14 @@ export const useCommentsStore = defineStore('comments', {
 				...comment,
 				replies: state.comments.filter((reply) => reply.parentId === comment.id),
 			})),
+		/**
+		 * @return {Map<number, number>} Comment id → its place in the order Comments were written, as the list and the markers number them
+		 */
+		numbers() {
+			return new Map([...this.threads]
+				.sort((a, b) => a.createdAt - b.createdAt || a.id - b.id)
+				.map((thread, index) => [thread.id, index + 1]))
+		},
 		mine: (state) => (comment) => state.me !== null
 			&& comment.author.type === state.me.type
 			&& comment.author.id === state.me.id,

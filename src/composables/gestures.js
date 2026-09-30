@@ -1,22 +1,25 @@
 import { ref } from 'vue'
 import { clampZoom, DOUBLE_TAP_MS, HOLD_MS, swipeStep, TAP_SLOP, tapSide } from '../lib/gestures.js'
 
+/** What a gesture without a handler does */
+function noop() {}
+
 /**
  * Touch on the picture, as in the Frame.io app (story 104): a tap, a double
  * tap on the left or right third, a hold, a swipe sideways, two fingers to
  * zoom and, once zoomed, one to pan. Only fingers and pens count; the mouse
  * keeps its clicks.
  *
- * @param {object} handlers - what to do
- * @param {() => void} handlers.tap - a single tap
- * @param {(side: number) => void} handlers.doubleTap - a double tap, with -1, 0 or 1 for the third it hit
- * @param {() => void} handlers.holdStart - a finger rests
- * @param {() => void} handlers.holdEnd - the resting finger lifts
- * @param {(step: number) => void} handlers.swipe - a swipe, with 1 for the next Asset and -1 for the previous
+ * @param {object} handlers - what to do; a gesture without one does nothing
+ * @param {() => void} [handlers.tap] - a single tap
+ * @param {(side: number) => void} [handlers.doubleTap] - a double tap, with -1, 0 or 1 for the third it hit
+ * @param {() => void} [handlers.holdStart] - a finger rests
+ * @param {() => void} [handlers.holdEnd] - the resting finger lifts
+ * @param {(step: number) => void} [handlers.swipe] - a swipe, with 1 for the next Asset and -1 for the previous
  * @param {import('vue').Ref<boolean>} enabled - false while drawing
  * @return {object} the zoom to apply, the pointer listeners, and whether the last pointer was a finger
  */
-export function useGestures({ tap, doubleTap, holdStart, holdEnd, swipe }, enabled) {
+export function useGestures({ tap = noop, doubleTap = noop, holdStart = noop, holdEnd = noop, swipe = noop }, enabled) {
 	const zoom = ref({ scale: 1, x: 0, y: 0 })
 	/** Set while fingers are on the picture, so the click that follows a tap is ignored */
 	const touched = ref(false)

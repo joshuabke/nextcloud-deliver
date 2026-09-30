@@ -134,7 +134,7 @@ async function claim({ name, email, mail }) {
 		<ReviewLayout v-else v-model:panelOpen="panelOpen">
 			<template #start>
 				<div class="deliver-public__crumbs">
-					<h2 class="deliver-public__title">
+					<h2 class="deliver-layout__title">
 						{{ context.asset?.name }}
 					</h2>
 					<DueDate v-if="isMobile" :modelValue="context.asset?.dueDate ?? null" />
@@ -190,29 +190,18 @@ async function claim({ name, email, mail }) {
 			</template>
 
 			<template #notice>
-				<NcNoteCard v-if="error" type="error" class="deliver-public__notice">
+				<NcNoteCard v-if="error" type="error" class="deliver-layout__notice">
 					{{ error }}
 				</NcNoteCard>
-				<NcNoteCard v-if="personalLink" type="success" class="deliver-public__notice">
+				<NcNoteCard v-if="personalLink" type="success" class="deliver-layout__notice">
 					{{ t('deliver', 'Bookmark your Personal Link. It makes you "{name}" again on any device:', { name: reviewerName }) }}
 					<code>{{ personalLink }}</code>
 				</NcNoteCard>
 			</template>
 
-			<ImageViewer
-				v-if="version && clock.still"
-				ref="player"
-				v-model:draft="draft"
-				v-model:drawing="drawing"
-				:version="version"
-				:comments="store.threads"
-				:canComment="store.canComment === true && store.me?.type !== 'unnamed'"
-				:watermark="context.flags.watermark ? watermarkText : null"
-				@comment="pin($event); panelOpen = true"
-				@jump="jump"
-				@swipe="step" />
-			<VideoPlayer
-				v-else-if="version"
+			<component
+				:is="clock.still ? ImageViewer : VideoPlayer"
+				v-if="version"
 				ref="player"
 				v-model:mode="mode"
 				v-model:draft="draft"
@@ -262,20 +251,7 @@ async function claim({ name, email, mail }) {
 	padding-inline-start: var(--default-grid-baseline);
 }
 
-.deliver-public__title {
-	margin: 0;
-	font-size: 16px;
-	font-weight: bold;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.deliver-public__notice {
-	margin: calc(2 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline)) 0;
-}
-
-.deliver-public__notice code {
+.deliver-layout__notice code {
 	display: block;
 	user-select: all;
 	overflow-wrap: anywhere;

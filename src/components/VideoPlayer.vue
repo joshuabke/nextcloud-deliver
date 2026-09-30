@@ -31,6 +31,7 @@ import { DOUBLE_TAP_MS } from '../lib/gestures.js'
 import { actionFor } from '../lib/hotkeys.js'
 import { formatAt, fpsValue, frameToTime, MODES, timeToFrame } from '../lib/timecode.js'
 import { watermarkTile } from '../lib/watermark.js'
+import { useCommentsStore } from '../store/comments.js'
 
 /** The drawing being made for the next Comment */
 const draft = defineModel('draft', { type: Array, default: () => [] })
@@ -53,6 +54,8 @@ const emit = defineEmits(['comment', 'jump', 'swipe', 'update:mode', 'update:dra
 
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2]
 
+/** For the Comments' numbers, the same as in the list */
+const store = useCommentsStore()
 const root = ref(null)
 const video = ref(null)
 const muted = ref(false)
@@ -92,10 +95,6 @@ const hover = ref(null)
 const scrubber = ref(null)
 /** The Comment whose card shows over the bar, and where */
 const peek = ref(null)
-/** Comment id → its place in the order Comments were written, as the panel numbers them */
-const numbers = computed(() => new Map([...props.comments]
-	.sort((a, b) => a.createdAt - b.createdAt || a.id - b.id)
-	.map((comment, index) => [comment.id, index + 1])))
 
 /** Half the card's width, to keep it inside the player */
 const PEEK_HALF = 160
@@ -210,13 +209,6 @@ watch(() => props.version.id, async (id) => {
 watch(source, () => {
 	unplayable.value = false
 })
-
-/** Switches between the original and the Proxy at the same Frame */
-function toggleSource() {
-	resumeAt = frame.value
-	pause()
-	useProxy.value = !useProxy.value
-}
 
 /**
  * @return {Promise<object|null>} the tile grid of the Thumbnail Strip, for hover previews
@@ -404,7 +396,7 @@ function pressMarker(event) {
 let lastTap = { id: null, at: 0 }
 
 /**
- * A marker clicked goes to its Frame. A tap only opens its card, to be read
+ * A marker clicked goes to its Frame, through the view's jump. A tap only opens its card, to be read
  * also in fullscreen, until it is tapped away or playback starts; a double
  * tap goes to the Frame.
  *
@@ -415,7 +407,6 @@ function openMarker(comment, event) {
 	const again = lastTap.id === comment.id && event.timeStamp - lastTap.at < DOUBLE_TAP_MS
 	lastTap = { id: comment.id, at: event.timeStamp }
 	if (!tappedMarker || again) {
-		seekTo(comment.inFrame)
 		emit('jump', comment)
 	}
 	if (tappedMarker) {
@@ -702,18 +693,32 @@ const sources = computed(() => [
 	{ proxy: false, label: t('deliver', 'Original'), resolution: props.version.resolution },
 	{ proxy: true, label: t('deliver', 'Proxy'), resolution: props.version.derived?.proxy?.resolution },
 ])
+const currentSource = computed(() => sources.value.find((each) => each.proxy === useProxy.value))
 
 /**
+ * @param {{label: string, resolution: ?number}} each - one of the sources
+ * @return {string} its name in the quality menu, with its height when known
+ */
+function sourceLabel(each) {
+	return each.resolution ? each.label + ' · ' + each.resolution + 'p' : each.label
+}
+
+/**
+ * Switches between the original and the Proxy at the same Frame
+ *
  * @param {boolean} wanted - whether the Proxy should play
  */
 function pickSource(wanted) {
 	if (wanted !== useProxy.value) {
-		toggleSource()
+		resumeAt = frame.value
+		pause()
+		useProxy.value = wanted
 	}
 }
 
 /** Loops the Range when one is set, else the whole Version */
 const loopsWhole = computed(() => loop.value && outPoint.value === null)
+const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') : t('deliver', 'Loop the Range'))
 </script>
 
 <template>
@@ -892,7 +897,7 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 						<div class="deliver-player__peek-head">
 							<strong>{{ peek.comment.author.name }}</strong>
 							<NcDateTime :timestamp="peek.comment.createdAt * 1000" relativeTime="short" />
-							<span class="deliver-player__peek-number">#{{ numbers.get(peek.comment.id) }}</span>
+							<span class="deliver-player__peek-number">#{{ store.numbers.get(peek.comment.id) }}</span>
 						</div>
 						<p>
 							<span class="deliver-player__peek-time">{{ formatAt(peek.comment.inFrame, clock) }}</span>
@@ -953,7 +958,7 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 						<NcIconSvgWrapper :svg="moreIcon" />
 					</template>
 					<NcActionButton :modelValue="loop" type="checkbox" @click="loop = !loop">
-						{{ range?.outFrame != null ? t('deliver', 'Loop the Range') : t('deliver', 'Loop') }}
+						{{ loopLabel }}
 					</NcActionButton>
 					<NcActionSeparator />
 					<NcActionButton
@@ -974,7 +979,7 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 							type="radio"
 							closeAfterClick
 							@click="pickSource(each.proxy)">
-							{{ each.resolution ? each.label + ' · ' + each.resolution + 'p' : each.label }}
+							{{ sourceLabel(each) }}
 						</NcActionButton>
 					</template>
 					<NcActionSeparator />
@@ -1014,8 +1019,8 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 				<NcButton
 					variant="tertiary"
 					:pressed="loop"
-					:aria-label="range?.outFrame != null ? t('deliver', 'Loop the Range') : t('deliver', 'Loop')"
-					:title="range?.outFrame != null ? t('deliver', 'Loop the Range') : t('deliver', 'Loop')"
+					:aria-label="loopLabel"
+					:title="loopLabel"
 					@click="loop = !loop">
 					<template #icon>
 						<NcIconSvgWrapper :svg="loopIcon" />
@@ -1074,8 +1079,8 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 				<NcActions
 					v-if="original && proxy"
 					variant="tertiary"
-					class="deliver-player__quality"
-					:menuName="(useProxy ? version.derived.proxy.resolution : version.resolution) ? (useProxy ? version.derived.proxy.resolution : version.resolution) + 'p' : t('deliver', 'Original')"
+					class="deliver-player__quality deliver-caret-after"
+					:menuName="currentSource.resolution ? currentSource.resolution + 'p' : currentSource.label"
 					:aria-label="t('deliver', 'Quality')">
 					<template #icon>
 						<NcIconSvgWrapper :svg="menuIcon" :size="18" />
@@ -1087,7 +1092,7 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 						type="radio"
 						closeAfterClick
 						@click="pickSource(each.proxy)">
-						{{ each.resolution ? each.label + ' · ' + each.resolution + 'p' : each.label }}
+						{{ sourceLabel(each) }}
 					</NcActionButton>
 				</NcActions>
 				<NcButton
@@ -1508,10 +1513,6 @@ const loopsWhole = computed(() => loop.value && outPoint.value === null)
 .deliver-player__quality :deep(.button-vue) {
 	border: 1px solid var(--color-border-dark);
 	font-weight: normal;
-}
-
-.deliver-player__quality :deep(.button-vue__wrapper) {
-	flex-direction: row-reverse;
 }
 
 .deliver-player--fullscreen {

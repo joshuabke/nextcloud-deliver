@@ -11,8 +11,8 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import ComparePlayer from '../components/ComparePlayer.vue'
-import PanelTabs from '../components/PanelTabs.vue'
 import ReviewLayout from '../components/ReviewLayout.vue'
+import SegmentedControl from '../components/SegmentedControl.vue'
 import VersionPicker from '../components/VersionPicker.vue'
 import { errorMessage, getVersion, listComments } from '../api.js'
 import { usePanelOpen } from '../composables/panel.js'
@@ -31,12 +31,17 @@ const router = useRouter()
 const panelOpen = usePanelOpen()
 const context = ref(null)
 const error = ref(null)
+/** Each side's Comments, without their Replies */
 const comments = ref({})
 const player = ref(null)
 const offset = ref(0)
 const mode = ref('side')
 const audio = ref('a')
 const tab = ref('a')
+const LAYOUTS = [
+	{ id: 'side', label: t('deliver', 'Side by side') },
+	{ id: 'wipe', label: t('deliver', 'Wipe') },
+]
 
 const versionA = computed(() => context.value?.versions.find((each) => each.id === props.a) ?? null)
 const versionB = computed(() => context.value?.versions.find((each) => each.id === props.b) ?? null)
@@ -46,18 +51,23 @@ const clock = computed(() => ({
 	startFrame: versionA.value?.startFrame ?? 0,
 	dropFrame: versionA.value?.dropFrame ?? false,
 }))
+/** Side B's Comments read in its own Frames */
+const clockB = computed(() => ({ ...clock.value, fps: versionB.value?.fps, startFrame: versionB.value?.startFrame ?? 0 }))
 const tabs = computed(() => [versionA.value, versionB.value].filter(Boolean).map((version, index) => ({
 	id: index === 0 ? 'a' : 'b',
 	label: t('deliver', 'Comments on V{number}', { number: version.number }),
 })))
-const shown = computed(() => (comments.value[tab.value === 'a' ? props.a : props.b] ?? []).filter((comment) => comment.parentId === null))
+const commentsA = computed(() => comments.value[props.a] ?? [])
+const commentsB = computed(() => comments.value[props.b] ?? [])
+const shown = computed(() => tab.value === 'a' ? commentsA.value : commentsB.value)
 
 watch(() => [props.a, props.b], async ([a, b]) => {
 	error.value = null
 	try {
 		context.value = await getVersion(a)
 		const [listA, listB] = await Promise.all([listComments(a), listComments(b)])
-		comments.value = { [a]: listA.comments, [b]: listB.comments }
+		const topLevel = (list) => list.comments.filter((comment) => comment.parentId === null)
+		comments.value = { [a]: topLevel(listA), [b]: topLevel(listB) }
 	} catch (e) {
 		error.value = errorMessage(e)
 	}
@@ -112,7 +122,7 @@ function jump(comment) {
 					<NcIconSvgWrapper :svg="backIcon" />
 				</template>
 			</NcButton>
-			<h2 class="deliver-compare-view__title">
+			<h2 class="deliver-layout__title">
 				{{ context.asset.name }}
 			</h2>
 		</template>
@@ -138,22 +148,7 @@ function jump(comment) {
 				@select="open(a, $event)" />
 		</template>
 		<template #end>
-			<div class="deliver-compare-view__switch" role="radiogroup" :aria-label="t('deliver', 'Layout')">
-				<button
-					type="button"
-					role="radio"
-					:aria-checked="mode === 'side'"
-					@click="mode = 'side'">
-					{{ t('deliver', 'Side by side') }}
-				</button>
-				<button
-					type="button"
-					role="radio"
-					:aria-checked="mode === 'wipe'"
-					@click="mode = 'wipe'">
-					{{ t('deliver', 'Wipe') }}
-				</button>
-			</div>
+			<SegmentedControl v-model="mode" :options="LAYOUTS" :aria-label="t('deliver', 'Layout')" />
 			<NcButton
 				v-if="!isStill(versionA)"
 				variant="tertiary"
@@ -170,16 +165,20 @@ function jump(comment) {
 		<ComparePlayer
 			ref="player"
 			v-model:offset="offset"
-			v-model:mode="mode"
-			v-model:audio="audio"
+			:mode="mode"
+			:audio="audio"
 			:a="versionA"
 			:b="versionB"
 			:clock="clock"
-			:commentsA="(comments[a] ?? []).filter((each) => each.parentId === null)"
-			:commentsB="(comments[b] ?? []).filter((each) => each.parentId === null)" />
+			:commentsA="commentsA"
+			:commentsB="commentsB" />
 
 		<template #panel>
-			<PanelTabs v-model="tab" :tabs="tabs" />
+			<SegmentedControl
+				v-model="tab"
+				class="deliver-compare-view__tabs"
+				:options="tabs"
+				wide />
 			<ul v-if="shown.length" class="deliver-compare-view__list">
 				<li v-for="comment in shown" :key="comment.id">
 					<button
@@ -187,7 +186,7 @@ function jump(comment) {
 						type="button"
 						class="deliver-compare-view__anchor"
 						@click="jump(comment)">
-						{{ formatAt(comment.inFrame, tab === 'a' ? clock : { ...clock, fps: versionB.fps, startFrame: versionB.startFrame ?? 0 }) }}
+						{{ formatAt(comment.inFrame, tab === 'a' ? clock : clockB) }}
 					</button>
 					<span class="deliver-compare-view__author">{{ comment.author.name }}</span>
 					<p>{{ comment.body }}</p>
@@ -201,42 +200,12 @@ function jump(comment) {
 </template>
 
 <style scoped>
-.deliver-compare-view__title {
-	margin: 0;
-	font-size: 16px;
-	font-weight: bold;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
 .deliver-compare-view__error {
 	margin: calc(var(--default-clickable-area) + 4 * var(--default-grid-baseline)) calc(4 * var(--default-grid-baseline));
 }
 
-.deliver-compare-view__switch {
-	display: flex;
-	padding: 3px;
-	border-radius: var(--border-radius-element);
-	background: var(--color-background-dark);
-}
-
-.deliver-compare-view__switch button {
-	min-height: 0;
-	margin: 0;
-	padding: 4px 10px;
-	border: none;
-	border-radius: calc(var(--border-radius-element) - 2px);
-	background: none;
-	color: var(--color-text-maxcontrast);
-	font-weight: normal;
-	cursor: pointer;
-}
-
-.deliver-compare-view__switch button[aria-checked='true'] {
-	background: var(--color-background-darker);
-	color: var(--color-main-text);
-	font-weight: bold;
+.deliver-compare-view__tabs {
+	margin: calc(3 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline)) var(--default-grid-baseline);
 }
 
 .deliver-compare-view__list {

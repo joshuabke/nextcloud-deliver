@@ -24,7 +24,7 @@ import { errorMessage } from '../api.js'
 import { useBusy } from '../composables/busy.js'
 import { sheet } from '../composables/panel.js'
 import { insertMention, mentionAt } from '../lib/mentions.js'
-import { formatAt } from '../lib/timecode.js'
+import { formatRange } from '../lib/timecode.js'
 import { useCommentsStore } from '../store/comments.js'
 
 const props = defineProps({
@@ -138,15 +138,7 @@ watch(() => body.value.trim() === '', (empty, wasEmpty) => {
 	}
 })
 
-const anchorLabel = computed(() => {
-	const from = formatAt(props.anchor.inFrame, props.clock)
-	return props.anchor.outFrame === null ? from : from + ' – ' + formatAt(props.anchor.outFrame, props.clock)
-})
-
-/** Comment id → its place in the order Comments were written */
-const numbers = computed(() => new Map([...store.threads]
-	.sort((a, b) => a.createdAt - b.createdAt || a.id - b.id)
-	.map((thread, index) => [thread.id, index + 1])))
+const anchorLabel = computed(() => formatRange(props.anchor, props.clock))
 
 /**
  * @param {object} thread - a Comment with its Replies
@@ -301,7 +293,7 @@ function claim() {
 		<div class="deliver-comments__head">
 			<NcActions
 				variant="tertiary"
-				class="deliver-comments__show"
+				class="deliver-comments__show deliver-caret-after"
 				:menuName="SHOW[show]"
 				:aria-label="t('deliver', 'Filter')">
 				<template #icon>
@@ -364,7 +356,7 @@ function claim() {
 				:key="thread.id"
 				:comment="thread"
 				:clock="clock"
-				:number="numbers.get(thread.id)"
+				:number="store.numbers.get(thread.id)"
 				@jump="emit('jump', $event)" />
 		</ul>
 		<p v-else class="deliver-comments__empty">
@@ -620,10 +612,6 @@ function claim() {
 	align-items: center;
 	gap: 2px;
 	padding: var(--default-grid-baseline) calc(2 * var(--default-grid-baseline));
-}
-
-.deliver-comments__show :deep(.button-vue__wrapper) {
-	flex-direction: row-reverse;
 }
 
 .deliver-comments__show :deep(.button-vue) {

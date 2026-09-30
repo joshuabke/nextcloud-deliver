@@ -3,6 +3,7 @@ import { loadState } from '@nextcloud/initial-state'
 import { t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import icon from '../img/app.svg?raw'
+import { reviewable } from './lib/media.js'
 
 /**
  * Runs on Nextcloud's own public share page when the share has review on
@@ -16,14 +17,14 @@ if (reviewUrl !== null) {
 	window.location.replace(reviewUrl)
 }
 
-/** File id → the id of its own Version (story 61); null until loaded */
-let reviewable = null
+/** File id → the id of its own Version (story 61); null until loaded. By hand: api.js would bring axios onto the share page */
+let versionOf = null
 const loading = fetch(generateUrl('/apps/deliver/s/{token}/api/assets', { token }))
 	.then((response) => response.ok ? response.json() : [])
 	.catch(() => [])
 	.then((list) => {
-		reviewable = new Map(list.map(({ fileId, versionId }) => [fileId, versionId]))
-		return reviewable
+		versionOf = new Map(list.map(({ fileId, versionId }) => [fileId, versionId]))
+		return versionOf
 	})
 
 registerFileAction({
@@ -36,10 +37,10 @@ registerFileAction({
 		if (nodes.length !== 1) {
 			return false
 		}
-		// The list usually arrives after the file ids; until then, offer it on every media file
-		return reviewable === null
-			? /^(video|audio)\//.test(nodes[0].mime ?? '')
-			: reviewable.has(nodes[0].fileid)
+		// The list usually arrives after the file ids; until then, offer it on every file Deliver reviews
+		return versionOf === null
+			? reviewable(nodes[0].mime)
+			: versionOf.has(nodes[0].fileid)
 	},
 	async exec(context) {
 		const versionId = (await loading).get(context.nodes[0].fileid)

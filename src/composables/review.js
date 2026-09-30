@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { isStill } from '../lib/media.js'
 import { sheet } from './panel.js'
 
@@ -59,19 +59,21 @@ export function useReview({ version, projectMode, refresh }) {
 			return
 		}
 		player.value?.pause()
-		if (pinned.value === null) {
-			pinned.value = { inFrame: player.value?.frame ?? 0, outFrame: null }
-		}
+		pinned.value ??= anchor.value
 		drawing.value = true
 	}
 
 	/**
+	 * The field gets the focus once a hidden panel is out; on a phone held
+	 * sideways the list comes out beside the picture for it
+	 *
 	 * @param {{inFrame: number, outFrame: ?number}} where - the Frame or Range to comment on
 	 */
 	function pin(where) {
 		pinnedByTyping = false
 		pinned.value = where
-		panel.value?.focus()
+		sheet.aside.value = true
+		nextTick(() => panel.value?.focus())
 	}
 
 	/**
@@ -96,7 +98,7 @@ export function useReview({ version, projectMode, refresh }) {
 	 */
 	function hold() {
 		if (pinned.value === null) {
-			pinned.value = { inFrame: player.value?.frame ?? 0, outFrame: null }
+			pinned.value = anchor.value
 			pinnedByTyping = true
 		}
 	}
