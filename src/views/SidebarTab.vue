@@ -1,5 +1,7 @@
 <script setup>
+import { emit } from '@nextcloud/event-bus'
 import { Permission } from '@nextcloud/files'
+import { getClient, getDefaultPropfind, getRootPath, resultToNode } from '@nextcloud/files/dav'
 import { n, t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import { computed, ref, watch } from 'vue'
@@ -114,6 +116,9 @@ function saveSettings(settings) {
 function addLink() {
 	return run(async () => {
 		shares.value = [...shares.value, await createShareLink(props.node.fileid)]
+		// The file list shows the new link's share icon once it has the node again, as Nextcloud's own sharing tab does
+		const { data } = await getClient().stat(getRootPath() + props.node.path, { details: true, data: getDefaultPropfind() })
+		emit('files:node:updated', resultToNode(data))
 	})
 }
 
