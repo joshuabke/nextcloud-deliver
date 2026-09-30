@@ -16,12 +16,16 @@ use OCP\Files\File;
 class Probe {
 	public function __construct(
 		private Ffmpeg $ffmpeg,
+		private ContainerProbe $container,
 	) {
 	}
 
 	/**
-	 * @return array<string, mixed>|null the metadata, or null when ffprobe
-	 *                                   could not read the file
+	 * Without ffprobe, the container's own headers still carry what Frames
+	 * rest on; such an answer is marked `fallback`.
+	 *
+	 * @return array<string, mixed>|null the metadata, or null when neither
+	 *                                   could read the file
 	 */
 	public function read(string $path): ?array {
 		$result = $this->ffmpeg->run($this->ffmpeg->ffprobe(), [
@@ -32,7 +36,8 @@ class Probe {
 			$path,
 		], 120);
 		if ($result['code'] !== 0) {
-			return null;
+			$read = $this->container->read($path);
+			return $read === null ? null : $read + ['fallback' => true];
 		}
 		$probed = json_decode($result['stdout'], true);
 		return is_array($probed) ? $probed : null;
