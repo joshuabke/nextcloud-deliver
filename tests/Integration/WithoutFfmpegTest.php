@@ -97,5 +97,6 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertSame(['num' => 25, 'den' => 1], $version['fps'], 'audio takes the Project frame rate');
 		self::assertSame(90000, $version['startFrame']);
 		self::assertSame(100, $version['durationFrames']);
+		self::assertTrue($version['playable'], 'a WAV plays in the browser as it is');
 	}
 }
