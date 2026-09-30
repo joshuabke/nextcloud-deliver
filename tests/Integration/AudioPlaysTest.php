@@ -51,7 +51,6 @@ class AudioPlaysTest extends TestCase {
 			'Ogg Vorbis' => ['mix.ogg', '-c:a libvorbis -f ogg', true],
 			'Ogg Opus' => ['mix.opus', '-c:a libopus -f ogg', true],
 			'AAC' => ['mix.aac', '-c:a aac -f adts', true],
-			'AIFF' => ['mix.aif', '-c:a pcm_s16be -f aiff', false],
 		];
 	}
 

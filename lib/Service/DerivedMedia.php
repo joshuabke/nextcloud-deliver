@@ -43,6 +43,12 @@ class DerivedMedia {
 	private const PLAYABLE = [
 		'mp4' => ['video' => ['h264'], 'audio' => ['aac', 'mp3']],
 		'webm' => ['video' => ['vp8', 'vp9', 'av1'], 'audio' => ['opus', 'vorbis']],
+		// Audio files: a picture in them is cover art at most, and anything else is no audio file
+		'mp3' => ['video' => [], 'audio' => ['mp3']],
+		'aac' => ['video' => [], 'audio' => ['aac']],
+		'flac' => ['video' => [], 'audio' => ['flac']],
+		'ogg' => ['video' => [], 'audio' => ['vorbis', 'opus', 'flac']],
+		'wav' => ['video' => [], 'audio' => ['pcm_u8', 'pcm_s16le', 'pcm_s24le', 'pcm_s32le', 'pcm_f32le']],
 	];
 
 	private const THUMB_WIDTH = 160;
@@ -293,6 +299,7 @@ class DerivedMedia {
 		$family = match (true) {
 			str_contains($format, 'mp4') => 'mp4',
 			str_contains($format, 'webm') => 'webm',
+			isset(self::PLAYABLE[$format]) => $format,
 			default => null,
 		};
 		if ($family === null) {

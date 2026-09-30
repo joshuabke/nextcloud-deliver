@@ -171,6 +171,7 @@ class ContainerProbe {
 		$pos = 12;
 		$sampleRate = 0;
 		$byteRate = 0;
+		$codec = 'pcm';
 		$data = 0;
 		$reference = null;
 		while ($pos + 8 <= $size) {
@@ -179,6 +180,13 @@ class ContainerProbe {
 			if ($id === 'fmt ') {
 				$sampleRate = (int)unpack('V', $this->at($pos + 12, 4))[1];
 				$byteRate = (int)unpack('V', $this->at($pos + 16, 4))[1];
+				// ffprobe's name: integer PCM is unsigned at 8 bits and signed above, float is format 3
+				$bits = $this->u16le($pos + 22);
+				$codec = match ((int)unpack('v', $this->at($pos + 8, 2))[1]) {
+					1 => $bits === 8 ? 'pcm_u8' : "pcm_s{$bits}le",
+					3 => "pcm_f{$bits}le",
+					default => 'pcm',
+				};
 			} elseif ($id === 'bext' && $length >= 346) {
 				// After description, originator, its reference, date and time: samples since midnight
 				['low' => $low, 'high' => $high] = unpack('Vlow/Vhigh', $this->at($pos + 8 + 338, 8));
@@ -193,7 +201,7 @@ class ContainerProbe {
 		}
 		return [
 			'format' => ['format_name' => 'wav', 'duration' => (string)($data / $byteRate), 'tags' => $reference === null ? [] : ['time_reference' => (string)$reference]],
-			'streams' => [['codec_type' => 'audio', 'codec_name' => 'pcm', 'sample_rate' => (string)$sampleRate]],
+			'streams' => [['codec_type' => 'audio', 'codec_name' => $codec, 'sample_rate' => (string)$sampleRate]],
 		];
 	}
 
@@ -231,6 +239,10 @@ class ContainerProbe {
 	private function at(int $offset, int $length): string {
 		fseek($this->file, $offset);
 		return str_pad((string)fread($this->file, $length), $length, "\0");
+	}
+
+	private function u16le(int $offset): int {
+		return (int)unpack('v', $this->at($offset, 2))[1];
 	}
 
 	private function u16(int $offset): int {
