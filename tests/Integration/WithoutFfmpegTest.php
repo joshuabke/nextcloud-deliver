@@ -77,7 +77,7 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertSame(86400, $version['startFrame'], '01:00:00:00 counts 24 Frames a second at 23.976');
 		self::assertSame(48, $version['durationFrames']);
 		self::assertStringContainsString('01:00:01:00 01:00:01:01', $this->edl($version['id'], 24));
-		self::assertNull($version['derived']['proxy']['state'], 'no ffmpeg, so no Proxy is queued only to fail');
+		self::assertSame('none', $version['derived']['proxy']['state'], 'no ffmpeg, so no Proxy is queued only to fail');
 	}
 
 	public function testAnMp4AtDropFrameKeepsItsTimecode(): void {
