@@ -1,13 +1,14 @@
 <script setup>
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
-import { showSuccess } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
 import { ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
-import { errorMessage, inviteReviewer, listReviewers, setShareFlags } from '../api.js'
+import { inviteReviewer, listReviewers, setShareFlags } from '../api.js'
+import { copyLink } from '../clipboard.js'
+import { useBusy } from '../composables/busy.js'
 
 const props = defineProps({
 	/** One Share Link with Deliver's flags, as the server lists it */
@@ -19,28 +20,12 @@ const props = defineProps({
 
 const emit = defineEmits(['update', 'person'])
 
-const busy = ref(false)
-const error = ref(null)
+const { busy, error, run } = useBusy()
 /** The Project's Reviewers, each with their Personal Link through this share; null while loading */
 const reviewers = ref(null)
 const inviting = ref(false)
 const name = ref('')
 const email = ref('')
-
-/**
- * @param {() => Promise<unknown>} action - what to run while the link is busy
- */
-async function run(action) {
-	busy.value = true
-	error.value = null
-	try {
-		await action()
-	} catch (e) {
-		error.value = errorMessage(e)
-	} finally {
-		busy.value = false
-	}
-}
 
 /**
  * @param {object} flags - the Deliver flags to change: review, canComment, allowOlder, watermark
@@ -65,14 +50,6 @@ function startInvite() {
 }
 
 defineExpose({ startInvite, inviting })
-
-/**
- * @param {string} link - a Personal Link
- */
-async function copy(link) {
-	await navigator.clipboard.writeText(link)
-	showSuccess(t('deliver', 'Personal Link copied'))
-}
 
 /** Invites a Reviewer by name and gets their Personal Link (story 53) */
 function invite() {
@@ -131,7 +108,7 @@ function invite() {
 				<ul v-else-if="reviewers">
 					<li v-for="reviewer in reviewers" :key="reviewer.id" class="deliver-link__reviewer">
 						<span class="deliver-link__name">{{ reviewer.name }}</span>
-						<NcButton variant="tertiary" @click="copy(reviewer.link)">
+						<NcButton variant="tertiary" @click="copyLink(reviewer.link, t('deliver', 'Personal Link copied'))">
 							{{ t('deliver', 'Copy Personal Link') }}
 						</NcButton>
 						<NcButton
@@ -153,7 +130,7 @@ function invite() {
 				<form v-if="inviting" class="deliver-link__invite" @submit.prevent="invite">
 					<NcTextField v-model="name" :label="t('deliver', 'Name')" />
 					<NcTextField v-model="email" type="email" :label="t('deliver', 'Email for replies (optional)')" />
-					<NcButton variant="primary" :disabled="busy || !name.trim()" @click="invite">
+					<NcButton type="submit" variant="primary" :disabled="busy || !name.trim()">
 						{{ t('deliver', 'Invite') }}
 					</NcButton>
 				</form>

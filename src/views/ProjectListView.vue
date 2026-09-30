@@ -23,8 +23,8 @@ import ProjectCard from '../components/ProjectCard.vue'
 import ProjectSettingsDialog from '../components/ProjectSettingsDialog.vue'
 import { errorMessage } from '../api.js'
 import { useQuery } from '../composables/query.js'
-import { confirmRemoval } from '../confirm.js'
-import { PROJECT_FILTERS, projectPasses, sortProjects, SORTS } from '../lib/filters.js'
+import { confirmProjectRemoval } from '../confirm.js'
+import { FILTER_LABELS, PROJECT_FILTERS, projectPasses, SORT_OPTIONS, sortProjects, SORTS } from '../lib/filters.js'
 import { projectDir } from '../lib/folders.js'
 import { useProjectsStore } from '../store/projects.js'
 
@@ -36,25 +36,12 @@ const settings = ref(null)
 // Every visit shows the news as they are now
 store.fetchAll()
 
-const LABELS = {
-	all: t('deliver', 'All'),
-	unseen: t('deliver', 'Unseen'),
-	changes: t('deliver', 'Changes requested'),
-	due: t('deliver', 'Due'),
-}
-const sorts = [
-	{ id: 'activity', label: t('deliver', 'Latest activity') },
-	{ id: 'name', label: t('deliver', 'Name') },
-	{ id: 'created', label: t('deliver', 'Newest first') },
-	{ id: 'due', label: t('deliver', 'Due Date') },
-]
-
 const filter = useQuery('filter', PROJECT_FILTERS, 'all')
 const sort = useQuery('sort', SORTS, 'activity')
 const query = useQuery('q', null, '')
 const filters = computed(() => PROJECT_FILTERS.map((id) => ({
 	id,
-	label: LABELS[id],
+	label: FILTER_LABELS[id],
 	count: store.projects.filter((project) => projectPasses(project, id)).length,
 })))
 const projects = computed(() => sortProjects(
@@ -104,12 +91,7 @@ async function save(project, fields) {
  * @param {object} project - the Project to remove
  */
 async function remove(project) {
-	const confirmed = await confirmRemoval(
-		t('deliver', 'Remove Project?'),
-		t('deliver', 'Its Comments and Version Stacks are deleted. The files stay untouched.'),
-		t('deliver', 'Remove Project'),
-	)
-	if (confirmed) {
+	if (await confirmProjectRemoval()) {
 		try {
 			await store.remove(project.id)
 		} catch (e) {
@@ -161,7 +143,7 @@ async function create() {
 			v-model:filter="filter"
 			v-model:sort="sort"
 			:filters="filters"
-			:sorts="sorts" />
+			:sorts="SORT_OPTIONS" />
 		<NcNoteCard v-if="error" type="error">
 			{{ error }}
 		</NcNoteCard>

@@ -1,13 +1,15 @@
 <script setup>
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
-import { errorMessage, renewReviewerKey, updateReviewerAsMember } from '../api.js'
+import { renewReviewerKey, updateReviewerAsMember } from '../api.js'
+import { copyLink } from '../clipboard.js'
+import { useBusy } from '../composables/busy.js'
 import { confirmRemoval } from '../confirm.js'
 
 const props = defineProps({
@@ -26,6 +28,11 @@ const mail = ref({ ...props.reviewer.mail })
 /** Their own rights; null leaves it to the link they come by */
 const rights = ref({ ...props.reviewer.rights })
 
+const WISHES = [
+	{ id: 'replies', label: t('deliver', 'Replies to their Comments') },
+	{ id: 'comments', label: t('deliver', 'Every new Comment') },
+	{ id: 'versions', label: t('deliver', 'New Versions') },
+]
 const RIGHTS = [
 	{ id: 'canComment', label: t('deliver', 'Comment') },
 	{ id: 'allowOlder', label: t('deliver', 'Comment on older Versions') },
@@ -36,30 +43,8 @@ const CHOICES = [
 	{ id: true, label: t('deliver', 'Yes') },
 	{ id: false, label: t('deliver', 'No') },
 ]
-const busy = ref(false)
-
-/**
- * @param {string} url - a Personal Link
- */
-async function copy(url) {
-	await navigator.clipboard.writeText(url)
-	showSuccess(t('deliver', 'Personal Link copied'))
-}
-
-/**
- * @param {() => Promise<unknown>} action - what to do while the dialog is busy
- */
-async function run(action) {
-	busy.value = true
-	try {
-		await action()
-		emit('changed')
-	} catch (e) {
-		showError(errorMessage(e))
-	} finally {
-		busy.value = false
-	}
-}
+const { busy, error, run } = useBusy()
+watch(error, (message) => message && showError(message))
 
 /** Name, address and mail wishes, as a Member sets them for the Reviewer */
 function save() {
@@ -73,6 +58,7 @@ function save() {
 			rights: rights.value,
 		})
 		showSuccess(t('deliver', 'Saved'))
+		emit('changed')
 	})
 }
 
@@ -84,7 +70,10 @@ async function renew() {
 		t('deliver', 'New Personal Links'),
 	)
 	if (confirmed) {
-		await run(() => renewReviewerKey(props.reviewer.id))
+		await run(async () => {
+			await renewReviewerKey(props.reviewer.id)
+			emit('changed')
+		})
 	}
 }
 </script>
@@ -101,14 +90,12 @@ async function renew() {
 					:disabled="busy" />
 				<fieldset>
 					<legend>{{ t('deliver', 'With an email address, Deliver can mail about') }}</legend>
-					<NcCheckboxRadioSwitch v-model="mail.replies" :disabled="!email || busy">
-						{{ t('deliver', 'Replies to their Comments') }}
-					</NcCheckboxRadioSwitch>
-					<NcCheckboxRadioSwitch v-model="mail.comments" :disabled="!email || busy">
-						{{ t('deliver', 'Every new Comment') }}
-					</NcCheckboxRadioSwitch>
-					<NcCheckboxRadioSwitch v-model="mail.versions" :disabled="!email || busy">
-						{{ t('deliver', 'New Versions') }}
+					<NcCheckboxRadioSwitch
+						v-for="wish in WISHES"
+						:key="wish.id"
+						v-model="mail[wish.id]"
+						:disabled="!email || busy">
+						{{ wish.label }}
 					</NcCheckboxRadioSwitch>
 				</fieldset>
 				<fieldset class="deliver-reviewer__rights">
@@ -135,7 +122,7 @@ async function renew() {
 			<ul>
 				<li v-for="each in reviewer.links" :key="each.shareId" class="deliver-reviewer__link">
 					<span>{{ links.find((share) => share.id === each.shareId)?.title }}</span>
-					<NcButton variant="tertiary" @click="copy(each.url)">
+					<NcButton variant="tertiary" @click="copyLink(each.url, t('deliver', 'Personal Link copied'))">
 						{{ t('deliver', 'Copy') }}
 					</NcButton>
 				</li>

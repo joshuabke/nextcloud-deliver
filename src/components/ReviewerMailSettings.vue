@@ -18,6 +18,12 @@ const props = defineProps({
 
 const emit = defineEmits(['update:reviewer'])
 
+const WISHES = [
+	{ id: 'replies', label: t('deliver', 'Replies to my Comments') },
+	{ id: 'comments', label: t('deliver', 'Every new Comment') },
+	{ id: 'versions', label: t('deliver', 'New Versions') },
+]
+
 const email = ref(props.reviewer.email ?? '')
 watch(() => props.reviewer.email, (value) => {
 	email.value = value ?? ''
@@ -66,22 +72,12 @@ async function save(change) {
 			{{ t('deliver', 'With an email address, Deliver can mail you about') }}
 		</NcActionText>
 		<NcActionCheckbox
-			:modelValue="reviewer.mail.replies"
+			v-for="wish in WISHES"
+			:key="wish.id"
+			:modelValue="reviewer.mail[wish.id]"
 			:disabled="!reviewer.email"
-			@update:modelValue="save({ mail: { replies: $event } })">
-			{{ t('deliver', 'Replies to my Comments') }}
-		</NcActionCheckbox>
-		<NcActionCheckbox
-			:modelValue="reviewer.mail.comments"
-			:disabled="!reviewer.email"
-			@update:modelValue="save({ mail: { comments: $event } })">
-			{{ t('deliver', 'Every new Comment') }}
-		</NcActionCheckbox>
-		<NcActionCheckbox
-			:modelValue="reviewer.mail.versions"
-			:disabled="!reviewer.email"
-			@update:modelValue="save({ mail: { versions: $event } })">
-			{{ t('deliver', 'New Versions') }}
+			@update:modelValue="save({ mail: { [wish.id]: $event } })">
+			{{ wish.label }}
 		</NcActionCheckbox>
 	</NcActions>
 </template>

@@ -23,15 +23,7 @@ const emit = defineEmits(['settings', 'menu'])
 
 /** A phone has no hover and no right click: the menu has a button of its own, and a long press opens it too (story 109) */
 const isMobile = useIsMobile()
-const press = useLongPress((where) => emit('menu', where))
-
-/**
- * @param {MouseEvent} event - the tap on the menu button
- */
-function menuFromButton(event) {
-	const box = event.currentTarget.getBoundingClientRect()
-	emit('menu', { clientX: box.left, clientY: box.bottom })
-}
+const { press, fromButton } = useLongPress((where) => emit('menu', where))
 
 /** Set when the server could not render the still; the icon stands in */
 const broken = ref(false)
@@ -47,8 +39,8 @@ const badges = computed(() => {
 
 <template>
 	<li class="deliver-project-card" v-on="press">
-		<RouterLink class="deliver-project-card__link" :to="`/projects/${project.id}`">
-			<div class="deliver-project-card__still">
+		<RouterLink class="deliver-card__link" :to="`/projects/${project.id}`">
+			<div class="deliver-card__still">
 				<img
 					v-if="project.activity.still && !broken"
 					:src="previewUrl(project.activity.still, 480)"
@@ -68,21 +60,21 @@ const badges = computed(() => {
 					</span>
 				</div>
 			</div>
-			<div class="deliver-project-card__name" :title="project.name">
+			<div class="deliver-card__name" :title="project.name">
 				{{ project.name }}
 			</div>
-			<div class="deliver-project-card__meta">
+			<div class="deliver-card__meta">
 				<NcDateTime :timestamp="project.activity.lastActivity * 1000" />
 				· {{ n('deliver', '%n Asset', '%n Assets', project.activity.assets) }}
 			</div>
-			<DueDate v-if="project.activity.nextDue" class="deliver-project-card__due" :modelValue="project.activity.nextDue" />
+			<DueDate v-if="project.activity.nextDue" class="deliver-card__due" :modelValue="project.activity.nextDue" />
 		</RouterLink>
 		<NcButton
 			v-if="isMobile"
 			class="deliver-project-card__settings deliver-project-card__settings--shown"
 			variant="tertiary"
 			:aria-label="t('deliver', 'Actions for {name}', { name: project.name })"
-			@click="menuFromButton">
+			@click="fromButton">
 			<template #icon>
 				<NcIconSvgWrapper :svg="moreIcon" />
 			</template>
@@ -100,6 +92,8 @@ const badges = computed(() => {
 		</NcButton>
 	</li>
 </template>
+
+<style scoped src="./card.css"></style>
 
 <style scoped>
 .deliver-project-card {
@@ -123,42 +117,8 @@ const badges = computed(() => {
 	opacity: 1;
 }
 
-/* A long press opens the menu, not the phone's own link preview */
-.deliver-project-card__link {
-	-webkit-touch-callout: none;
-}
-
-.deliver-project-card__link {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	padding: calc(2 * var(--default-grid-baseline));
-	border-radius: var(--border-radius-large);
-	color: var(--color-main-text);
-}
-
-.deliver-project-card__link:hover,
-.deliver-project-card__link:focus-visible {
-	background: var(--color-background-hover);
-}
-
-/* A still of the newest video */
-.deliver-project-card__still {
-	position: relative;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	aspect-ratio: 16 / 9;
-	margin-bottom: var(--default-grid-baseline);
-	border-radius: var(--border-radius);
-	background: #111;
-	color: #bbb;
-	overflow: hidden;
-}
-
-.deliver-project-card__still img {
-	width: 100%;
-	height: 100%;
+/* A still of the newest video, filling the tile */
+.deliver-project-card .deliver-card__still img {
 	object-fit: cover;
 }
 
@@ -188,22 +148,5 @@ const badges = computed(() => {
 
 .deliver-project-card__badge--changes {
 	background: #c77800;
-}
-
-.deliver-project-card__name {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	font-weight: bold;
-}
-
-.deliver-project-card__meta {
-	color: var(--color-text-maxcontrast);
-	font-size: 13px;
-}
-
-.deliver-project-card__due {
-	align-self: flex-start;
-	margin-top: 4px;
 }
 </style>

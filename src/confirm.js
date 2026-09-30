@@ -20,3 +20,16 @@ export function confirmRemoval(title, text, confirm) {
 			.then(() => resolve(false))
 	})
 }
+
+/**
+ * Asks before a Project goes with all its review data (story 9).
+ *
+ * @return {Promise<boolean>} whether the person confirmed
+ */
+export function confirmProjectRemoval() {
+	return confirmRemoval(
+		t('deliver', 'Remove Project?'),
+		t('deliver', 'Its Comments and Version Stacks are deleted. The files stay untouched.'),
+		t('deliver', 'Remove Project'),
+	)
+}

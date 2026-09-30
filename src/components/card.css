@@ -1,0 +1,53 @@
+/* What a Project tile and an Asset card share: one link with a 16:9 still, the name, a line below it and the Due Date */
+
+/* A long press opens the menu, not the phone's own link preview */
+.deliver-card__link {
+	-webkit-touch-callout: none;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: calc(2 * var(--default-grid-baseline));
+	border-radius: var(--border-radius-large);
+	color: var(--color-main-text);
+}
+
+.deliver-card__link:hover,
+.deliver-card__link:focus-visible {
+	background: var(--color-background-hover);
+}
+
+.deliver-card__still {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	aspect-ratio: 16 / 9;
+	margin-bottom: var(--default-grid-baseline);
+	border-radius: var(--border-radius);
+	background: #111;
+	color: #bbb;
+	overflow: hidden;
+}
+
+.deliver-card__still img {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.deliver-card__name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: bold;
+}
+
+.deliver-card__meta {
+	color: var(--color-text-maxcontrast);
+	font-size: 13px;
+}
+
+.deliver-card__due {
+	align-self: flex-start;
+	margin-top: 4px;
+}

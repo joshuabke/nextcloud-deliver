@@ -27,15 +27,7 @@ const emit = defineEmits(['stack', 'menu', 'versions'])
 
 /** A phone has no right click: a button opens the menu, and so does a long press (story 109) */
 const isMobile = useIsMobile()
-const press = useLongPress((where) => emit('menu', where))
-
-/**
- * @param {MouseEvent} event - the tap on the menu button
- */
-function menuFromButton(event) {
-	const box = event.currentTarget.getBoundingClientRect()
-	emit('menu', { clientX: box.left, clientY: box.bottom })
-}
+const { press, fromButton } = useLongPress((where) => emit('menu', where))
 
 const newest = computed(() => props.asset.versions[0])
 /** A Version stacked by its name waits here until a Member keeps or undoes it (story 13) */
@@ -113,7 +105,7 @@ const status = computed(() => {
 			class="deliver-card__more"
 			variant="tertiary"
 			:aria-label="t('deliver', 'Actions for {name}', { name: asset.name })"
-			@click="menuFromButton">
+			@click="fromButton">
 			<template #icon>
 				<NcIconSvgWrapper :svg="moreIcon" />
 			</template>
@@ -138,6 +130,8 @@ const status = computed(() => {
 	</li>
 </template>
 
+<style scoped src="./card.css"></style>
+
 <style scoped>
 .deliver-card {
 	position: relative;
@@ -154,40 +148,6 @@ const status = computed(() => {
 	position: absolute !important;
 	top: calc(8px + (100cqw - 16px) * 9 / 16 + 6px);
 	inset-inline-end: 0;
-}
-
-.deliver-card__link {
-	-webkit-touch-callout: none;
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	padding: calc(2 * var(--default-grid-baseline));
-	border-radius: var(--border-radius-large);
-	color: var(--color-main-text);
-}
-
-.deliver-card__link:hover,
-.deliver-card__link:focus-visible {
-	background: var(--color-background-hover);
-}
-
-.deliver-card__still {
-	position: relative;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	aspect-ratio: 16 / 9;
-	margin-bottom: var(--default-grid-baseline);
-	border-radius: var(--border-radius);
-	background: #111;
-	color: #bbb;
-	overflow: hidden;
-}
-
-.deliver-card__still img {
-	width: 100%;
-	height: 100%;
-	object-fit: contain;
 }
 
 .deliver-card__version,
@@ -248,24 +208,10 @@ const status = computed(() => {
 	color: var(--color-warning-text);
 }
 
-.deliver-card__due {
-	align-self: flex-start;
-	margin-top: 4px;
-}
-
-.deliver-card__name {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	font-weight: bold;
-}
-
 .deliver-card__meta {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	color: var(--color-text-maxcontrast);
-	font-size: 13px;
 }
 
 .deliver-card__suggestion {

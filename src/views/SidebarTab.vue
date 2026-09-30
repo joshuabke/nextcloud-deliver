@@ -13,14 +13,14 @@ import {
 	createShareLink,
 	disableAsset,
 	enableFile,
-	errorMessage,
 	getAssetForFile,
 	getProjectForFolder,
 	listShares,
 	removeProject,
 	updateProject,
 } from '../api.js'
-import { confirmRemoval } from '../confirm.js'
+import { useBusy } from '../composables/busy.js'
+import { confirmProjectRemoval, confirmRemoval } from '../confirm.js'
 
 // The Files app also sets folder, view and active on the web component; only node is used
 const props = defineProps({
@@ -34,8 +34,7 @@ const project = ref(null)
 const asset = ref(null)
 /** The Share Links of this node; review is a switch on each (ADR 0004) */
 const shares = ref([])
-const busy = ref(false)
-const error = ref(null)
+const { busy, error, run } = useBusy()
 
 const isFolder = computed(() => props.node?.type === 'folder')
 const canWrite = computed(() => ((props.node?.permissions ?? 0) & Permission.UPDATE) !== 0)
@@ -50,7 +49,7 @@ const appUrl = computed(() => {
 	return projectId.value ? generateUrl('/apps/deliver/projects/{id}', { id: projectId.value }) : null
 })
 
-watch(() => props.node?.fileid, async (fileid) => {
+watch(() => props.node?.fileid, (fileid) => {
 	project.value = null
 	asset.value = null
 	shares.value = []
@@ -58,8 +57,7 @@ watch(() => props.node?.fileid, async (fileid) => {
 	if (!fileid) {
 		return
 	}
-	busy.value = true
-	try {
+	run(async () => {
 		const [found, links] = await Promise.all([
 			(isFolder.value ? getProjectForFolder(fileid) : getAssetForFile(fileid)).catch((e) => {
 				if (e?.response?.status === 404) {
@@ -75,27 +73,8 @@ watch(() => props.node?.fileid, async (fileid) => {
 			asset.value = isFolder.value ? null : found
 			shares.value = links
 		}
-	} catch (e) {
-		error.value = errorMessage(e)
-	} finally {
-		busy.value = false
-	}
+	})
 }, { immediate: true })
-
-/**
- * @param {() => Promise<unknown>} action - what to run while the tab is busy
- */
-async function run(action) {
-	error.value = null
-	busy.value = true
-	try {
-		await action()
-	} catch (e) {
-		error.value = errorMessage(e)
-	} finally {
-		busy.value = false
-	}
-}
 
 /**
  * On a folder the switch is Auto Intake (stories 2 and 3), on a file it
@@ -147,12 +126,7 @@ function replaceShare(updated) {
 
 /** Removes the Project with all its review data (story 9) */
 async function remove() {
-	const confirmed = await confirmRemoval(
-		t('deliver', 'Remove Project?'),
-		t('deliver', 'Its Comments and Version Stacks are deleted. The files stay untouched.'),
-		t('deliver', 'Remove Project'),
-	)
-	if (confirmed) {
+	if (await confirmProjectRemoval()) {
 		await run(async () => {
 			await removeProject(project.value.id)
 			project.value = null

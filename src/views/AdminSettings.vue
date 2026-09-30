@@ -7,6 +7,7 @@ import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcSettingsSection from '@nextcloud/vue/components/NcSettingsSection'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { errorMessage, getPipelineSettings, savePipelineSettings } from '../api.js'
+import { useBusy } from '../composables/busy.js'
 
 const ENCODERS = [
 	{ id: 'none', label: t('deliver', 'None: software (libx264)') },
@@ -17,8 +18,7 @@ const ENCODERS = [
 
 const settings = ref(null)
 const status = ref(null)
-const busy = ref(false)
-const error = ref(null)
+const { busy, error, run } = useBusy()
 /** Set after a save, so the encoder test result only shows once it has run */
 const saved = ref(false)
 
@@ -34,23 +34,11 @@ onMounted(async () => {
 })
 
 /** Saves everything; a hardware encoder is tested with a one-second encode on the server */
-async function save() {
-	busy.value = true
-	error.value = null
-	try {
-		const values = settings.value
-		;({ settings: settings.value, status: status.value } = await savePipelineSettings({
-			...values,
-			maxJobs: Number(values.maxJobs),
-			maxHeight: Number(values.maxHeight),
-			thumbCap: Number(values.thumbCap),
-		}))
+function save() {
+	return run(async () => {
+		({ settings: settings.value, status: status.value } = await savePipelineSettings(settings.value))
 		saved.value = true
-	} catch (e) {
-		error.value = errorMessage(e)
-	} finally {
-		busy.value = false
-	}
+	})
 }
 </script>
 
@@ -63,20 +51,20 @@ async function save() {
 				<NcTextField v-model="settings.ffmpegPath" :label="t('deliver', 'Path to ffmpeg')" :placeholder="t('deliver', 'ffmpeg on the PATH')" />
 				<NcTextField v-model="settings.ffprobePath" :label="t('deliver', 'Path to ffprobe')" :placeholder="t('deliver', 'ffprobe on the PATH')" />
 				<NcTextField
-					v-model="settings.maxJobs"
+					v-model.number="settings.maxJobs"
 					type="number"
 					min="1"
 					max="16"
 					:label="t('deliver', 'Jobs running at the same time')" />
 				<NcTextField
-					v-model="settings.maxHeight"
+					v-model.number="settings.maxHeight"
 					type="number"
 					min="144"
 					max="2160"
 					:label="t('deliver', 'Proxy resolution: short side in pixels')"
 					:helperText="t('deliver', 'Originals that browsers play are always available. Larger ones also get a lighter Proxy to switch to.')" />
 				<NcTextField
-					v-model="settings.thumbCap"
+					v-model.number="settings.thumbCap"
 					type="number"
 					min="10"
 					max="5000"
@@ -96,7 +84,7 @@ async function save() {
 					:label="t('deliver', 'Extra ffmpeg arguments for Proxies')"
 					:helperText="t('deliver', 'Added before the output file, for example -threads 4')" />
 				<div>
-					<NcButton variant="primary" :disabled="busy" @click="save">
+					<NcButton type="submit" variant="primary" :disabled="busy">
 						{{ busy ? t('deliver', 'Saving and testing…') : t('deliver', 'Save') }}
 					</NcButton>
 				</div>
