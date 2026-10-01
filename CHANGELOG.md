@@ -12,6 +12,6 @@ First release in the App Store.
 - Due Dates with reminders, Unseen Comments, notifications and mail, and live updates without reloading.
 - Export of the Comments as EDL, FCP7 XML, FCPXML or CSV, as markers for the editing application.
 - Audio counts to the millisecond: shown as `m:ss.mmm`, switchable to timecode or frames at the Project's frame rate.
-- Proxies, Thumbnail Strips and Waveforms when ffmpeg is installed; without it, browser-native files play as they are, MOV, MP4 and Broadcast WAV keep their frame rate and start timecode, and audio still gets its Waveform.
+- Proxies, Thumbnail Strips and Waveforms when ffmpeg is installed; without it, browser-native files play as they are, MOV, MP4 and Broadcast WAV keep their frame rate and start timecode, WebM and MKV their frame rate, and audio still gets its Waveform.
 - Works on phones: the Review view, drawing with a finger and the Project list are made for small screens.
 - English and German.
