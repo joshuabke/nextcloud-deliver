@@ -84,6 +84,15 @@ const useProxy = ref(false)
 const source = computed(() => (useProxy.value ? proxy.value : original.value) ?? proxy.value ?? original.value)
 /** Where to go once the other source has loaded, so switching keeps the Frame */
 let resumeAt = null
+/** Why nothing plays: no browser can and nothing converts it, or only this browser cannot (MKV in Safari, say) */
+const unplayableReason = computed(() => {
+	if (props.version.playable !== false) {
+		return t('deliver', 'This browser cannot play this file. Open it in another browser, such as Chrome or Firefox.')
+	}
+	return props.version.derived?.proxy?.state === 'failed'
+		? t('deliver', 'Browsers cannot play this file, and Deliver could not convert it.')
+		: t('deliver', 'Browsers cannot play this file, and without ffmpeg on the server Deliver cannot convert it.')
+})
 const proxyPending = computed(() => ['queued', 'running'].includes(props.version.derived?.proxy?.state))
 const lastFrame = computed(() => Math.max(0, durationFrames.value - 1))
 
@@ -806,7 +815,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 			</div>
 			<p v-if="!source || unplayable" class="deliver-player__notice">
 				<template v-if="!proxyPending">
-					{{ t('deliver', 'This file cannot be played in this browser.') }}
+					{{ unplayableReason }}
 				</template>
 				<template v-else-if="version.derived.progress !== null">
 					{{ t('deliver', 'Deliver is preparing a version of this file that the browser can play: {percent} %', { percent: version.derived.progress }) }}

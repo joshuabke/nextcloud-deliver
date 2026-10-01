@@ -68,7 +68,10 @@ class LoadPublicSharePageListener implements IEventListener {
 		}
 
 		$this->initialState->provideInitialState('token', $token);
-		$this->initialState->provideInitialState('reviewUrl', $reviewUrl);
+		// Initial state takes no null; the script's default stands for it
+		if ($reviewUrl !== null) {
+			$this->initialState->provideInitialState('reviewUrl', $reviewUrl);
+		}
 		// An init script runs before the file list asks for its actions; a regular one would be too late
 		Util::addInitScript(Application::APP_ID, 'deliver-publicfiles');
 	}
