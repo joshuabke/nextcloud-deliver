@@ -48,6 +48,8 @@ class DerivedMedia {
 		'flac' => ['video' => [], 'audio' => ['flac']],
 		'ogg' => ['video' => [], 'audio' => ['vorbis', 'opus', 'flac']],
 		'wav' => ['video' => [], 'audio' => ['pcm_u8', 'pcm_s16le', 'pcm_s24le', 'pcm_s32le', 'pcm_f32le']],
+		// Only read without ffmpeg (ffprobe says matroska,webm): Chrome and Firefox play these, Safari tells its user to switch
+		'matroska' => ['video' => ['h264', 'vp8', 'vp9', 'av1'], 'audio' => ['aac', 'opus', 'vorbis', 'flac', 'mp3']],
 	];
 
 	private const THUMB_WIDTH = 160;

@@ -7,11 +7,11 @@ namespace OCA\Deliver\Service;
 /**
  * What Frames rest on, read without ffprobe (ADR 0003): the frame rate, the
  * start timecode and the duration of a MOV or MP4 from its boxes, and the
- * time reference of a Broadcast WAV. MP3, AAC, FLAC and Ogg are only known
- * as audio, which counts in milliseconds and needs nothing more; the browser
- * knows their duration. The answer has ffprobe's shape, so Probe treats both
- * alike. Other containers (WebM, MXF) stay unread and take the Project's
- * frame rate. Only headers are read: the media data is skipped by seeking,
+ * time reference of a Broadcast WAV, the frame rate, size and duration of a
+ * WebM or MKV. MP3, AAC, FLAC and Ogg are only known as audio, which counts
+ * in milliseconds and needs nothing more; the browser knows their duration.
+ * The answer has ffprobe's shape, so Probe treats both alike. Other
+ * containers (MXF, AVI) stay unread and take the Project's frame rate. Only headers are read: the media data is skipped by seeking,
  * so a file of many gigabytes costs a few reads.
  */
 class ContainerProbe {
@@ -23,6 +23,13 @@ class ContainerProbe {
 	];
 	/** H.264 profiles that are 8-bit 4:2:0, the only kind browsers decode */
 	private const H264_420 = [66, 77, 88, 100];
+	/** Matroska's codec ids, as ffprobe names them */
+	private const MATROSKA_CODECS = [
+		'V_VP8' => 'vp8', 'V_VP9' => 'vp9', 'V_AV1' => 'av1', 'V_MPEG4/ISO/AVC' => 'h264', 'V_MPEGH/ISO/HEVC' => 'hevc',
+		'A_OPUS' => 'opus', 'A_VORBIS' => 'vorbis', 'A_AAC' => 'aac', 'A_FLAC' => 'flac', 'A_MPEG/L3' => 'mp3',
+	];
+	/** Frame rates a Matroska frame duration in whole nanoseconds stands for */
+	private const RATES = [[24000, 1001], [30000, 1001], [60000, 1001], [24, 1], [25, 1], [30, 1], [48, 1], [50, 1], [60, 1], [100, 1], [120, 1]];
 
 	/** @var resource */
 	private $file;
@@ -41,6 +48,9 @@ class ContainerProbe {
 			}
 			if (in_array(substr($head, 4, 4), ['ftyp', 'moov', 'mdat', 'wide', 'free', 'skip'], true)) {
 				return $this->quickTime();
+			}
+			if (str_starts_with($head, "\x1A\x45\xDF\xA3")) {
+				return $this->matroska();
 			}
 			if (str_starts_with($head, 'fLaC')) {
 				return $this->audio('flac', 'flac');
@@ -271,6 +281,163 @@ class ContainerProbe {
 			$chunks[$this->at($pos, 4)] ??= [$pos + 8, min($length, $size - $pos - 8)];
 		}
 		return $chunks;
+	}
+
+	/**
+	 * WebM and MKV are EBML: the header names which, the Segment's Info holds
+	 * the duration and its Tracks the codecs, sizes and frame durations. Both
+	 * come before the Clusters, where reading stops.
+	 *
+	 * @return array<string, mixed>|null
+	 */
+	private function matroska(): ?array {
+		$header = $this->element(0, $this->size(), 0x1A45DFA3);
+		$segment = $this->element($header[1] ?? 0, $this->size(), 0x18538067);
+		if ($header === null || $segment === null) {
+			return null;
+		}
+		$docType = $this->element($header[0], $header[1], 0x4282);
+		$seconds = 0.0;
+		$streams = [];
+		foreach ($this->elements($segment[0], $segment[1]) as [$id, $start, $end]) {
+			if ($id === 0x1F43B675) {
+				// ponytail: Info and Tracks after the first Cluster go unread; muxers put them first
+				break;
+			}
+			if ($id === 0x1549A966) {
+				$scale = $this->element($start, $end, 0x2AD7B1);
+				$duration = $this->element($start, $end, 0x4489);
+				$seconds = $duration === null ? 0.0 : $this->float($duration) * ($scale === null ? 1000000 : $this->uint($scale)) / 1e9;
+			} elseif ($id === 0x1654AE6B) {
+				foreach ($this->elements($start, $end) as [$entry, $from, $to]) {
+					$stream = $entry === 0xAE ? $this->matroskaTrack($from, $to) : null;
+					if ($stream !== null) {
+						$streams[] = $stream;
+					}
+				}
+			}
+		}
+		// ffprobe says matroska,webm for both; Matroska alone has codecs only some browsers play
+		$webm = $docType !== null && $this->at($docType[0], $docType[1] - $docType[0]) === 'webm';
+		return [
+			'format' => ['format_name' => $webm ? 'matroska,webm' : 'matroska', 'duration' => (string)$seconds, 'tags' => []],
+			'streams' => $streams,
+		];
+	}
+
+	/** @return array<string, mixed>|null a video or audio stream, ffprobe's shape */
+	private function matroskaTrack(int $start, int $end): ?array {
+		$type = $this->element($start, $end, 0x83);
+		$codec = $this->element($start, $end, 0x86);
+		$kind = match ($type === null ? 0 : $this->uint($type)) {
+			1 => 'video',
+			2 => 'audio',
+			default => null,
+		};
+		if ($kind === null || $codec === null) {
+			return null;
+		}
+		$id = rtrim($this->at($codec[0], $codec[1] - $codec[0]), "\0");
+		$stream = ['codec_type' => $kind, 'codec_name' => self::MATROSKA_CODECS[$id] ?? (str_starts_with($id, 'A_AAC') ? 'aac' : strtolower($id))];
+		if ($kind === 'audio') {
+			return $stream;
+		}
+		$video = $this->element($start, $end, 0xE0);
+		$width = $video === null ? null : $this->element($video[0], $video[1], 0xB0);
+		$height = $video === null ? null : $this->element($video[0], $video[1], 0xBA);
+		$stream['width'] = $width === null ? 0 : $this->uint($width);
+		$stream['height'] = $height === null ? 0 : $this->uint($height);
+		$frame = $this->element($start, $end, 0x23E383);
+		$nanoseconds = $frame === null ? 0 : $this->uint($frame);
+		if ($nanoseconds > 0) {
+			$stream['avg_frame_rate'] = $this->rateOf($nanoseconds);
+		}
+		if ($stream['codec_name'] === 'h264') {
+			// CodecPrivate is the avcC record: its second byte is the profile
+			$private = $this->element($start, $end, 0x63A2);
+			$profile = $private === null ? 0 : ord($this->at($private[0] + 1, 1));
+			$stream['pix_fmt'] = in_array($profile, self::H264_420, true) ? 'yuv420p' : 'unknown';
+		}
+		return $stream;
+	}
+
+	/** A frame duration rounded to whole nanoseconds, back to the rate it was written for: 41708333 is 24000/1001 */
+	private function rateOf(int $nanoseconds): string {
+		foreach (self::RATES as [$num, $den]) {
+			if (abs(1e9 * $den / $num - $nanoseconds) < 1000) {
+				return "$num/$den";
+			}
+		}
+		$gcd = $this->gcd(1000000000, $nanoseconds);
+		return intdiv(1000000000, $gcd) . '/' . intdiv($nanoseconds, $gcd);
+	}
+
+	/** @return \Generator<array{0: int, 1: int, 2: int}> id, start and end of each EBML element's content */
+	private function elements(int $start, int $end): \Generator {
+		$pos = $start;
+		while ($pos < $end) {
+			[$id, $idLength] = $this->vint($pos, true);
+			[$size, $sizeLength] = $this->vint($pos + $idLength, false);
+			if ($idLength === 0 || $sizeLength === 0) {
+				return;
+			}
+			$content = $pos + $idLength + $sizeLength;
+			// An unknown size, as live recordings write, runs to the end of its parent
+			$to = $size < 0 ? $end : min($end, $content + $size);
+			yield [$id, $content, $to];
+			$pos = $to;
+		}
+	}
+
+	/** @return array{0: int, 1: int}|null the content of the first child element of an id */
+	private function element(int $start, int $end, int $id): ?array {
+		foreach ($this->elements($start, $end) as [$found, $from, $to]) {
+			if ($found === $id) {
+				return [$from, $to];
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * EBML's variable-length integer: the leading zeros of the first byte say
+	 * how many more follow. An id keeps its marker bit, a size drops it, and a
+	 * size of all ones is unknown (-1).
+	 *
+	 * @return array{0: int, 1: int} the value and its length in bytes, 0 when invalid
+	 */
+	private function vint(int $pos, bool $id): array {
+		$first = ord($this->at($pos, 1));
+		$length = $first === 0 ? 0 : 9 - strlen(decbin($first));
+		if ($length === 0) {
+			return [0, 0];
+		}
+		$value = $id ? $first : $first & (0xFF >> $length);
+		$unknown = $value === (0xFF >> $length);
+		foreach (str_split($this->at($pos + 1, $length - 1) ?: '', 1) as $byte) {
+			if ($byte === '') {
+				break;
+			}
+			$value = ($value << 8) | ord($byte);
+			$unknown = $unknown && ord($byte) === 0xFF;
+		}
+		return [!$id && $unknown ? -1 : $value, $length];
+	}
+
+	/** @param array{0: int, 1: int} $element */
+	private function uint(array $element): int {
+		$value = 0;
+		foreach (str_split($this->at($element[0], min(8, $element[1] - $element[0]))) as $byte) {
+			$value = ($value << 8) | ord($byte);
+		}
+		return $value;
+	}
+
+	/** @param array{0: int, 1: int} $element */
+	private function float(array $element): float {
+		return $element[1] - $element[0] === 4
+			? (float)unpack('G', $this->at($element[0], 4))[1]
+			: (float)unpack('E', $this->at($element[0], 8))[1];
 	}
 
 	/**
