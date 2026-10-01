@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Tests\Integration;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -94,9 +95,39 @@ class WithoutFfmpegTest extends TestCase {
 		$this->make('-f lavfi -i sine=duration=4 -ar 48000 -write_bext 1 -metadata time_reference=172800000 -f wav');
 		$version = $this->upload('mix.wav');
 
-		self::assertSame(['num' => 25, 'den' => 1], $version['fps'], 'audio takes the Project frame rate');
-		self::assertSame(90000, $version['startFrame']);
-		self::assertSame(100, $version['durationFrames']);
+		self::assertSame(['num' => 1000, 'den' => 1], $version['fps'], 'audio counts in milliseconds');
+		self::assertSame(3600000, $version['startFrame']);
+		self::assertSame(4000, $version['durationFrames']);
 		self::assertTrue($version['playable'], 'a WAV plays in the browser as it is');
+	}
+
+	/** @return array<string, array{string, string}> */
+	public static function audio(): array {
+		return [
+			'MP3' => ['-c:a libmp3lame -f mp3', 'take.mp3'],
+			'MP3 with an ID3 tag' => ['-c:a libmp3lame -metadata title=Take -id3v2_version 3 -f mp3', 'tagged.mp3'],
+			'FLAC' => ['-c:a flac -f flac', 'take.flac'],
+			'Ogg Vorbis' => ['-c:a libvorbis -f ogg', 'take.ogg'],
+			'Ogg Opus' => ['-c:a libopus -f ogg', 'take.opus'],
+			'AAC' => ['-c:a aac -f adts', 'take.aac'],
+		];
+	}
+
+	#[DataProvider('audio')]
+	public function testAudioIsKnownAsAudio(string $args, string $name): void {
+		$this->make("-f lavfi -i sine=duration=2 -ar 48000 $args");
+		$version = $this->upload($name);
+
+		self::assertTrue($version['audioOnly']);
+		self::assertSame(['num' => 1000, 'den' => 1], $version['fps']);
+		self::assertTrue($version['playable']);
+		self::assertNull($version['derived']['error'], 'nothing failed');
+	}
+
+	public function testAFormatItCannotReadSaysThatFfmpegIsMissing(): void {
+		$this->make('-f lavfi -i testsrc=size=320x180:rate=25:duration=1 -c:v libvpx -f webm');
+		$version = $this->upload('cut.webm');
+
+		self::assertSame('Without ffmpeg, Deliver cannot read this format', $version['derived']['error']);
 	}
 }
