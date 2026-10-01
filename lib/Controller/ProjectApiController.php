@@ -95,6 +95,11 @@ class ProjectApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	public function waveform(int $id, array $peaks = [], int $durationFrames = 0): Response {
+		return $this->guard(fn () => $this->service->giveWaveform((string)$this->userId, $id, $peaks, $durationFrames));
+	}
+
+	#[NoAdminRequired]
 	public function version(int $id): Response {
 		return $this->guard(fn () => $this->service->versionContext((string)$this->userId, $id));
 	}

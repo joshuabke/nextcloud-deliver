@@ -341,6 +341,13 @@ class ProjectService {
 		return $this->versionPayload($this->versions->find($versionId) ?? $version, $project, $folder, $uid);
 	}
 
+	/** What a Member's browser decoded where the server has no ffmpeg (ADR 0003) */
+	public function giveWaveform(string $uid, int $versionId, array $peaks, int $durationFrames): array {
+		[$version, $project, $folder] = $this->reachVersion($uid, $versionId);
+		$this->media->acceptWaveform($version, $peaks, $durationFrames);
+		return $this->versionPayload($version, $project, $folder, $uid);
+	}
+
 	/**
 	 * What the Review view needs for one Version: its Project, its Asset and
 	 * the whole Version Stack, newest first.
