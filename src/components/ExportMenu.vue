@@ -17,6 +17,8 @@ const props = defineProps({
 	versionId: { type: Number, required: true },
 	/** Audio gets the formats of audio workstations, video those of editing applications */
 	audioOnly: { type: Boolean, default: false },
+	/** Whether the server can write a WAV with markers for this Version */
+	wavExport: { type: Boolean, default: false },
 	/** A still has no timeline, so only the list makes sense (story 95) */
 	still: { type: Boolean, default: false },
 })
@@ -37,7 +39,7 @@ const AUDIO_FORMATS = [
 const unresolvedOnly = ref(false)
 const zeroBased = ref(false)
 const liveSetInput = ref(null)
-const formats = computed(() => props.still ? VIDEO_FORMATS.filter((format) => format.id === 'csv') : props.audioOnly ? AUDIO_FORMATS : VIDEO_FORMATS)
+const formats = computed(() => props.still ? VIDEO_FORMATS.filter((format) => format.id === 'csv') : props.audioOnly ? AUDIO_FORMATS.filter((format) => format.id !== 'wav' || props.wavExport) : VIDEO_FORMATS)
 
 /** @return {URLSearchParams} the options every export takes, those switched on */
 function options() {

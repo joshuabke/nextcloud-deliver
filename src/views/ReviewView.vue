@@ -327,6 +327,7 @@ async function upload(event) {
 						v-if="context.project.canWrite && !isMobile"
 						:versionId="id"
 						:audioOnly="version?.audioOnly ?? false"
+						:wavExport="version?.wavExport ?? false"
 						:still="clock.still" />
 				</template>
 			</CommentPanel>

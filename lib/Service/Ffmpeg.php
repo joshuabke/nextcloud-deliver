@@ -29,6 +29,13 @@ class Ffmpeg {
 		return $this->config->getValueString(Application::APP_ID, 'ffprobe_path') ?: 'ffprobe';
 	}
 
+	private ?bool $available = null;
+
+	/** Whether ffmpeg runs, asked once per request */
+	public function available(): bool {
+		return $this->available ??= $this->version($this->ffmpeg()) !== null;
+	}
+
 	/** @return ?string the first line of `-version`, or null when the binary is not there */
 	public function version(string $binary): ?string {
 		$result = $this->run($binary, ['-version'], 10);
