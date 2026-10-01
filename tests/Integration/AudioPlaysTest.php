@@ -66,5 +66,6 @@ class AudioPlaysTest extends TestCase {
 		self::assertTrue($version['audioOnly']);
 		self::assertSame(['num' => 1000, 'den' => 1], $version['fps'], 'audio counts in milliseconds');
 		self::assertSame($playable, $version['playable']);
+		self::assertTrue($version['wavExport'], 'ffmpeg turns any audio into WAV');
 	}
 }

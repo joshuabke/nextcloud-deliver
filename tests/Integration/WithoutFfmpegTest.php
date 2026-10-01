@@ -99,6 +99,7 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertSame(3600000, $version['startFrame']);
 		self::assertSame(4000, $version['durationFrames']);
 		self::assertTrue($version['playable'], 'a WAV plays in the browser as it is');
+		self::assertTrue($version['wavExport'], 'a WAV takes its markers without ffmpeg');
 	}
 
 	/** @return array<string, array{string, string}> */
@@ -122,6 +123,7 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertSame(['num' => 1000, 'den' => 1], $version['fps']);
 		self::assertTrue($version['playable']);
 		self::assertNull($version['derived']['error'], 'nothing failed');
+		self::assertFalse($version['wavExport'], 'turning it into WAV needs ffmpeg');
 	}
 
 	public function testAFormatItCannotReadSaysThatFfmpegIsMissing(): void {
