@@ -5,7 +5,7 @@ Deliver is a Nextcloud app for frame-accurate video and audio review (a Frame.io
 ## Read first, in this order
 
 1. `CONTEXT.md` — the glossary. Use its terms verbatim in code, UI strings, commits and issues.
-2. `docs/adr/` — the decisions with lasting consequences (Files as source of truth, derived-media pipeline, review on Nextcloud Share Links; 0001 is superseded by 0004). Code that contradicts an accepted one is a bug.
+2. `docs/adr/` — the decisions with lasting consequences (Files as source of truth, derived-media pipeline, review on Nextcloud Share Links; 0001 is superseded by 0004, 0006 by 0008). Code that contradicts an accepted one is a bug.
 3. `docs/spec-v2.md` — the full spec for milestone 0.2.0, also published as GitHub issue #2 (label `spec`). The issue is the tracked copy; the file is the canonical text. Keep them identical when either changes.
 
 ## Rewrite mechanics (settled, do not re-open)

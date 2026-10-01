@@ -15,7 +15,7 @@ A Project setting that makes every media file in the folder an Asset, including 
 _Avoid_: Watch mode, auto scan, sync
 
 **Asset**:
-A video, audio or picture file inside a Project that has been enabled for review, by a Member or by Auto Intake. A single Asset may have several Versions.
+A video, audio or picture file inside a Project that has been enabled for review, by a Member or by Auto Intake. A single Asset may have several Versions. A Take is not an Asset.
 _Avoid_: Video, clip, item, media
 
 **Still**:
@@ -109,7 +109,7 @@ _Avoid_: New, unread (unread is for notifications)
 ### Takes
 
 **Take**:
-One recorded pass over a passage of a work, delivered as an Asset inside a Take Folder. Its start timecode is its position on the recording session's timeline, so the same time on two Takes is the same musical point. Named after its recording pass.
+One recorded pass over a passage of a work, delivered as a file inside a Take Folder. Not an Asset: it has Comments but no Versions, and opens only in the Take comparison. Its start timecode is its position on the recording session's timeline, so the same time on two Takes is the same musical point. Named after its recording pass.
 _Avoid_: Recording, pass, REAPER take (an alternative inside a REAPER media item, unrelated)
 
 **Take Folder**:
