@@ -414,7 +414,7 @@ class ContainerProbe {
 		}
 		$value = $id ? $first : $first & (0xFF >> $length);
 		$unknown = $value === (0xFF >> $length);
-		foreach (str_split($this->at($pos + 1, $length - 1) ?: '', 1) as $byte) {
+		foreach (str_split($this->at($pos + 1, $length - 1)) as $byte) {
 			if ($byte === '') {
 				break;
 			}
@@ -523,6 +523,9 @@ class ContainerProbe {
 	}
 
 	private function at(int $offset, int $length): string {
+		if ($length < 1) {
+			return '';
+		}
 		fseek($this->file, $offset);
 		return str_pad((string)fread($this->file, $length), $length, "\0");
 	}
