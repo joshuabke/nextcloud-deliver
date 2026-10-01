@@ -32,6 +32,8 @@ const props = defineProps({
 	isReply: { type: Boolean, default: false },
 	/** Its place in the order Comments were written, shown as #n */
 	number: { type: Number, default: null },
+	/** The thread last clicked or jumped to: lifted out, its React button showing without a hover */
+	selected: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['jump'])
@@ -106,6 +108,7 @@ function saveReply() {
 			'deliver-comment--reply': isReply,
 			'deliver-comment--resolved': comment.resolved,
 			'deliver-comment--unseen': unseen,
+			'deliver-comment--selected': selected,
 		}">
 		<NcAvatar
 			class="deliver-comment__avatar"
@@ -217,7 +220,7 @@ function saveReply() {
 				</li>
 			</ul>
 
-			<div v-if="comment.reactions?.length || canReact" class="deliver-comment__reactions">
+			<div v-if="comment.reactions?.length" class="deliver-comment__reactions">
 				<button
 					v-for="reaction in comment.reactions"
 					:key="reaction.emoji"
@@ -229,18 +232,6 @@ function saveReply() {
 					@click="toggle(reaction.emoji)">
 					{{ reaction.emoji }} {{ reaction.authors.length }}
 				</button>
-				<NcEmojiPicker v-if="canReact" @select="toggle">
-					<NcButton
-						class="deliver-comment__react"
-						variant="tertiary"
-						size="small"
-						:aria-label="t('deliver', 'React')"
-						:title="t('deliver', 'React')">
-						<template #icon>
-							<NcIconSvgWrapper :svg="reactIcon" :size="16" />
-						</template>
-					</NcButton>
-				</NcEmojiPicker>
 			</div>
 
 			<p v-if="error" class="deliver-comment__error">
@@ -262,13 +253,29 @@ function saveReply() {
 					</NcButton>
 				</div>
 			</div>
-			<button
-				v-else-if="canReply"
-				type="button"
-				class="deliver-comment__link"
-				@click="replying = true">
-				{{ t('deliver', 'Reply') }}
-			</button>
+			<div v-else-if="canReply || canReact" class="deliver-comment__footer">
+				<button
+					v-if="canReply"
+					type="button"
+					class="deliver-comment__link"
+					@click="replying = true">
+					{{ t('deliver', 'Reply') }}
+				</button>
+				<span v-if="canReact" class="deliver-comment__react-at">
+					<NcEmojiPicker @select="toggle">
+						<NcButton
+							class="deliver-comment__react"
+							variant="tertiary"
+							size="small"
+							:aria-label="t('deliver', 'React')"
+							:title="t('deliver', 'React')">
+							<template #icon>
+								<NcIconSvgWrapper :svg="reactIcon" :size="16" />
+							</template>
+						</NcButton>
+					</NcEmojiPicker>
+				</span>
+			</div>
 
 			<template v-if="comment.replies?.length">
 				<button type="button" class="deliver-comment__link deliver-comment__toggle" @click="showReplies = !showReplies">
@@ -289,14 +296,39 @@ function saveReply() {
 </template>
 
 <style scoped>
+/* A card without a line around it, as Frame.io has them; the border stays, transparent, for the selected one */
 .deliver-comment {
 	display: flex;
-	transition: border-color 0.3s;
+	transition: border-color 0.3s, background-color 0.15s;
 	gap: calc(3 * var(--default-grid-baseline));
 	padding: calc(3 * var(--default-grid-baseline));
-	border: 1px solid var(--color-border);
+	border: 1px solid transparent;
 	border-radius: var(--border-radius-large);
-	background: var(--deliver-card, var(--color-main-background));
+	background: var(--deliver-comment, var(--color-background-hover));
+}
+
+.deliver-comment--selected {
+	border-color: var(--color-border-dark);
+	background: var(--deliver-comment-selected, var(--color-background-dark));
+}
+
+.deliver-comment__footer {
+	display: flex;
+	align-self: stretch;
+	align-items: center;
+	min-height: 26px;
+}
+
+/* React shows on the thread under the pointer or selected; a phone selects by a tap */
+.deliver-comment__react-at {
+	margin-inline-start: auto;
+	visibility: hidden;
+}
+
+.deliver-comment:hover > .deliver-comment__content > .deliver-comment__footer > .deliver-comment__react-at,
+.deliver-comment:focus-within > .deliver-comment__content > .deliver-comment__footer > .deliver-comment__react-at,
+.deliver-comment--selected > .deliver-comment__content > .deliver-comment__footer > .deliver-comment__react-at {
+	visibility: visible;
 }
 
 .deliver-comment--unseen {

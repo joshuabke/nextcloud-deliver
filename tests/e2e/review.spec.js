@@ -227,7 +227,11 @@ test.describe('Review view', () => {
 
 		// A reaction shows as a pill with its count, mine highlighted (story 91)
 		const reacted = page.locator('.deliver-comment').filter({ hasText: 'shorten this passage' }).first()
-		await reacted.getByRole('button', { name: 'React' }).click()
+		// React waits for the pointer, as on Frame.io
+		await page.mouse.move(0, 0)
+		await expect(reacted.locator('.deliver-comment__react-at').first()).toBeHidden()
+		await reacted.hover()
+		await reacted.getByRole('button', { name: 'React' }).first().click()
 		await page.locator('.emoji-mart input').fill('tooth')
 		await page.locator('.emoji-mart .emoji-mart-scroll .emoji-mart-emoji').first().click()
 		await expect(reacted.locator('.deliver-comment__reaction--mine')).toHaveText('🦷 1')

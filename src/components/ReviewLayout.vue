@@ -193,6 +193,8 @@ body.deliver-review footer {
 	--color-error: #3a1818;
 	--color-error-text: #ff7b72;
 	--deliver-card: #19191c;
+	--deliver-comment: #1c1c20;
+	--deliver-comment-selected: #26262b;
 	--deliver-timecode: #6ea8ff;
 	position: fixed;
 	inset: 0;
