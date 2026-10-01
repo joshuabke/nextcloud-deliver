@@ -175,42 +175,102 @@ class ContainerProbe {
 
 	/** @return array<string, mixed>|null */
 	private function wav(): ?array {
-		$size = $this->size();
-		$pos = 12;
-		$sampleRate = 0;
-		$byteRate = 0;
-		$codec = 'pcm';
-		$data = 0;
-		$reference = null;
-		while ($pos + 8 <= $size) {
-			$id = $this->at($pos, 4);
-			$length = (int)unpack('V', $this->at($pos + 4, 4))[1];
-			if ($id === 'fmt ') {
-				$sampleRate = (int)unpack('V', $this->at($pos + 12, 4))[1];
-				$byteRate = (int)unpack('V', $this->at($pos + 16, 4))[1];
-				// ffprobe's name: integer PCM is unsigned at 8 bits and signed above, float is format 3
-				$bits = $this->u16le($pos + 22);
-				$codec = match ((int)unpack('v', $this->at($pos + 8, 2))[1]) {
-					1 => $bits === 8 ? 'pcm_u8' : "pcm_s{$bits}le",
-					3 => "pcm_f{$bits}le",
-					default => 'pcm',
-				};
-			} elseif ($id === 'bext' && $length >= 346) {
-				// After description, originator, its reference, date and time: samples since midnight
-				['low' => $low, 'high' => $high] = unpack('Vlow/Vhigh', $this->at($pos + 8 + 338, 8));
-				$reference = $high * 4294967296 + $low;
-			} elseif ($id === 'data') {
-				$data = $length;
-			}
-			$pos += 8 + $length + ($length & 1);
-		}
-		if ($sampleRate === 0 || $byteRate === 0) {
+		$chunks = $this->chunks();
+		$fmt = $chunks['fmt '] ?? null;
+		$byteRate = $fmt === null ? 0 : $this->u32le($fmt[0] + 8);
+		if ($fmt === null || $byteRate === 0) {
 			return null;
 		}
+		// ffprobe's name: integer PCM is unsigned at 8 bits and signed above, float is format 3
+		$bits = $this->u16le($fmt[0] + 14);
+		$codec = match ($this->formatTag($fmt[0])) {
+			1 => $bits === 8 ? 'pcm_u8' : "pcm_s{$bits}le",
+			3 => "pcm_f{$bits}le",
+			default => 'pcm',
+		};
+		$tags = [];
+		$bext = $chunks['bext'] ?? null;
+		if ($bext !== null && $bext[1] >= 346) {
+			// After description, originator, its reference, date and time: samples since midnight
+			$tags['time_reference'] = (string)($this->u32le($bext[0] + 342) * 4294967296 + $this->u32le($bext[0] + 338));
+		}
 		return [
-			'format' => ['format_name' => 'wav', 'duration' => (string)($data / $byteRate), 'tags' => $reference === null ? [] : ['time_reference' => (string)$reference]],
-			'streams' => [['codec_type' => 'audio', 'codec_name' => $codec, 'sample_rate' => (string)$sampleRate]],
+			'format' => ['format_name' => 'wav', 'duration' => (string)(($chunks['data'][1] ?? 0) / $byteRate), 'tags' => $tags],
+			'streams' => [['codec_type' => 'audio', 'codec_name' => $codec, 'sample_rate' => (string)$this->u32le($fmt[0] + 4)]],
 		];
+	}
+
+	/**
+	 * A Waveform straight from a WAV's PCM: the loudest sample of each bucket
+	 * over all channels, as ffmpeg's Waveform has it.
+	 *
+	 * @return list<float>|null 0 to 1, or null for anything but integer or float PCM
+	 */
+	public function wavPeaks(string $path, int $buckets): ?array {
+		$file = @fopen($path, 'rb');
+		if ($file === false) {
+			return null;
+		}
+		$this->file = $file;
+		try {
+			$head = (string)fread($file, 12);
+			if (!str_starts_with($head, 'RIFF') || substr($head, 8, 4) !== 'WAVE') {
+				return null;
+			}
+			$chunks = $this->chunks();
+			if (!isset($chunks['fmt '], $chunks['data'])) {
+				return null;
+			}
+			$format = $this->formatTag($chunks['fmt '][0]);
+			$bits = $this->u16le($chunks['fmt '][0] + 14);
+			// unpack code and full scale per sample format; 24 bits are widened to 32 below
+			[$code, $scale] = match ("$format/$bits") {
+				'1/8' => ['C*', 128],
+				'1/16' => ['s*', 32768],
+				'1/24', '1/32' => ['l*', 2147483648],
+				'3/32' => ['g*', 1],
+				'3/64' => ['e*', 1],
+				default => [null, 0],
+			};
+			if ($code === null) {
+				return null;
+			}
+			$width = intdiv($bits, 8);
+			[$start, $length] = $chunks['data'];
+			$perBucket = max($width, (int)ceil($length / $buckets / $width) * $width);
+			$most = intdiv(512 * 1024, $width) * $width;
+			$peaks = [];
+			for ($at = 0; $at < $length; $at += $perBucket) {
+				// ponytail: at most 512 KiB of each bucket, so a WAV of hours reads in seconds; a click past it can be missed
+				$chunk = $this->at($start + $at, min($perBucket, $length - $at, $most));
+				if ($bits === 24) {
+					$chunk = (string)preg_replace('/(...)/s', "\0$1", $chunk);
+				}
+				$samples = unpack($code, $chunk) ?: [0];
+				$loudest = $bits === 8 ? max(max($samples) - 128, 128 - min($samples)) : max(abs(max($samples)), abs(min($samples)));
+				$peaks[] = round(min(1, $loudest / $scale), 3);
+			}
+			return $peaks;
+		} finally {
+			fclose($file);
+		}
+	}
+
+	/** 1 for integer PCM, 3 for float; WAVE_FORMAT_EXTENSIBLE, as 24 bits and more channels are written, keeps it in its sub-format */
+	private function formatTag(int $fmt): int {
+		$tag = $this->u16le($fmt);
+		return $tag === 0xFFFE ? $this->u16le($fmt + 24) : $tag;
+	}
+
+	/** @return array<string, array{0: int, 1: int}> start and length of the first RIFF chunk of each id */
+	private function chunks(): array {
+		$size = $this->size();
+		$chunks = [];
+		for ($pos = 12; $pos + 8 <= $size; $pos += 8 + $length + ($length & 1)) {
+			$length = $this->u32le($pos + 4);
+			$chunks[$this->at($pos, 4)] ??= [$pos + 8, min($length, $size - $pos - 8)];
+		}
+		return $chunks;
 	}
 
 	/**
@@ -298,6 +358,10 @@ class ContainerProbe {
 	private function at(int $offset, int $length): string {
 		fseek($this->file, $offset);
 		return str_pad((string)fread($this->file, $length), $length, "\0");
+	}
+
+	private function u32le(int $offset): int {
+		return (int)unpack('V', $this->at($offset, 4))[1];
 	}
 
 	private function u16le(int $offset): int {

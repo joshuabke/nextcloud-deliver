@@ -28,11 +28,13 @@ import ImageViewer from '../components/ImageViewer.vue'
 import ReviewLayout from '../components/ReviewLayout.vue'
 import VersionPicker from '../components/VersionPicker.vue'
 import VideoPlayer from '../components/VideoPlayer.vue'
-import { errorMessage, getVersion, listMembers, updateAsset, uploadNextVersion } from '../api.js'
+import { errorMessage, getVersion, giveWaveform, listMembers, updateAsset, uploadNextVersion } from '../api.js'
 import { useLiveUpdates } from '../composables/live.js'
 import { usePanelOpen } from '../composables/panel.js'
 import { useReview } from '../composables/review.js'
 import { filesDir, groupByFolder, uploadFolder } from '../lib/folders.js'
+import { fpsValue } from '../lib/timecode.js'
+import { decodeWaveform } from '../lib/waveform.js'
 import { useCommentsStore } from '../store/comments.js'
 import { useProjectsStore } from '../store/projects.js'
 
@@ -106,6 +108,22 @@ onBeforeUnmount(() => store.stop())
 async function reload() {
 	context.value = await getVersion(props.id)
 }
+
+/** Without ffmpeg the first Member to open audio decodes its Waveform, for everyone after */
+const decoded = new Set()
+watch(version, async (each) => {
+	if (each?.audioOnly !== true || each.derived?.waveform?.state !== 'none' || !each.url || decoded.has(each.id)) {
+		return
+	}
+	decoded.add(each.id)
+	try {
+		const { peaks, seconds } = await decodeWaveform(each.url)
+		await giveWaveform(each.id, peaks, Math.max(1, Math.round(seconds * fpsValue(each.fps))))
+		await reload()
+	} catch {
+		// The player plays without a Waveform; the next visit tries again
+	}
+}, { immediate: true })
 
 /**
  * @param {string|null} dueDate - the new Due Date, or null

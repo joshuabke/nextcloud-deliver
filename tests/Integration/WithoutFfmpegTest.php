@@ -100,6 +100,13 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertSame(4000, $version['durationFrames']);
 		self::assertTrue($version['playable'], 'a WAV plays in the browser as it is');
 		self::assertTrue($version['wavExport'], 'a WAV takes its markers without ffmpeg');
+
+		// The PCM is right there, so the server draws the Waveform itself
+		self::assertSame('ready', $version['derived']['waveform']['state']);
+		$peaks = json_decode($this->nc->request('GET', $version['derived']['waveform']['url'])['body'], true)['peaks'];
+		self::assertCount(2000, $peaks);
+		self::assertEqualsWithDelta(0.125, max($peaks), 0.01, 'the sine is an eighth of full scale');
+		self::assertSame(409, $this->nc->ocs('POST', "/versions/{$version['id']}/waveform", ['peaks' => [0.5], 'durationFrames' => 4000])['status'], 'a browser does not overwrite it');
 	}
 
 	/** @return array<string, array{string, string}> */
@@ -124,6 +131,17 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertTrue($version['playable']);
 		self::assertNull($version['derived']['error'], 'nothing failed');
 		self::assertFalse($version['wavExport'], 'turning it into WAV needs ffmpeg');
+
+		// The browser decodes it and hands in what the server cannot work out
+		self::assertSame('none', $version['derived']['waveform']['state']);
+		self::assertNull($version['durationFrames']);
+		$given = $this->nc->ocs('POST', "/versions/{$version['id']}/waveform", ['peaks' => [0.1, 0.5, 0.25], 'durationFrames' => 2000]);
+		self::assertSame(200, $given['status'], json_encode($given['data']));
+		$version = $this->nc->ocs('GET', "/versions/{$version['id']}")['data']['versions'][0];
+		self::assertSame('ready', $version['derived']['waveform']['state']);
+		self::assertSame(2000, $version['durationFrames']);
+		self::assertSame([0.1, 0.5, 0.25], json_decode($this->nc->request('GET', $version['derived']['waveform']['url'])['body'], true)['peaks']);
+		self::assertSame(409, $this->nc->ocs('POST', "/versions/{$version['id']}/waveform", ['peaks' => [0.2], 'durationFrames' => 2000])['status'], 'once is enough');
 	}
 
 	public function testAFormatItCannotReadSaysThatFfmpegIsMissing(): void {
@@ -131,5 +149,42 @@ class WithoutFfmpegTest extends TestCase {
 		$version = $this->upload('cut.webm');
 
 		self::assertSame('Without ffmpeg, Deliver cannot read this format', $version['derived']['error']);
+	}
+
+	public function testAWaveformFromTheBrowserIsChecked(): void {
+		$this->make('-f lavfi -i sine=duration=1 -c:a libmp3lame -f mp3');
+		$id = $this->upload('take.mp3')['id'];
+
+		foreach ([
+			'louder than full scale' => ['peaks' => [1.5], 'durationFrames' => 1000],
+			'more peaks than a Waveform has' => ['peaks' => array_fill(0, 2001, 0.1), 'durationFrames' => 1000],
+			'no peaks' => ['peaks' => [], 'durationFrames' => 1000],
+			'no duration' => ['peaks' => [0.1], 'durationFrames' => 0],
+		] as $case => $body) {
+			self::assertSame(400, $this->nc->ocs('POST', "/versions/$id/waveform", $body)['status'], $case);
+		}
+	}
+
+	#[DataProvider('pcm')]
+	public function testAWavOfAnyPcmGetsItsWaveform(string $codec, bool $playable): void {
+		$this->make("-f lavfi -i sine=duration=1 -ar 48000 -ac 2 -c:a $codec -f wav");
+		$version = $this->upload('mix.wav');
+
+		$peaks = json_decode($this->nc->request('GET', $version['derived']['waveform']['url'])['body'], true)['peaks'];
+		// Spread over two channels, the sine at an eighth of full scale comes to 0.088
+		self::assertEqualsWithDelta(0.088, max($peaks), 0.01);
+		self::assertEqualsWithDelta(0.088, $peaks[1000], 0.01, 'every bucket of a steady sine peaks alike');
+		self::assertSame($playable, $version['playable']);
+	}
+
+	/** @return array<string, array{string, bool}> codec, and whether browsers play it (64-bit float is beyond them) */
+	public static function pcm(): array {
+		return [
+			'8 bit' => ['pcm_u8', true],
+			'24 bit' => ['pcm_s24le', true],
+			'32 bit' => ['pcm_s32le', true],
+			'32 bit float' => ['pcm_f32le', true],
+			'64 bit float' => ['pcm_f64le', false],
+		];
 	}
 }

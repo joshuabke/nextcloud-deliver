@@ -62,6 +62,7 @@ class DerivedMedia {
 		private Ffmpeg $ffmpeg,
 		private Encoder $encoder,
 		private Probe $probe,
+		private ContainerProbe $container,
 		private VersionMapper $versions,
 		private JobMapper $jobs,
 		private IRootFolder $root,
@@ -145,8 +146,14 @@ class DerivedMedia {
 		$playable = $this->browserPlays($probed);
 		$version->setPlayable($playable);
 		$this->versions->update($version);
-		// Read without ffprobe: there is no ffmpeg either, so nothing to queue that could only fail
+		// Read without ffprobe: there is no ffmpeg either, so nothing to queue that could only fail.
+		// A WAV's Waveform is in its PCM; other audio gets one from the browser (acceptWaveform).
 		if ($probed['fallback'] ?? false) {
+			$peaks = $version->getHasAudio() ? $this->container->wavPeaks($path, self::WAVEFORM_BUCKETS) : null;
+			if ($peaks !== null) {
+				$this->put($version, 'waveform', json_encode(['peaks' => $peaks], JSON_THROW_ON_ERROR));
+				$this->mark($version->getId(), Job::KIND_WAVEFORM, self::STATE_READY);
+			}
 			return;
 		}
 		// A Proxy either makes the Version playable at all or is the lighter choice next to a large original
@@ -268,6 +275,35 @@ class DerivedMedia {
 			@unlink($pcm);
 		}
 		$this->put($version, 'waveform', json_encode(['peaks' => $peaks], JSON_THROW_ON_ERROR));
+	}
+
+	/**
+	 * A Waveform and duration the browser worked out by decoding the file,
+	 * where the server has no ffmpeg to do it. Only taken when there is no
+	 * Waveform and nothing on its way: a browser never overrides the server.
+	 *
+	 * @param list<mixed> $peaks
+	 * @throws InvalidRequestException peaks or duration out of shape
+	 * @throws ProjectConflictException the Version has a Waveform or is getting one
+	 */
+	public function acceptWaveform(Version $version, array $peaks, int $durationFrames): void {
+		if ($peaks === [] || count($peaks) > self::WAVEFORM_BUCKETS || $durationFrames < 1) {
+			throw new InvalidRequestException('A Waveform is 1 to ' . self::WAVEFORM_BUCKETS . ' peaks over a duration of at least one Frame');
+		}
+		foreach ($peaks as $peak) {
+			if (!is_int($peak) && !is_float($peak) || $peak < 0 || $peak > 1) {
+				throw new InvalidRequestException('Peaks run from 0 to 1');
+			}
+		}
+		if (!$version->getHasAudio() || $version->getWaveformState() !== self::STATE_NONE) {
+			throw new ProjectConflictException('This Version has its Waveform from the server');
+		}
+		$this->put($version, 'waveform', json_encode(['peaks' => array_map(static fn ($peak) => round((float)$peak, 3), $peaks)], JSON_THROW_ON_ERROR));
+		if ($version->getDurationFrames() === null) {
+			$version->setDurationFrames($durationFrames);
+		}
+		$version->setWaveformState(self::STATE_READY);
+		$this->versions->update($version);
 	}
 
 	/**
