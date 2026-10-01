@@ -75,7 +75,10 @@ class ShareApiController extends OCSController {
 	public function inProject(int $id): Response {
 		return $this->guard(function () use ($id) {
 			[$project, $folder] = $this->projects->resolve((string)$this->userId, $id);
-			return $this->sharing->linksUnder((string)$this->userId, $project, $folder);
+			$listed = $this->sharing->linksUnder((string)$this->userId, $project, $folder);
+			$notEnabled = $this->projects->notEnabled($project, $folder, array_column($listed['links'], 'fileId'));
+			$listed['links'] = array_map(static fn (array $link) => $link + ['notEnabled' => $notEnabled[$link['fileId']] ?? 0], $listed['links']);
+			return $listed;
 		});
 	}
 

@@ -630,6 +630,35 @@ class ProjectService {
 		}
 	}
 
+	/**
+	 * Media files under each shared node that are no Assets, so a Reviewer
+	 * sees them without a Review button. With Auto Intake on, none: the
+	 * listener and the scan take every one in.
+	 *
+	 * @param list<int> $nodeIds files and folders inside the Project folder
+	 * @return array<int, int> node id => how many
+	 */
+	public function notEnabled(Project $project, Folder $folder, array $nodeIds): array {
+		if ($project->getAutoIntake()) {
+			return array_fill_keys($nodeIds, 0);
+		}
+		$known = array_flip(array_map(static fn (Version $version) => $version->getFileId(), $this->versions->findByProject($project->getId())));
+		$counts = [];
+		foreach ($nodeIds as $nodeId) {
+			$node = $nodeId === $folder->getId() ? $folder : $folder->getFirstNodeById($nodeId);
+			$files = match (true) {
+				$node instanceof Folder => $this->mediaFiles($node),
+				$node instanceof File && Reviewable::file($node) => [$node],
+				default => [],
+			};
+			$counts[$nodeId] = 0;
+			foreach ($files as $file) {
+				$counts[$nodeId] += isset($known[$file->getId()]) ? 0 : 1;
+			}
+		}
+		return $counts;
+	}
+
 	/** @return list<array<string, mixed>> the Assets with their Version Stacks, newest Version first */
 	private function assetTree(Project $project, Folder $folder, string $uid): array {
 		[$versionsByAsset, $versionIds] = $this->stacks($project);
