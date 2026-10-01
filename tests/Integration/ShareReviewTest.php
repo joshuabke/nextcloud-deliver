@@ -258,6 +258,22 @@ class ShareReviewTest extends TestCase {
 		self::assertStringContainsString($fileLink['data']['token'], $kimLinks[$fileLink['data']['id']], 'every Reviewer has a Personal Link through every review link');
 	}
 
+	public function testALinkSaysWhichFilesAreNotUpForReview(): void {
+		self::assertSame(200, $this->nc->ocs('PUT', "/projects/{$this->projectId}", ['autoIntake' => false])['status']);
+		$this->nc->put("{$this->root}/take.mp3", 'not really audio');
+		$this->nc->put("{$this->root}/notes.txt", 'no media');
+		$this->nc->mkdir("{$this->root}/mix");
+		$this->nc->put("{$this->root}/mix/final.wav", 'not really audio');
+		$notEnabled = fn () => array_column($this->nc->ocs('GET', "/projects/{$this->projectId}/shares")['data']['links'], 'notEnabled', 'id')[$this->shareId];
+
+		self::assertSame(2, $notEnabled(), 'Reviewers see both without a Review button');
+
+		// Auto Intake takes in what is there, and with it on nothing is left out
+		self::assertSame(200, $this->nc->ocs('PUT', "/projects/{$this->projectId}", ['autoIntake' => true])['status']);
+		self::assertSame(0, $notEnabled());
+		self::assertCount(3, $this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets']);
+	}
+
 	public function testAMemberEditsAReviewerAndRenewsTheirLink(): void {
 		$invited = $this->nc->ocs('POST', "/shares/{$this->shareId}/reviewers", ['name' => 'Kim']);
 		$id = $invited['data']['id'];

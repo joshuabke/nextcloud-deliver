@@ -91,6 +91,22 @@ async function createLink() {
 }
 
 /**
+ * Auto Intake from the link's settings: switched on, it takes in what is there,
+ * so the counts and the Asset list are read again.
+ *
+ * @param {boolean} on - Auto Intake on or off
+ */
+async function setAutoIntake(on) {
+	try {
+		await store.save(props.id, { autoIntake: on })
+		await Promise.all([load(), store.fetch(props.id)])
+		editing.value = links.value.find((share) => share.id === editing.value?.id) ?? editing.value
+	} catch (e) {
+		showError(errorMessage(e))
+	}
+}
+
+/**
  * @param {object} updated - the Share Link as the server returned it after a change
  */
 function replace(updated) {
@@ -234,6 +250,8 @@ function personalLink(reviewer) {
 				v-if="editing"
 				:share="editing"
 				:canWrite="project?.canWrite ?? false"
+				:autoIntake="project?.autoIntake ?? false"
+				@autoIntake="setAutoIntake"
 				@update="replace"
 				@person="openPerson"
 				@close="closeEditing" />

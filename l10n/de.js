@@ -26,6 +26,7 @@ OC.L10N.register(
 		"As the link says": "Wie beim Link",
 		"Attach files": "Dateien anhängen",
 		"Attach files, up to five of 25 MB each": "Dateien anhängen, bis zu fünf mit je 25 MB",
+		"Auto Intake: review every media file in the Project folder": "Automatische Aufnahme: jede Mediendatei im Projektordner reviewen",
 		"Auto Intake: review every media file in this folder": "Automatische Aufnahme: jede Mediendatei in diesem Ordner reviewen",
 		"Back to the Review": "Zurück zum Review",
 		"Back to {project}": "Zurück zu {project}",
@@ -310,6 +311,10 @@ OC.L10N.register(
 		"_%n Asset with changes requested_::_%n Assets with changes requested_": [
 			"%n Asset mit gewünschten Änderungen",
 			"%n Assets mit gewünschten Änderungen"
+		],
+		"_%n media file here is not up for review, so Reviewers see it without a Review button._::_%n media files here are not up for review, so Reviewers see them without a Review button._": [
+			"%n Mediendatei hier ist nicht zum Review freigegeben, Reviewer sehen sie also ohne Review-Knopf.",
+			"%n Mediendateien hier sind nicht zum Review freigegeben, Reviewer sehen sie also ohne Review-Knopf."
 		],
 		"_%n Asset_::_%n Assets_": [
 			"%n Asset",
