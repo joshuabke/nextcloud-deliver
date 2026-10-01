@@ -12,6 +12,6 @@ Erste Veröffentlichung im App Store.
 - Fälligkeitsdaten mit Erinnerung, ungesehene Kommentare, Benachrichtigungen und Mails, und Live-Aktualisierung ohne Neuladen.
 - Export der Kommentare als EDL, FCP7 XML, FCPXML oder CSV, als Marker für den Schnitt.
 - Audio zählt auf die Millisekunde: angezeigt als `m:ss.mmm`, umschaltbar auf Timecode oder Frames in der Bildrate des Projekts.
-- Proxys, Vorschauleisten und Wellenformen, wenn ffmpeg installiert ist; ohne ffmpeg spielen browsertaugliche Dateien so, wie sie sind, MOV, MP4 und Broadcast-WAV behalten Bildrate und Start-Timecode, und Audio bekommt trotzdem seine Wellenform.
+- Proxys, Vorschauleisten und Wellenformen, wenn ffmpeg installiert ist; ohne ffmpeg spielen browsertaugliche Dateien so, wie sie sind, MOV, MP4 und Broadcast-WAV behalten Bildrate und Start-Timecode, WebM und MKV ihre Bildrate, und Audio bekommt trotzdem seine Wellenform.
 - Funktioniert auf dem Handy: Review-Ansicht, Zeichnen mit dem Finger und die Projektliste sind für kleine Bildschirme gemacht.
 - Englisch und Deutsch.

@@ -144,9 +144,31 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertSame(409, $this->nc->ocs('POST', "/versions/{$version['id']}/waveform", ['peaks' => [0.2], 'durationFrames' => 2000])['status'], 'once is enough');
 	}
 
-	public function testAFormatItCannotReadSaysThatFfmpegIsMissing(): void {
-		$this->make('-f lavfi -i testsrc=size=320x180:rate=25:duration=1 -c:v libvpx -f webm');
+	public function testAWebmKeepsItsFrameRate(): void {
+		$this->make('-f lavfi -i testsrc=size=320x180:rate=24000/1001:duration=2 -f lavfi -i sine=duration=2 -c:v libvpx-vp9 -c:a libopus -shortest -f webm');
 		$version = $this->upload('cut.webm');
+
+		self::assertSame(['num' => 24000, 'den' => 1001], $version['fps']);
+		self::assertSame(48, $version['durationFrames']);
+		self::assertSame([320, 180], [$version['width'], $version['height']]);
+		self::assertFalse($version['audioOnly']);
+		self::assertTrue($version['playable']);
+	}
+
+	public function testAnMkvKeepsItsFrameRateAndLeavesPlayingToTheBrowser(): void {
+		$this->make('-f lavfi -i testsrc=size=320x180:rate=50:duration=1 -c:v libx264 -pix_fmt yuv420p -f matroska');
+		$version = $this->upload('cut.mkv');
+
+		self::assertSame(['num' => 50, 'den' => 1], $version['fps']);
+		self::assertSame(50, $version['durationFrames']);
+		// Chrome and Firefox play H.264 in Matroska, Safari does not and says so
+		self::assertTrue($version['playable']);
+		self::assertNull($version['derived']['error']);
+	}
+
+	public function testAFormatItCannotReadSaysThatFfmpegIsMissing(): void {
+		$this->make('-f lavfi -i testsrc=size=320x180:rate=25:duration=1 -c:v mpeg4 -f avi');
+		$version = $this->upload('cut.avi');
 
 		self::assertSame('Without ffmpeg, Deliver cannot read this format', $version['derived']['error']);
 	}
