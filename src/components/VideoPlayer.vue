@@ -206,6 +206,22 @@ watch(() => props.version.id, async (id) => {
 	}
 }, { immediate: true })
 
+// Derived media that becomes ready while the Version is open shows without opening it again
+watch(() => props.version.derived?.waveform?.state, async (state) => {
+	const id = props.version.id
+	const loaded = state === 'ready' && peaks.value.length === 0 ? await loadWaveform() : null
+	if (loaded !== null && props.version.id === id) {
+		peaks.value = loaded
+	}
+})
+watch(() => props.version.derived?.thumbs?.state, async (state) => {
+	const id = props.version.id
+	const loaded = state === 'ready' && strip.value === null ? await loadStrip() : null
+	if (loaded !== null && props.version.id === id) {
+		strip.value = loaded
+	}
+})
+
 watch(source, () => {
 	unplayable.value = false
 })
