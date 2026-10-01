@@ -164,4 +164,19 @@ class WithoutFfmpegTest extends TestCase {
 			self::assertSame(400, $this->nc->ocs('POST', "/versions/$id/waveform", $body)['status'], $case);
 		}
 	}
+
+	#[DataProvider('pcm')]
+	public function testAWavOfAnyPcmGetsItsWaveform(string $codec): void {
+		$this->make("-f lavfi -i sine=duration=1 -ar 48000 -ac 2 -c:a $codec -f wav");
+		$version = $this->upload('mix.wav');
+
+		$peaks = json_decode($this->nc->request('GET', $version['derived']['waveform']['url'])['body'], true)['peaks'];
+		self::assertEqualsWithDelta(0.125, max($peaks), 0.01);
+		self::assertEqualsWithDelta(0.125, $peaks[1000], 0.01, 'every bucket of a steady sine peaks alike');
+	}
+
+	/** @return array<string, array{string}> */
+	public static function pcm(): array {
+		return ['8 bit' => ['pcm_u8'], '24 bit' => ['pcm_s24le'], '32 bit' => ['pcm_s32le'], '32 bit float' => ['pcm_f32le'], '64 bit float' => ['pcm_f64le']];
+	}
 }
