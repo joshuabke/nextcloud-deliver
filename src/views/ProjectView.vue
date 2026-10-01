@@ -4,6 +4,8 @@ import dueIcon from '@mdi/svg/svg/calendar-clock.svg?raw'
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import compareIcon from '@mdi/svg/svg/compare.svg?raw'
 import removeIcon from '@mdi/svg/svg/delete-outline.svg?raw'
+import notUpIcon from '@mdi/svg/svg/eye-off-outline.svg?raw'
+import videoIcon from '@mdi/svg/svg/filmstrip.svg?raw'
 import filesIcon from '@mdi/svg/svg/folder-eye-outline.svg?raw'
 import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
 import stackIcon from '@mdi/svg/svg/layers-outline.svg?raw'
@@ -11,6 +13,7 @@ import newVersionIcon from '@mdi/svg/svg/layers-plus.svg?raw'
 import searchIcon from '@mdi/svg/svg/magnify.svg?raw'
 import openIcon from '@mdi/svg/svg/open-in-app.svg?raw'
 import uploadIcon from '@mdi/svg/svg/tray-arrow-up.svg?raw'
+import audioIcon from '@mdi/svg/svg/waveform.svg?raw'
 import { t } from '@nextcloud/l10n'
 import { generateRemoteUrl, generateUrl } from '@nextcloud/router'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
@@ -112,6 +115,27 @@ const filters = computed(() => FILTERS.map((id) => ({
 const shown = computed(() => inView.value.filter((asset) => passes(asset, filter.value) && found(asset, query.value)))
 // Sorted within each folder, the folders themselves by path
 const groups = computed(() => groupByFolder(sortAssets(shown.value, sort.value)))
+/** Media files in the folder on screen that are no Assets, greyed out under them to add one by one; they have no state to filter by */
+const loose = computed(() => filter.value !== 'all'
+	? []
+	: (project.value?.notEnabled ?? []).filter((file) => inFolder(file, folder.value) && file.name.toLocaleLowerCase().includes(query.value.trim().toLocaleLowerCase())))
+/** File ids being added, so a second click waits */
+const adding = ref(new Set())
+
+/**
+ * @param {{fileId: number}} file - a media file that is no Asset yet
+ */
+async function add(file) {
+	adding.value.add(file.fileId)
+	try {
+		await enableFile(file.fileId)
+		await store.fetch(props.id)
+	} catch (e) {
+		error.value = errorMessage(e)
+	} finally {
+		adding.value.delete(file.fileId)
+	}
+}
 
 /** Files dragged over the view; enter and leave fire for every child, so they are counted */
 const dragDepth = ref(0)
@@ -386,6 +410,35 @@ function dropped(event) {
 						@menu="openMenu($event, asset)" />
 				</ul>
 			</section>
+			<section v-if="loose.length" class="deliver-project__group">
+				<h3 class="deliver-project__folder deliver-project__loose-head">
+					<NcIconSvgWrapper :svg="notUpIcon" :size="20" />
+					{{ t('deliver', 'Not up for review') }}
+				</h3>
+				<ul class="deliver-project__grid">
+					<li v-for="file in loose" :key="file.fileId" class="deliver-project__loose">
+						<div class="deliver-card__link">
+							<div class="deliver-card__still">
+								<NcIconSvgWrapper :svg="file.mimeType.startsWith('audio/') ? audioIcon : videoIcon" :size="40" />
+							</div>
+							<div class="deliver-card__name" :title="file.name">
+								{{ file.name }}
+							</div>
+							<div class="deliver-card__meta">
+								{{ file.path ? file.path : project.name }}
+							</div>
+						</div>
+						<NcButton
+							v-if="project.canWrite"
+							class="deliver-project__add"
+							variant="secondary"
+							:disabled="adding.has(file.fileId)"
+							@click="add(file)">
+							{{ t('deliver', 'Add for review') }}
+						</NcButton>
+					</li>
+				</ul>
+			</section>
 			<input
 				ref="versionInput"
 				type="file"
@@ -501,4 +554,29 @@ function dropped(event) {
 	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 	gap: calc(2 * var(--default-grid-baseline));
 }
+
+.deliver-project__loose-head {
+	color: var(--color-text-maxcontrast);
+}
+
+/* Greyed out until the pointer is on one: it is there in Files, not in review */
+.deliver-project__loose {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	opacity: 0.5;
+	transition: opacity 0.15s;
+}
+
+.deliver-project__loose:hover,
+.deliver-project__loose:focus-within {
+	opacity: 1;
+}
+
+.deliver-project__add {
+	align-self: flex-start;
+	margin-inline-start: calc(2 * var(--default-grid-baseline));
+}
 </style>
+
+<style scoped src="../components/card.css"></style>
