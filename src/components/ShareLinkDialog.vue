@@ -1,8 +1,9 @@
 <script setup>
-import { t } from '@nextcloud/l10n'
+import { n, t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import { ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import ShareLinkItem from './ShareLinkItem.vue'
 
@@ -10,9 +11,11 @@ const props = defineProps({
 	/** A Share Link as the Project's navigation lists it */
 	share: { type: Object, required: true },
 	canWrite: { type: Boolean, default: false },
+	/** The Project's Auto Intake, which decides whether every file under the link is up for review */
+	autoIntake: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['update', 'person', 'close'])
+const emit = defineEmits(['update', 'person', 'close', 'autoIntake'])
 
 const item = ref(null)
 
@@ -33,6 +36,17 @@ const manageUrl = generateUrl('/apps/files/files/{fileId}', { fileId: props.shar
 			inDialog
 			@update="emit('update', $event)"
 			@person="emit('person', $event)" />
+		<div v-if="canWrite && share.review && (share.notEnabled > 0 || autoIntake)" class="deliver-link-dialog__intake">
+			<p v-if="share.notEnabled > 0" class="deliver-link-dialog__hint">
+				{{ n('deliver', '%n media file here is not up for review, so Reviewers see it without a Review button.', '%n media files here are not up for review, so Reviewers see them without a Review button.', share.notEnabled) }}
+			</p>
+			<NcCheckboxRadioSwitch
+				type="switch"
+				:modelValue="autoIntake"
+				@update:modelValue="emit('autoIntake', $event)">
+				{{ t('deliver', 'Auto Intake: review every media file in the Project folder') }}
+			</NcCheckboxRadioSwitch>
+		</div>
 		<template #actions>
 			<NcButton
 				v-if="canWrite && share.review && !item?.inviting"
@@ -48,6 +62,14 @@ const manageUrl = generateUrl('/apps/files/files/{fileId}', { fileId: props.shar
 </template>
 
 <style scoped>
+.deliver-link-dialog__intake {
+	margin-top: calc(3 * var(--default-grid-baseline));
+}
+
+.deliver-link-dialog__hint {
+	color: var(--color-text-maxcontrast);
+}
+
 /* Left in the row of dialog buttons, apart from the one that leaves for Files */
 .deliver-link-dialog__invite {
 	margin-inline-end: auto;
