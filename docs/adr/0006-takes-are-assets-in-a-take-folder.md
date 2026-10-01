@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by [0008](0008-takes-are-not-assets.md)
 ---
 
 # Takes are Assets in a Take Folder, not Versions, and not an extension of Compare
