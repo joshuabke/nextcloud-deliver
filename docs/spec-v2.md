@@ -159,6 +159,21 @@ The phone version follows the Frame.io iOS app, in the mobile browser: Deliver i
 108. As a Reviewer or Member on a phone or tablet, I want to draw on the picture with a finger or a pen, so that Drawings work there too.
 109. As a Member on a phone, I want the Project list and Project view to fit: the navigation as a drawer, menus by a long press or a "…" button on each card, filters as a row to swipe, and upload by button, so that I can follow my Projects on the go.
 
+### Milestone 1.1: Takes
+
+Classical recordings are made in Takes: many passes over the same passages, partly over the whole work, partly over a few bars. The producer and the musicians choose between them by listening to the same place in several Takes, one after the other. Today that means a copy of the recording session for everyone. With 1.1 the recording session delivers its Takes into a Take Folder (reaper-deliver does it in one click, ADRs 0005 and 0006), and anyone the folder is shared with compares them in the browser.
+
+110. As a Member, I want a folder whose Sidecar says it holds Takes to be a Take Folder, so that a Delivery sets it up without a visit to the browser.
+111. As a Member or Reviewer, I want a Take Folder to appear as one entry in the Project view and on a Share Link with review on, opening the Take comparison, so that thirty Takes do not bury the Mixes.
+112. As a Member or Reviewer, I want the Takes of a Take Folder stacked as lanes on one timeline of Session Time, each with its Waveform and Take name, in the order of the recording session's lanes, so that I see at a glance which Takes cover the place I care about.
+113. As a Member or Reviewer, I want a click to set the play position and select the Take under the pointer, so that position and Take are one gesture.
+114. As a Member or Reviewer, I want Space to play the selected Take from the play position and, pressed again, to stop and return to that position, so that I can hear the same place again in another Take.
+115. As a Member or Reviewer, I want ↑ and ↓ to select the Take above or below while stopped, keeping the play position, so that I compare Takes without the mouse.
+116. As a Member or Reviewer, I want to zoom the timeline down to a few seconds, so that I can place the play position on a single bar.
+117. As a Member or Reviewer, I want Session Time shown as `m:ss.mmm` whatever the Project's timecode display mode, so that we speak about the same times as the recording session.
+118. As a Member or Reviewer who may comment, I want to comment on the selected Take at the play position, and see every Take's Comments as markers on its lane, so that "T. 40 in RP12 is the one" lands where it belongs.
+119. As a Member, I want Takes delivered again under the same name to keep their Comments, so that a re-render never loses feedback.
+
 ## Implementation Decisions
 
 ### Repository and stack
@@ -193,13 +208,35 @@ File identity is always the Nextcloud file id, so renames and moves inside the P
 
 ### Media metadata and derived media
 
-- Probe order: ffprobe when present; otherwise browser-side detection on first open, persisted server-side; otherwise the Project default fps. Members can override fps and start timecode per Version, which re-anchors nothing (frames stay frames) but changes display and export.
+- Probe order: a Sidecar entry for the file when there is one (ADR 0005); then ffprobe when present; otherwise browser-side detection on first open, persisted server-side; otherwise the Project default fps. Members can override fps and start timecode per Version, which re-anchors nothing (frames stay frames) but changes display and export.
 - Proxy: one H.264/AAC MP4 at the source frame rate (VFR conformed to average), capped at the configured resolution measured on the short side (1080p is 1920×1080 and 1080×1920 alike), CRF around 20, one-second keyframe interval, faststart. Sources browsers play (H.264/AAC MP4, WebM) always play as the original by default, at any size; they get a Proxy only when they exceed the cap, as a lighter choice the player can switch to at the same Frame. For every other source the Proxy is the only playable rendition.
 - Thumbnail Strip: WebP sprite plus JSON index, roughly one frame per second, capped by the admin setting.
 - Waveform: peaks JSON computed from raw PCM via ffmpeg, no extra binaries. Generated for every Version with audio.
 - Storage in `appdata_deliver/<version id>/`. Served through a range-capable streaming endpoint for both Members and Reviewers.
 - Jobs run in Nextcloud's background job system, one ffmpeg at a time by default, with the optional `occ deliver:worker` loop and `occ deliver:regenerate`.
 - Admin settings: ffmpeg path, ffprobe path, max parallel jobs, max resolution, thumbnail cap, hardware encoder with device path (probed on save), extra ffmpeg args, plus a read-only status panel.
+
+### Takes and Sidecar
+
+- Sidecar: `deliver.json` in the folder it describes, written by the delivering tool after the files and before they are enabled. Format:
+  ```json
+  {
+    "deliver": 1,
+    "takes": true,
+    "files": {
+      "RP12.mp3": {
+        "start": 252.35,
+        "duration": 183.21,
+        "lane": 3,
+        "waveform": { "rate": 50, "peaks": [0.012, 0.431, 0.998] }
+      }
+    }
+  }
+  ```
+  `start` is the Session Time of the first sample in seconds and becomes the start timecode at the Project's frame rate; `duration` in seconds; `lane` orders Takes and is ignored elsewhere; `takes` is present only on a Take Folder's Sidecar; unknown keys are ignored. A Sidecar entry is the probe result for its file (audio only, no video) and is re-read when the Sidecar changes.
+- Waveform: the peaks JSON gains an optional `rate` (peaks per second). Without it, the 2000 buckets across the duration as before; a Sidecar Waveform is stored as is, so zoomed Take lanes stay sharp.
+- Take alignment rests on start timecodes, which are whole Frames at the Project's frame rate: Takes line up to the Frame, and an audio-only Project at 1000 fps lines them up to the millisecond. Playback position itself is continuous.
+- Take comparison: a view of its own over the Takes of one Take Folder, opened from the Project view, the Asset menu and the public share page (a "Compare Takes" action on the folder instead of a Review action per file). One audio element plays the selected Take; switching only happens while stopped. Comments are ordinary Comments on each Take's current Version, anchored to a Frame; Ranges are not offered here.
 
 ### Permissions
 
@@ -263,6 +300,9 @@ CI runs php-cs-fixer, psalm, PHPUnit (unit and integration), Vitest and Playwrig
 - On phones: comparing Versions, Exports, managing Version Stacks and upload by drag and drop; they stay on larger screens.
 - External or GPU-farm transcoding workers over HTTP (job table is ready for it).
 - Direct push of markers into DaVinci Resolve.
+- Ranges, ratings and favourites on Takes; assembling Takes into a cut in the browser.
+- Aligning Takes by their audio (they line up only as the recording session placed them).
+- The Take comparison on phones.
 - Signed App Store release workflow and the certificate.
 - Deploying and running a particular Nextcloud server; the repo ships only a generic `deploy/` compose example with ffmpeg and `/dev/dri`.
 
