@@ -41,7 +41,7 @@ A note anchored to a Frame or a Range on one Version. Has an author, may have Re
 _Avoid_: Note, annotation, marker (marker is an export term)
 
 **Frame**:
-The exact picture a Comment points to, expressed as a frame index at the Version's frame rate. Seconds are derived, never stored as the anchor.
+The exact picture a Comment points to, expressed as a frame index at the Version's frame rate. An audio-only Version counts in milliseconds, so there a Frame is a millisecond. Seconds are derived, never stored as the anchor.
 _Avoid_: Timestamp, time, position
 
 **Range**:
@@ -106,6 +106,20 @@ _Avoid_: Invite link, magic link, session
 A Comment or Reply the current person has not yet had on screen since it was written. Tracked per person per Version.
 _Avoid_: New, unread (unread is for notifications)
 
+### Takes
+
+**Take**:
+One recorded pass over a passage of a work, delivered as an Asset inside a Take Folder. Its start timecode is its position on the recording session's timeline, so the same time on two Takes is the same musical point. Named after its recording pass.
+_Avoid_: Recording, pass, REAPER take (an alternative inside a REAPER media item, unrelated)
+
+**Take Folder**:
+A folder inside a Project marked as holding the Takes of one work, over which Deliver offers the Take comparison. A Project may hold several, usually one per work.
+_Avoid_: Take set, take list, session
+
+**Session Time**:
+A point on the recording session's timeline, shown as `m:ss.mmm`. A Take's start timecode is its Session Time, so equal Session Time on two Takes is the same musical place.
+_Avoid_: Position, timestamp, "Stelle" (that is the place in the music, which Session Time only stands for)
+
 ### Derived Media
 
 **Proxy**:
@@ -130,6 +144,14 @@ _Avoid_: Orphaned, broken, deleted
 A file generated from a Version's Comments for import into an editing application, such as an EDL.
 _Avoid_: Download, report
 
+**Delivery**:
+One run of an editing application's Deliver action that puts new Versions or Takes into a Project, together with their Sidecar. Several works can go out in one Delivery.
+_Avoid_: Publish, release, upload (and never Export, which is Comments going the other way)
+
+**Sidecar**:
+A `deliver.json` file in a Project folder, written by the delivering tool, that supplies start timecodes and Waveforms for the files beside it and marks the folder as a Take Folder when it holds Takes. Lets Deliver work fully without ffmpeg.
+_Avoid_: Manifest, metadata file
+
 ## German
 
 The German translation (`l10n/de` with "du", `l10n/de_DE` with "Sie") uses these terms. The trade words of post-production stay English.
@@ -149,6 +171,8 @@ The German translation (`l10n/de` with "du", `l10n/de_DE` with "Sie") uses these
 | Proxy, Thumbnail Strip, Waveform | Proxy, Vorschauleiste, Wellenform |
 | Missing | Fehlt |
 | Export | Export |
+| Delivery, Sidecar | Delivery, Sidecar |
+| Take, Take Folder, Session Time | Take, Take-Ordner, Session-Zeit (never „Aufnahme“, which is Auto Intake) |
 | Drawing | Zeichnung |
 | Reaction | Reaktion |
 | Mention | Erwähnung |

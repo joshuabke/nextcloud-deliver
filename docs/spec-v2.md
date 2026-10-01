@@ -21,7 +21,7 @@ Deliver becomes a proper Nextcloud app, rebuilt from scratch, in which media fil
 4. As a Member, I want to take a single file out of Deliver after a confirmation, so that its review data is cleaned up while the file itself stays.
 5. As a Member, I want the Deliver app page to list every Project I can access, so that I have one place to find reviews.
 6. As a Member, I want a Project to show its folder tree with every enabled file as an Asset, so that subfolders keep their meaning.
-7. As a Member, I want a Project to have a default frame rate, so that audio-only Assets and undetectable videos still get frame-accurate Comments.
+7. As a Member, I want a Project to have a default frame rate, so that undetectable videos still get frame-accurate Comments and audio can be read in the Project's timecode.
 8. As a Member, I want a Project to have a timecode display setting (SMPTE, frames, seconds), so that every viewer sees the format my team works in.
 9. As a Member, I want to remove the Deliver Project from a folder after a confirmation, so that review data can be cleaned up while the files stay.
 10. As a Member, I want a folder inside a Project to be refused as a new Project, so that ownership of files is never ambiguous.
@@ -42,7 +42,7 @@ Deliver becomes a proper Nextcloud app, rebuilt from scratch, in which media fil
 ### Playback
 
 21. As a Member or Reviewer, I want to play a Version in the browser with frame stepping (arrow keys and `,` `.`), J/K/L shuttle, space, loop of a Range and playback speed, so that I can inspect any frame.
-22. As a Member or Reviewer, I want the current position shown as SMPTE timecode or frame counter according to the Project setting, with a session-local toggle, so that I can read it the way I think.
+22. As a Member or Reviewer, I want the current position shown as SMPTE timecode or frame counter according to the Project setting, and audio-only Versions as `m:ss.mmm`, with a session-local toggle between them, so that I can read it the way I think.
 23. As a Member or Reviewer, I want a marker strip on the timeline showing every Comment and Range, and to jump to one by clicking it, so that I can navigate feedback visually.
 24. As a Member or Reviewer, I want hover thumbnails on the timeline and a waveform under it, so that I can find a moment quickly, especially in audio-only material.
 25. As a Member, I want to see "processing, N %" while derived media is generated and to play the original meanwhile if the browser can, so that waiting is transparent.
@@ -159,6 +159,21 @@ The phone version follows the Frame.io iOS app, in the mobile browser: Deliver i
 108. As a Reviewer or Member on a phone or tablet, I want to draw on the picture with a finger or a pen, so that Drawings work there too.
 109. As a Member on a phone, I want the Project list and Project view to fit: the navigation as a drawer, menus by a long press or a "…" button on each card, filters as a row to swipe, and upload by button, so that I can follow my Projects on the go.
 
+### Milestone 1.1: Takes
+
+Classical recordings are made in Takes: many passes over the same passages, partly over the whole work, partly over a few bars. The producer and the musicians choose between them by listening to the same place in several Takes, one after the other. Today that means a copy of the recording session for everyone. With 1.1 the recording session delivers its Takes into a Take Folder (reaper-deliver does it in one click, ADRs 0005 and 0006), and anyone the folder is shared with compares them in the browser.
+
+110. As a Member, I want a folder whose Sidecar says it holds Takes to be a Take Folder, so that a Delivery sets it up without a visit to the browser.
+111. As a Member or Reviewer, I want a Take Folder to appear as one entry in the Project view and on a Share Link with review on, opening the Take comparison, so that thirty Takes do not bury the Mixes.
+112. As a Member or Reviewer, I want the Takes of a Take Folder stacked as lanes on one timeline of Session Time, each with its Waveform and Take name, in the order of the recording session's lanes, so that I see at a glance which Takes cover the place I care about.
+113. As a Member or Reviewer, I want a click to set the play position and select the Take under the pointer, so that position and Take are one gesture.
+114. As a Member or Reviewer, I want Space to play the selected Take from the play position and, pressed again, to stop and return to that position, so that I can hear the same place again in another Take.
+115. As a Member or Reviewer, I want ↑ and ↓ to select the Take above or below while stopped, keeping the play position, so that I compare Takes without the mouse.
+116. As a Member or Reviewer, I want to zoom the timeline down to a few seconds, so that I can place the play position on a single bar.
+117. As a Member or Reviewer, I want Session Time shown as `m:ss.mmm` whatever the Project's timecode display mode, switchable to timecode or frames at the Project's frame rate, so that we speak about the same times as the recording session.
+118. As a Member or Reviewer who may comment, I want to comment on the selected Take at the play position, and see every Take's Comments as markers on its lane, so that "T. 40 in RP12 is the one" lands where it belongs.
+119. As a Member, I want a Take or Mix delivered again under the same name to replace its file and keep its Comments, and to be asked first when it already has Comments, so that a re-render never loses feedback nor silently puts it on different audio.
+
 ## Implementation Decisions
 
 ### Repository and stack
@@ -175,7 +190,7 @@ Files is the source of truth (ADR 0002). Deliver's tables hold only review state
 - **Project**: folder file id, owner user id, Auto Intake flag, default fps, timecode display mode, created at. The row is created implicitly when the first file in the folder is enabled, and explicitly when a Member switches the folder to Auto Intake. Nesting is rejected at creation time by walking ancestors. Membership is never stored; it is derived per request from the current user's access to the folder.
 - **Asset**: project id, display name (derived from the newest Version's filename unless overridden), parent folder file id. An Asset exists for a file a Member enabled, or for every media file in the folder while Auto Intake is on; taking a file out of Deliver deletes the Asset with its Versions and Comments after a confirmation.
 - **Version**: asset id, file id, Version Number (integer, unique per Asset), media metadata (fps as rational, drop-frame flag, start timecode in frames, duration in frames, width, height, has video, has audio), state (ready, missing, purged), derived-media state per kind (none, queued, running, ready, failed with message).
-- **Comment**: version id, parent comment id (nullable, one level), author reference (user id or reviewer id), in frame, out frame (nullable), body, resolved flag, created and updated timestamps. Frames are stored at the Version's fps; seconds are never persisted. An audio-only Version has no frame rate of its own and keeps the Project's default it was probed with, so its Frames do not change meaning later; a Broadcast WAV's time reference becomes its start timecode.
+- **Comment**: version id, parent comment id (nullable, one level), author reference (user id or reviewer id), in frame, out frame (nullable), body, resolved flag, created and updated timestamps. Frames are stored at the Version's fps; seconds are never persisted. An audio-only Version counts in milliseconds: its frame rate is 1000/1 whatever the Project's, so a Frame is a millisecond, its Frames never change meaning with the Project setting, and Takes line up to the millisecond (ADR 0007). Shown as timecode or frames, its position is converted to the Project's frame rate for display only. A Broadcast WAV's time reference becomes its start timecode.
 - **Review flags on a share**: Deliver stores nothing of its own for a Share Link. Whether a share is a review surface (`deliver/review`, off unless set), whether Reviewers may comment (`deliver/comment`) and whether older Versions accept Comments (`deliver/older`) are Nextcloud share attributes, so they are created, copied and deleted with the share. Password, expiry, revocation and "hide download" are the share's own properties (ADR 0004).
 - **Reviewer**: project id, name, email (nullable), secret key, created at. A Personal Link is the share URL plus the Reviewer's key. Reviewers are never deleted while they have Comments; revoking a Share Link does not touch them, and a Member can issue a fresh Personal Link for an existing Reviewer under a new Share Link.
 - **Seen state**: per person (user id or reviewer id) per Version, the timestamp up to which Comments have been on screen. Everything created after it is Unseen.
@@ -193,13 +208,36 @@ File identity is always the Nextcloud file id, so renames and moves inside the P
 
 ### Media metadata and derived media
 
-- Probe order: ffprobe when present; otherwise browser-side detection on first open, persisted server-side; otherwise the Project default fps. Members can override fps and start timecode per Version, which re-anchors nothing (frames stay frames) but changes display and export.
+- Probe order: a Sidecar entry for the file when there is one (ADR 0005); then ffprobe when present; otherwise Deliver's own container reader, which takes the frame rate, duration and start timecode from a MOV or MP4 and the time reference from a Broadcast WAV; otherwise the Project default fps and start 0. Audio-only Versions always count in milliseconds. Members can override fps and start timecode per Version, which re-anchors nothing (frames stay frames) but changes display and export.
 - Proxy: one H.264/AAC MP4 at the source frame rate (VFR conformed to average), capped at the configured resolution measured on the short side (1080p is 1920×1080 and 1080×1920 alike), CRF around 20, one-second keyframe interval, faststart. Sources browsers play (H.264/AAC MP4, WebM) always play as the original by default, at any size; they get a Proxy only when they exceed the cap, as a lighter choice the player can switch to at the same Frame. For every other source the Proxy is the only playable rendition.
 - Thumbnail Strip: WebP sprite plus JSON index, roughly one frame per second, capped by the admin setting.
 - Waveform: peaks JSON computed from raw PCM via ffmpeg, no extra binaries. Generated for every Version with audio.
 - Storage in `appdata_deliver/<version id>/`. Served through a range-capable streaming endpoint for both Members and Reviewers.
 - Jobs run in Nextcloud's background job system, one ffmpeg at a time by default, with the optional `occ deliver:worker` loop and `occ deliver:regenerate`.
 - Admin settings: ffmpeg path, ffprobe path, max parallel jobs, max resolution, thumbnail cap, hardware encoder with device path (probed on save), extra ffmpeg args, plus a read-only status panel.
+
+### Takes and Sidecar
+
+- Sidecar: `deliver.json` in the folder it describes, written by the delivering tool after the files and before they are enabled. Format:
+  ```json
+  {
+    "deliver": 1,
+    "takes": true,
+    "files": {
+      "RP12.mp3": {
+        "start": 252.35,
+        "duration": 183.21,
+        "lane": 3,
+        "waveform": { "rate": 50, "peaks": [0.012, 0.431, 0.998] }
+      }
+    }
+  }
+  ```
+  `start` is the Session Time of the first sample in seconds and becomes the start Frame in milliseconds; `duration` in seconds; `lane` orders Takes and is ignored elsewhere; `takes` is present only on a Take Folder's Sidecar; unknown keys are ignored. A Sidecar entry is the probe result for its file (audio only, no video) and is re-read when the Sidecar changes. Limits, since anyone with write access writes it: a Sidecar of at most 5 MiB, `rate` at most 100, and no more peaks than `duration` × `rate`; a Sidecar or entry over them is ignored and the file is probed instead.
+- Waveform: the peaks JSON gains an optional `rate` (peaks per second). Without it, the 2000 buckets across the duration as before; a Sidecar Waveform is stored as is, so zoomed Take lanes stay sharp.
+- Take alignment rests on start Frames, which for audio are milliseconds, so Takes line up to the millisecond whatever the Project's frame rate. Playback position itself is continuous.
+- Delivering again: a file written again in place keeps its file id, Version and Comments, and Deliver re-reads it (Sidecar first) and rebuilds its derived media. Replacing the file of a Version that has Comments is the exception and needs an explicit confirmation: Deliver's own upload asks, and a delivering tool asks before it overwrites, after reading the Version's Comments through the OCS API; without the confirmation it delivers a new Version instead. Writes from the Files app or a sync client cannot be asked about and are taken as they come.
+- Take comparison: a view of its own over the Takes of one Take Folder, opened from the Project view, the Asset menu and the public share page (a "Compare Takes" action on the folder instead of a Review action per file). One audio element plays the selected Take; switching only happens while stopped. Comments are ordinary Comments on each Take's current Version, anchored to a Frame; Ranges are not offered here.
 
 ### Permissions
 
@@ -263,7 +301,9 @@ CI runs php-cs-fixer, psalm, PHPUnit (unit and integration), Vitest and Playwrig
 - On phones: comparing Versions, Exports, managing Version Stacks and upload by drag and drop; they stay on larger screens.
 - External or GPU-farm transcoding workers over HTTP (job table is ready for it).
 - Direct push of markers into DaVinci Resolve.
-- Signed App Store release workflow and the certificate.
+- Ranges, ratings and favourites on Takes; assembling Takes into a cut in the browser.
+- Aligning Takes by their audio (they line up only as the recording session placed them).
+- The Take comparison on phones.
 - Deploying and running a particular Nextcloud server; the repo ships only a generic `deploy/` compose example with ffmpeg and `/dev/dri`.
 
 ## Further Notes
@@ -272,5 +312,5 @@ CI runs php-cs-fixer, psalm, PHPUnit (unit and integration), Vitest and Playwrig
 - Frame anchors rely on the Proxy having exactly the source frame rate; this is a correctness invariant, not an optimisation.
 - Ranges are inclusive of the out Frame.
 - Comment sort default is by Frame with a newest-first switch; the Unseen badge exists precisely because Frame order hides recency.
-- Timecode display mode is a Project setting; the player offers a session-local override that does not persist.
+- Timecode display mode is a Project setting for video; audio-only Versions and the Take comparison show `m:ss.mmm`. The player offers a session-local override between them that does not persist.
 - Reviewer identity is permanent by design: a Personal Link is the credential. Members are told this when they create one so they hand it to one person only.
