@@ -45,6 +45,7 @@ class ProjectService {
 		private ITimeFactory $time,
 		private Members $members,
 		private Authors $authors,
+		private Ffmpeg $ffmpeg,
 	) {
 	}
 
@@ -408,6 +409,8 @@ class ProjectService {
 			'playable' => $version->getPlayable(),
 			// Audio without a picture, once ffprobe has looked; null before
 			'audioOnly' => $version->getPlayable() === null ? null : !$version->getHasVideo() && (bool)$version->getHasAudio(),
+			// A WAV takes its markers as it is; anything else needs ffmpeg to become one
+			'wavExport' => in_array(strtolower(pathinfo($version->getName(), PATHINFO_EXTENSION)), ['wav', 'bwf'], true) || $this->ffmpeg->available(),
 			'width' => $version->getWidth(),
 			'height' => $version->getHeight(),
 			// The short side in pixels, as in "1080p"
