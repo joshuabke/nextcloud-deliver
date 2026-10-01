@@ -82,12 +82,15 @@ class ProjectApiTest extends TestCase {
 		$byFolder = $this->nc->ocs('GET', "/folders/{$this->nc->fileId($this->root)}/project");
 		self::assertSame($projectId, $byFolder['data']['id'], 'the folder the file lies in became the Project');
 		self::assertSame(['cut'], array_keys($this->stacks($this->nc, $projectId)), 'the other media files stay out');
+		$left = fn () => array_map(static fn (array $file) => [$file['path'], $file['name']], $this->nc->ocs('GET', "/projects/$projectId")['data']['notEnabled']);
+		self::assertSame([['scenes', 'intro.mov'], ['scenes', 'voiceover.wav']], $left(), 'but the Project view shows them, to add one by one');
 
 		// A second file, from a subfolder, joins the Project that is already there
 		$second = $this->nc->ocs('POST', '/assets', ['fileId' => $this->nc->fileId("{$this->root}/scenes/intro.mov")]);
 		self::assertSame(201, $second['status'], json_encode($second['data']));
 		self::assertSame($projectId, $second['data']['projectId']);
 		self::assertSame(['cut', 'intro'], array_keys($this->stacks($this->nc, $projectId)));
+		self::assertSame([['scenes', 'voiceover.wav']], $left());
 
 		self::assertSame(200, $this->nc->ocs('DELETE', "/assets/{$second['data']['assetId']}")['status']);
 		self::assertSame(['cut'], array_keys($this->stacks($this->nc, $projectId)), 'taking one Asset out leaves the rest');
@@ -138,6 +141,7 @@ class ProjectApiTest extends TestCase {
 		$byFolder = $this->nc->ocs('GET', "/folders/$folderId/project");
 		self::assertSame(200, $byFolder['status']);
 		self::assertSame($project['id'], $byFolder['data']['id']);
+		self::assertSame([], $this->nc->ocs('GET', "/projects/{$project['id']}")['data']['notEnabled'], 'Auto Intake leaves nothing out');
 
 		$listed = array_column($this->nc->ocs('GET', '/projects')['data'], 'id');
 		self::assertContains($project['id'], $listed);
