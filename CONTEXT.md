@@ -41,7 +41,7 @@ A note anchored to a Frame or a Range on one Version. Has an author, may have Re
 _Avoid_: Note, annotation, marker (marker is an export term)
 
 **Frame**:
-The exact picture a Comment points to, expressed as a frame index at the Version's frame rate. Seconds are derived, never stored as the anchor.
+The exact picture a Comment points to, expressed as a frame index at the Version's frame rate. An audio-only Version counts in milliseconds, so there a Frame is a millisecond. Seconds are derived, never stored as the anchor.
 _Avoid_: Timestamp, time, position
 
 **Range**:

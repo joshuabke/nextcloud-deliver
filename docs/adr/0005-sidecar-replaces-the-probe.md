@@ -4,7 +4,7 @@ status: accepted
 
 # A Sidecar from the delivering tool replaces the probe
 
-Managed hosts such as Hetzner Storage Share have no ffmpeg and never will, and the container probe reads MOV, MP4 and Broadcast WAV but not MP3, and computes no Waveform. Takes and Mixes from REAPER arrive as MP3 to stay streamable, so without help they would start at 0 and have no Waveform — the Take comparison would be impossible on exactly the hosts it is meant for. The tool that renders the files knows their Session Time and peaks exactly, so it writes them into a `deliver.json` Sidecar beside the files, and Deliver takes a Sidecar entry as the probe result for that file, ahead of ffprobe and the container probe.
+Managed Nextcloud hosts have no ffmpeg and never will, and the container probe reads MOV, MP4 and Broadcast WAV but not MP3, and computes no Waveform. Takes and Mixes from REAPER arrive as MP3 to stay streamable, so without help they would start at 0 and have no Waveform — the Take comparison would be impossible on exactly the hosts it is meant for. The tool that renders the files knows their Session Time and peaks exactly, so it writes them into a `deliver.json` Sidecar beside the files, and Deliver takes a Sidecar entry as the probe result for that file, ahead of ffprobe and the container probe.
 
 ## Considered Options
 
