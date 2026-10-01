@@ -80,6 +80,7 @@ const shareUrl = computed(() => version.value?.url
 const { player, panel, mode, clock, anchor, pin, hold, release, jump, posted, drawing, draft, draw, range, markRange, clearRange } = useReview({
 	version,
 	projectMode: computed(() => context.value?.project.timecodeMode ?? 'smpte'),
+	projectFps: computed(() => context.value?.project.fps ?? { num: 25, den: 1 }),
 	refresh: reload,
 })
 

@@ -56,12 +56,12 @@ class AudioExportTest extends TestCase {
 
 		$version = $this->nc->ocs('GET', "/versions/$versionId")['data']['versions'][0];
 		self::assertTrue($version['audioOnly']);
-		self::assertSame(['num' => 25, 'den' => 1], $version['fps'], 'audio keeps the Project frame rate it was probed with');
-		self::assertSame(90000, $version['startFrame'], 'the BWF time reference is the start timecode');
+		self::assertSame(['num' => 1000, 'den' => 1], $version['fps'], 'audio counts in milliseconds (ADR 0007)');
+		self::assertSame(3600000, $version['startFrame'], 'the BWF time reference is the start timecode');
 
-		$range = $this->nc->ocs('POST', "/versions/$versionId/comments", ['inFrame' => 50, 'outFrame' => 74, 'body' => 'too loud']);
+		$range = $this->nc->ocs('POST', "/versions/$versionId/comments", ['inFrame' => 2000, 'outFrame' => 2999, 'body' => 'too loud']);
 		self::assertSame(201, $range['status']);
-		$this->nc->ocs('POST', "/versions/$versionId/comments", ['inFrame' => 75, 'body' => 'click']);
+		$this->nc->ocs('POST', "/versions/$versionId/comments", ['inFrame' => 3000, 'body' => 'click']);
 		$export = "/apps/deliver/versions/$versionId/export";
 
 		$wav = $this->nc->request('GET', "$export/wav");
@@ -79,6 +79,9 @@ class AudioExportTest extends TestCase {
 		$reaper = $this->nc->request('GET', "$export/reaper");
 		self::assertStringContainsString('R1,"admin: too loud",1:00:02.000,1:00:03.000,0:00:01.000', $reaper['body']);
 		self::assertStringContainsString('M1,"admin: click",0:00:03.000', $this->nc->request('GET', "$export/reaper?zeroBased=1")['body']);
+
+		$csv = $this->nc->request('GET', "$export/csv")['body'];
+		self::assertStringContainsString('2000,2999,01:00:02:00,01:00:02:24,admin', $csv, 'milliseconds, and timecode at the Project frame rate');
 
 		$midi = $this->nc->request('GET', "$export/midi?zeroBased=1");
 		self::assertSame(200, $midi['status']);

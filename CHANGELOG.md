@@ -11,6 +11,7 @@ First release in the App Store.
 - Review for outsiders on Nextcloud's own Share Links, with a Personal Link for every Reviewer, their own rights and an optional Watermark with their name.
 - Due Dates with reminders, Unseen Comments, notifications and mail, and live updates without reloading.
 - Export of the Comments as EDL, FCP7 XML, FCPXML or CSV, as markers for the editing application.
+- Audio counts to the millisecond: shown as `m:ss.mmm`, switchable to timecode or frames at the Project's frame rate.
 - Proxies, Thumbnail Strips and Waveforms when ffmpeg is installed; without it, browser-native files play as they are, and MOV, MP4 and Broadcast WAV keep their frame rate and start timecode.
 - Works on phones: the Review view, drawing with a finger and the Project list are made for small screens.
 - English and German.

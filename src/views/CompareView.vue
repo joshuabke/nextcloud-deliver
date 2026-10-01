@@ -45,9 +45,11 @@ const LAYOUTS = [
 
 const versionA = computed(() => context.value?.versions.find((each) => each.id === props.a) ?? null)
 const versionB = computed(() => context.value?.versions.find((each) => each.id === props.b) ?? null)
+const audioOnly = computed(() => versionA.value?.audioOnly === true)
 const clock = computed(() => ({
 	fps: versionA.value?.fps ?? { num: 25, den: 1 },
-	mode: context.value?.project.timecodeMode ?? 'smpte',
+	displayFps: audioOnly.value ? context.value?.project.fps : undefined,
+	mode: audioOnly.value ? 'ms' : context.value?.project.timecodeMode ?? 'smpte',
 	startFrame: versionA.value?.startFrame ?? 0,
 	dropFrame: versionA.value?.dropFrame ?? false,
 }))

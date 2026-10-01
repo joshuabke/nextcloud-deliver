@@ -7,10 +7,12 @@ namespace OCA\Deliver\Service;
 /**
  * What Frames rest on, read without ffprobe (ADR 0003): the frame rate, the
  * start timecode and the duration of a MOV or MP4 from its boxes, and the
- * time reference of a Broadcast WAV. The answer has ffprobe's shape, so
- * Probe treats both alike. Other containers (WebM, MXF, MP3) stay unread
- * and take the Project's frame rate. Only headers are read: the media data
- * is skipped by seeking, so a file of many gigabytes costs a few reads.
+ * time reference of a Broadcast WAV. MP3, AAC, FLAC and Ogg are only known
+ * as audio, which counts in milliseconds and needs nothing more; the browser
+ * knows their duration. The answer has ffprobe's shape, so Probe treats both
+ * alike. Other containers (WebM, MXF) stay unread and take the Project's
+ * frame rate. Only headers are read: the media data is skipped by seeking,
+ * so a file of many gigabytes costs a few reads.
  */
 class ContainerProbe {
 	/** ffprobe's names for the sample entries a browser may meet */
@@ -40,7 +42,13 @@ class ContainerProbe {
 			if (in_array(substr($head, 4, 4), ['ftyp', 'moov', 'mdat', 'wide', 'free', 'skip'], true)) {
 				return $this->quickTime();
 			}
-			return null;
+			if (str_starts_with($head, 'fLaC')) {
+				return $this->audio('flac', 'flac');
+			}
+			if (str_starts_with($head, 'OggS')) {
+				return $this->ogg();
+			}
+			return $this->mpeg($head);
 		} finally {
 			fclose($file);
 		}
@@ -202,6 +210,57 @@ class ContainerProbe {
 		return [
 			'format' => ['format_name' => 'wav', 'duration' => (string)($data / $byteRate), 'tags' => $reference === null ? [] : ['time_reference' => (string)$reference]],
 			'streams' => [['codec_type' => 'audio', 'codec_name' => $codec, 'sample_rate' => (string)$sampleRate]],
+		];
+	}
+
+	/**
+	 * The first packet of an Ogg stream names its codec; Theora and the like
+	 * are video, which this does not read.
+	 *
+	 * @return array<string, mixed>|null
+	 */
+	private function ogg(): ?array {
+		$packet = $this->at(27 + ord($this->at(26, 1)), 8);
+		return match (true) {
+			str_starts_with($packet, "\x01vorbis") => $this->audio('ogg', 'vorbis'),
+			$packet === 'OpusHead' => $this->audio('ogg', 'opus'),
+			str_starts_with($packet, "\x7FFLAC") => $this->audio('ogg', 'flac'),
+			default => null,
+		};
+	}
+
+	/**
+	 * MP3 and ADTS AAC have no container: past an ID3 tag, the first frame's
+	 * sync word and layer tell them apart.
+	 *
+	 * @return array<string, mixed>|null
+	 */
+	private function mpeg(string $head): ?array {
+		$offset = 0;
+		if (str_starts_with($head, 'ID3')) {
+			// The tag's size is syncsafe: seven bits a byte, plus ten for a footer
+			$size = 0;
+			for ($i = 6; $i < 10; $i++) {
+				$size = ($size << 7) | (ord($head[$i]) & 0x7F);
+			}
+			$offset = 10 + $size + ((ord($head[5]) & 0x10) === 0 ? 0 : 10);
+		}
+		[$sync, $bits] = array_map('ord', str_split($this->at($offset, 2)));
+		if ($sync !== 0xFF) {
+			return null;
+		}
+		return match (true) {
+			($bits & 0xF6) === 0xF0 => $this->audio('aac', 'aac'),
+			($bits & 0xE6) === 0xE2 => $this->audio('mp3', 'mp3'),
+			default => null,
+		};
+	}
+
+	/** @return array<string, mixed> audio of a known codec, and nothing else known */
+	private function audio(string $format, string $codec): array {
+		return [
+			'format' => ['format_name' => $format, 'tags' => []],
+			'streams' => [['codec_type' => 'audio', 'codec_name' => $codec]],
 		];
 	}
 
