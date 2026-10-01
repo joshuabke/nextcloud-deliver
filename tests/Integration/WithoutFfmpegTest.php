@@ -166,7 +166,7 @@ class WithoutFfmpegTest extends TestCase {
 	}
 
 	#[DataProvider('pcm')]
-	public function testAWavOfAnyPcmGetsItsWaveform(string $codec): void {
+	public function testAWavOfAnyPcmGetsItsWaveform(string $codec, bool $playable): void {
 		$this->make("-f lavfi -i sine=duration=1 -ar 48000 -ac 2 -c:a $codec -f wav");
 		$version = $this->upload('mix.wav');
 
@@ -174,11 +174,17 @@ class WithoutFfmpegTest extends TestCase {
 		// Spread over two channels, the sine at an eighth of full scale comes to 0.088
 		self::assertEqualsWithDelta(0.088, max($peaks), 0.01);
 		self::assertEqualsWithDelta(0.088, $peaks[1000], 0.01, 'every bucket of a steady sine peaks alike');
-		self::assertTrue($version['playable']);
+		self::assertSame($playable, $version['playable']);
 	}
 
-	/** @return array<string, array{string}> */
+	/** @return array<string, array{string, bool}> codec, and whether browsers play it (64-bit float is beyond them) */
 	public static function pcm(): array {
-		return ['8 bit' => ['pcm_u8'], '24 bit' => ['pcm_s24le'], '32 bit' => ['pcm_s32le'], '32 bit float' => ['pcm_f32le'], '64 bit float' => ['pcm_f64le']];
+		return [
+			'8 bit' => ['pcm_u8', true],
+			'24 bit' => ['pcm_s24le', true],
+			'32 bit' => ['pcm_s32le', true],
+			'32 bit float' => ['pcm_f32le', true],
+			'64 bit float' => ['pcm_f64le', false],
+		];
 	}
 }
