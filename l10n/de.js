@@ -26,6 +26,8 @@ OC.L10N.register(
 		"As the link says": "Wie beim Link",
 		"Attach files": "Dateien anhängen",
 		"Attach files, up to five of 25 MB each": "Dateien anhängen, bis zu fünf mit je 25 MB",
+		"Not up for review": "Nicht im Review",
+		"Add for review": "Zum Review hinzufügen",
 		"Auto Intake: review every media file in the Project folder": "Automatische Aufnahme: jede Mediendatei im Projektordner reviewen",
 		"Auto Intake: review every media file in this folder": "Automatische Aufnahme: jede Mediendatei in diesem Ordner reviewen",
 		"Back to the Review": "Zurück zum Review",

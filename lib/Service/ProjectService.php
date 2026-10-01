@@ -83,6 +83,13 @@ class ProjectService {
 		return $this->serialize($project, $folder) + [
 			'muted' => $this->mutes->isMuted($project->getId(), $uid),
 			'assets' => $this->assetTree($project, $folder, $uid),
+			// Shown greyed out under the Assets, to add one by one
+			'notEnabled' => array_map(static fn (File $file) => [
+				'fileId' => $file->getId(),
+				'name' => $file->getName(),
+				'path' => ltrim(substr(dirname($file->getPath()), strlen($folder->getPath())), '/'),
+				'mimeType' => $file->getMimetype(),
+			], $this->looseFiles($project, $folder)),
 		];
 	}
 
@@ -639,24 +646,33 @@ class ProjectService {
 	 * @return array<int, int> node id => how many
 	 */
 	public function notEnabled(Project $project, Folder $folder, array $nodeIds): array {
-		if ($project->getAutoIntake()) {
-			return array_fill_keys($nodeIds, 0);
-		}
-		$known = array_flip(array_map(static fn (Version $version) => $version->getFileId(), $this->versions->findByProject($project->getId())));
 		$counts = [];
 		foreach ($nodeIds as $nodeId) {
 			$node = $nodeId === $folder->getId() ? $folder : $folder->getFirstNodeById($nodeId);
-			$files = match (true) {
-				$node instanceof Folder => $this->mediaFiles($node),
-				$node instanceof File && Reviewable::file($node) => [$node],
-				default => [],
-			};
-			$counts[$nodeId] = 0;
-			foreach ($files as $file) {
-				$counts[$nodeId] += isset($known[$file->getId()]) ? 0 : 1;
-			}
+			$counts[$nodeId] = $node === null ? 0 : count($this->looseFiles($project, $node));
 		}
 		return $counts;
+	}
+
+	/**
+	 * The media files under a node of the Project that are no Assets, by
+	 * path. With Auto Intake on, none: the listener and the scan take every one in.
+	 *
+	 * @return list<File>
+	 */
+	private function looseFiles(Project $project, Node $node): array {
+		if ($project->getAutoIntake()) {
+			return [];
+		}
+		$known = array_flip(array_map(static fn (Version $version) => $version->getFileId(), $this->versions->findByProject($project->getId())));
+		$files = match (true) {
+			$node instanceof Folder => iterator_to_array($this->mediaFiles($node), false),
+			$node instanceof File && Reviewable::file($node) => [$node],
+			default => [],
+		};
+		$loose = array_values(array_filter($files, static fn (File $file) => !isset($known[$file->getId()])));
+		usort($loose, static fn (File $a, File $b) => strcmp($a->getPath(), $b->getPath()));
+		return $loose;
 	}
 
 	/** @return list<array<string, mixed>> the Assets with their Version Stacks, newest Version first */
