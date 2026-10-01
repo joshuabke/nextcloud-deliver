@@ -7,7 +7,6 @@ namespace OCA\Deliver\Service;
 use OCA\Deliver\AppInfo\Application;
 use OCA\Deliver\Db\Job;
 use OCA\Deliver\Db\JobMapper;
-use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\Version;
 use OCA\Deliver\Db\VersionMapper;
 use OCP\AppFramework\Utility\ITimeFactory;
@@ -64,7 +63,6 @@ class DerivedMedia {
 		private Encoder $encoder,
 		private Probe $probe,
 		private VersionMapper $versions,
-		private ProjectMapper $projects,
 		private JobMapper $jobs,
 		private IRootFolder $root,
 		private IAppDataFactory $appDataFactory,
@@ -138,10 +136,11 @@ class DerivedMedia {
 	}
 
 	private function runProbe(Version $version, string $path): void {
-		$project = $this->projects->find($version->getProjectId());
-		$probed = $this->probe->apply($version, $path, [$project->getFpsNum(), $project->getFpsDen()]);
+		$probed = $this->probe->apply($version, $path);
 		if ($probed === null) {
-			throw new \RuntimeException('ffprobe could not read this file');
+			throw new \RuntimeException($this->ffmpeg->version($this->ffmpeg->ffprobe()) === null
+				? 'Without ffmpeg, Deliver cannot read this format'
+				: 'ffprobe could not read this file');
 		}
 		$playable = $this->browserPlays($probed);
 		$version->setPlayable($playable);

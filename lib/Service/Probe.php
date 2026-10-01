@@ -43,15 +43,15 @@ class Probe {
 		return is_array($probed) ? $probed : null;
 	}
 
+	/** Audio has no frame rate of its own, so it counts in milliseconds (ADR 0007) */
+	public const AUDIO_FPS = [1000, 1];
+
 	/**
-	 * Writes what ffprobe found onto the Version. Audio has no frame rate of
-	 * its own, so it gets the Project's, fixed from now on: its Frames must
-	 * not change meaning when the Project setting changes later.
+	 * Writes what ffprobe found onto the Version.
 	 *
-	 * @param array{0: int, 1: int} $projectFps the Project's default frame rate
 	 * @return array<string, mixed>|null the raw ffprobe answer, or null when it could not read the file
 	 */
-	public function apply(Version $version, string $path, array $projectFps): ?array {
+	public function apply(Version $version, string $path): ?array {
 		$probed = $this->read($path);
 		if ($probed === null) {
 			return null;
@@ -63,7 +63,7 @@ class Probe {
 
 		$fps = $this->rate($video['avg_frame_rate'] ?? null) ?? $this->rate($video['r_frame_rate'] ?? null);
 		if ($fps === null && $video === null && $audio !== null) {
-			$fps = $projectFps;
+			$fps = self::AUDIO_FPS;
 		}
 		if ($fps !== null) {
 			$version->setFpsNum($fps[0]);

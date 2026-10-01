@@ -65,6 +65,8 @@ class ExportService {
 			'num' => $version->getFpsNum() ?? $project->getFpsNum(),
 			'den' => $version->getFpsDen() ?? $project->getFpsDen(),
 			'dropFrame' => (bool)$version->getDropFrame(),
+			// Audio counts in milliseconds; its timecode is read at the Project's frame rate (ADR 0007)
+			'timecode' => $version->getHasAudio() && !$version->getHasVideo() ? [$project->getFpsNum(), $project->getFpsDen()] : null,
 			'start' => $zeroBased ? 0 : ($version->getStartFrame() ?? 0),
 			'duration' => $version->getDurationFrames(),
 			'width' => $version->getWidth(),
@@ -157,7 +159,9 @@ class ExportService {
 
 	/** The timecode of a Frame, counted from the clip's start */
 	private static function tc(array $clip, int $frame): string {
-		return Timecode::format($clip['start'] + $frame, $clip['num'], $clip['den'], $clip['dropFrame']);
+		[$num, $den] = $clip['timecode'] ?? [$clip['num'], $clip['den']];
+		$at = intdiv(($clip['start'] + $frame) * $num * $clip['den'], $den * $clip['num']);
+		return Timecode::format($at, $num, $den, $clip['dropFrame']);
 	}
 
 	/**
