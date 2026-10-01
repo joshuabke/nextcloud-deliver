@@ -29,7 +29,7 @@ import { useGestures } from '../composables/gestures.js'
 import { COLORS, drawingsAt } from '../lib/drawing.js'
 import { DOUBLE_TAP_MS } from '../lib/gestures.js'
 import { actionFor } from '../lib/hotkeys.js'
-import { formatAt, fpsValue, frameToTime, MODES, timeToFrame } from '../lib/timecode.js'
+import { formatAt, fpsValue, frameToTime, modesFor, stepOf, timeToFrame } from '../lib/timecode.js'
 import { watermarkTile } from '../lib/watermark.js'
 import { useCommentsStore } from '../store/comments.js'
 
@@ -506,7 +506,7 @@ function seekTo(target) {
  */
 function step(by) {
 	pause()
-	seekTo(frame.value + by)
+	seekTo(frame.value + by * stepOf(props.clock))
 }
 
 /** Plays forward at the chosen speed */
@@ -686,6 +686,7 @@ const MODE_LABELS = {
 	smpte: t('deliver', 'Timecode'),
 	frames: t('deliver', 'Frames'),
 	seconds: t('deliver', 'Seconds'),
+	ms: t('deliver', 'Milliseconds'),
 }
 
 /** Where the other source is, for the quality menu */
@@ -984,7 +985,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 					</template>
 					<NcActionSeparator />
 					<NcActionButton
-						v-for="each in MODES"
+						v-for="each in modesFor(clock)"
 						:key="each"
 						:modelValue="clock.mode === each"
 						type="radio"
@@ -1053,7 +1054,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 							<NcIconSvgWrapper :svg="caretIcon" :size="18" />
 						</template>
 						<NcActionButton
-							v-for="each in MODES"
+							v-for="each in modesFor(clock)"
 							:key="each"
 							:modelValue="clock.mode === each"
 							type="radio"

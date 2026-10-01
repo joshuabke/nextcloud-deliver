@@ -13,19 +13,29 @@ const DERIVED_RECHECK = 10000
  * @param {object} options - the view's state
  * @param {import('vue').Ref<object|null>} options.version - the Version on screen
  * @param {import('vue').Ref<string>} options.projectMode - the Project's timecode display
+ * @param {import('vue').Ref<{num: number, den: number}>} options.projectFps - the Project's frame rate, at which audio is read as timecode
  * @param {() => Promise<void>} options.refresh - reloads the view's context
  */
-export function useReview({ version, projectMode, refresh }) {
+export function useReview({ version, projectMode, projectFps, refresh }) {
 	const player = ref(null)
 	const panel = ref(null)
-	/** Session-local override of the Project's timecode display (story 22) */
-	const mode = ref(projectMode.value)
+	/** Session-local override of the Project's timecode display (story 22); audio has its own, starting at milliseconds */
+	const videoMode = ref(projectMode.value)
+	const audioMode = ref('ms')
 	watch(projectMode, (value) => {
-		mode.value = value
+		videoMode.value = value
+	})
+	const audio = computed(() => version.value?.audioOnly === true)
+	const mode = computed({
+		get: () => (audio.value ? audioMode : videoMode).value,
+		set: (value) => {
+			(audio.value ? audioMode : videoMode).value = value
+		},
 	})
 
 	const clock = computed(() => ({
 		fps: version.value?.fps ?? { num: 25, den: 1 },
+		displayFps: audio.value ? projectFps.value : undefined,
 		mode: mode.value,
 		startFrame: version.value?.startFrame ?? 0,
 		dropFrame: version.value?.dropFrame ?? false,

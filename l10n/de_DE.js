@@ -220,6 +220,7 @@ OC.L10N.register(
 		"Saving and testing…": "Wird gespeichert und getestet …",
 		"Search Comments": "Kommentare durchsuchen",
 		"Seconds": "Sekunden",
+		"Milliseconds": "Millisekunden",
 		"Send (Enter)": "Senden (Enter)",
 		"Set a Due Date": "Fälligkeitsdatum setzen",
 		"Set the Due Date; Members are reminded the day before and on the day": "Fälligkeitsdatum setzen; Mitglieder werden am Vortag und am Tag erinnert",

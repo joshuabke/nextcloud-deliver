@@ -44,22 +44,41 @@ function pad(value, width = 2) {
 }
 
 /**
- * A Frame as text, in one of the three display modes. SMPTE starts at the
- * Version's embedded start timecode; the frame counter and seconds count from
- * the first frame of the file.
+ * A Frame as text, in one of the display modes. SMPTE and milliseconds start
+ * at the Version's embedded start timecode; the frame counter and seconds
+ * count from the first frame of the file. Audio counts in milliseconds and
+ * carries the Project's frame rate as `displayFps`, at which its timecode and
+ * frames are read (ADR 0007).
  *
  * @param {number} frame - frame index, zero-based
- * @param {{fps: {num: number, den: number}, mode?: string, startFrame?: number, dropFrame?: boolean}} clock - how the Review view shows time: 'smpte', 'frames' or 'seconds', and the Version's start timecode in Frames
+ * @param {{fps: {num: number, den: number}, displayFps?: {num: number, den: number}, mode?: string, startFrame?: number, dropFrame?: boolean}} clock - how the Review view shows time: 'smpte', 'frames', 'seconds' or 'ms', and the Version's start timecode in Frames
  * @return {string} the Frame as the Review view shows it
  */
-export function formatAt(frame, { fps, mode = 'smpte', startFrame = 0, dropFrame = false }) {
+export function formatAt(frame, { fps, displayFps, mode = 'smpte', startFrame = 0, dropFrame = false }) {
+	const rate = displayFps ?? fps
+	const shown = (at) => displayFps ? Math.floor(at * fpsValue(displayFps) / fpsValue(fps) + 1e-6) : at
 	if (mode === 'frames') {
-		return String(frame)
+		return String(shown(frame))
 	}
 	if (mode === 'seconds') {
 		return (frame / fpsValue(fps)).toFixed(2) + ' s'
 	}
-	return smpte(frame + startFrame, fps, dropFrame)
+	if (mode === 'ms') {
+		return clockTime(Math.round((frame + startFrame) * 1000 / fpsValue(fps)))
+	}
+	return smpte(shown(frame + startFrame), rate, dropFrame && !displayFps)
+}
+
+/**
+ * @param {number} ms - milliseconds
+ * @return {string} m:ss.mmm, or h:mm:ss.mmm from an hour on
+ */
+function clockTime(ms) {
+	const seconds = Math.floor(ms / 1000)
+	const rest = pad(seconds % 60) + '.' + pad(ms % 1000, 3)
+	return seconds < 3600
+		? Math.floor(seconds / 60) + ':' + rest
+		: Math.floor(seconds / 3600) + ':' + pad((seconds / 60) % 60) + ':' + rest
 }
 
 /**
@@ -73,6 +92,24 @@ export function formatRange({ inFrame, outFrame }, clock) {
 
 /** The display modes, in the order the player's toggle steps through them */
 export const MODES = ['smpte', 'frames', 'seconds']
+/** Audio shows milliseconds unless someone switches to the Project's timecode or frames */
+export const AUDIO_MODES = ['ms', 'smpte', 'frames']
+
+/**
+ * @param {{displayFps?: object}} clock - as for formatAt
+ * @return {string[]} the display modes this clock offers
+ */
+export function modesFor(clock) {
+	return clock.displayFps ? AUDIO_MODES : MODES
+}
+
+/**
+ * @param {{fps: {num: number, den: number}, displayFps?: {num: number, den: number}}} clock - as for formatAt
+ * @return {number} Frames in one step: one Frame, or for audio one Frame of the Project in milliseconds
+ */
+export function stepOf({ fps, displayFps }) {
+	return displayFps ? Math.max(1, Math.round(fpsValue(fps) / fpsValue(displayFps))) : 1
+}
 
 /**
  * SMPTE timecode. Fractional rates count whole frames per timecode second
