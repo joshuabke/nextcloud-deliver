@@ -183,7 +183,7 @@ class ContainerProbe {
 		}
 		// ffprobe's name: integer PCM is unsigned at 8 bits and signed above, float is format 3
 		$bits = $this->u16le($fmt[0] + 14);
-		$codec = match ($this->u16le($fmt[0])) {
+		$codec = match ($this->formatTag($fmt[0])) {
 			1 => $bits === 8 ? 'pcm_u8' : "pcm_s{$bits}le",
 			3 => "pcm_f{$bits}le",
 			default => 'pcm',
@@ -221,7 +221,7 @@ class ContainerProbe {
 			if (!isset($chunks['fmt '], $chunks['data'])) {
 				return null;
 			}
-			$format = $this->u16le($chunks['fmt '][0]);
+			$format = $this->formatTag($chunks['fmt '][0]);
 			$bits = $this->u16le($chunks['fmt '][0] + 14);
 			// unpack code and full scale per sample format; 24 bits are widened to 32 below
 			[$code, $scale] = match ("$format/$bits") {
@@ -254,6 +254,12 @@ class ContainerProbe {
 		} finally {
 			fclose($file);
 		}
+	}
+
+	/** 1 for integer PCM, 3 for float; WAVE_FORMAT_EXTENSIBLE, as 24 bits and more channels are written, keeps it in its sub-format */
+	private function formatTag(int $fmt): int {
+		$tag = $this->u16le($fmt);
+		return $tag === 0xFFFE ? $this->u16le($fmt + 24) : $tag;
 	}
 
 	/** @return array<string, array{0: int, 1: int}> start and length of the first RIFF chunk of each id */

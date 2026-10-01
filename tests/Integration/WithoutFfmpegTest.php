@@ -171,8 +171,10 @@ class WithoutFfmpegTest extends TestCase {
 		$version = $this->upload('mix.wav');
 
 		$peaks = json_decode($this->nc->request('GET', $version['derived']['waveform']['url'])['body'], true)['peaks'];
-		self::assertEqualsWithDelta(0.125, max($peaks), 0.01);
-		self::assertEqualsWithDelta(0.125, $peaks[1000], 0.01, 'every bucket of a steady sine peaks alike');
+		// Spread over two channels, the sine at an eighth of full scale comes to 0.088
+		self::assertEqualsWithDelta(0.088, max($peaks), 0.01);
+		self::assertEqualsWithDelta(0.088, $peaks[1000], 0.01, 'every bucket of a steady sine peaks alike');
+		self::assertTrue($version['playable']);
 	}
 
 	/** @return array<string, array{string}> */
