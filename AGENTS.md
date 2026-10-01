@@ -6,7 +6,7 @@ Deliver is a Nextcloud app for frame-accurate video and audio review (a Frame.io
 
 1. `CONTEXT.md` — the glossary. Use its terms verbatim in code, UI strings, commits and issues.
 2. `docs/adr/` — the decisions with lasting consequences (Files as source of truth, derived-media pipeline, review on Nextcloud Share Links; 0001 is superseded by 0004, 0006 by 0008). Code that contradicts an accepted one is a bug.
-3. `docs/spec-v2.md` — the full spec for milestone 0.2.0, also published as GitHub issue #2 (label `spec`). The issue is the tracked copy; the file is the canonical text. Keep them identical when either changes.
+3. `docs/spec-v2.md` — the full spec, from the rewrite through the milestones after it. The file is the only copy.
 
 ## Rewrite mechanics (settled, do not re-open)
 
@@ -40,7 +40,7 @@ Deliver is a Nextcloud app for frame-accurate video and audio review (a Frame.io
 - Files is the source of truth: never copy, move or write media outside the Project folder except derived media in app data.
 - Frames are the anchor; seconds are derived. Any code path that stores seconds is wrong.
 - Every UI string goes through `t()`; German translation ships. Add the German to `l10n/de.json` (du) and `l10n/de_DE.json` (Sie) with the terms in `CONTEXT.md`, then `npm run l10n` writes the `.js` files; Vitest fails on any untranslated or stale string.
-- Spec changes go to `docs/spec-v2.md` and issue #2 together; glossary changes go to `CONTEXT.md` in the same commit as the code that introduces the term.
+- Spec changes go to `docs/spec-v2.md`; glossary changes go to `CONTEXT.md` in the same commit as the code that introduces the term.
 
 ## Maintaining this file
 
