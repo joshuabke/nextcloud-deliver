@@ -182,6 +182,19 @@ class ShareReviewTest extends TestCase {
 		self::assertSame(404, $asReviewer->call('GET', '/api/context?versionId=' . $this->versionId)['status'], 'the API answers nothing until the password is given');
 	}
 
+	public function testAMemberSetsPasswordAndExpiryInDeliver(): void {
+		$protected = $this->nc->ocs('PUT', "/shares/{$this->shareId}", ['password' => 'Review-' . bin2hex(random_bytes(6)), 'expireDate' => '2099-12-31']);
+		self::assertSame(200, $protected['status'], json_encode($protected['data']));
+		self::assertSame([true, '2099-12-31'], [$protected['data']['hasPassword'], $protected['data']['expireDate']]);
+		self::assertSame(303, $this->reviewer()->raw('')['status'], 'Nextcloud asks for the password');
+
+		$open = $this->nc->ocs('PUT', "/shares/{$this->shareId}", ['password' => '', 'expireDate' => '']);
+		self::assertSame([false, null], [$open['data']['hasPassword'], $open['data']['expireDate']]);
+		self::assertSame(200, $this->reviewer()->raw('')['status']);
+
+		self::assertSame(400, $this->nc->ocs('PUT', "/shares/{$this->shareId}", ['expireDate' => '2001-01-01'])['status'], 'Nextcloud refuses a date in the past');
+	}
+
 	public function testVersionsOutsideTheShareStayOutside(): void {
 		$this->nc->mkdir("{$this->root}/scenes");
 		$this->nc->put("{$this->root}/scenes/intro.mp4", 'not really a video');
