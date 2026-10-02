@@ -96,7 +96,8 @@ class NotificationTest extends TestCase {
 	public function testAMentionReachesTheMemberEvenWhenMuted(): void {
 		$this->member->ocs('PUT', "/projects/{$this->projectId}/mute", ['muted' => true]);
 		$this->admin->ocsForm('PUT', "/ocs/v2.php/cloud/users/{$this->user}", ['key' => 'displayname', 'value' => 'Mara Member']);
-		$members = $this->nc->ocs('GET', "/projects/{$this->projectId}/members")['data'];
+		// Who can open the file, not who can reach a folder (ADR 0009)
+		$members = $this->nc->ocs('GET', "/versions/{$this->versionId}/members")['data'];
 		self::assertEqualsCanonicalizing([$this->owner, $this->user], array_column($members, 'id'));
 
 		$comment = $this->nc->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 2, 'body' => "@{$this->user} please check the logo, @admin"]);

@@ -8,7 +8,9 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Runs against the real Nextcloud container over HTTP (see Makefile `test-integration`).
- * A folder becomes a Project and its video and audio files show up as Assets.
+ * A folder becomes a Folder Project and its video and audio files show up as
+ * Assets; a Project by name collects files from anywhere, and a file can wait
+ * in No Project (ADR 0009).
  */
 class ProjectApiTest extends TestCase {
 	private NextcloudClient $nc;
@@ -62,11 +64,18 @@ class ProjectApiTest extends TestCase {
 		return array_column($shown['data']['assets'], 'versions', 'name');
 	}
 
-	public function testSingleFileIsEnabledWithoutTakingTheWholeFolder(): void {
+	/** @return list<string> the names of the Assets in a Member's No Project */
+	private function unassigned(NextcloudClient $client): array {
+		$shown = $client->ocs('GET', '/projects/0');
+		self::assertSame(200, $shown['status'], json_encode($shown['data']));
+		self::assertTrue($shown['data']['none']);
+		return array_column($shown['data']['assets'], 'name');
+	}
+
+	public function testSingleFileIsEnabledWithoutItsFolderBecomingAProject(): void {
 		$this->nc->mkdir("{$this->root}/scenes");
 		$this->nc->put("{$this->root}/cut.mp4", 'not really a video');
 		$this->nc->put("{$this->root}/scenes/intro.mov", 'not really a video');
-		$this->nc->put("{$this->root}/scenes/voiceover.wav", 'not really audio');
 		$this->nc->put("{$this->root}/notes.txt", 'not media at all');
 		$fileId = $this->nc->fileId("{$this->root}/cut.mp4");
 
@@ -75,28 +84,68 @@ class ProjectApiTest extends TestCase {
 
 		$enabled = $this->nc->ocs('POST', '/assets', ['fileId' => $fileId]);
 		self::assertSame(201, $enabled['status'], json_encode($enabled['data']));
-		$projectId = $enabled['data']['projectId'];
+		self::assertSame(0, $enabled['data']['projectId'], 'with no Folder Project above it, the file goes to No Project');
+		self::assertSame(404, $this->nc->ocs('GET', "/folders/{$this->nc->fileId($this->root)}/project")['status'], 'its folder does not become a Project (ADR 0009)');
+		self::assertContains('cut', $this->unassigned($this->nc));
+		self::assertNotContains('intro', $this->unassigned($this->nc), 'the other media files stay out');
+		self::assertContains(0, array_column($this->nc->ocs('GET', '/projects')['data'], 'id'), 'No Project is listed while it holds something');
+
+		// A Project by name collects files from anywhere, without moving them
+		$named = $this->nc->ocs('POST', '/projects', ['name' => 'Showreel 2026']);
+		self::assertSame(201, $named['status'], json_encode($named['data']));
+		$projectId = $named['data']['id'];
 		$this->projects[] = [$this->nc, $projectId];
-		self::assertFalse($enabled['data']['autoIntake'], 'enabling one file does not put the folder on Auto Intake');
+		self::assertSame(['Showreel 2026', null, true], [$named['data']['name'], $named['data']['folderId'], $named['data']['canWrite']]);
+		self::assertSame(400, $this->nc->ocs('POST', '/projects', ['name' => '  '])['status'], 'a Project needs a name');
 
-		$byFolder = $this->nc->ocs('GET', "/folders/{$this->nc->fileId($this->root)}/project");
-		self::assertSame($projectId, $byFolder['data']['id'], 'the folder the file lies in became the Project');
-		self::assertSame(['cut'], array_keys($this->stacks($this->nc, $projectId)), 'the other media files stay out');
+		$intro = $this->nc->ocs('POST', '/assets', ['fileId' => $this->nc->fileId("{$this->root}/scenes/intro.mov"), 'projectId' => $projectId]);
+		self::assertSame([201, $projectId], [$intro['status'], $intro['data']['projectId']], 'enabled straight into a Project');
+		$assigned = $this->nc->ocs('PUT', "/assets/{$enabled['data']['assetId']}/project", ['projectId' => $projectId]);
+		self::assertSame(200, $assigned['status'], json_encode($assigned['data']));
+		self::assertSame(['cut', 'intro'], array_keys($this->stacks($this->nc, $projectId)));
+		self::assertNotContains('cut', $this->unassigned($this->nc));
+		self::assertSame('Showreel 2026', $this->nc->ocs('GET', "/files/$fileId/asset")['data']['projectName']);
+		$paths = array_column($this->nc->ocs('GET', "/projects/$projectId")['data']['assets'], 'path', 'name');
+		self::assertSame(['cut' => "/{$this->root}", 'intro' => "/{$this->root}/scenes"], $paths, 'without a folder of its own, paths run from home');
+
+		self::assertSame(200, $this->nc->ocs('PUT', "/projects/$projectId", ['name' => 'Showreel'])['status']);
+		self::assertSame(400, $this->nc->ocs('PUT', "/projects/$projectId", ['autoIntake' => true])['status'], 'only a Folder Project takes in a folder');
+
+		// Removing the Project keeps every Asset, in No Project
+		$commented = $this->nc->ocs('POST', "/versions/{$intro['data']['versionId']}/comments", ['inFrame' => 1, 'body' => 'keep me']);
+		self::assertSame(201, $commented['status']);
+		self::assertSame(200, $this->nc->ocs('DELETE', "/projects/$projectId")['status']);
+		self::assertSame(404, $this->nc->ocs('GET', "/projects/$projectId")['status']);
+		self::assertContains('intro', $this->unassigned($this->nc));
+		self::assertCount(1, $this->nc->ocs('GET', "/versions/{$intro['data']['versionId']}/comments")['data']['comments'], 'with its Comments');
+
+		self::assertSame(200, $this->nc->ocs('DELETE', "/assets/{$intro['data']['assetId']}")['status']);
+		self::assertSame(200, $this->nc->ocs('DELETE', "/assets/{$enabled['data']['assetId']}")['status']);
+		self::assertSame([], array_intersect(['cut', 'intro'], $this->unassigned($this->nc)), 'taken out of Deliver');
+	}
+
+	public function testAFolderProjectWithoutAutoIntakeTakesFilesOneByOne(): void {
+		$this->nc->mkdir("{$this->root}/scenes");
+		$this->nc->put("{$this->root}/cut.mp4", 'not really a video');
+		$this->nc->put("{$this->root}/scenes/intro.mov", 'not really a video');
+		$this->nc->put("{$this->root}/scenes/voiceover.wav", 'not really audio');
+		$project = $this->nc->ocs('POST', '/projects', ['folderId' => $this->nc->fileId($this->root), 'autoIntake' => false]);
+		self::assertSame(201, $project['status'], json_encode($project['data']));
+		$projectId = $project['data']['id'];
+		$this->projects[] = [$this->nc, $projectId];
+		self::assertSame([], $this->stacks($this->nc, $projectId));
+
+		$enabled = $this->nc->ocs('POST', '/assets', ['fileId' => $this->nc->fileId("{$this->root}/cut.mp4")]);
+		self::assertSame($projectId, $enabled['data']['projectId'], 'a file joins the Folder Project above it');
 		$left = fn () => array_map(static fn (array $file) => [$file['path'], $file['name']], $this->nc->ocs('GET', "/projects/$projectId")['data']['notEnabled']);
-		self::assertSame([['scenes', 'intro.mov'], ['scenes', 'voiceover.wav']], $left(), 'but the Project view shows them, to add one by one');
+		self::assertSame([['scenes', 'intro.mov'], ['scenes', 'voiceover.wav']], $left(), 'the Project view shows the others, to add one by one');
 
-		// A second file, from a subfolder, joins the Project that is already there
-		$second = $this->nc->ocs('POST', '/assets', ['fileId' => $this->nc->fileId("{$this->root}/scenes/intro.mov")]);
-		self::assertSame(201, $second['status'], json_encode($second['data']));
-		self::assertSame($projectId, $second['data']['projectId']);
+		$this->nc->ocs('POST', '/assets', ['fileId' => $this->nc->fileId("{$this->root}/scenes/intro.mov")]);
 		self::assertSame(['cut', 'intro'], array_keys($this->stacks($this->nc, $projectId)));
 		self::assertSame([['scenes', 'voiceover.wav']], $left());
 
-		self::assertSame(200, $this->nc->ocs('DELETE', "/assets/{$second['data']['assetId']}")['status']);
-		self::assertSame(['cut'], array_keys($this->stacks($this->nc, $projectId)), 'taking one Asset out leaves the rest');
-
 		self::assertSame(200, $this->nc->ocs('DELETE', "/assets/{$enabled['data']['assetId']}")['status']);
-		self::assertSame(404, $this->nc->ocs('GET', "/projects/$projectId")['status'], 'a Project without Assets and without Auto Intake goes too');
+		self::assertSame(['intro'], array_keys($this->stacks($this->nc, $projectId)), 'taking one Asset out leaves the rest');
 	}
 
 	public function testAutoIntakeCanBeSwitchedOffAndKeepsWhatItCollected(): void {
@@ -164,7 +213,7 @@ class ProjectApiTest extends TestCase {
 		$names = array_column($this->nc->ocs('GET', "/projects/{$project['id']}")['data']['assets'], 'name');
 		self::assertContains('b-roll', $names);
 
-		// A file that leaves the Project folder is Missing, not gone
+		// A file that goes to the trash is Missing, not gone
 		$this->nc->delete("{$this->root}/cut_v1.mp4");
 		self::assertSame('missing', $this->stacks($this->nc, $project['id'])['cut'][0]['state']);
 
@@ -174,6 +223,12 @@ class ProjectApiTest extends TestCase {
 		self::assertSame(200, $this->nc->ocs('DELETE', "/projects/{$project['id']}")['status']);
 		self::assertSame(404, $this->nc->ocs('GET', "/projects/{$project['id']}")['status']);
 		self::assertSame(404, $this->nc->ocs('GET', "/folders/$folderId/project")['status']);
+		self::assertContains('intro', $this->unassigned($this->nc), 'its Assets wait in No Project');
+		foreach ($this->nc->ocs('GET', '/projects/0')['data']['assets'] as $asset) {
+			if (in_array($asset['name'], ['intro', 'voiceover', 'b-roll', 'cut'], true)) {
+				$this->nc->ocs('DELETE', "/assets/{$asset['id']}");
+			}
+		}
 	}
 
 	public function testReceivedShareBecomesProjectUnlessItSitsInsideOne(): void {
@@ -206,20 +261,21 @@ class ProjectApiTest extends TestCase {
 		self::assertSame(404, $asMember->ocs('GET', "/folders/$scenesId/project")['status'], 'nothing was created');
 	}
 
-	public function testFileMovedToAnotherProjectIsMissingThereAndVersionOneHere(): void {
+	public function testAFileKeepsItsProjectWhereverItMoves(): void {
 		$this->nc->mkdir("{$this->root}/p1");
 		$this->nc->mkdir("{$this->root}/p2");
 		$this->nc->put("{$this->root}/p1/cut.mp4", 'not really a video');
 		$p1 = $this->createProject($this->nc, $this->nc->fileId("{$this->root}/p1"))['id'];
 		$p2 = $this->createProject($this->nc, $this->nc->fileId("{$this->root}/p2"))['id'];
-		self::assertSame(['cut'], array_keys($this->stacks($this->nc, $p1)));
-		self::assertSame([], $this->stacks($this->nc, $p2));
+		$before = $this->stacks($this->nc, $p1)['cut'][0];
 
 		$this->nc->move("{$this->root}/p1/cut.mp4", "{$this->root}/p2/cut.mp4");
 
-		$stacks = $this->stacks($this->nc, $p2);
-		self::assertSame([1, 'ready'], [$stacks['cut'][0]['number'], $stacks['cut'][0]['state']], 'the receiving Project gets a fresh Version 1');
-		self::assertSame('missing', $this->stacks($this->nc, $p1)['cut'][0]['state'], 'the old Project keeps its Missing Version');
+		$after = $this->stacks($this->nc, $p1)['cut'][0];
+		self::assertSame([$before['id'], 'ready'], [$after['id'], $after['state']], 'same Version, same Project (ADR 0009)');
+		self::assertSame([], $this->stacks($this->nc, $p2), 'Auto Intake does not take a file another Project holds');
+		$path = array_column($this->nc->ocs('GET', "/projects/$p1")['data']['assets'], 'path', 'name')['cut'];
+		self::assertSame("/{$this->root}/p2", $path, 'outside its folder, the path runs from home');
 	}
 
 	public function testProjectMovedIntoAnotherKeepsItsFilesToItself(): void {
