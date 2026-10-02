@@ -1,5 +1,12 @@
+import { t } from '@nextcloud/l10n'
 import { defineStore } from 'pinia'
-import { createProject, getProject, listProjects, muteProject, removeProject, updateProject } from '../api.js'
+import { createNamedProject, createProject, getProject, listProjects, muteProject, removeProject, updateProject } from '../api.js'
+
+/**
+ * @param {object} project - a Project as the server sends it
+ * @return {object} the same, with No Project named in the reader's language
+ */
+const named = (project) => project.none ? { ...project, name: t('deliver', 'No Project') } : project
 
 export const useProjectsStore = defineStore('projects', {
 	state: () => ({
@@ -10,11 +17,11 @@ export const useProjectsStore = defineStore('projects', {
 	}),
 	actions: {
 		async fetchAll() {
-			this.projects = await listProjects()
+			this.projects = (await listProjects()).map(named)
 			this.loaded = true
 		},
 		async fetch(id) {
-			this.details[id] = await getProject(id)
+			this.details[id] = named(await getProject(id))
 		},
 		/**
 		 * @param {number} folderId - the folder to turn into a Project
@@ -22,6 +29,15 @@ export const useProjectsStore = defineStore('projects', {
 		 */
 		async create(folderId) {
 			const project = await createProject(folderId, true)
+			await this.fetchAll()
+			return project
+		},
+		/**
+		 * @param {string} name - what to call it
+		 * @return {Promise<object>} the new Project, which collects files from anywhere
+		 */
+		async createNamed(name) {
+			const project = await createNamedProject(name)
 			await this.fetchAll()
 			return project
 		},

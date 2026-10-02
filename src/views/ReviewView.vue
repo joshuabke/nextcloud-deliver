@@ -59,6 +59,7 @@ const pickingDue = ref(false)
 const members = ref([])
 
 const version = computed(() => context.value?.versions.find((each) => each.id === props.id) ?? null)
+const projectName = computed(() => context.value?.project.none ? t('deliver', 'No Project') : context.value?.project.name)
 
 /** The Project's Assets in the order the Project view shows them, to step through */
 const assets = computed(() => {
@@ -91,7 +92,7 @@ watch(() => props.id, async (id) => {
 	try {
 		context.value = await getVersion(id)
 		await store.open(id)
-		listMembers(context.value.project.id).then((list) => {
+		listMembers(id).then((list) => {
 			members.value = list
 		}).catch(() => {})
 		if (!projects.details[context.value.project.id]) {
@@ -189,8 +190,8 @@ async function upload(event) {
 			<NcButton
 				variant="tertiary"
 				:to="`/projects/${context.project.id}`"
-				:aria-label="t('deliver', 'Back to {project}', { project: context.project.name })"
-				:title="t('deliver', 'Back to {project}', { project: context.project.name })">
+				:aria-label="t('deliver', 'Back to {project}', { project: projectName })"
+				:title="t('deliver', 'Back to {project}', { project: projectName })">
 				<template #icon>
 					<NcIconSvgWrapper :svg="backIcon" />
 				</template>
@@ -198,13 +199,13 @@ async function upload(event) {
 			<div class="deliver-review__crumbs">
 				<div class="deliver-review__over">
 					<RouterLink class="deliver-review__project" :to="`/projects/${context.project.id}`">
-						{{ context.project.name }}
+						{{ projectName }}
 					</RouterLink>
 					<DueDate
 						v-if="isMobile && context.asset.dueDate"
 						class="deliver-review__due"
 						:modelValue="context.asset.dueDate"
-						:editable="context.project.canWrite"
+						:editable="context.canWrite"
 						@update:modelValue="setDue" />
 				</div>
 				<h2 class="deliver-layout__title deliver-review__title" tabindex="-1">
@@ -214,7 +215,7 @@ async function upload(event) {
 			<DueDate
 				v-if="!isMobile"
 				:modelValue="context.asset.dueDate"
-				:editable="context.project.canWrite"
+				:editable="context.canWrite"
 				@update:modelValue="setDue" />
 		</template>
 		<template #center>
@@ -233,7 +234,7 @@ async function upload(event) {
 				</template>
 			</NcButton>
 			<VersionPicker :versions="context.versions" :current="id" @select="$router.push(`/versions/${$event}`)" />
-			<template v-if="context.project.canWrite">
+			<template v-if="context.canWrite">
 				<NcButton
 					v-if="folderUrl && !isMobile"
 					:disabled="uploading"
@@ -273,7 +274,7 @@ async function upload(event) {
 				</template>
 				{{ t('deliver', 'Next Asset') }}
 			</NcActionButton>
-			<template v-if="context.project.canWrite">
+			<template v-if="context.canWrite">
 				<NcActionButton
 					v-if="folderUrl"
 					:disabled="uploading"
@@ -342,7 +343,7 @@ async function upload(event) {
 				@cleared="release">
 				<template #tools>
 					<ExportMenu
-						v-if="context.project.canWrite && !isMobile"
+						v-if="context.canWrite && !isMobile"
 						:versionId="id"
 						:audioOnly="version?.audioOnly ?? false"
 						:wavExport="version?.wavExport ?? false"

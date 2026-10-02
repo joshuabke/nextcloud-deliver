@@ -213,7 +213,7 @@ function personalLink(reviewer) {
 				</NcAppNavigationItem>
 			</NcAppNavigationItem>
 			<NcAppNavigationItem
-				v-if="project?.canWrite"
+				v-if="project?.canWrite && project?.folderId"
 				:name="t('deliver', 'Create Review Link')"
 				@click="createLink">
 				<template #icon>

@@ -8,15 +8,18 @@ import { computed, ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
+import NcSelect from '@nextcloud/vue/components/NcSelect'
 import ProjectSettingsFields from '../components/ProjectSettingsFields.vue'
 import ShareLinkItem from '../components/ShareLinkItem.vue'
 import {
+	assignAsset,
 	createProject,
 	createShareLink,
 	disableAsset,
 	enableFile,
 	getAssetForFile,
 	getProjectForFolder,
+	listProjects,
 	listShares,
 	removeProject,
 	updateProject,
@@ -36,6 +39,8 @@ const project = ref(null)
 const asset = ref(null)
 /** The Share Links of this node; review is a switch on each (ADR 0004) */
 const shares = ref([])
+/** Where an enabled file can go: the Projects this Member sees, and No Project (ADR 0009) */
+const projects = ref([])
 const { busy, error, run } = useBusy()
 
 const isFolder = computed(() => props.node?.type === 'folder')
@@ -43,12 +48,18 @@ const canWrite = computed(() => ((props.node?.permissions ?? 0) & Permission.UPD
 const enabled = computed(() => isFolder.value ? project.value?.autoIntake === true : asset.value !== null)
 // Auto Intake decides for every media file in the folder, so single files cannot opt out
 const ownedByAutoIntake = computed(() => !isFolder.value && asset.value?.autoIntake === true)
-const projectId = computed(() => isFolder.value ? project.value?.id : asset.value?.projectId)
+const NO_PROJECT = { id: 0, label: t('deliver', 'No Project') }
+const projectOptions = computed(() => [
+	NO_PROJECT,
+	...projects.value.filter((each) => !each.none).map((each) => ({ id: each.id, label: each.name })),
+])
+const assignedTo = computed(() => projectOptions.value.find((each) => each.id === asset.value?.projectId)
+	?? (asset.value ? { id: asset.value.projectId, label: asset.value.projectName ?? '' } : null))
 const appUrl = computed(() => {
 	if (asset.value) {
 		return generateUrl('/apps/deliver/versions/{id}', { id: asset.value.versionId })
 	}
-	return projectId.value ? generateUrl('/apps/deliver/projects/{id}', { id: projectId.value }) : null
+	return project.value ? generateUrl('/apps/deliver/projects/{id}', { id: project.value.id }) : null
 })
 
 watch(() => props.node?.fileid, (fileid) => {
@@ -75,8 +86,26 @@ watch(() => props.node?.fileid, (fileid) => {
 			asset.value = isFolder.value ? null : found
 			shares.value = links
 		}
+		if (!isFolder.value && projects.value.length === 0) {
+			projects.value = await listProjects().catch(() => [])
+		}
 	})
 }, { immediate: true })
+
+/**
+ * Puts the file's Asset into another Project, or into No Project; the file stays where it is
+ *
+ * @param {{id: number}} option - the Project picked
+ */
+function assign(option) {
+	if (!option || option.id === asset.value?.projectId) {
+		return
+	}
+	return run(async () => {
+		await assignAsset(asset.value.assetId, option.id)
+		asset.value = await getAssetForFile(props.node.fileid)
+	})
+}
 
 /**
  * On a folder the switch is Auto Intake (stories 2 and 3), on a file it
@@ -161,6 +190,16 @@ async function remove() {
 			{{ t('deliver', 'Files in this Project are enabled one by one, in the Deliver tab of each file.') }}
 		</p>
 
+		<NcSelect
+			v-if="asset"
+			class="deliver-tab__project"
+			:inputLabel="t('deliver', 'Project')"
+			:options="projectOptions"
+			:modelValue="assignedTo"
+			:clearable="false"
+			:disabled="busy || !asset.canWrite || ownedByAutoIntake"
+			@update:modelValue="assign" />
+
 		<p v-if="asset" class="deliver-tab__hint">
 			{{ t('deliver', 'Version {number}', { number: asset.number }) }}
 			· {{ n('deliver', '%n Comment', '%n Comments', asset.comments) }}
@@ -174,7 +213,7 @@ async function remove() {
 			<ProjectSettingsFields :project="project" :disabled="busy" @save="saveSettings" />
 		</section>
 
-		<section v-if="projectId" class="deliver-tab__section">
+		<section v-if="asset || project" class="deliver-tab__section">
 			<h4>{{ t('deliver', 'Share Links') }}</h4>
 			<p v-if="shares.length === 0" class="deliver-tab__hint">
 				{{ t('deliver', 'No link yet. A link shows the files; review is a switch on it.') }}
@@ -216,6 +255,10 @@ async function remove() {
 
 .deliver-tab__hint {
 	color: var(--color-text-maxcontrast);
+}
+
+.deliver-tab__project {
+	width: 100%;
 }
 
 .deliver-tab__section {

@@ -7,6 +7,7 @@ import removeIcon from '@mdi/svg/svg/delete-outline.svg?raw'
 import notUpIcon from '@mdi/svg/svg/eye-off-outline.svg?raw'
 import videoIcon from '@mdi/svg/svg/filmstrip.svg?raw'
 import filesIcon from '@mdi/svg/svg/folder-eye-outline.svg?raw'
+import moveIcon from '@mdi/svg/svg/folder-move-outline.svg?raw'
 import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
 import stackIcon from '@mdi/svg/svg/layers-outline.svg?raw'
 import newVersionIcon from '@mdi/svg/svg/layers-plus.svg?raw'
@@ -25,6 +26,7 @@ import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
+import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import AssetCard from '../components/AssetCard.vue'
 import ContextMenu from '../components/ContextMenu.vue'
@@ -32,7 +34,7 @@ import DueDateDialog from '../components/DueDateDialog.vue'
 import FilterBar from '../components/FilterBar.vue'
 import ProjectSettingsDialog from '../components/ProjectSettingsDialog.vue'
 import VersionStack from '../components/VersionStack.vue'
-import { disableAsset, enableFile, errorMessage, stackVersion, updateAsset, uploadNextVersion, uploadVersion } from '../api.js'
+import { assignAsset, disableAsset, enableFile, errorMessage, stackVersion, updateAsset, uploadNextVersion, uploadVersion } from '../api.js'
 import { useQuery } from '../composables/query.js'
 import { confirmRemoval } from '../confirm.js'
 import { FILTER_LABELS, FILTERS, found, passes, SORT_OPTIONS, sortAssets, SORTS } from '../lib/filters.js'
@@ -121,6 +123,41 @@ const loose = computed(() => filter.value !== 'all'
 	: (project.value?.notEnabled ?? []).filter((file) => inFolder(file, folder.value) && file.name.toLocaleLowerCase().includes(query.value.trim().toLocaleLowerCase())))
 /** File ids being added, so a second click waits */
 const adding = ref(new Set())
+/**
+ * Upload goes into the folder on screen: anywhere in a Folder Project's
+ * folder, and in another Project only once a folder of it is open
+ */
+const canUpload = computed(() => project.value?.path ? project.value.canWrite : folder.value.startsWith('/'))
+/** The Asset being put into another Project, while its dialog is open */
+const assigning = ref(null)
+const assignTo = ref(null)
+/** Where an Asset can go: the Projects this Member sees, and No Project (ADR 0009) */
+const assignOptions = computed(() => [
+	{ id: 0, label: t('deliver', 'No Project') },
+	...store.projects.filter((each) => !each.none).map((each) => ({ id: each.id, label: each.name })),
+].filter((each) => each.id !== project.value?.id))
+
+/**
+ * @param {object} asset - the Asset to put into another Project
+ */
+async function openAssign(asset) {
+	assignTo.value = null
+	assigning.value = asset
+	if (!store.loaded) {
+		await store.fetchAll().catch(() => {})
+	}
+}
+
+/** Puts the Asset into the Project picked; no file moves */
+async function assign() {
+	try {
+		await assignAsset(assigning.value.id, assignTo.value.id)
+		assigning.value = null
+		await Promise.all([store.fetch(props.id), store.fetchAll()])
+	} catch (e) {
+		error.value = errorMessage(e)
+	}
+}
 
 /**
  * @param {{fileId: number}} file - a media file that is no Asset yet
@@ -128,7 +165,7 @@ const adding = ref(new Set())
 async function add(file) {
 	adding.value.add(file.fileId)
 	try {
-		await enableFile(file.fileId)
+		await enableFile(file.fileId, project.value.id)
 		await store.fetch(props.id)
 	} catch (e) {
 		error.value = errorMessage(e)
@@ -153,7 +190,7 @@ async function upload(files) {
 	uploading.value = true
 	try {
 		for (const file of media) {
-			await enableFile(await uploadVersion(folderUrl, file))
+			await enableFile(await uploadVersion(folderUrl, file), project.value.id)
 		}
 	} catch (e) {
 		error.value = errorMessage(e)
@@ -164,12 +201,12 @@ async function upload(files) {
 }
 
 /**
- * @param {string} path - a folder of the Project, '' for the Project folder
+ * @param {string} path - a folder of the Project, '' for the Project folder, or from the Member's home with a leading slash
  * @return {string} its WebDAV URL, without a trailing slash
  */
 function davFolder(path) {
-	return generateRemoteUrl('dav') + '/files/' + projectDavPath(project.value.path)
-		+ path.split('/').filter(Boolean).map((part) => '/' + encodeURIComponent(part)).join('')
+	const base = path.startsWith('/') ? project.value.davHome : generateRemoteUrl('dav') + '/files/' + projectDavPath(project.value.path)
+	return base + path.split('/').filter(Boolean).map((part) => '/' + encodeURIComponent(part)).join('')
 }
 
 /**
@@ -178,22 +215,23 @@ function davFolder(path) {
  */
 function openMenu(event, asset) {
 	const [newest, previous] = asset.versions
-	const dir = projectDir(project.value.path) + (asset.path ? '/' + asset.path : '')
+	const dir = asset.path.startsWith('/') ? asset.path : projectDir(project.value.path) + (asset.path ? '/' + asset.path : '')
 	menu.value = {
 		x: event.clientX,
 		y: event.clientY,
 		items: [
 			{ label: t('deliver', 'Open'), icon: openIcon, action: () => router.push(`/versions/${newest.id}`) },
 			previous && { label: t('deliver', 'Compare with the Version before'), icon: compareIcon, action: () => router.push(`/compare/${previous.id}/${newest.id}`) },
-			project.value.canWrite && { label: t('deliver', 'Upload a new Version'), icon: newVersionIcon, action: () => pickVersion(asset) },
-			project.value.canWrite && { label: asset.dueDate ? t('deliver', 'Change the Due Date') : t('deliver', 'Set a Due Date'), icon: dueIcon, action: () => { dueFor.value = asset } },
-			project.value.canWrite && !isMobile.value && { label: t('deliver', 'Manage Versions'), icon: stackIcon, action: () => { managing.value = asset.id } },
+			asset.canWrite && { label: t('deliver', 'Upload a new Version'), icon: newVersionIcon, action: () => pickVersion(asset) },
+			asset.canWrite && { label: asset.dueDate ? t('deliver', 'Change the Due Date') : t('deliver', 'Set a Due Date'), icon: dueIcon, action: () => { dueFor.value = asset } },
+			asset.canWrite && !isMobile.value && { label: t('deliver', 'Manage Versions'), icon: stackIcon, action: () => { managing.value = asset.id } },
+			asset.canWrite && { label: t('deliver', 'Move to Project…'), icon: moveIcon, action: () => openAssign(asset) },
 			{
 				label: t('deliver', 'Show in Files'),
 				icon: filesIcon,
 				href: generateUrl('/apps/files/files/{fileId}', { fileId: newest.fileId }) + '?' + new URLSearchParams({ dir, opendetails: 'true' }),
 			},
-			project.value.canWrite && { label: t('deliver', 'Take out of Deliver'), icon: removeIcon, danger: true, action: () => takeOut(asset) },
+			asset.canWrite && { label: t('deliver', 'Take out of Deliver'), icon: removeIcon, danger: true, action: () => takeOut(asset) },
 		].filter(Boolean),
 	}
 }
@@ -277,7 +315,7 @@ function picked(event) {
  */
 function dropped(event) {
 	dragDepth.value = 0
-	if (project.value?.canWrite && !uploading.value) {
+	if (canUpload.value && !uploading.value) {
 		upload([...(event.dataTransfer?.files ?? [])])
 	}
 }
@@ -286,12 +324,12 @@ function dropped(event) {
 <template>
 	<div
 		class="deliver-project"
-		:class="{ 'deliver-project--dragging': dragDepth > 0 && project?.canWrite }"
+		:class="{ 'deliver-project--dragging': dragDepth > 0 && canUpload }"
 		@dragenter.prevent="dragDepth++"
 		@dragleave="dragDepth--"
 		@dragover.prevent
 		@drop.prevent="dropped">
-		<div v-if="dragDepth > 0 && project?.canWrite" class="deliver-project__drop">
+		<div v-if="dragDepth > 0 && canUpload" class="deliver-project__drop">
 			{{ folder
 				? t('deliver', 'Drop files to upload them into {folder}', { folder })
 				: t('deliver', 'Drop files to upload them into the Project') }}
@@ -317,7 +355,7 @@ function dropped(event) {
 				</NcButton>
 				<h2>
 					{{ project.name }}<template v-if="folder">
-						<span class="deliver-project__path"> / {{ folder }}</span>
+						<span class="deliver-project__path"> / {{ folder.replace(/^\//, '') }}</span>
 					</template>
 				</h2>
 				<span class="deliver-project__spacer" />
@@ -340,7 +378,7 @@ function dropped(event) {
 					:showTrailingButton="query !== ''"
 					@trailingButtonClick="query = ''" />
 				<NcButton
-					v-if="project.canWrite"
+					v-if="canUpload"
 					:variant="isMobile ? 'tertiary' : 'secondary'"
 					:disabled="uploading"
 					:aria-label="t('deliver', 'Upload')"
@@ -361,6 +399,7 @@ function dropped(event) {
 					hidden
 					@change="picked">
 				<NcButton
+					v-if="!project.none"
 					variant="tertiary"
 					:aria-label="t('deliver', 'Project settings')"
 					:title="t('deliver', 'Project settings')"
@@ -391,7 +430,9 @@ function dropped(event) {
 				:name="t('deliver', 'No Assets yet')"
 				:description="project.autoIntake
 					? t('deliver', 'Every video or audio file placed in this folder becomes an Asset.')
-					: t('deliver', 'Enable files for review in the Deliver tab of the Files sidebar.')" />
+					: project.path
+						? t('deliver', 'Enable files for review in the Deliver tab of the Files sidebar.')
+						: t('deliver', 'Add files to this Project in the Deliver tab of the Files sidebar, wherever they lie.')" />
 			<section v-for="group in groups" :key="group.path" class="deliver-project__group">
 				<h3 v-if="group.path !== folder" class="deliver-project__folder">
 					<NcIconSvgWrapper :svg="folderIcon" :size="20" />
@@ -403,7 +444,7 @@ function dropped(event) {
 						:key="asset.id"
 						:asset="asset"
 						:candidates="suggestions.get(asset.id) ?? []"
-						:canWrite="project.canWrite"
+						:canWrite="asset.canWrite"
 						@stack="accept"
 						@versions="managing = $event.id"
 						@contextmenu.prevent="openMenu($event, asset)"
@@ -461,6 +502,25 @@ function dropped(event) {
 					:folderUrl="davFolder(managed.path)"
 					@open="router.push(`/versions/${$event}`)"
 					@changed="store.fetch(props.id)" />
+			</NcDialog>
+			<NcDialog
+				v-if="assigning"
+				:name="t('deliver', 'Move {asset} to another Project', { asset: assigning.name })"
+				size="small"
+				@closing="assigning = null">
+				<p class="deliver-project__hint">
+					{{ t('deliver', 'Its Versions and Comments go along. The files stay where they are.') }}
+				</p>
+				<NcSelect
+					v-model="assignTo"
+					:inputLabel="t('deliver', 'Project')"
+					:options="assignOptions"
+					:clearable="false" />
+				<template #actions>
+					<NcButton variant="primary" :disabled="!assignTo" @click="assign">
+						{{ t('deliver', 'Move') }}
+					</NcButton>
+				</template>
 			</NcDialog>
 			<DueDateDialog
 				v-if="dueFor"
@@ -553,6 +613,11 @@ function dropped(event) {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 	gap: calc(2 * var(--default-grid-baseline));
+}
+
+.deliver-project__hint {
+	margin-bottom: calc(2 * var(--default-grid-baseline));
+	color: var(--color-text-maxcontrast);
 }
 
 .deliver-project__loose-head {

@@ -21,9 +21,12 @@ export const listProjects = () => axios.get(url('/projects')).then(data)
 export const getProject = (id) => axios.get(url(`/projects/${id}`)).then(data)
 export const getProjectForFolder = (folderId) => axios.get(url(`/folders/${folderId}/project`)).then(data)
 export const createProject = (folderId, autoIntake = true) => axios.post(url('/projects'), { folderId, autoIntake }).then(data)
+// A Project by name, which collects files from anywhere (ADR 0009)
+export const createNamedProject = (name) => axios.post(url('/projects'), { name }).then(data)
 export const updateProject = (id, settings) => axios.put(url(`/projects/${id}`), settings).then(data)
 export const removeProject = (id) => axios.delete(url(`/projects/${id}`))
-export const listMembers = (id) => axios.get(url(`/projects/${id}/members`)).then(data)
+// Who can be @mentioned on a Version: whoever can open its file
+export const listMembers = (versionId) => axios.get(url(`/versions/${versionId}/members`)).then(data)
 export const listProjectShares = (id) => axios.get(url(`/projects/${id}/shares`)).then(data)
 export const updateReviewerAsMember = (id, fields) => axios.put(url(`/reviewers/${id}`), fields).then(data)
 export const renewReviewerKey = (id) => axios.post(url(`/reviewers/${id}/key`)).then(data)
@@ -36,7 +39,14 @@ export const unstackVersion = (id) => axios.post(url(`/versions/${id}/unstack`))
 export const regenerateVersion = (id) => axios.post(url(`/versions/${id}/regenerate`)).then(data)
 
 export const getAssetForFile = (fileId) => axios.get(url(`/files/${fileId}/asset`)).then(data)
-export const enableFile = (fileId) => axios.post(url('/assets'), { fileId }).then(data)
+/**
+ * @param {number} fileId - a media file
+ * @param {?number} projectId - its Project, 0 for No Project; without one it joins the Folder Project above it, else No Project
+ * @return {Promise<object>} the Asset as the Files sidebar shows it
+ */
+export const enableFile = (fileId, projectId = null) => axios.post(url('/assets'), projectId === null ? { fileId } : { fileId, projectId }).then(data)
+// Puts an Asset into a Project, or into No Project for 0; no file moves
+export const assignAsset = (id, projectId) => axios.put(url(`/assets/${id}/project`), { projectId }).then(data)
 export const updateAsset = (id, fields) => axios.put(url(`/assets/${id}`), fields).then(data)
 export const disableAsset = (id) => axios.delete(url(`/assets/${id}`))
 

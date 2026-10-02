@@ -1,10 +1,12 @@
 <script setup>
 import { t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
+import { ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
+import NcTextField from '@nextcloud/vue/components/NcTextField'
 import ProjectSettingsFields from './ProjectSettingsFields.vue'
 import { useBusy } from '../composables/busy.js'
 import { confirmProjectRemoval } from '../confirm.js'
@@ -20,7 +22,9 @@ const emit = defineEmits(['close', 'removed'])
 
 const store = useProjectsStore()
 const { busy, error, run } = useBusy()
-const filesUrl = generateUrl('/apps/files/') + '?' + new URLSearchParams({ dir: projectDir(props.project.path) })
+const filesUrl = props.project.path ? generateUrl('/apps/files/') + '?' + new URLSearchParams({ dir: projectDir(props.project.path) }) : null
+/** A Project without a folder has a name of its own (ADR 0009) */
+const name = ref(props.project.name)
 
 /**
  * @param {object} fields - the settings to change, or muted
@@ -54,7 +58,14 @@ async function remove() {
 				{{ t('deliver', 'Mute notifications') }}
 			</NcCheckboxRadioSwitch>
 			<template v-if="project.canWrite">
+				<NcTextField
+					v-if="!project.folderId"
+					v-model="name"
+					:label="t('deliver', 'Name')"
+					:disabled="busy"
+					@blur="name.trim() && name !== project.name && save({ name })" />
 				<NcCheckboxRadioSwitch
+					v-else
 					type="switch"
 					:modelValue="project.autoIntake"
 					:disabled="busy"
@@ -75,7 +86,7 @@ async function remove() {
 				@click="remove">
 				{{ t('deliver', 'Remove Project') }}
 			</NcButton>
-			<NcButton :href="filesUrl">
+			<NcButton v-if="filesUrl" :href="filesUrl">
 				{{ t('deliver', 'Open in Files') }}
 			</NcButton>
 		</template>

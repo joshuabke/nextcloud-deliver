@@ -3,7 +3,9 @@ import changesIcon from '@mdi/svg/svg/alert-circle-outline.svg?raw'
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import commentIcon from '@mdi/svg/svg/comment-outline.svg?raw'
 import moreIcon from '@mdi/svg/svg/dots-horizontal.svg?raw'
-import projectIcon from '@mdi/svg/svg/folder-play-outline.svg?raw'
+import folderProjectIcon from '@mdi/svg/svg/folder-play-outline.svg?raw'
+import noProjectIcon from '@mdi/svg/svg/inbox-outline.svg?raw'
+import projectIcon from '@mdi/svg/svg/play-box-multiple-outline.svg?raw'
 import { n, t } from '@nextcloud/l10n'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, ref } from 'vue'
@@ -46,7 +48,7 @@ const badges = computed(() => {
 					:src="previewUrl(project.activity.still, 480)"
 					alt=""
 					@error="broken = true">
-				<NcIconSvgWrapper v-else :svg="projectIcon" :size="48" />
+				<NcIconSvgWrapper v-else :svg="project.none ? noProjectIcon : project.folderId ? folderProjectIcon : projectIcon" :size="48" />
 				<div v-if="badges.length" class="deliver-project-card__badges">
 					<span
 						v-for="badge in badges"
@@ -80,7 +82,7 @@ const badges = computed(() => {
 			</template>
 		</NcButton>
 		<NcButton
-			v-else
+			v-else-if="!project.none"
 			class="deliver-project-card__settings"
 			variant="tertiary"
 			:aria-label="t('deliver', 'Settings of {project}', { project: project.name })"
