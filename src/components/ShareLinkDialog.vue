@@ -15,7 +15,7 @@ const props = defineProps({
 	autoIntake: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['update', 'person', 'close', 'autoIntake'])
+const emit = defineEmits(['update', 'person', 'close', 'autoIntake', 'deleted'])
 
 const item = ref(null)
 
@@ -35,7 +35,8 @@ const manageUrl = generateUrl('/apps/files/files/{fileId}', { fileId: props.shar
 			:canWrite="canWrite"
 			inDialog
 			@update="emit('update', $event)"
-			@person="emit('person', $event)" />
+			@person="emit('person', $event)"
+			@deleted="emit('deleted')" />
 		<div v-if="canWrite && share.review && (share.notEnabled > 0 || autoIntake)" class="deliver-link-dialog__intake">
 			<p v-if="share.notEnabled > 0" class="deliver-link-dialog__hint">
 				{{ n('deliver', '%n media file here is not up for review, so Reviewers see it without a Review button.', '%n media files here are not up for review, so Reviewers see them without a Review button.', share.notEnabled) }}

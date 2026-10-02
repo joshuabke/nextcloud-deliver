@@ -1,14 +1,21 @@
 <script setup>
+import removeIcon from '@mdi/svg/svg/account-remove-outline.svg?raw'
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
+import copyIcon from '@mdi/svg/svg/content-copy.svg?raw'
+import stopIcon from '@mdi/svg/svg/eye-off-outline.svg?raw'
+import deleteIcon from '@mdi/svg/svg/trash-can-outline.svg?raw'
 import { t } from '@nextcloud/l10n'
 import { ref, watch } from 'vue'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
-import { inviteReviewer, listReviewers, setShareFlags } from '../api.js'
+import { deleteShareLink, inviteReviewer, listReviewers, removeReviewer, setShareFlags } from '../api.js'
 import { copyLink } from '../clipboard.js'
 import { useBusy } from '../composables/busy.js'
+import { confirmLinkDeletion, confirmReviewerRemoval } from '../confirm.js'
 
 const props = defineProps({
 	/** One Share Link with Deliver's flags, as the server lists it */
@@ -18,7 +25,7 @@ const props = defineProps({
 	inDialog: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['update', 'person'])
+const emit = defineEmits(['update', 'person', 'deleted'])
 
 const { busy, error, run } = useBusy()
 /** The Project's Reviewers, each with their Personal Link through this share; null while loading */
@@ -32,6 +39,28 @@ const email = ref('')
  */
 function setFlags(flags) {
 	return run(async () => emit('update', await setShareFlags(props.share.id, flags)))
+}
+
+/** Deletes the link from Nextcloud, not only its review */
+async function remove() {
+	if (await confirmLinkDeletion()) {
+		await run(async () => {
+			await deleteShareLink(props.share.id)
+			emit('deleted', props.share.id)
+		})
+	}
+}
+
+/**
+ * @param {object} reviewer - one of the Reviewers listed
+ */
+async function dropReviewer(reviewer) {
+	if (await confirmReviewerRemoval(reviewer.name)) {
+		await run(async () => {
+			await removeReviewer(reviewer.id)
+			reviewers.value = reviewers.value.filter((each) => each.id !== reviewer.id)
+		})
+	}
 }
 
 // Every Reviewer shows with their Personal Link through this share (story 55)
@@ -65,13 +94,39 @@ function invite() {
 
 <template>
 	<div class="deliver-link">
-		<NcCheckboxRadioSwitch
-			type="switch"
-			:modelValue="share.review"
-			:disabled="busy || !canWrite"
-			@update:modelValue="setFlags({ review: $event })">
-			{{ share.label || share.url }}
-		</NcCheckboxRadioSwitch>
+		<div class="deliver-link__head">
+			<span class="deliver-link__title" :title="share.url">{{ share.label || share.url }}</span>
+			<NcButton
+				variant="tertiary"
+				:aria-label="t('deliver', 'Copy link')"
+				:title="t('deliver', 'Copy link')"
+				@click="copyLink(share.url, t('deliver', 'Link copied'))">
+				<template #icon>
+					<NcIconSvgWrapper :svg="copyIcon" />
+				</template>
+			</NcButton>
+			<NcActions v-if="canWrite" :disabled="busy">
+				<NcActionButton v-if="share.review" closeAfterClick @click="setFlags({ review: false })">
+					<template #icon>
+						<NcIconSvgWrapper :svg="stopIcon" />
+					</template>
+					{{ t('deliver', 'Stop review, keep the link') }}
+				</NcActionButton>
+				<NcActionButton closeAfterClick @click="remove">
+					<template #icon>
+						<NcIconSvgWrapper :svg="deleteIcon" />
+					</template>
+					{{ t('deliver', 'Delete link') }}
+				</NcActionButton>
+			</NcActions>
+		</div>
+		<NcButton
+			v-if="!share.review && canWrite"
+			variant="secondary"
+			:disabled="busy"
+			@click="setFlags({ review: true })">
+			{{ t('deliver', 'Review on this link') }}
+		</NcButton>
 
 		<template v-if="share.review">
 			<p v-if="!share.hasPassword" class="deliver-link__hint">
@@ -110,6 +165,15 @@ function invite() {
 						<span class="deliver-link__name">{{ reviewer.name }}</span>
 						<NcButton variant="tertiary" @click="copyLink(reviewer.link, t('deliver', 'Personal Link copied'))">
 							{{ t('deliver', 'Copy Personal Link') }}
+						</NcButton>
+						<NcButton
+							variant="tertiary"
+							:aria-label="t('deliver', 'Remove {name}', { name: reviewer.name })"
+							:title="t('deliver', 'Remove {name}', { name: reviewer.name })"
+							@click="dropReviewer(reviewer)">
+							<template #icon>
+								<NcIconSvgWrapper :svg="removeIcon" />
+							</template>
 						</NcButton>
 						<NcButton
 							v-if="inDialog"
@@ -156,6 +220,21 @@ function invite() {
 	flex-direction: column;
 	gap: var(--default-grid-baseline);
 	overflow-wrap: anywhere;
+}
+
+.deliver-link__head {
+	display: flex;
+	align-items: center;
+	gap: var(--default-grid-baseline);
+}
+
+.deliver-link__title {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: bold;
 }
 
 .deliver-link__flags,

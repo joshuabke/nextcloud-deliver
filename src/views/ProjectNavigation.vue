@@ -1,5 +1,6 @@
 <script setup>
 import reviewerIcon from '@mdi/svg/svg/account-outline.svg?raw'
+import removeIcon from '@mdi/svg/svg/account-remove-outline.svg?raw'
 import copyIcon from '@mdi/svg/svg/content-copy.svg?raw'
 import imageLinkIcon from '@mdi/svg/svg/file-image-outline.svg?raw'
 import audioLinkIcon from '@mdi/svg/svg/file-music-outline.svg?raw'
@@ -9,6 +10,7 @@ import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
 import allIcon from '@mdi/svg/svg/folder-play-outline.svg?raw'
 import linkIcon from '@mdi/svg/svg/link-variant.svg?raw'
 import addIcon from '@mdi/svg/svg/plus.svg?raw'
+import deleteIcon from '@mdi/svg/svg/trash-can-outline.svg?raw'
 import { showError } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
 import { computed, ref, watch } from 'vue'
@@ -20,8 +22,9 @@ import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import ReviewerDialog from '../components/ReviewerDialog.vue'
 import ShareLinkDialog from '../components/ShareLinkDialog.vue'
-import { createShareLink, errorMessage, listProjectShares } from '../api.js'
+import { createShareLink, deleteShareLink, errorMessage, listProjectShares, removeReviewer } from '../api.js'
 import { copyLink } from '../clipboard.js'
+import { confirmLinkDeletion, confirmReviewerRemoval } from '../confirm.js'
 import { folderTree } from '../lib/folders.js'
 import { useProjectsStore } from '../store/projects.js'
 
@@ -114,6 +117,35 @@ function replace(updated) {
 }
 
 /**
+ * @param {object} share - a Share Link of the list
+ */
+async function deleteLink(share) {
+	if (await confirmLinkDeletion()) {
+		try {
+			await deleteShareLink(share.id)
+			await load()
+		} catch (e) {
+			showError(errorMessage(e))
+		}
+	}
+}
+
+/**
+ * @param {object} reviewer - a Reviewer of the list
+ */
+async function dropReviewer(reviewer) {
+	if (await confirmReviewerRemoval(reviewer.name)) {
+		try {
+			await removeReviewer(reviewer.id)
+			person.value = null
+			await load()
+		} catch (e) {
+			showError(errorMessage(e))
+		}
+	}
+}
+
+/**
  * @param {string} folder - a folder of the Project, '' for all of it
  */
 function open(folder) {
@@ -200,6 +232,12 @@ function personalLink(reviewer) {
 						</template>
 						{{ t('deliver', 'Copy link') }}
 					</NcActionButton>
+					<NcActionButton v-if="project?.canWrite" closeAfterClick @click="deleteLink(share)">
+						<template #icon>
+							<NcIconSvgWrapper :svg="deleteIcon" />
+						</template>
+						{{ t('deliver', 'Delete link') }}
+					</NcActionButton>
 				</template>
 				<!-- Who was invited through this link or came in by it -->
 				<NcAppNavigationItem
@@ -240,6 +278,12 @@ function personalLink(reviewer) {
 							</template>
 							{{ t('deliver', 'Copy Personal Link') }}
 						</NcActionButton>
+						<NcActionButton closeAfterClick @click="dropReviewer(reviewer)">
+							<template #icon>
+								<NcIconSvgWrapper :svg="removeIcon" />
+							</template>
+							{{ t('deliver', 'Remove Reviewer') }}
+						</NcActionButton>
 					</template>
 				</NcAppNavigationItem>
 			</template>
@@ -254,6 +298,7 @@ function personalLink(reviewer) {
 				@autoIntake="setAutoIntake"
 				@update="replace"
 				@person="openPerson"
+				@deleted="closeEditing"
 				@close="closeEditing" />
 			<ReviewerDialog
 				v-if="person"
@@ -261,6 +306,7 @@ function personalLink(reviewer) {
 				:links="links"
 				:canWrite="project?.canWrite ?? false"
 				@changed="load()"
+				@remove="dropReviewer(person)"
 				@close="person = null" />
 		</template>
 	</NcAppNavigation>

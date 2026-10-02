@@ -10,17 +10,15 @@ import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwit
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import ProjectSettingsFields from '../components/ProjectSettingsFields.vue'
-import ShareLinkItem from '../components/ShareLinkItem.vue'
+import ShareLinks from '../components/ShareLinks.vue'
 import {
 	assignAsset,
 	createProject,
-	createShareLink,
 	disableAsset,
 	enableFile,
 	getAssetForFile,
 	getProjectForFolder,
 	listProjects,
-	listShares,
 	removeProject,
 	updateProject,
 } from '../api.js'
@@ -37,15 +35,14 @@ const props = defineProps({
 const project = ref(null)
 /** On a media file: its Asset, or null */
 const asset = ref(null)
-/** The Share Links of this node; review is a switch on each (ADR 0004) */
-const shares = ref([])
+/** On a folder that is no Project yet: whether the Project it becomes takes in every media file */
+const intake = ref(true)
 /** Where an enabled file can go: the Projects this Member sees, and No Project (ADR 0009) */
 const projects = ref([])
 const { busy, error, run } = useBusy()
 
 const isFolder = computed(() => props.node?.type === 'folder')
 const canWrite = computed(() => ((props.node?.permissions ?? 0) & Permission.UPDATE) !== 0)
-const enabled = computed(() => isFolder.value ? project.value?.autoIntake === true : asset.value !== null)
 // Auto Intake decides for every media file in the folder, so single files cannot opt out
 const ownedByAutoIntake = computed(() => !isFolder.value && asset.value?.autoIntake === true)
 const NO_PROJECT = { id: 0, label: t('deliver', 'No Project') }
@@ -65,26 +62,22 @@ const appUrl = computed(() => {
 watch(() => props.node?.fileid, (fileid) => {
 	project.value = null
 	asset.value = null
-	shares.value = []
+	intake.value = true
 	error.value = null
 	if (!fileid) {
 		return
 	}
 	run(async () => {
-		const [found, links] = await Promise.all([
-			(isFolder.value ? getProjectForFolder(fileid) : getAssetForFile(fileid)).catch((e) => {
-				if (e?.response?.status === 404) {
-					return null
-				}
-				throw e
-			}),
-			listShares(fileid),
-		])
+		const found = await (isFolder.value ? getProjectForFolder(fileid) : getAssetForFile(fileid)).catch((e) => {
+			if (e?.response?.status === 404) {
+				return null
+			}
+			throw e
+		})
 		// The sidebar may have moved on to another node meanwhile
 		if (props.node?.fileid === fileid) {
 			project.value = isFolder.value ? found : null
 			asset.value = isFolder.value ? null : found
-			shares.value = links
 		}
 		if (!isFolder.value && projects.value.length === 0) {
 			projects.value = await listProjects().catch(() => [])
@@ -107,19 +100,36 @@ function assign(option) {
 	})
 }
 
+/** Turns the folder into a Folder Project, with Auto Intake as switched (stories 2 and 3) */
+function makeProject() {
+	return run(async () => {
+		project.value = await createProject(props.node.fileid, intake.value)
+	})
+}
+
 /**
- * On a folder the switch is Auto Intake (stories 2 and 3), on a file it
- * enables or disables review of that file (stories 1 and 4).
+ * Auto Intake: before the folder is a Project only the choice for it, after that the Project's own setting
+ *
+ * @param {boolean} checked - the new switch state
+ */
+function setIntake(checked) {
+	if (project.value === null) {
+		intake.value = checked
+		return
+	}
+	return run(async () => {
+		project.value = await updateProject(project.value.id, { autoIntake: checked })
+	})
+}
+
+/**
+ * Enables or disables review of a file (stories 1 and 4)
  *
  * @param {boolean} checked - the new switch state
  */
 function toggle(checked) {
 	return run(async () => {
-		if (isFolder.value) {
-			project.value = project.value === null
-				? await createProject(props.node.fileid, true)
-				: await updateProject(project.value.id, { autoIntake: checked })
-		} else if (checked) {
+		if (checked) {
 			asset.value = await enableFile(props.node.fileid)
 		} else if (await confirmRemoval(
 			t('deliver', 'Take this file out of Deliver?'),
@@ -141,21 +151,10 @@ function saveSettings(settings) {
 	})
 }
 
-/** A new Share Link with review already on (story 45) */
-function addLink() {
-	return run(async () => {
-		shares.value = [...shares.value, await createShareLink(props.node.fileid)]
-		// The file list shows the new link's share icon once it has the node again, as Nextcloud's own sharing tab does
-		const { data } = await getClient().stat(getRootPath() + props.node.path, { details: true, data: getDefaultPropfind() })
-		emit('files:node:updated', resultToNode(data))
-	})
-}
-
-/**
- * @param {object} updated - the Share Link as the server returned it
- */
-function replaceShare(updated) {
-	shares.value = shares.value.map((each) => each.id === updated.id ? updated : each)
+/** The file list shows a link's share icon once it has the node again, as Nextcloud's own sharing tab does */
+async function refreshNode() {
+	const { data } = await getClient().stat(getRootPath() + props.node.path, { details: true, data: getDefaultPropfind() })
+	emit('files:node:updated', resultToNode(data))
 }
 
 /** Removes the Project with all its review data (story 9) */
@@ -171,12 +170,29 @@ async function remove() {
 
 <template>
 	<div class="deliver-tab">
+		<template v-if="isFolder">
+			<NcCheckboxRadioSwitch
+				type="switch"
+				:modelValue="project ? project.autoIntake : intake"
+				:disabled="busy || !canWrite"
+				@update:modelValue="setIntake">
+				{{ t('deliver', 'Auto Intake: review every media file in this folder') }}
+			</NcCheckboxRadioSwitch>
+			<NcButton
+				v-if="!project"
+				variant="primary"
+				:disabled="busy || !canWrite"
+				@click="makeProject">
+				{{ t('deliver', 'Make this folder a Project') }}
+			</NcButton>
+		</template>
 		<NcCheckboxRadioSwitch
+			v-else
 			type="switch"
-			:modelValue="enabled"
+			:modelValue="asset !== null"
 			:disabled="busy || !canWrite || ownedByAutoIntake"
 			@update:modelValue="toggle">
-			{{ isFolder ? t('deliver', 'Auto Intake: review every media file in this folder') : t('deliver', 'Review in Deliver') }}
+			{{ t('deliver', 'Review in Deliver') }}
 		</NcCheckboxRadioSwitch>
 		<p v-if="ownedByAutoIntake" class="deliver-tab__hint">
 			{{ t('deliver', 'This folder is on Auto Intake. Switch it off in the folder to pick files one by one.') }}
@@ -215,18 +231,7 @@ async function remove() {
 
 		<section v-if="asset || project" class="deliver-tab__section">
 			<h4>{{ t('deliver', 'Share Links') }}</h4>
-			<p v-if="shares.length === 0" class="deliver-tab__hint">
-				{{ t('deliver', 'No link yet. A link shows the files; review is a switch on it.') }}
-			</p>
-			<ShareLinkItem
-				v-for="share in shares"
-				:key="share.id"
-				:share="share"
-				:canWrite="canWrite"
-				@update="replaceShare" />
-			<NcButton :disabled="busy || !canWrite" variant="secondary" @click="addLink">
-				{{ t('deliver', 'Create Review Link') }}
-			</NcButton>
+			<ShareLinks :fileId="node.fileid" :canWrite="canWrite" @changed="refreshNode" />
 		</section>
 
 		<NcNoteCard v-if="error" type="error">
