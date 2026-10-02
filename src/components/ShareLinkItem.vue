@@ -2,15 +2,13 @@
 import removeIcon from '@mdi/svg/svg/account-remove-outline.svg?raw'
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import copyIcon from '@mdi/svg/svg/content-copy.svg?raw'
-import stopIcon from '@mdi/svg/svg/eye-off-outline.svg?raw'
 import deleteIcon from '@mdi/svg/svg/trash-can-outline.svg?raw'
 import { t } from '@nextcloud/l10n'
 import { ref, watch } from 'vue'
-import NcActionButton from '@nextcloud/vue/components/NcActionButton'
-import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import NcPasswordField from '@nextcloud/vue/components/NcPasswordField'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { deleteShareLink, inviteReviewer, listReviewers, removeReviewer, setShareFlags } from '../api.js'
 import { copyLink } from '../clipboard.js'
@@ -33,9 +31,43 @@ const reviewers = ref(null)
 const inviting = ref(false)
 const name = ref('')
 const email = ref('')
+/** A password or expiry being given to a link that has none yet */
+const settingPassword = ref(false)
+const settingExpiry = ref(false)
+const password = ref('')
 
 /**
- * @param {object} flags - the Deliver flags to change: review, canComment, allowOlder, watermark
+ * @param {boolean} on - the password switch
+ */
+function togglePassword(on) {
+	settingPassword.value = on
+	password.value = ''
+	if (!on && props.share.hasPassword) {
+		setFlags({ password: '' })
+	}
+}
+
+/** Nextcloud's password policy decides; its refusal shows below the link */
+async function savePassword() {
+	await setFlags({ password: password.value })
+	if (!error.value) {
+		password.value = ''
+		settingPassword.value = false
+	}
+}
+
+/**
+ * @param {boolean} on - the expiry switch
+ */
+function toggleExpiry(on) {
+	settingExpiry.value = on
+	if (!on && props.share.expireDate) {
+		setFlags({ expireDate: '' })
+	}
+}
+
+/**
+ * @param {object} flags - what to change: review, canComment, allowOlder, watermark; password and expireDate, empty to remove
  */
 function setFlags(flags) {
 	return run(async () => emit('update', await setShareFlags(props.share.id, flags)))
@@ -105,20 +137,17 @@ function invite() {
 					<NcIconSvgWrapper :svg="copyIcon" />
 				</template>
 			</NcButton>
-			<NcActions v-if="canWrite" :disabled="busy">
-				<NcActionButton v-if="share.review" closeAfterClick @click="setFlags({ review: false })">
-					<template #icon>
-						<NcIconSvgWrapper :svg="stopIcon" />
-					</template>
-					{{ t('deliver', 'Stop review, keep the link') }}
-				</NcActionButton>
-				<NcActionButton closeAfterClick @click="remove">
-					<template #icon>
-						<NcIconSvgWrapper :svg="deleteIcon" />
-					</template>
-					{{ t('deliver', 'Delete link') }}
-				</NcActionButton>
-			</NcActions>
+			<NcButton
+				v-if="canWrite"
+				variant="tertiary"
+				:disabled="busy"
+				:aria-label="t('deliver', 'Delete link')"
+				:title="t('deliver', 'Delete link')"
+				@click="remove">
+				<template #icon>
+					<NcIconSvgWrapper :svg="deleteIcon" />
+				</template>
+			</NcButton>
 		</div>
 		<NcButton
 			v-if="!share.review && canWrite"
@@ -127,6 +156,39 @@ function invite() {
 			@click="setFlags({ review: true })">
 			{{ t('deliver', 'Review on this link') }}
 		</NcButton>
+
+		<!-- Nextcloud's own link settings, so nobody has to go to Files for them -->
+		<div v-if="canWrite" class="deliver-link__flags">
+			<NcCheckboxRadioSwitch
+				:modelValue="share.hasPassword || settingPassword"
+				:disabled="busy"
+				@update:modelValue="togglePassword">
+				{{ t('deliver', 'Password') }}
+			</NcCheckboxRadioSwitch>
+			<form v-if="share.hasPassword || settingPassword" class="deliver-link__field" @submit.prevent="savePassword">
+				<NcPasswordField
+					v-model="password"
+					:label="share.hasPassword ? t('deliver', 'New password') : t('deliver', 'Password')"
+					autocomplete="new-password" />
+				<NcButton type="submit" :disabled="busy || !password">
+					{{ t('deliver', 'Save') }}
+				</NcButton>
+			</form>
+			<NcCheckboxRadioSwitch
+				:modelValue="Boolean(share.expireDate) || settingExpiry"
+				:disabled="busy"
+				@update:modelValue="toggleExpiry">
+				{{ t('deliver', 'Expiry date') }}
+			</NcCheckboxRadioSwitch>
+			<input
+				v-if="share.expireDate || settingExpiry"
+				class="deliver-link__date"
+				type="date"
+				:value="share.expireDate ?? ''"
+				:disabled="busy"
+				:aria-label="t('deliver', 'Expiry date')"
+				@change="$event.target.value && setFlags({ expireDate: $event.target.value })">
+		</div>
 
 		<template v-if="share.review">
 			<p v-if="!share.hasPassword" class="deliver-link__hint">
@@ -240,6 +302,27 @@ function invite() {
 .deliver-link__flags,
 .deliver-link__reviewers {
 	padding-inline-start: calc(var(--default-grid-baseline) * 4);
+}
+
+.deliver-link__field {
+	display: flex;
+	align-items: flex-end;
+	gap: var(--default-grid-baseline);
+	padding-inline-start: calc(var(--default-grid-baseline) * 8);
+}
+
+.deliver-link__field > :first-child {
+	flex: 1;
+	min-width: 0;
+}
+
+.deliver-link__field > :last-child {
+	flex: none;
+}
+
+.deliver-link__date {
+	min-width: 11em;
+	margin-inline-start: calc(var(--default-grid-baseline) * 8);
 }
 
 .deliver-link__reviewer {

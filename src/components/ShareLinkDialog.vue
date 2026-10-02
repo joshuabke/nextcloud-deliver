@@ -1,13 +1,12 @@
 <script setup>
 import { n, t } from '@nextcloud/l10n'
-import { generateUrl } from '@nextcloud/router'
 import { ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import ShareLinkItem from './ShareLinkItem.vue'
 
-const props = defineProps({
+defineProps({
 	/** A Share Link as the Project's navigation lists it */
 	share: { type: Object, required: true },
 	canWrite: { type: Boolean, default: false },
@@ -18,10 +17,6 @@ const props = defineProps({
 const emit = defineEmits(['update', 'person', 'close', 'autoIntake', 'deleted'])
 
 const item = ref(null)
-
-/** Password and expiry are Nextcloud's own share settings */
-const manageUrl = generateUrl('/apps/files/files/{fileId}', { fileId: props.share.fileId })
-	+ '?' + new URLSearchParams({ dir: props.share.dir, opendetails: 'true' })
 </script>
 
 <template>
@@ -54,9 +49,6 @@ const manageUrl = generateUrl('/apps/files/files/{fileId}', { fileId: props.shar
 				class="deliver-link-dialog__invite"
 				@click="item.startInvite()">
 				{{ t('deliver', 'Invite a Reviewer') }}
-			</NcButton>
-			<NcButton :href="manageUrl">
-				{{ t('deliver', 'Password and expiry in Files') }}
 			</NcButton>
 		</template>
 	</NcDialog>

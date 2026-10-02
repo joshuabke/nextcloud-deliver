@@ -29,17 +29,6 @@ export function uploadFolder(versions) {
 }
 
 /**
- * @param {string} davUrl - a file's WebDAV URL, /remote.php/dav/files/<user>/<path>
- * @return {string} the folder Files shows it in, such as /Showreel
- */
-export function filesDir(davUrl) {
-	const path = decodeURIComponent(new URL(davUrl, 'http://localhost').pathname)
-	const inHome = path.split('/remote.php/dav/files/')[1] ?? ''
-	const parts = inHome.split('/').slice(1, -1)
-	return '/' + parts.join('/')
-}
-
-/**
  * @param {string} path - a Project's path as the server has it, /<user>/files/<path>
  * @return {string} the folder as Files shows it, such as /Clients/Showreel
  */

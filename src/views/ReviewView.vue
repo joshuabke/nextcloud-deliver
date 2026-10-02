@@ -7,7 +7,6 @@ import compareIcon from '@mdi/svg/svg/compare.svg?raw'
 import shareIcon from '@mdi/svg/svg/share-variant-outline.svg?raw'
 import uploadIcon from '@mdi/svg/svg/tray-arrow-up.svg?raw'
 import { t } from '@nextcloud/l10n'
-import { generateUrl } from '@nextcloud/router'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -33,7 +32,7 @@ import { errorMessage, getVersion, giveWaveform, listMembers, updateAsset, uploa
 import { useLiveUpdates } from '../composables/live.js'
 import { usePanelOpen } from '../composables/panel.js'
 import { useReview } from '../composables/review.js'
-import { filesDir, groupByFolder, uploadFolder } from '../lib/folders.js'
+import { groupByFolder, uploadFolder } from '../lib/folders.js'
 import { fpsValue } from '../lib/timecode.js'
 import { decodeWaveform } from '../lib/waveform.js'
 import { useCommentsStore } from '../store/comments.js'
@@ -77,11 +76,6 @@ const compareWith = computed(() => {
 	return (stack[index + 1] ?? stack[0])?.id
 })
 const folderUrl = computed(() => uploadFolder(context.value?.versions ?? []))
-
-/** Password and expiry are Nextcloud's own share settings, on the file of this Version */
-const shareUrl = computed(() => version.value?.url
-	? generateUrl('/apps/files/files/{fileId}', { fileId: version.value.fileId }) + '?' + new URLSearchParams({ dir: filesDir(version.value.url), opendetails: 'true' })
-	: null)
 
 const { player, panel, mode, clock, anchor, pin, hold, release, jump, posted, drawing, draft, draw, range, markRange, clearRange } = useReview({
 	version,
@@ -255,7 +249,7 @@ async function upload(event) {
 					accept="video/*,audio/*"
 					hidden
 					@change="upload">
-				<NcButton v-if="shareUrl && !isMobile" @click="sharing = true">
+				<NcButton v-if="version?.url && !isMobile" @click="sharing = true">
 					<template #icon>
 						<NcIconSvgWrapper :svg="shareIcon" />
 					</template>
@@ -294,7 +288,7 @@ async function upload(event) {
 					</template>
 					{{ t('deliver', 'Set a Due Date') }}
 				</NcActionButton>
-				<NcActionButton v-if="shareUrl" closeAfterClick @click="sharing = true">
+				<NcActionButton v-if="version?.url" closeAfterClick @click="sharing = true">
 					<template #icon>
 						<NcIconSvgWrapper :svg="shareIcon" />
 					</template>
@@ -366,11 +360,6 @@ async function upload(event) {
 		size="normal"
 		@closing="sharing = false">
 		<ShareLinks :fileId="version.fileId" :canWrite="context.canWrite" />
-		<template #actions>
-			<NcButton :href="shareUrl">
-				{{ t('deliver', 'Password and expiry in Files') }}
-			</NcButton>
-		</template>
 	</NcDialog>
 </template>
 
