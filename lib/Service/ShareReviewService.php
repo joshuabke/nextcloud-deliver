@@ -106,9 +106,9 @@ class ShareReviewService {
 	}
 
 	/**
-	 * The user's Share Links that show something of a Project: its folder,
-	 * anything inside it, or a file or folder with one of its files (ADR
-	 * 0009); and the user's Reviewers who came by one of them, for the
+	 * The user's Share Links that belong to a Project: on its folder,
+	 * anything inside it, or one of its files (ADR 0009), never a folder
+	 * that merely holds one of its files; and the user's Reviewers who came by one of them, for the
 	 * Project's navigation (story 100). A link names its file or folder, the
 	 * folder Files shows it in, and the Reviewers who were invited through or
 	 * came in by it; a Reviewer carries their Personal Link through every
@@ -160,7 +160,7 @@ class ShareReviewService {
 	}
 
 	/**
-	 * Whether a shared node shows something of the Project
+	 * Whether a shared node belongs to the Project
 	 *
 	 * @param list<Node> $files
 	 */
@@ -168,8 +168,9 @@ class ShareReviewService {
 		if ($folder !== null && ($node->getId() === $folder->getId() || str_starts_with($node->getPath(), $folder->getPath() . '/'))) {
 			return true;
 		}
+		// A folder that merely holds one of the files belongs to whatever else it holds, not to this Project
 		foreach ($files as $file) {
-			if ($file->getId() === $node->getId() || ($node instanceof Folder && str_starts_with($file->getPath(), $node->getPath() . '/'))) {
+			if ($file->getId() === $node->getId()) {
 				return true;
 			}
 		}

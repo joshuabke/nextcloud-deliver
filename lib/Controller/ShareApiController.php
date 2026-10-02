@@ -75,7 +75,7 @@ class ShareApiController extends OCSController {
 		return $reviewer;
 	}
 
-	/** Every Share Link of mine that shows something of a Project, and my Reviewers who came by them, for its navigation (story 100) */
+	/** Every Share Link of mine on a Project's folder or files, and my Reviewers who came by them, for its navigation (story 100) */
 	#[NoAdminRequired]
 	public function inProject(int $id): Response {
 		return $this->guard(function () use ($id) {
