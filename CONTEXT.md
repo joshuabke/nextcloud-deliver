@@ -7,15 +7,23 @@ Video review inside Nextcloud: editors put cuts in Files, team members and exter
 ### Content
 
 **Project**:
-The folder in Nextcloud Files that holds a review workspace. It comes into being with the first Asset enabled inside it and carries the settings its Assets share. Files remains the source of truth for its contents.
-_Avoid_: Library, workspace, space
+A named collection of Assets in Deliver, carrying the settings they share. Its files can lie anywhere in Files and are never moved into it (ADR 0009).
+_Avoid_: Library, workspace, space, collection (in the UI)
+
+**Folder Project**:
+A Project bound to a folder, named after it, whose settings follow write access to that folder. Only a Folder Project has Auto Intake.
+_Avoid_: Project folder (for the Project itself)
+
+**No Project**:
+Where the Assets that belong to no Project wait, listed for the Member who enabled them.
+_Avoid_: Inbox, unsorted, loose files
 
 **Auto Intake**:
-A Project setting that makes every media file in the folder an Asset, including files that arrive later. Off by default: without it, a Member enables files one by one.
+A Folder Project setting that makes every media file in the folder an Asset, including files that arrive later, unless another Project already holds it. On when a folder becomes a Project.
 _Avoid_: Watch mode, auto scan, sync
 
 **Asset**:
-A video, audio or picture file inside a Project that has been enabled for review, by a Member or by Auto Intake. A single Asset may have several Versions. A Take is not an Asset.
+A video, audio or picture file that has been enabled for review, by a Member or by Auto Intake, in a Project or in No Project. A single Asset may have several Versions. A Take is not an Asset.
 _Avoid_: Video, clip, item, media
 
 **Still**:
@@ -61,7 +69,7 @@ Pen strokes, arrows and boxes on the Frame a Comment anchors to, in coordinates 
 _Avoid_: Annotation (in the UI), sketch, markup
 
 **Mention**:
-A Member named in a Comment with `@`, who is notified even from a muted Project. Reviewers can be read but not mentioned, as they have no account.
+A Member of the Version named in a Comment with `@`, who is notified even from a muted Project. Reviewers can be read but not mentioned, as they have no account.
 _Avoid_: Tag, ping
 
 **Watermark**:
@@ -69,11 +77,11 @@ The Reviewer's name and the date, repeated across the picture on a Share Link th
 _Avoid_: Stamp, overlay (alone)
 
 **Due Date**:
-The calendar day an Asset should be through by. Members are reminded the day before and on the day, unless its newest Version is approved with nobody asking for changes.
+The calendar day an Asset should be through by. The Members of its newest Version are reminded the day before and on the day, unless its newest Version is approved with nobody asking for changes.
 _Avoid_: Deadline
 
 **Attachment**:
-A file added to a Comment, up to five of 25 MB. It lives in the Project folder under `.deliver-attachments/<Comment id>/`, is never an Asset, and goes with its Comment.
+A file added to a Comment, up to five of 25 MB. It lives in Deliver's app data, not in Files, is never an Asset, and goes with its Comment.
 _Avoid_: Upload, file (alone)
 
 **Reaction**:
@@ -87,8 +95,8 @@ _Avoid_: Sign-off, status, vote
 ### People
 
 **Member**:
-A Nextcloud user who can reach the Project folder through Files permissions.
-_Avoid_: Owner (except for the folder's actual owner), collaborator, team
+A Nextcloud user who can open a Version's file through Files permissions; read access lets them comment, write access lets them manage. Never stored, always derived from Files (ADR 0009).
+_Avoid_: Owner (except for the file's actual owner), collaborator, team
 
 **Reviewer**:
 Anyone who reaches a Version through a Share Link instead of Files permissions, identified by a self-given name (prefilled from their account if they happen to be logged in). Reviewers only ever touch their own Comments.
@@ -135,7 +143,7 @@ Precomputed audio peaks of a Version, drawn under the timeline; the primary visu
 _Avoid_: Peaks, audio graph
 
 **Missing**:
-The state of a Version whose file has left the Project folder or gone to trash. Comments stay until the file is permanently deleted or a Member removes the Version.
+The state of a Version whose file has gone to trash. Comments stay until the file is permanently deleted or a Member removes the Version.
 _Avoid_: Orphaned, broken, deleted
 
 ### Delivery
@@ -158,7 +166,7 @@ The German translation (`l10n/de` with "du", `l10n/de_DE` with "Sie") uses these
 
 | Term | German |
 | --- | --- |
-| Project | Projekt |
+| Project, Folder Project, No Project | Projekt, Ordnerprojekt, Ohne Projekt |
 | Auto Intake | Automatische Aufnahme |
 | Asset | Asset |
 | Version, Version Number, Version Stack | Version, Versionsnummer, Versionsstapel |

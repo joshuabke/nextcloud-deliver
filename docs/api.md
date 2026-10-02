@@ -4,16 +4,18 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/projects` | Projects whose folder the user can reach |
-| POST | `/projects` `{folderId}` | Turn a folder into a Project |
-| GET | `/folders/{folderId}/project` | The Project of a folder, or 404 |
-| GET | `/projects/{id}` | Project with its Asset tree; rescans the folder |
-| PUT | `/projects/{id}` `{autoIntake, allowOlder, fpsNum, fpsDen, timecodeMode}` | Project settings, each field optional |
-| PUT | `/projects/{id}/mute` `{muted}` | Mute or unmute the Project's notifications for oneself |
-| DELETE | `/projects/{id}` | Remove the Project, files stay untouched |
-| GET | `/files/{fileId}/asset` | The Asset of a file, or 404 |
-| POST | `/assets` `{fileId}` | Enable one media file for review |
+| GET | `/projects` | The Projects the user sees: a Folder Project whose folder they reach, one they made, one with a file they can open; and No Project (`id` 0, `none`) while it holds something of theirs |
+| POST | `/projects` `{folderId, autoIntake}` or `{name}` | Turn a folder into a Folder Project, or make a Project by name |
+| GET | `/folders/{folderId}/project` | The Folder Project of a folder, or 404 |
+| GET | `/projects/{id}` | Project with the Assets the user can open; Auto Intake looks at the folder first. `/projects/0` is the user's No Project |
+| PUT | `/projects/{id}` `{autoIntake, allowOlder, fpsNum, fpsDen, timecodeMode, name}` | Project settings, each field optional; `autoIntake` only for a Folder Project, `name` only for any other |
+| PUT | `/projects/{id}/mute` `{muted}` | Mute or unmute the Project's notifications for oneself; 0 mutes No Project |
+| DELETE | `/projects/{id}` | Remove the Project; its Assets go to No Project, files stay untouched |
+| GET | `/files/{fileId}/asset` | The Asset of a file with its Project, or 404 |
+| POST | `/assets` `{fileId, projectId}` | Enable one media file for review: into the Project given, 0 for No Project, or without one the Folder Project above it, else No Project |
+| PUT | `/assets/{id}/project` `{projectId}` | Put an Asset into another Project, or 0 for No Project; no file moves |
 | DELETE | `/assets/{id}` | Take a file out of Deliver, the file stays |
+| GET | `/versions/{id}/members` | Who can be @mentioned on a Version: whoever can open its file |
 | GET | `/versions/{id}` | Project, Asset and Version Stack for the Review view |
 | PUT | `/versions/{id}` `{number, autoStacked}` | Set the Version Number, or take note of an automatic stack |
 | POST | `/versions/{id}/stack` `{assetId, number}` | Stack a Version onto another Asset |
@@ -34,10 +36,11 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | GET | `/files/{fileId}/shares` | The Share Links of a file or folder, with Deliver's flags |
 | POST | `/files/{fileId}/shares` | A Share Link with review already on |
 | PUT | `/shares/{shareId}` `{review, canComment, allowOlder}` | Switch review on a Share Link and set its flags |
-| GET | `/shares/{shareId}/reviewers` | The Project's Reviewers, each with a Personal Link through this share |
+| GET | `/projects/{id}/shares` | The user's Share Links that show something of the Project, and their Reviewers who came by them |
+| GET | `/shares/{shareId}/reviewers` | The Reviewers of the Member who made the link, each with a Personal Link through this share |
 | POST | `/shares/{shareId}/reviewers` `{name, email}` | Invite a Reviewer; the answer carries the Personal Link |
 
-Missing write access answers 403; a request that clashes with the current state (a nested Project, a taken Version Number, an older Version closed for Comments) answers 409.
+Rights follow each Version's file (ADR 0009): read access views and comments, write access manages. Missing write access answers 403; a request that clashes with the current state (a nested Folder Project, a taken Version Number, an older Version closed for Comments) answers 409.
 
 A Personal Link is the share URL plus the Reviewer's key, `/s/{token}?r={key}`. Opening it stores the key in a cookie for that share, so the browser keeps the identity.
 

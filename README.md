@@ -8,7 +8,7 @@ Deliver turns Nextcloud into a review tool for cuts, mixes and stills, in the sp
 
 ## What it does
 
-- **Review in place.** Enable a video, audio or image file from the Files sidebar, or let a whole folder take in everything new. The folder becomes a Project, every file an Asset.
+- **Review in place.** Enable a video, audio or image file from the Files sidebar, or let a whole folder take in everything new. Projects collect files from anywhere without moving them, and whoever can open a file in Files sees its review.
 - **Comments on the Frame.** Anchor a Comment to a Frame or a Range, draw on the picture with pen, arrow or box, reply, react, mention a colleague, attach a reference, and resolve it once it is done.
 - **Versions that stack.** A new cut named `…_v2` next to `…_v1` lands on top of it by itself. Compare two Versions side by side or under a wipe, playing in sync.
 - **Sign-off.** Approve a Version or request changes, set Due Dates with reminders, and see at a glance what is unseen, approved or due.
