@@ -8,7 +8,6 @@ use OCA\Deliver\Db\Attachment;
 use OCA\Deliver\Db\AttachmentMapper;
 use OCA\Deliver\Db\Comment;
 use OCA\Deliver\Db\CommentMapper;
-use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\Reaction;
 use OCA\Deliver\Db\ReactionMapper;
 use OCA\Deliver\Db\Seen;
@@ -16,6 +15,7 @@ use OCA\Deliver\Db\SeenMapper;
 use OCA\Deliver\Db\Version;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\DB\Exception as DbException;
+use OCP\Files\IMimeTypeDetector;
 use OCP\Files\NotFoundException;
 
 /**
@@ -45,7 +45,7 @@ class CommentService {
 		private ReactionMapper $reactions,
 		private AttachmentMapper $attachments,
 		private AttachmentStore $store,
-		private ProjectMapper $projects,
+		private IMimeTypeDetector $mimeTypes,
 		private LiveUpdates $live,
 		private CommentWindow $window,
 		private Members $members,
@@ -243,27 +243,32 @@ class CommentService {
 			throw new InvalidRequestException('A Comment carries at most ' . self::MAX_ATTACHMENTS . ' attachments');
 		}
 		$content = fopen($upload['tmp_name'], 'rb') ?: throw new InvalidRequestException('The upload could not be read');
-		// Nextcloud closes the stream once it has written it
-		$file = $this->store->store($this->projects->find($version->getProjectId()), $id, (string)($upload['name'] ?? ''), $content);
+		// Leading dots would hide the file; very long names break file systems
+		$name = mb_substr(trim(str_replace(['/', '\\', "\0"], '_', (string)($upload['name'] ?? '')), " \t\n\r."), -200) ?: 'attachment';
 		$attachment = new Attachment();
 		$attachment->setCommentId($id);
-		$attachment->setFileId($file->getId());
-		$attachment->setName($file->getName());
-		$attachment->setMimeType($file->getMimeType());
-		$attachment->setSize($file->getSize());
-		$this->attachments->insert($attachment);
+		$attachment->setName($name);
+		$attachment->setMimeType($this->mimeTypes->detectPath($name));
+		$attachment->setSize($size);
+		$attachment = $this->attachments->insert($attachment);
+		try {
+			// Nextcloud closes the stream once it has written it
+			$this->store->store($id, $attachment->getId(), $name, $content);
+		} catch (\Throwable $e) {
+			$this->attachments->delete($attachment);
+			throw $e;
+		}
 		return $this->changed($version, $comment);
 	}
 
 	/**
-	 * @return array{0: \OCP\Files\File, 1: Attachment} the file of an attachment on a Comment of this Version
+	 * @return array{0: \OCP\Files\SimpleFS\ISimpleFile, 1: Attachment} the file of an attachment on a Comment of this Version
 	 * @throws NotFoundException no such attachment here, or its file is gone
 	 */
 	public function attachment(Version $version, int $attachmentId): array {
 		$attachment = $this->attachments->find($attachmentId) ?? throw new NotFoundException('Attachment not found');
 		$this->reach($version, $attachment->getCommentId());
-		$file = $this->store->file($this->projects->find($version->getProjectId()), $attachment->getFileId());
-		return [$file ?? throw new NotFoundException('The attached file is gone'), $attachment];
+		return [$this->store->file($attachment->getCommentId(), $attachment->getId(), $attachment->getName()), $attachment];
 	}
 
 	/** @throws NotFoundException no such attachment */
@@ -274,12 +279,11 @@ class CommentService {
 
 	/** Deletes Comments' attachments, files and rows */
 	public function forgetAttachments(Version $version, array $commentIds): void {
-		$project = $this->projects->find($version->getProjectId());
 		foreach ($this->attachments->findByComments($commentIds) as $commentId => $attachments) {
 			foreach ($attachments as $attachment) {
 				$this->attachments->delete($attachment);
 			}
-			$this->store->forget($project, $commentId);
+			$this->store->forget($commentId);
 		}
 	}
 
@@ -287,7 +291,7 @@ class CommentService {
 	public function setResolved(Viewer $viewer, Version $version, int $id, bool $resolved): array {
 		$comment = $this->reach($version, $id);
 		if (!$viewer->canWrite) {
-			throw new AccessDeniedException('Write permission on the folder is required to resolve a Comment');
+			throw new AccessDeniedException('Write permission on the file is required to resolve a Comment');
 		}
 		if ($comment->getParentId() !== null) {
 			throw new InvalidRequestException('Replies are not resolved on their own');
@@ -387,8 +391,7 @@ class CommentService {
 	 * @return list<string>
 	 */
 	private function membersOf(Version $version): array {
-		return $this->membersByVersion[$version->getId()]
-			??= $this->members->of($this->projects->find($version->getProjectId())->getFolderId());
+		return $this->membersByVersion[$version->getId()] ??= $this->members->of($version->getFileId());
 	}
 
 	/**

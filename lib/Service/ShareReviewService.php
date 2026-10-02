@@ -6,8 +6,6 @@ namespace OCA\Deliver\Service;
 
 use OCA\Deliver\Db\Asset;
 use OCA\Deliver\Db\AssetMapper;
-use OCA\Deliver\Db\Project;
-use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\Reviewer;
 use OCA\Deliver\Db\ReviewerMapper;
 use OCA\Deliver\Db\Version;
@@ -39,7 +37,6 @@ class ShareReviewService {
 	public function __construct(
 		private IShareManager $shares,
 		private IRootFolder $root,
-		private ProjectMapper $projects,
 		private AssetMapper $assets,
 		private VersionMapper $versions,
 		private ReviewerService $reviewers,
@@ -108,26 +105,29 @@ class ShareReviewService {
 	}
 
 	/**
-	 * The user's Share Links on a Project folder and on anything inside it,
-	 * and the Project's Reviewers, for the Project's navigation (story 100).
-	 * A link names its file or folder, the folder Files shows it in, and the
-	 * Reviewers who were invited through it or came in by it; a Reviewer
-	 * carries their Personal Link through every link with review on.
+	 * The user's Share Links that show something of a Project: its folder,
+	 * anything inside it, or a file or folder with one of its files (ADR
+	 * 0009); and the user's Reviewers who came by one of them, for the
+	 * Project's navigation (story 100). A link names its file or folder, the
+	 * folder Files shows it in, and the Reviewers who were invited through or
+	 * came in by it; a Reviewer carries their Personal Link through every
+	 * link with review on.
 	 *
+	 * @param ?Folder $folder a Folder Project's folder, as the user reaches it
+	 * @param list<int> $fileIds the Project's files the user can open
 	 * @return array{links: list<array<string, mixed>>, reviewers: list<array<string, mixed>>}
 	 */
-	public function linksUnder(string $uid, Project $project, Folder $folder): array {
-		// Nextcloud no longer looks into subfolders for us: take all of the user's links, keep those inside
-		// ponytail: one node lookup per link of the user; filter by path in SQL if people keep thousands
+	public function linksUnder(string $uid, ?Folder $folder, array $fileIds): array {
+		// Nextcloud no longer looks into subfolders for us: take all of the user's links, keep those that show the Project
+		// ponytail: one node lookup per link and file of the user; filter by path in SQL if people keep thousands
 		$shares = $this->shares->getSharesBy($uid, IShare::TYPE_LINK, null, true, -1);
 		$home = $this->root->getUserFolder($uid);
-		$reviewers = $this->reviewerMapper->findByProject($project->getId());
-		$cameBy = $this->reviewerMapper->reviewersByLink(array_map(static fn (Reviewer $reviewer) => $reviewer->getId(), $reviewers));
+		$files = array_filter(array_map(static fn (int $id) => $home->getFirstNodeById($id), $fileIds));
 		$links = [];
 		$review = [];
 		foreach ($shares as $share) {
-			$node = $share->getNodeId() === $folder->getId() ? $folder : $folder->getFirstNodeById($share->getNodeId());
-			if ($node === null) {
+			$node = $home->getFirstNodeById($share->getNodeId());
+			if ($node === null || !$this->shows($node, $folder, $files)) {
 				continue;
 			}
 			if ($this->isReview($share)) {
@@ -136,18 +136,43 @@ class ShareReviewService {
 			$links[] = $this->serialize($share) + [
 				'fileId' => $node->getId(),
 				'name' => $node->getName(),
-				'isProject' => $node->getId() === $folder->getId(),
+				'isProject' => $folder !== null && $node->getId() === $folder->getId(),
 				'mimeType' => $node->getMimetype(),
 				'dir' => $home->getRelativePath($node->getParent()->getPath()) ?? '/',
-				'reviewerIds' => $cameBy[(int)$share->getId()] ?? [],
 			];
 		}
+		$reviewers = $this->reviewerMapper->findByOwners([$uid]);
+		$cameBy = $this->reviewerMapper->reviewersByLink(array_map(static fn (Reviewer $reviewer) => $reviewer->getId(), $reviewers));
+		$shown = [];
+		foreach ($links as &$link) {
+			$link['reviewerIds'] = $cameBy[$link['id']] ?? [];
+			array_push($shown, ...$link['reviewerIds']);
+		}
+		unset($link);
+		$reviewers = array_values(array_filter($reviewers, static fn (Reviewer $reviewer) => in_array($reviewer->getId(), $shown, true)));
 		return [
 			'links' => $links,
 			'reviewers' => array_map(fn (Reviewer $reviewer) => $this->reviewers->serialize($reviewer) + [
 				'links' => array_map(fn (IShare $share) => ['shareId' => (int)$share->getId(), 'url' => $this->personalLink($share, $reviewer)], $review),
 			], $reviewers),
 		];
+	}
+
+	/**
+	 * Whether a shared node shows something of the Project
+	 *
+	 * @param list<Node> $files
+	 */
+	private function shows(Node $node, ?Folder $folder, array $files): bool {
+		if ($folder !== null && ($node->getId() === $folder->getId() || str_starts_with($node->getPath(), $folder->getPath() . '/'))) {
+			return true;
+		}
+		foreach ($files as $file) {
+			if ($file->getId() === $node->getId() || ($node instanceof Folder && str_starts_with($file->getPath(), $node->getPath() . '/'))) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -170,8 +195,8 @@ class ShareReviewService {
 	}
 
 	/**
-	 * The Reviewers of the share's Project, each with a Personal Link through
-	 * this share, so a replaced link can be handed out again (story 55).
+	 * The Reviewers of the Member who made the link, each with a Personal Link
+	 * through this share, so a replaced link can be handed out again (story 55).
 	 *
 	 * @return list<array<string, mixed>>
 	 */
@@ -179,7 +204,7 @@ class ShareReviewService {
 		$share = $this->ownShare($uid, $shareId);
 		return array_map(
 			fn (Reviewer $reviewer) => $this->reviewerWithLink($share, $reviewer),
-			$this->reviewerMapper->findByProject($this->project($share)->getId()),
+			$this->reviewerMapper->findByOwners([$share->getSharedBy()]),
 		);
 	}
 
@@ -190,7 +215,7 @@ class ShareReviewService {
 	 */
 	public function invite(string $uid, int $shareId, string $name, ?string $email): array {
 		$share = $this->ownShare($uid, $shareId);
-		$reviewer = $this->reviewers->claim($this->project($share), $name, $email);
+		$reviewer = $this->reviewers->claim($share->getSharedBy(), $name, $email);
 		$this->reviewers->cameBy($reviewer, $shareId);
 		return $this->reviewerWithLink($share, $reviewer);
 	}
@@ -201,21 +226,16 @@ class ShareReviewService {
 	}
 
 	/**
-	 * The Review view of the Version through some review Share Link that shows
-	 * it, with the Reviewer's key, for mails; null when none does any more.
-	 * It opens the player straight away rather than the shared file list.
+	 * The Review view of the Version through a review Share Link of the
+	 * Reviewer's Member that shows it, with the Reviewer's key, for mails;
+	 * null when none does any more. It opens the player straight away rather
+	 * than the shared file list.
 	 */
 	public function reviewLinkFor(Version $version, Reviewer $reviewer): ?string {
-		try {
-			$project = $this->projects->find($version->getProjectId());
-		} catch (\OCP\AppFramework\Db\DoesNotExistException) {
-			return null;
-		}
-		$folder = $this->root->getFirstNodeById($project->getFolderId());
-		$node = $folder instanceof Folder ? $folder->getFirstNodeById($version->getFileId()) : null;
-		$owner = $folder?->getOwner()?->getUID();
-		// From the file up to the Project folder, the nearest review link wins
-		for (; $node !== null && $owner !== null; $node = $node->getId() === $folder->getId() ? null : $node->getParent()) {
+		$owner = $reviewer->getOwnerUid();
+		$home = $this->root->getUserFolder($owner);
+		// From the file up to the Member's home, the nearest review link wins
+		for ($node = $home->getFirstNodeById($version->getFileId()); $node !== null; $node = $node->getPath() === $home->getPath() ? null : $node->getParent()) {
 			foreach ($this->shares->getSharesBy($owner, IShare::TYPE_LINK, $node, true, -1) as $share) {
 				if ($this->isReview($share)) {
 					return $this->instanceUrl($this->urls->linkToRoute('deliver.Public.showVersion', ['token' => $share->getToken(), 'versionId' => $version->getId()]))
@@ -287,47 +307,47 @@ class ShareReviewService {
 	}
 
 	/**
-	 * The Project the shared node lies in, looked up in the owner's tree, so
-	 * it does not matter who opened the link.
-	 *
-	 * @throws NotFoundException the shared node is not in a Project
-	 */
-	public function project(IShare $share): Project {
-		return $this->projects->findAbove($this->node($share)) ?? throw new NotFoundException('This link does not reach into a Project');
-	}
-
-	/**
-	 * The Assets this Share Link shows, each with the Versions inside the
-	 * shared node, highest Version Number first.
+	 * The Assets this Share Link shows, whatever their Project (ADR 0009),
+	 * each with its Versions inside the shared node, highest Version Number
+	 * first.
+	 * ponytail: walks the shared folder on every call; keep a file index if shares get big
 	 *
 	 * @return array<int, array{asset: Asset, versions: Version[]}>
 	 */
 	public function assets(IShare $share): array {
-		$project = $this->project($share);
 		$node = $this->node($share);
+		$fileIds = $node instanceof Folder ? $this->fileIdsUnder($node) : [$node->getId()];
 		$byAsset = [];
-		foreach ($this->versions->findByProject($project->getId()) as $version) {
-			if ($this->contains($node, $version->getFileId())) {
-				$byAsset[$version->getAssetId()][] = $version;
-			}
+		foreach ($this->versions->findByFiles($fileIds) as $version) {
+			$byAsset[$version->getAssetId()][] = $version;
 		}
 		$result = [];
-		foreach ($this->assets->findByProject($project->getId()) as $asset) {
-			if (isset($byAsset[$asset->getId()])) {
-				$result[$asset->getId()] = ['asset' => $asset, 'versions' => $byAsset[$asset->getId()]];
-			}
+		foreach ($this->assets->findByIds(array_keys($byAsset)) as $asset) {
+			$result[$asset->getId()] = ['asset' => $asset, 'versions' => $byAsset[$asset->getId()]];
 		}
 		return $result;
+	}
+
+	/** @return list<int> the media files under a folder, at any depth */
+	private function fileIdsUnder(Folder $folder): array {
+		$ids = [];
+		foreach ($folder->getDirectoryListing() as $node) {
+			if ($node instanceof Folder) {
+				array_push($ids, ...$this->fileIdsUnder($node));
+			} elseif ($node instanceof File && Reviewable::file($node)) {
+				$ids[] = $node->getId();
+			}
+		}
+		return $ids;
 	}
 
 	/**
 	 * The Version of a file inside the share, for the Review button in the shared file list.
 	 *
-	 * @throws NotFoundException the file is not an Asset of this Share Link
+	 * @throws NotFoundException the file is not enabled for review here
 	 */
 	public function versionForFile(IShare $share, int $fileId): Version {
-		$project = $this->project($share);
-		$version = $this->versions->findByProjectAndFile($project->getId(), $fileId);
+		$version = $this->versions->findByFile($fileId);
 		if ($version === null || !$this->contains($this->node($share), $fileId)) {
 			throw new NotFoundException('This file is not enabled for review');
 		}
@@ -337,9 +357,7 @@ class ShareReviewService {
 	/** @throws NotFoundException the Version is outside what this link shows */
 	public function version(IShare $share, int $versionId): Version {
 		$version = $this->versions->find($versionId);
-		if ($version === null
-			|| $version->getProjectId() !== $this->project($share)->getId()
-			|| !$this->contains($this->node($share), $version->getFileId())) {
+		if ($version === null || !$this->contains($this->node($share), $version->getFileId())) {
 			throw new NotFoundException('Version not found');
 		}
 		return $version;

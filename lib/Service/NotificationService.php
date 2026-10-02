@@ -8,18 +8,16 @@ use OCA\Deliver\AppInfo\Application;
 use OCA\Deliver\Db\AssetMapper;
 use OCA\Deliver\Db\Comment;
 use OCA\Deliver\Db\MuteMapper;
-use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\Version;
-use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IUserSession;
 use OCP\Notification\IManager as INotificationManager;
 
 /**
  * Nextcloud notifications for Members (spec: Notifications): new Comments
- * and Replies, new Versions, automatic stacks, Missing files, approvals. Members are
- * whoever can reach the Project folder, minus the person who caused the
- * event and anyone who muted the Project.
+ * and Replies, new Versions, automatic stacks, Missing files, approvals.
+ * Members are whoever can open the Version's file (ADR 0009), minus the
+ * person who caused the event and anyone who muted its Project, or No Project.
  */
 class NotificationService {
 	public const COMMENT = 'comment';
@@ -36,7 +34,6 @@ class NotificationService {
 	public function __construct(
 		private INotificationManager $notifications,
 		private Members $members,
-		private ProjectMapper $projects,
 		private AssetMapper $assets,
 		private MuteMapper $mutes,
 		private IUserSession $userSession,
@@ -57,13 +54,8 @@ class NotificationService {
 
 	/** @return list<string> the Members a Comment mentions, not its author */
 	private function mentioned(Comment $comment, Version $version): array {
-		try {
-			$project = $this->projects->find($version->getProjectId());
-		} catch (DoesNotExistException) {
-			return [];
-		}
 		return array_values(array_diff(
-			array_intersect(Mentions::parse($comment->getBody()), $this->members->of($project->getFolderId())),
+			array_intersect(Mentions::parse($comment->getBody()), $this->members->of($version->getFileId())),
 			[$comment->getUserId()],
 		));
 	}
@@ -98,7 +90,7 @@ class NotificationService {
 		$this->notify($version, $subject, 'approval', $version->getId() . ':' . $author, ['author' => $author], $actor);
 	}
 
-	/** The file of a Version left the Project folder or went to the trash (stories 18 and 63) */
+	/** The file of a Version went to the trash (stories 18 and 63) */
 	public function versionMissing(Version $version): void {
 		$this->notify($version, self::MISSING, 'version', (string)$version->getId(), ['file' => $version->getName()], $this->userSession->getUser()?->getUID());
 	}
@@ -110,12 +102,8 @@ class NotificationService {
 	 * @param list<string> $exclude who hears of it otherwise
 	 */
 	private function notify(Version $version, string $subject, string $objectType, string $objectId, array $parameters, ?string $actor, array $exclude = []): void {
-		try {
-			$project = $this->projects->find($version->getProjectId());
-		} catch (DoesNotExistException) {
-			return;
-		}
-		$recipients = array_diff($this->members->of($project->getFolderId()), $this->mutes->mutedBy($project->getId()), [$actor], $exclude);
+		// Whoever can open the file hears, unless they muted its Project or No Project (ADR 0009)
+		$recipients = array_diff($this->members->of($version->getFileId()), $this->mutes->mutedBy($version->getProjectId() ?? 0), [$actor], $exclude);
 		$this->send($version, $subject, $objectType, $objectId, $parameters, array_values($recipients));
 	}
 
@@ -134,7 +122,7 @@ class NotificationService {
 			->setObject($objectType, $objectId)
 			->setSubject($subject, $parameters + [
 				'versionId' => (string)$version->getId(),
-				'projectId' => (string)$version->getProjectId(),
+				'projectId' => (string)($version->getProjectId() ?? 0),
 				'number' => (string)$version->getNumber(),
 				'asset' => $asset === null ? $version->getName() : ($asset->getNameOverride() ?? VersionNaming::assetName($version->getName())),
 			]);

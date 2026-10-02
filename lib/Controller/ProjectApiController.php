@@ -45,14 +45,24 @@ class ProjectApiController extends OCSController {
 		return $this->guard(fn () => $this->service->setDueDate((string)$this->userId, $id, $dueDate));
 	}
 
+	/** Puts the Asset into a Project, or into No Project for 0 (ADR 0009) */
+	#[NoAdminRequired]
+	public function assignAsset(int $id, int $projectId): Response {
+		return $this->guard(fn () => $this->service->assign((string)$this->userId, $id, $projectId));
+	}
+
+	/** Who can be @mentioned on a Version: whoever can open its file */
 	#[NoAdminRequired]
 	public function members(int $id): Response {
 		return $this->guard(fn () => $this->service->members((string)$this->userId, $id));
 	}
 
+	/** A Folder Project from a folder, or a Project by name */
 	#[NoAdminRequired]
-	public function create(int $folderId, bool $autoIntake = true): Response {
-		return $this->guard(fn () => $this->service->create((string)$this->userId, $folderId, $autoIntake), Http::STATUS_CREATED);
+	public function create(?int $folderId = null, ?string $name = null, bool $autoIntake = true): Response {
+		return $this->guard(fn () => $folderId === null
+			? $this->service->createNamed((string)$this->userId, (string)$name)
+			: $this->service->create((string)$this->userId, $folderId, $autoIntake), Http::STATUS_CREATED);
 	}
 
 	#[NoAdminRequired]
@@ -63,9 +73,10 @@ class ProjectApiController extends OCSController {
 		?int $fpsNum = null,
 		?int $fpsDen = null,
 		?string $timecodeMode = null,
+		?string $name = null,
 	): Response {
 		return $this->guard(fn () => $this->service->updateSettings(
-			(string)$this->userId, $id, $autoIntake, $allowOlder, $fpsNum, $fpsDen, $timecodeMode,
+			(string)$this->userId, $id, $autoIntake, $allowOlder, $fpsNum, $fpsDen, $timecodeMode, $name,
 		));
 	}
 
@@ -110,8 +121,8 @@ class ProjectApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
-	public function enableFile(int $fileId): Response {
-		return $this->guard(fn () => $this->service->enableFile((string)$this->userId, $fileId), Http::STATUS_CREATED);
+	public function enableFile(int $fileId, ?int $projectId = null): Response {
+		return $this->guard(fn () => $this->service->enableFile((string)$this->userId, $fileId, $projectId), Http::STATUS_CREATED);
 	}
 
 	#[NoAdminRequired]

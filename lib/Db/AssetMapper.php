@@ -32,6 +32,47 @@ class AssetMapper extends Mapper {
 	}
 
 	/**
+	 * @param list<int> $ids
+	 * @return Asset[]
+	 */
+	public function findByIds(array $ids): array {
+		if ($ids === []) {
+			return [];
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->in('id', $qb->createNamedParameter($ids, IQueryBuilder::PARAM_INT_ARRAY)));
+		return $this->findEntities($qb);
+	}
+
+	/** @return Asset[] the Assets of No Project a Member enabled (ADR 0009) */
+	public function findUnassigned(string $uid): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->isNull('project_id'))
+			->andWhere($qb->expr()->eq('enabled_by', $qb->createNamedParameter($uid)));
+		return $this->findEntities($qb);
+	}
+
+	/**
+	 * Puts every Asset of a Project into No Project, for whoever enabled it,
+	 * or else the given Member.
+	 */
+	public function release(int $projectId, string $uid): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('enabled_by', $qb->createNamedParameter($uid))
+			->where($qb->expr()->eq('project_id', $qb->createNamedParameter($projectId)))
+			->andWhere($qb->expr()->isNull('enabled_by'))
+			->executeStatement();
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('project_id', $qb->createNamedParameter(null))
+			->where($qb->expr()->eq('project_id', $qb->createNamedParameter($projectId)))
+			->executeStatement();
+	}
+
+	/**
 	 * @param list<string> $days YYYY-MM-DD
 	 * @return list<Asset> the Assets due on one of the days
 	 */

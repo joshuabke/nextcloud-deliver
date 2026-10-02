@@ -7,8 +7,10 @@ namespace OCA\Deliver\Db;
 use OCP\AppFramework\Db\Entity;
 
 /**
- * @method int getFolderId()
- * @method void setFolderId(int $folderId)
+ * @method ?int getFolderId()
+ * @method void setFolderId(?int $folderId)
+ * @method ?string getName()
+ * @method void setName(?string $name)
  * @method string getOwnerUid()
  * @method void setOwnerUid(string $ownerUid)
  * @method ?bool getAutoIntake()
@@ -25,7 +27,9 @@ use OCP\AppFramework\Db\Entity;
  * @method void setCreatedAt(int $createdAt)
  */
 class Project extends Entity {
-	protected int $folderId = 0;
+	/** Set for a Folder Project only (ADR 0009) */
+	protected ?int $folderId = null;
+	protected ?string $name = null;
 	protected string $ownerUid = '';
 	/** Null and false mean the same thing; Entity setters skip values equal to the default */
 	protected ?bool $autoIntake = null;

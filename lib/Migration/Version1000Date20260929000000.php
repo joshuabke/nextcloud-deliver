@@ -13,7 +13,8 @@ use OCP\Migration\SimpleMigrationStep;
 /**
  * The whole schema. Review state only (ADR 0002): Files stays the source of
  * truth, every file reference is a Nextcloud file id, every anchor is a Frame
- * count. Timestamps are unix seconds.
+ * count. Timestamps are unix seconds. A Project is a collection, its folder
+ * optional, and no table stores who may see what (ADR 0009).
  *
  * Until the first release this is the only migration and changes in place;
  * there is no installation to carry forward.
@@ -25,7 +26,10 @@ class Version1000Date20260929000000 extends SimpleMigrationStep {
 
 		$t = $schema->createTable('deliver_projects');
 		$t->addColumn('id', Types::BIGINT, ['autoincrement' => true, 'notnull' => true]);
-		$t->addColumn('folder_id', Types::BIGINT, ['notnull' => true]);
+		// A Folder Project's folder; null for a Project that only collects
+		$t->addColumn('folder_id', Types::BIGINT, ['notnull' => false]);
+		// Shown while there is no folder to take the name from
+		$t->addColumn('name', Types::STRING, ['notnull' => false, 'length' => 255]);
 		$t->addColumn('owner_uid', Types::STRING, ['notnull' => true, 'length' => 64]);
 		$t->addColumn('auto_intake', Types::BOOLEAN, ['notnull' => false, 'default' => false]);
 		$t->addColumn('allow_older', Types::BOOLEAN, ['notnull' => false, 'default' => false]);
@@ -38,7 +42,9 @@ class Version1000Date20260929000000 extends SimpleMigrationStep {
 
 		$t = $schema->createTable('deliver_assets');
 		$t->addColumn('id', Types::BIGINT, ['autoincrement' => true, 'notnull' => true]);
-		$t->addColumn('project_id', Types::BIGINT, ['notnull' => true]);
+		// Null: No Project, listed for whoever enabled it
+		$t->addColumn('project_id', Types::BIGINT, ['notnull' => false]);
+		$t->addColumn('enabled_by', Types::STRING, ['notnull' => false, 'length' => 64]);
 		$t->addColumn('parent_id', Types::BIGINT, ['notnull' => true]);
 		$t->addColumn('name_override', Types::STRING, ['notnull' => false, 'length' => 255]);
 		// A calendar day, YYYY-MM-DD, as the person picked it, and which reminder went out for it (story 93)
@@ -46,11 +52,13 @@ class Version1000Date20260929000000 extends SimpleMigrationStep {
 		$t->addColumn('due_reminded', Types::STRING, ['notnull' => false, 'length' => 20]);
 		$t->setPrimaryKey(['id']);
 		$t->addIndex(['project_id'], 'deliver_asset_project_idx');
+		$t->addIndex(['enabled_by'], 'deliver_asset_enabled_idx');
 		$t->addIndex(['due_date'], 'deliver_asset_due_idx');
 
 		$t = $schema->createTable('deliver_versions');
 		$t->addColumn('id', Types::BIGINT, ['autoincrement' => true, 'notnull' => true]);
-		$t->addColumn('project_id', Types::BIGINT, ['notnull' => true]);
+		// The Asset's Project, copied for the queries by Project; null with the Asset's
+		$t->addColumn('project_id', Types::BIGINT, ['notnull' => false]);
 		$t->addColumn('asset_id', Types::BIGINT, ['notnull' => true]);
 		$t->addColumn('file_id', Types::BIGINT, ['notnull' => true]);
 		$t->addColumn('number', Types::INTEGER, ['notnull' => true]);
@@ -73,7 +81,9 @@ class Version1000Date20260929000000 extends SimpleMigrationStep {
 		$t->addColumn('derived_error', Types::TEXT, ['notnull' => false]);
 		$t->addColumn('created_at', Types::BIGINT, ['notnull' => true]);
 		$t->setPrimaryKey(['id']);
-		$t->addUniqueIndex(['project_id', 'file_id'], 'deliver_ver_file_uniq');
+		// A file is one Version at most, wherever it lies
+		$t->addUniqueIndex(['file_id'], 'deliver_ver_file_uniq');
+		$t->addIndex(['project_id'], 'deliver_ver_project_idx');
 		$t->addUniqueIndex(['asset_id', 'number'], 'deliver_ver_asset_num_uniq');
 
 		$t = $schema->createTable('deliver_comments');
@@ -99,7 +109,8 @@ class Version1000Date20260929000000 extends SimpleMigrationStep {
 
 		$t = $schema->createTable('deliver_reviewers');
 		$t->addColumn('id', Types::BIGINT, ['autoincrement' => true, 'notnull' => true]);
-		$t->addColumn('project_id', Types::BIGINT, ['notnull' => true]);
+		// The Member who invited them, or whose Share Link they named themselves on
+		$t->addColumn('owner_uid', Types::STRING, ['notnull' => true, 'length' => 64]);
 		$t->addColumn('name', Types::STRING, ['notnull' => true, 'length' => 255]);
 		$t->addColumn('email', Types::STRING, ['notnull' => false, 'length' => 255]);
 		$t->addColumn('secret_key', Types::STRING, ['notnull' => true, 'length' => 64]);
@@ -114,7 +125,7 @@ class Version1000Date20260929000000 extends SimpleMigrationStep {
 		$t->addColumn('watermark', Types::BOOLEAN, ['notnull' => false]);
 		$t->setPrimaryKey(['id']);
 		$t->addUniqueIndex(['secret_key'], 'deliver_reviewer_key_uniq');
-		$t->addIndex(['project_id'], 'deliver_reviewer_project_idx');
+		$t->addIndex(['owner_uid'], 'deliver_reviewer_owner_idx');
 
 		$t = $schema->createTable('deliver_seen');
 		$t->addColumn('id', Types::BIGINT, ['autoincrement' => true, 'notnull' => true]);
@@ -127,6 +138,7 @@ class Version1000Date20260929000000 extends SimpleMigrationStep {
 		$t->addUniqueIndex(['version_id', 'user_id'], 'deliver_seen_user_uniq');
 		$t->addUniqueIndex(['version_id', 'reviewer_id'], 'deliver_seen_reviewer_uniq');
 
+		// Project 0 is No Project
 		$t = $schema->createTable('deliver_mutes');
 		$t->addColumn('id', Types::BIGINT, ['autoincrement' => true, 'notnull' => true]);
 		$t->addColumn('project_id', Types::BIGINT, ['notnull' => true]);
@@ -182,11 +194,10 @@ class Version1000Date20260929000000 extends SimpleMigrationStep {
 		$t->addUniqueIndex(['comment_id', 'user_id', 'emoji'], 'deliver_react_user_uniq');
 		$t->addUniqueIndex(['comment_id', 'reviewer_id', 'emoji'], 'deliver_react_reviewer_uniq');
 
-		// Attachments: files attached to Comments, living in the Project folder (story 92)
+		// Attachments: files attached to Comments, kept in app data under the Comment (story 92)
 		$t = $schema->createTable('deliver_attachments');
 		$t->addColumn('id', Types::BIGINT, ['autoincrement' => true, 'notnull' => true]);
 		$t->addColumn('comment_id', Types::BIGINT, ['notnull' => true]);
-		$t->addColumn('file_id', Types::BIGINT, ['notnull' => true]);
 		$t->addColumn('name', Types::STRING, ['notnull' => true, 'length' => 255]);
 		$t->addColumn('mime_type', Types::STRING, ['notnull' => true, 'length' => 255]);
 		$t->addColumn('size', Types::BIGINT, ['notnull' => true]);

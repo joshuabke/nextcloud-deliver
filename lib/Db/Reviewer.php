@@ -11,8 +11,8 @@ use OCP\AppFramework\Db\Entity;
  * permissions. The secret key is their identity: a Personal Link carries it,
  * so the same person is the same author on any device, forever.
  *
- * @method int getProjectId()
- * @method void setProjectId(int $projectId)
+ * @method string getOwnerUid()
+ * @method void setOwnerUid(string $ownerUid)
  * @method string getName()
  * @method void setName(string $name)
  * @method ?string getEmail()
@@ -35,7 +35,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setCreatedAt(int $createdAt)
  */
 class Reviewer extends Entity {
-	protected int $projectId = 0;
+	/** The Member they belong to: who invited them, or whose Share Link they named themselves on */
+	protected string $ownerUid = '';
 	protected ?string $name = null;
 	protected ?string $email = null;
 	protected ?string $secretKey = null;
@@ -50,7 +51,6 @@ class Reviewer extends Entity {
 	protected ?bool $watermark = null;
 
 	public function __construct() {
-		$this->addType('projectId', 'integer');
 		$this->addType('createdAt', 'integer');
 		$this->addType('mailReplies', 'boolean');
 		$this->addType('mailComments', 'boolean');

@@ -64,7 +64,7 @@ class PublicApiController extends PublicShareController {
 		return $this->guard(function () use ($versionId) {
 			$share = $this->share();
 			$version = $this->sharing->version($share, $versionId);
-			$project = $this->sharing->project($share);
+			$project = $this->projects->settingsOf($version);
 			$stack = $this->sharing->assets($share)[$version->getAssetId()] ?? null;
 			$reviewer = $this->reviewer();
 			if ($reviewer !== null) {
@@ -145,7 +145,7 @@ class PublicApiController extends PublicShareController {
 		return $this->guard(function () use ($name, $email, $mailReplies, $mailComments, $mailVersions) {
 			$share = $this->share();
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
-			$reviewer = $this->reviewers->claim($this->sharing->project($share), $name, $email, $wishes);
+			$reviewer = $this->reviewers->claim($share->getSharedBy(), $name, $email, $wishes);
 			$this->reviewers->cameBy($reviewer, (int)$share->getId());
 			// A JSONResponse, because a DataResponse loses its cookies on the way out
 			$response = new JSONResponse(
@@ -255,7 +255,7 @@ class PublicApiController extends PublicShareController {
 			$this->mayPlayOriginal($version, false) => str_replace('__kind__', 'original', $media),
 			default => null,
 		};
-		return $this->projects->describeVersion($version, $this->sharing->project($share), $url, $media);
+		return $this->projects->describeVersion($version, $this->projects->settingsOf($version), $url, $media);
 	}
 
 	/** Without downloads, the original plays only while no Proxy is made for it */
@@ -280,7 +280,7 @@ class PublicApiController extends PublicShareController {
 
 	private function reviewer(): ?Reviewer {
 		$key = $this->request->getCookie(self::cookieName($this->getToken())) ?? $this->request->getParam('r');
-		return $this->reviewers->byKey(is_string($key) ? $key : null, $this->sharing->project($this->share()));
+		return $this->reviewers->byKey(is_string($key) ? $key : null, $this->share());
 	}
 
 	/**

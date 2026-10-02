@@ -6,7 +6,6 @@ namespace OCA\Deliver\Controller;
 
 use OCA\Deliver\AppInfo\Application;
 use OCA\Deliver\Db\Version;
-use OCA\Deliver\Service\ProjectService;
 use OCA\Deliver\Service\ShareReviewService;
 use OCP\AppFramework\AuthPublicShareController;
 use OCP\AppFramework\Http;
@@ -14,6 +13,7 @@ use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Services\IInitialState;
+use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
 use OCP\IRequest;
 use OCP\ISession;
@@ -33,7 +33,7 @@ class PublicController extends AuthPublicShareController {
 		ISession $session,
 		private IURLGenerator $urls,
 		private ShareReviewService $sharing,
-		private ProjectService $projects,
+		private IRootFolder $root,
 		private IUserSession $userSession,
 		private IInitialState $initialState,
 		private IShareManager $shares,
@@ -85,15 +85,13 @@ class PublicController extends AuthPublicShareController {
 		return $response;
 	}
 
-	/** A Member works in the app, never with a Reviewer's reduced rights (story 59) */
+	/**
+	 * A Member works in the app, never with a Reviewer's reduced rights (story
+	 * 59). Whoever can open the file through Files is one (ADR 0009).
+	 */
 	private function memberUrl(IShare $share, ?Version $version): ?string {
 		$user = $this->userSession->getUser();
-		if ($user === null) {
-			return null;
-		}
-		try {
-			$this->projects->resolve($user->getUID(), $this->sharing->project($share)->getId());
-		} catch (NotFoundException) {
+		if ($user === null || $this->root->getUserFolder($user->getUID())->getFirstNodeById($version?->getFileId() ?? $share->getNodeId()) === null) {
 			return null;
 		}
 		$app = $this->urls->linkToRoute('deliver.page.index');

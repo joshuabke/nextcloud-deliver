@@ -4,80 +4,55 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Service;
 
-use OCA\Deliver\Db\Project;
-use OCP\Files\File;
-use OCP\Files\Folder;
-use OCP\Files\InvalidPathException;
-use OCP\Files\IRootFolder;
+use OCA\Deliver\AppInfo\Application;
+use OCP\Files\AppData\IAppDataFactory;
 use OCP\Files\NotFoundException;
-use OCP\Files\NotPermittedException;
+use OCP\Files\SimpleFS\ISimpleFile;
+use OCP\Files\SimpleFS\ISimpleFolder;
 
 /**
- * The files of Comment attachments (story 92). They live in the Project
- * folder, in a hidden folder per Comment, and are written as the Project's
- * owner, so a Reviewer on a read-only link can attach too.
+ * The files of Comment attachments (story 92). They live in Deliver's app
+ * data, a folder per Comment beside the derived media, so they need no
+ * Project folder and nobody's quota (ADR 0009).
  */
 class AttachmentStore {
 	public function __construct(
-		private IRootFolder $root,
+		private IAppDataFactory $appDataFactory,
 	) {
 	}
 
-	/**
-	 * @param resource $content
-	 * @throws NotFoundException the Project folder is gone
-	 */
-	public function store(Project $project, int $commentId, string $name, $content): File {
-		$folder = $this->commentFolder($project, $commentId, true)
-			?? throw new InvalidRequestException('Something named ' . Reviewable::ATTACHMENTS . ' in the Project folder is in the way');
-		try {
-			return $folder->newFile($this->freeName($folder, $name), $content);
-		} catch (InvalidPathException|NotPermittedException $e) {
-			throw new InvalidRequestException('This file name cannot be stored: ' . $e->getMessage());
-		}
+	/** @param resource|string $content */
+	public function store(int $commentId, int $attachmentId, string $name, $content): ISimpleFile {
+		return $this->folder($commentId, true)->newFile(self::fileName($attachmentId, $name), $content);
 	}
 
-	public function file(Project $project, int $fileId): ?File {
-		$file = $this->projectFolder($project)?->getFirstNodeById($fileId);
-		return $file instanceof File ? $file : null;
+	/** @throws NotFoundException the file is gone */
+	public function file(int $commentId, int $attachmentId, string $name): ISimpleFile {
+		return $this->folder($commentId, false)->getFile(self::fileName($attachmentId, $name));
 	}
 
 	/** Deletes the attachments of a Comment, folder and all */
-	public function forget(Project $project, int $commentId): void {
+	public function forget(int $commentId): void {
 		try {
-			$this->commentFolder($project, $commentId, false)?->delete();
+			$this->folder($commentId, false)->delete();
 		} catch (NotFoundException) {
 		}
 	}
 
-	private function projectFolder(Project $project): ?Folder {
-		$folder = $this->root->getUserFolder($project->getOwnerUid())->getFirstNodeById($project->getFolderId());
-		return $folder instanceof Folder ? $folder : null;
-	}
-
-	/** @throws NotFoundException the Project folder is gone */
-	private function commentFolder(Project $project, int $commentId, bool $create): ?Folder {
-		$folder = $this->projectFolder($project) ?? throw new NotFoundException('Project folder not found');
-		foreach ([Reviewable::ATTACHMENTS, (string)$commentId] as $name) {
-			if ($folder->nodeExists($name)) {
-				$next = $folder->get($name);
-				if (!$next instanceof Folder) {
-					return null;
-				}
-				$folder = $next;
-			} elseif ($create) {
-				$folder = $folder->newFolder($name);
-			} else {
-				return null;
-			}
+	/** @throws NotFoundException no folder, and none wanted */
+	private function folder(int $commentId, bool $create): ISimpleFolder {
+		$appData = $this->appDataFactory->get(Application::APP_ID);
+		$name = 'attachments-' . $commentId;
+		try {
+			return $appData->getFolder($name);
+		} catch (NotFoundException $e) {
+			return $create ? $appData->newFolder($name) : throw $e;
 		}
-		return $folder;
 	}
 
-	/** "shot.png", then "shot (2).png" if that is taken */
-	private function freeName(Folder $folder, string $name): string {
-		$name = trim(str_replace(['/', '\\', "\0"], '_', $name), " \t\n\r.");
-		// Leading dots would hide the file; very long names break file systems
-		return $folder->getNonExistingName(mb_substr($name, -200) ?: 'attachment');
+	/** The id keeps names apart, the extension gives the file its type */
+	private static function fileName(int $attachmentId, string $name): string {
+		$extension = strtolower((string)pathinfo($name, PATHINFO_EXTENSION));
+		return $attachmentId . (preg_match('/^[a-z0-9]{1,10}$/', $extension) === 1 ? '.' . $extension : '');
 	}
 }

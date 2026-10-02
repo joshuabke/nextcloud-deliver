@@ -7,13 +7,11 @@ namespace OCA\Deliver\Db;
 use OCP\AppFramework\Db\Entity;
 
 /**
- * A file attached to a Comment. The file sits in the Project folder; this
- * row only points at it.
+ * A file attached to a Comment. The file sits in app data under the
+ * Comment (AttachmentStore); this row names it.
  *
  * @method int getCommentId()
  * @method void setCommentId(int $commentId)
- * @method int getFileId()
- * @method void setFileId(int $fileId)
  * @method string getName()
  * @method void setName(string $name)
  * @method string getMimeType()
@@ -23,14 +21,12 @@ use OCP\AppFramework\Db\Entity;
  */
 class Attachment extends Entity {
 	protected int $commentId = 0;
-	protected int $fileId = 0;
 	protected ?string $name = null;
 	protected ?string $mimeType = null;
 	protected ?int $size = null;
 
 	public function __construct() {
 		$this->addType('commentId', 'integer');
-		$this->addType('fileId', 'integer');
 		$this->addType('size', 'integer');
 	}
 }

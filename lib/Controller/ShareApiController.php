@@ -59,24 +59,23 @@ class ShareApiController extends OCSController {
 	}
 
 	/**
-	 * @throws AccessDeniedException the user may not write to the Reviewer's Project folder
+	 * @throws AccessDeniedException the Reviewer is another Member's (ADR 0009)
 	 */
 	private function writableReviewer(int $id): \OCA\Deliver\Db\Reviewer {
 		$reviewer = $this->reviewers->find($id);
-		[, $folder] = $this->projects->resolve((string)$this->userId, $reviewer->getProjectId());
-		if (!$this->projects->canWrite($folder)) {
-			throw new AccessDeniedException('Write permission on the Project folder is required');
+		if ($reviewer->getOwnerUid() !== (string)$this->userId) {
+			throw new AccessDeniedException('Only the Member a Reviewer belongs to changes them');
 		}
 		return $reviewer;
 	}
 
-	/** Every Share Link of mine in a Project, and the Project's Reviewers, for its navigation (story 100) */
+	/** Every Share Link of mine that shows something of a Project, and my Reviewers who came by them, for its navigation (story 100) */
 	#[NoAdminRequired]
 	public function inProject(int $id): Response {
 		return $this->guard(function () use ($id) {
-			[$project, $folder] = $this->projects->resolve((string)$this->userId, $id);
-			$listed = $this->sharing->linksUnder((string)$this->userId, $project, $folder);
-			$notEnabled = $this->projects->notEnabled($project, $folder, array_column($listed['links'], 'fileId'));
+			[$project, $folder, $fileIds] = $this->projects->filesOf((string)$this->userId, $id);
+			$listed = $this->sharing->linksUnder((string)$this->userId, $folder, $fileIds);
+			$notEnabled = $project === null ? [] : $this->projects->notEnabled((string)$this->userId, $project, array_column($listed['links'], 'fileId'));
 			$listed['links'] = array_map(static fn (array $link) => $link + ['notEnabled' => $notEnabled[$link['fileId']] ?? 0], $listed['links']);
 			return $listed;
 		});

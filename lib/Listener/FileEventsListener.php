@@ -21,10 +21,11 @@ use OCP\Files\Folder;
 use OCP\Files\Node;
 
 /**
- * Keeps Deliver in step with Files (ADR 0002): a new media file in a Project
- * with Auto Intake becomes an Asset, a file in the trash is Missing, a file
- * deleted for good takes its review data along, and a rename or a move inside
- * the Project changes only the name.
+ * Keeps Deliver in step with Files (ADR 0002): a new media file in a Folder
+ * Project with Auto Intake becomes an Asset, a file in the trash is Missing,
+ * a file deleted for good takes its review data along, and a rename or a move
+ * changes only the name: the Version keeps its Project wherever its file goes
+ * (ADR 0009).
  *
  * @template-implements IEventListener<Event>
  */
@@ -55,26 +56,22 @@ class FileEventsListener implements IEventListener {
 		};
 	}
 
-	/** With Auto Intake a new media file becomes an Asset; without it a Member enables files one by one */
+	/** With Auto Intake a new media file no Project holds becomes an Asset; without it a Member enables files one by one */
 	private function arrived(Node $node): void {
+		if (!$node instanceof File || !Reviewable::file($node) || $this->versionOf($node) !== null) {
+			return;
+		}
 		$project = $this->projects->findAbove($node);
-		if ($node instanceof File && $project?->getAutoIntake() === true && Reviewable::file($node)) {
+		if ($project?->getAutoIntake() === true) {
 			$this->stacks->intake($project, $node);
 		}
 	}
 
-	/** A rename or a move keeps the file id, so the Version stays the same (story 20) */
+	/** A rename or a move keeps the file id, so the Version stays the same, in the same Project (story 20) */
 	private function renamed(Node $source, Node $target): void {
 		$version = $this->versionOf($target);
 		if ($version === null) {
-			// Moved in from outside a Project, where Auto Intake may take it
-			$this->arrived($target);
-			return;
-		}
-		$project = $this->projects->findAbove($target);
-		if ($project === null || $project->getId() !== $version->getProjectId()) {
-			// Moved out of its Project: Missing there, and perhaps an Asset of another
-			$this->stacks->markMissing($version);
+			// A file no Project holds, moved where Auto Intake may take it
 			$this->arrived($target);
 			return;
 		}
@@ -101,9 +98,9 @@ class FileEventsListener implements IEventListener {
 	}
 
 	/**
-	 * Deleted for good: the Version goes with its review data (story 19), a
-	 * Project folder takes the whole Project (story 11). Versions inside a
-	 * deleted subfolder are purged by the next scan.
+	 * Deleted for good: the Version goes with its review data (story 19); a
+	 * Folder Project keeps its Assets without its folder (story 11). Versions
+	 * inside a deleted folder are purged by the next periodic check.
 	 */
 	private function deleted(Node $node): void {
 		if (isset(self::$goingToTrash[$node->getId()])) {
@@ -112,7 +109,10 @@ class FileEventsListener implements IEventListener {
 		}
 		$project = $node instanceof Folder ? $this->projects->findByFolderId($node->getId()) : null;
 		if ($project !== null) {
-			$this->stacks->purgeProject($project);
+			$project->setName($node->getName());
+			$project->setFolderId(null);
+			$project->setAutoIntake(false);
+			$this->projects->update($project);
 			return;
 		}
 		$version = $this->versionOf($node);
@@ -121,8 +121,8 @@ class FileEventsListener implements IEventListener {
 		}
 	}
 
-	/** A file is one Version at most, since Projects never nest */
+	/** A file is one Version at most (ADR 0009) */
 	private function versionOf(Node $node): ?Version {
-		return $this->versions->findByFile($node->getId())[0] ?? null;
+		return $this->versions->findByFile($node->getId());
 	}
 }

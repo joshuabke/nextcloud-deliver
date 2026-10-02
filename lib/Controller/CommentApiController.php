@@ -14,7 +14,7 @@ use OCP\AppFramework\Http\Response;
 use OCP\AppFramework\OCSController;
 use OCP\IRequest;
 
-/** Comments for Members; the permissions on the Project folder decide what is allowed */
+/** Comments for Members; the permissions on the Version's file decide what is allowed (ADR 0009) */
 class CommentApiController extends OCSController {
 	use GuardsErrors;
 

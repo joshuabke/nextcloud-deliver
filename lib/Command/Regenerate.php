@@ -43,10 +43,8 @@ class Regenerate extends Command {
 				$versions = [];
 			}
 		} else {
-			$versions = array_merge(...array_values(array_map(
-				fn ($project) => $this->versions->findByProject($project->getId()),
-				$this->projects->findAll(),
-			)));
+			// Every Version, No Project's too
+			$versions = $this->versions->findAll();
 		}
 		if ($versions === [] && ($versionId !== null || $projectId !== null)) {
 			$output->writeln('<error>No such Version or Project</error>');

@@ -45,7 +45,7 @@ class ExportController extends Controller {
 	private function respond(int $id, string $format, bool $unresolvedOnly, bool $zeroBased, ?string $liveSet): Response {
 		return $this->guard(function () use ($id, $format, $unresolvedOnly, $zeroBased, $liveSet) {
 			[$viewer, $version] = $this->projects->viewerForVersion((string)$this->userId, $id);
-			[$project] = $this->projects->resolve((string)$this->userId, $version->getProjectId());
+			$project = $this->projects->settingsOf($version);
 			$file = $this->exports->export($viewer, $version, $project, $format, $unresolvedOnly, $zeroBased, $liveSet);
 			if (!isset($file['path'])) {
 				return new DataDownloadResponse($file['body'], $file['name'], $file['mime']);
