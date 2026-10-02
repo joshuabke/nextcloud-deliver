@@ -220,6 +220,11 @@ class ShareReviewService {
 		return $this->reviewerWithLink($share, $reviewer);
 	}
 
+	/** Deletes the Share Link from Nextcloud: it stops working for everyone, Personal Links through it too */
+	public function deleteLink(string $uid, int $shareId): void {
+		$this->shares->deleteShare($this->ownShare($uid, $shareId));
+	}
+
 	/** The share URL plus the Reviewer's key: whoever opens it is that Reviewer */
 	public function personalLink(IShare $share, Reviewer $reviewer): string {
 		return $this->shareUrl($share) . '?r=' . rawurlencode($reviewer->getSecretKey());

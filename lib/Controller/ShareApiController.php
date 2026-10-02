@@ -58,6 +58,12 @@ class ShareApiController extends OCSController {
 		return $this->guard(fn () => $this->reviewers->serialize($this->reviewers->renewKey($this->writableReviewer($id))));
 	}
 
+	/** The Reviewer's Personal Links stop working and they leave the lists; their Comments stay */
+	#[NoAdminRequired]
+	public function removeReviewer(int $id): Response {
+		return $this->guard(fn () => $this->reviewers->remove($this->writableReviewer($id)));
+	}
+
 	/**
 	 * @throws AccessDeniedException the Reviewer is another Member's (ADR 0009)
 	 */
@@ -91,6 +97,11 @@ class ShareApiController extends OCSController {
 		return $this->guard(fn () => $this->sharing->serialize(
 			$this->sharing->setFlags((string)$this->userId, $shareId, $review, $canComment, $allowOlder, $watermark),
 		));
+	}
+
+	#[NoAdminRequired]
+	public function destroy(int $shareId): Response {
+		return $this->guard(fn () => $this->sharing->deleteLink((string)$this->userId, $shareId));
 	}
 
 	#[NoAdminRequired]

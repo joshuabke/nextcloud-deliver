@@ -24,7 +24,7 @@ class ReviewerMapper extends Mapper {
 
 	/**
 	 * @param list<string> $uids
-	 * @return Reviewer[] the Reviewers of these Members, oldest first
+	 * @return Reviewer[] the Reviewers of these Members, oldest first; removed ones left out
 	 */
 	public function findByOwners(array $uids): array {
 		if ($uids === []) {
@@ -33,6 +33,7 @@ class ReviewerMapper extends Mapper {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')->from($this->getTableName())
 			->where($qb->expr()->in('owner_uid', $qb->createNamedParameter($uids, IQueryBuilder::PARAM_STR_ARRAY)))
+			->andWhere($qb->expr()->isNotNull('secret_key'))
 			->orderBy('created_at');
 		return $this->findEntities($qb);
 	}

@@ -85,6 +85,13 @@ class ReviewerService {
 		return $this->reviewers->update($reviewer);
 	}
 
+	/** No Personal Link names them any more and they leave every list; their Comments keep their name */
+	public function remove(Reviewer $reviewer): void {
+		$reviewer->setSecretKey(null);
+		$this->reviewers->update($reviewer);
+		$this->reviewers->deleteLinks([$reviewer->getId()]);
+	}
+
 	/** Remembers the Share Link the Reviewer was invited through or came in by */
 	public function cameBy(Reviewer $reviewer, int $shareId): void {
 		$this->reviewers->recordLink($reviewer->getId(), $shareId, $this->time->getTime());
