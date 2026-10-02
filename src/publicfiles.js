@@ -2,7 +2,7 @@ import { registerFileAction } from '@nextcloud/files'
 import { loadState } from '@nextcloud/initial-state'
 import { t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
-import icon from '../img/app.svg?raw'
+import icon from './icon.svg?raw'
 import { reviewable } from './lib/media.js'
 
 /**
