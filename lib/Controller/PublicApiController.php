@@ -24,6 +24,7 @@ use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\FileDisplayResponse;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\Response;
+use OCP\AppFramework\Http\ZipResponse;
 use OCP\AppFramework\PublicShareController;
 use OCP\Files\NotFoundException;
 use OCP\IPreview;
@@ -103,25 +104,65 @@ class PublicApiController extends PublicShareController {
 	public function assets(): Response {
 		return $this->guard(function () {
 			$link = $this->link();
+			$canDownload = $this->flags($link, $this->reviewer())['canDownload'];
 			$result = [];
 			foreach ($link->assets() as ['asset' => $asset, 'versions' => $versions]) {
+				$newest = $versions[0];
+				$original = $this->mediaUrl($newest, 'original');
+				$each = [
+					'newestId' => $newest->getId(),
+					'assetId' => $asset->getId(),
+					'name' => $this->stacks->nameOf($asset),
+					'number' => $newest->getNumber(),
+					'count' => count($versions),
+					'mimeType' => $link->originalFile($newest)?->getMimetype(),
+					'dueDate' => $asset->getDueDate(),
+					// A frame of the video stands in where Nextcloud renders no still (no ffmpeg)
+					'playUrl' => $this->mayPlayOriginal($newest, $canDownload) ? $original : $this->mediaUrl($newest, 'proxy'),
+					'downloadUrl' => $canDownload ? $original . '?download=1' : null,
+				];
 				foreach ($versions as $version) {
 					// The Review button opens the file's own Version; stepping through Assets lands on the newest
-					$result[] = [
-						'fileId' => $version->getFileId(),
-						'versionId' => $version->getId(),
-						'newestId' => $versions[0]->getId(),
-						'assetId' => $asset->getId(),
-						'name' => $this->stacks->nameOf($asset),
-						'number' => $versions[0]->getNumber(),
-						'count' => count($versions),
-						'mimeType' => $link->originalFile($versions[0])?->getMimetype(),
-						'dueDate' => $asset->getDueDate(),
-					];
+					$result[] = ['fileId' => $version->getFileId(), 'versionId' => $version->getId()] + $each;
 				}
 			}
 			return $result;
 		});
+	}
+
+	/**
+	 * The newest Version of every Asset the link shows as one ZIP, where the
+	 * link lets the Reviewer download (story 124); each counts as a download.
+	 */
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function download(): Response {
+		try {
+			$link = $this->link();
+			$reviewer = $this->reviewer();
+			if (!$this->flags($link, $reviewer)['canDownload']) {
+				return new Response(Http::STATUS_NOT_FOUND);
+			}
+			$zip = new ZipResponse($this->request, $link->title() !== '' ? $link->title() : 'download');
+			$names = [];
+			foreach ($link->assets() as ['versions' => [$newest]]) {
+				$file = $link->originalFile($newest);
+				if ($file === null) {
+					continue;
+				}
+				// Two Assets in different folders can carry the same file name
+				$name = $file->getName();
+				for ($n = 2; isset($names[$name]); $n++) {
+					$name = pathinfo($file->getName(), PATHINFO_FILENAME) . " ($n)." . $file->getExtension();
+				}
+				$names[$name] = true;
+				$zip->addResource($file->fopen('rb'), $name, $file->getSize(), $file->getMTime());
+				$this->links->record($link, LinkActivityMapper::DOWNLOADED, $reviewer, $newest);
+			}
+			return $zip;
+		} catch (NotFoundException) {
+			return new Response(Http::STATUS_NOT_FOUND);
+		}
 	}
 
 	/**
@@ -282,12 +323,8 @@ class PublicApiController extends PublicShareController {
 
 	/** A Version as the Review view shows it, with the original only where the link allows */
 	private function describe(ReviewLink $link, Version $version, bool $canDownload): array {
-		$media = $this->urls->linkToRoute('deliver.PublicApi.media', [
-			'token' => $this->getToken(),
-			'versionId' => $version->getId(),
-			'kind' => '__kind__',
-		]);
-		$original = str_replace('__kind__', 'original', $media);
+		$media = $this->mediaUrl($version, '__kind__');
+		$original = $this->mediaUrl($version, 'original');
 		$url = match (true) {
 			$canDownload => $link->directUrl($version) ?? $original,
 			$this->mayPlayOriginal($version, false) => $original,
@@ -296,6 +333,10 @@ class PublicApiController extends PublicShareController {
 		return $this->projects->describeVersion($version, $this->projects->settingsOf($version), $url, $media)
 			// Always through Deliver, never a share's WebDAV URL, so the link's activity notes it (story 124)
 			+ ['downloadUrl' => $canDownload ? $original . '?download=1' : null];
+	}
+
+	private function mediaUrl(Version $version, string $kind): string {
+		return $this->urls->linkToRoute('deliver.PublicApi.media', ['token' => $this->getToken(), 'versionId' => $version->getId(), 'kind' => $kind]);
 	}
 
 	/** Without downloads, the original plays only while no Proxy is made for it */

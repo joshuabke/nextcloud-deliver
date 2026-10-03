@@ -1,4 +1,5 @@
 <script setup>
+import accountIcon from '@mdi/svg/svg/account-circle-outline.svg?raw'
 import backIcon from '@mdi/svg/svg/arrow-left.svg?raw'
 import previousIcon from '@mdi/svg/svg/chevron-left.svg?raw'
 import nextIcon from '@mdi/svg/svg/chevron-right.svg?raw'
@@ -31,8 +32,8 @@ import { useCommentsStore } from '../store/comments.js'
 const props = defineProps({
 	/** The Version the link opened on; none opens the grid of its Assets */
 	versionId: { type: Number, default: null },
-	/** The link's title and description, for that grid */
-	link: { type: Object, default: () => ({ title: '', description: null }) },
+	/** The link's title and description for that grid, with the Reviewer's name and the ZIP of all, if any */
+	link: { type: Object, default: () => ({ title: '', description: null, reviewer: null, downloadAll: null }) },
 })
 
 const store = useCommentsStore()
@@ -138,6 +139,7 @@ async function claim({ name, email, mail }) {
 			v-else-if="current === null && newest"
 			:link="link"
 			:assets="newest"
+			:me="reviewerName || link.reviewer || ''"
 			@open="current = $event" />
 		<NcEmptyContent v-else-if="!context" :name="t('deliver', 'Loading…')">
 			<template #icon>
@@ -168,6 +170,13 @@ async function claim({ name, email, mail }) {
 				<AssetStepper :index="assetIndex" :count="assetCount" @step="step" />
 			</template>
 			<template #end>
+				<span
+					v-if="reviewerName && !isMobile"
+					class="deliver-public__me"
+					:title="t('deliver', 'Reviewing as {name}', { name: reviewerName })">
+					<NcIconSvgWrapper :svg="accountIcon" :size="20" />
+					{{ reviewerName }}
+				</span>
 				<ApprovalControl />
 				<VersionPicker :versions="context.versions" :current="current" @select="current = $event" />
 				<NcButton
@@ -272,6 +281,18 @@ async function claim({ name, email, mail }) {
 	align-items: flex-start;
 	min-width: 0;
 	padding-inline-start: var(--default-grid-baseline);
+}
+
+.deliver-public__me {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	max-width: 200px;
+	padding-inline: 8px;
+	overflow: hidden;
+	color: var(--color-text-maxcontrast);
+	white-space: nowrap;
+	text-overflow: ellipsis;
 }
 
 .deliver-layout__notice code {

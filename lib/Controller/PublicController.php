@@ -76,11 +76,6 @@ class PublicController extends AuthPublicShareController {
 			return $response;
 		}
 
-		$this->initialState->provideInitialState('token', $this->getToken());
-		$this->initialState->provideInitialState('versionId', $version?->getId());
-		// For the landing page of a link with several Assets (stories 123, 125)
-		$this->initialState->provideInitialState('link', ['title' => $link->title(), 'description' => $link->description()]);
-		Util::addScript(Application::APP_ID, 'deliver-public');
 		$key = $this->request->getParam('r');
 		if (is_string($key) && $key !== '') {
 			$this->rememberReviewer($response, $key);
@@ -88,6 +83,18 @@ class PublicController extends AuthPublicShareController {
 		$cookie = $this->request->getCookie(self::cookieName($this->getToken()));
 		$reviewer = $this->reviewers->byKey(is_string($key) && $key !== '' ? $key : (is_string($cookie) ? $cookie : null), $link);
 		$this->links->record($link, LinkActivityMapper::OPENED, $reviewer);
+
+		$this->initialState->provideInitialState('token', $this->getToken());
+		$this->initialState->provideInitialState('versionId', $version?->getId());
+		// For the landing page of a link with several Assets (stories 123, 125)
+		$flags = $reviewer === null ? $link->flags() : $reviewer->over($link->flags());
+		$this->initialState->provideInitialState('link', [
+			'title' => $link->title(),
+			'description' => $link->description(),
+			'reviewer' => $reviewer?->getName(),
+			'downloadAll' => $flags['canDownload'] ? $this->urls->linkToRoute('deliver.PublicApi.download', ['token' => $this->getToken()]) : null,
+		]);
+		Util::addScript(Application::APP_ID, 'deliver-public');
 		return $response;
 	}
 

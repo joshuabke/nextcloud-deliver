@@ -21,6 +21,7 @@ return [
 		['name' => 'PublicApi#context', 'url' => '/s/{token}/api/context', 'verb' => 'GET'],
 		['name' => 'PublicApi#assets', 'url' => '/s/{token}/api/assets', 'verb' => 'GET'],
 		['name' => 'PublicApi#media', 'url' => '/s/{token}/media/{versionId}/{kind}', 'verb' => 'GET'],
+		['name' => 'PublicApi#download', 'url' => '/s/{token}/download', 'verb' => 'GET'],
 		['name' => 'PublicApi#preview', 'url' => '/s/{token}/preview', 'verb' => 'GET'],
 		['name' => 'PublicApi#settings', 'url' => '/s/{token}/api/reviewer', 'verb' => 'PUT'],
 		['name' => 'PublicApi#claim', 'url' => '/s/{token}/api/reviewer', 'verb' => 'POST'],

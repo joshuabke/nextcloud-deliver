@@ -163,6 +163,26 @@ class ProjectLinkTest extends TestCase {
 		self::assertSame([], $paused['reviewers'][0]['links'], 'but no Personal Link goes through a paused one');
 	}
 
+	public function testDownloadAllZipsTheNewestOfEveryAsset(): void {
+		$link = $this->link();
+		$visitor = $this->visitor($link);
+		$listed = $visitor->call('GET', '/api/assets')['data'];
+		self::assertCount(2, array_filter(array_column($listed, 'downloadUrl')), 'every Asset downloads on its own');
+		self::assertStringContainsString('/media/', $listed[0]['playUrl'], 'a frame of the video stands in for a missing still');
+
+		$zip = $visitor->raw('/download');
+		self::assertSame(200, $zip['status']);
+		self::assertStringStartsWith('PK', $zip['body']);
+		self::assertStringContainsString('cut.mp4', $zip['body']);
+		self::assertStringContainsString('teaser.mp4', $zip['body']);
+		$kinds = array_count_values(array_column($this->nc->ocs('GET', "/links/{$link['id']}/activity")['data'], 'kind'));
+		self::assertSame(2, $kinds['downloaded'] ?? 0, 'each file in it counts as a download');
+
+		$this->change($link['id'], ['canDownload' => false]);
+		self::assertSame([null, null], array_column($visitor->call('GET', '/api/assets')['data'], 'downloadUrl'));
+		self::assertSame(404, $visitor->raw('/download')['status']);
+	}
+
 	public function testALinkShowsOnlyWhatItsMemberMayShare(): void {
 		$uid = 'deliver-guest-' . bin2hex(random_bytes(4));
 		$password = 'Deliver-' . bin2hex(random_bytes(8));

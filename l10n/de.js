@@ -400,7 +400,10 @@ OC.L10N.register(
 		"{index} of {count}": "{index} von {count}",
 		"{name}, Version {number}": "{name}, Version {number}",
 		"{queued} waiting, {running} running, {failed} failed": "{queued} wartend, {running} laufend, {failed} fehlgeschlagen",
-		"−{seconds} s": "−{seconds} s"
+		"−{seconds} s": "−{seconds} s",
+		"Reviewing as {name}": "Du prüfst als {name}",
+		"Download all": "Alle herunterladen",
+		"Download {name}": "{name} herunterladen"
 	},
 	"nplurals=2; plural=(n != 1);"
 );
