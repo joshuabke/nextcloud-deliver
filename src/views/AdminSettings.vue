@@ -177,6 +177,8 @@ function save() {
 }
 
 .deliver-admin__status dt {
+	/* Nextcloud gives every dt a fixed width, too narrow for longer labels */
+	width: auto;
 	font-weight: bold;
 	text-align: start;
 }
