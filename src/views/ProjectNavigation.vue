@@ -7,7 +7,10 @@ import videoLinkIcon from '@mdi/svg/svg/file-video-outline.svg?raw'
 import projectLinkIcon from '@mdi/svg/svg/folder-account-outline.svg?raw'
 import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
 import allIcon from '@mdi/svg/svg/folder-play-outline.svg?raw'
+import projectWideIcon from '@mdi/svg/svg/link-box-variant-outline.svg?raw'
+import pausedIcon from '@mdi/svg/svg/link-variant-off.svg?raw'
 import linkIcon from '@mdi/svg/svg/link-variant.svg?raw'
+import pickedIcon from '@mdi/svg/svg/playlist-check.svg?raw'
 import addIcon from '@mdi/svg/svg/plus.svg?raw'
 import { showError } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
@@ -20,7 +23,7 @@ import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import ReviewerDialog from '../components/ReviewerDialog.vue'
 import ShareLinkDialog from '../components/ShareLinkDialog.vue'
-import { createShareLink, errorMessage, listProjectShares, removeReviewer } from '../api.js'
+import { createProjectLink, errorMessage, listProjectShares, removeReviewer } from '../api.js'
 import { copyLink } from '../clipboard.js'
 import { confirmReviewerRemoval } from '../confirm.js'
 import { folderTree } from '../lib/folders.js'
@@ -51,23 +54,29 @@ const byId = computed(() => new Map(reviewers.value.map((reviewer) => [reviewer.
  * @param {number} id - the Project
  */
 async function load(id = props.id) {
-	const found = await listProjectShares(id).catch(() => ({ links: [], reviewers: [] }))
+	const found = await listProjectShares(id).catch(() => ({ projectLinks: [], links: [], reviewers: [] }))
 	if (props.id === id) {
-		// The Project folder's link first: it is the one a Reviewer usually gets
-		links.value = found.links
-			.filter((share) => share.review)
-			.map((share) => ({ ...share, title: share.isProject ? t('deliver', 'Project folder') : (share.label || share.name) }))
-			.sort((a, b) => b.isProject - a.isProject || a.title.localeCompare(b.title))
+		// Project Links first, paused ones too (ADR 0010); then Share Links from Files, the Project folder's first
+		links.value = [
+			...found.projectLinks.map((link, index) => ({ ...link, title: link.label || (index === 0 ? t('deliver', 'Project Link') : t('deliver', 'Project Link {number}', { number: index + 1 })) })),
+			...found.links
+				.filter((share) => share.review)
+				.map((share) => ({ ...share, title: share.isProject ? t('deliver', 'Project folder') : (share.label || share.name) }))
+				.sort((a, b) => b.isProject - a.isProject || a.title.localeCompare(b.title)),
+		]
 		reviewers.value = found.reviewers
 		person.value = person.value && (byId.value.get(person.value.id) ?? null)
 	}
 }
 
 /**
- * @param {object} share - a Share Link
- * @return {string} a folder with a person for the Project folder, else what kind of file it shows
+ * @param {object} share - a Share Link or Project Link
+ * @return {string} for a Project Link whether it is paused or shows all or picked Assets; for a Share Link a folder with a person for the Project folder, else what kind of file it shows
  */
 function iconOf(share) {
+	if (share.kind === 'project') {
+		return !share.review ? pausedIcon : share.assetIds === null ? projectWideIcon : pickedIcon
+	}
 	if (share.isProject) {
 		return projectLinkIcon
 	}
@@ -80,12 +89,12 @@ watch(() => props.id, (id) => {
 	load(id)
 }, { immediate: true })
 
-/** A new Share Link on the Project folder, review on, its settings open (story 45) */
+/** A new Project Link showing the whole Project, live, its settings open (stories 45, 120) */
 async function createLink() {
 	try {
-		const created = await createShareLink(project.value.folderId)
+		const created = await createProjectLink(props.id)
 		await load()
-		editing.value = links.value.find((share) => share.id === created.id) ?? null
+		editing.value = links.value.find((share) => share.token === created.token) ?? null
 	} catch (e) {
 		showError(errorMessage(e))
 	}
@@ -101,7 +110,7 @@ async function setAutoIntake(on) {
 	try {
 		await store.save(props.id, { autoIntake: on })
 		await Promise.all([load(), store.fetch(props.id)])
-		editing.value = links.value.find((share) => share.id === editing.value?.id) ?? editing.value
+		editing.value = links.value.find((share) => share.token === editing.value?.token) ?? editing.value
 	} catch (e) {
 		showError(errorMessage(e))
 	}
@@ -161,7 +170,7 @@ async function openPerson(id) {
  */
 function personalLink(reviewer) {
 	const share = links.value[0]
-	return reviewer.links.find((each) => each.shareId === share?.id)?.url ?? reviewer.links[0]?.url
+	return reviewer.links.find((each) => each.token === share?.token)?.url ?? reviewer.links[0]?.url
 }
 </script>
 
@@ -195,13 +204,13 @@ function personalLink(reviewer) {
 				</template>
 			</NcAppNavigationItem>
 
-			<NcAppNavigationCaption :name="t('deliver', 'Share Links')" />
+			<NcAppNavigationCaption :name="t('deliver', 'Links')" />
 			<li v-if="links.length === 0" class="deliver-navigation__hint">
-				{{ t('deliver', 'No Share Link with review yet.') }}
+				{{ t('deliver', 'No link with review yet.') }}
 			</li>
 			<NcAppNavigationItem
 				v-for="share in links"
-				:key="share.id"
+				:key="share.token"
 				:name="share.title"
 				:title="share.isProject ? t('deliver', 'Link to the whole Project folder') : share.name"
 				:allowCollapse="share.reviewerIds.length > 0"
@@ -231,7 +240,7 @@ function personalLink(reviewer) {
 				</NcAppNavigationItem>
 			</NcAppNavigationItem>
 			<NcAppNavigationItem
-				v-if="project?.canWrite && project?.folderId"
+				v-if="project && !project.none"
 				:name="t('deliver', 'Create Review Link')"
 				@click="createLink">
 				<template #icon>
@@ -267,8 +276,9 @@ function personalLink(reviewer) {
 			<ShareLinkDialog
 				v-if="editing"
 				:share="editing"
-				:canWrite="project?.canWrite ?? false"
+				:canWrite="editing.kind === 'project' || (project?.canWrite ?? false)"
 				:autoIntake="project?.autoIntake ?? false"
+				:assets="project?.assets ?? []"
 				@autoIntake="setAutoIntake"
 				@update="replace"
 				@person="openPerson"

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { linkify } from './links.js'
+import { downloadUrl, linkify } from './links.js'
 
 describe('links in Comments', () => {
 	it('leaves plain text alone', () => {
@@ -24,5 +24,13 @@ describe('links in Comments', () => {
 
 	it('only links web addresses', () => {
 		expect(linkify('javascript:alert(1)')).toEqual([{ text: 'javascript:alert(1)' }])
+	})
+})
+
+describe('download URL of an original', () => {
+	it('asks Deliver for a download, which the link notes, and leaves a share\'s WebDAV alone', () => {
+		expect(downloadUrl('/index.php/apps/deliver/s/abc/media/7/original')).toBe('/index.php/apps/deliver/s/abc/media/7/original?download=1')
+		expect(downloadUrl('/apps/deliver/s/abc/media/7/original?x=1')).toBe('/apps/deliver/s/abc/media/7/original?x=1&download=1')
+		expect(downloadUrl('https://cloud/public.php/dav/files/abc/cut.mp4')).toBe('https://cloud/public.php/dav/files/abc/cut.mp4')
 	})
 })

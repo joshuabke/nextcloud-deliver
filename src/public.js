@@ -13,7 +13,8 @@ usePublicApi(token)
 usePublicPreviews(token)
 
 const versionId = loadState('deliver', 'versionId', null)
+const link = loadState('deliver', 'link', { title: '', description: null })
 
-createApp({ render: () => h(PublicReviewView, { versionId }) })
+createApp({ render: () => h(PublicReviewView, { versionId, link }) })
 	.use(createPinia())
 	.mount('#deliver-public')

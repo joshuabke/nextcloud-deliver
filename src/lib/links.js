@@ -22,3 +22,15 @@ export function linkify(body) {
 	}
 	return pieces
 }
+
+/**
+ * The download button's URL: through Deliver's media route it asks for the
+ * file as a download, so the link's activity notes it (story 124); a Share
+ * Link's own WebDAV URL stays as it is.
+ *
+ * @param {string} url - the original's URL as the Review view has it
+ * @return {string} the URL to download it from
+ */
+export function downloadUrl(url) {
+	return url.includes('/apps/deliver/s/') ? url + (url.includes('?') ? '&' : '?') + 'download=1' : url
+}
