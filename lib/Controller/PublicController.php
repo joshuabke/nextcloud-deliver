@@ -11,12 +11,10 @@ use OCA\Deliver\Service\ReviewerService;
 use OCA\Deliver\Service\ReviewLink;
 use OCA\Deliver\Service\ReviewLinks;
 use OCP\AppFramework\AuthPublicShareController;
-use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Services\IInitialState;
-use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
 use OCP\IRequest;
 use OCP\ISession;
@@ -35,7 +33,6 @@ class PublicController extends AuthPublicShareController {
 		private IURLGenerator $urls,
 		private ReviewLinks $links,
 		private ReviewerService $reviewers,
-		private IRootFolder $root,
 		private IUserSession $userSession,
 		private IInitialState $initialState,
 	) {
@@ -63,13 +60,7 @@ class PublicController extends AuthPublicShareController {
 		}
 
 		$response = new TemplateResponse(Application::APP_ID, 'public', [], TemplateResponse::RENDER_AS_PUBLIC);
-		$member = $this->memberUrl($link, $version);
-		if ($member !== null) {
-			// The parent class wants a TemplateResponse here, so the redirect is made by hand
-			$response->setStatus(Http::STATUS_SEE_OTHER);
-			$response->addHeader('Location', $member);
-			return $response;
-		}
+		$member = $this->links->isMember($link, $this->userSession->getUser()?->getUID());
 
 		$key = $this->request->getParam('r');
 		if (is_string($key) && $key !== '') {
@@ -77,7 +68,10 @@ class PublicController extends AuthPublicShareController {
 		}
 		$cookie = $this->request->getCookie(self::cookieName($this->getToken()));
 		$reviewer = $this->reviewers->byKey(is_string($key) && $key !== '' ? $key : (is_string($cookie) ? $cookie : null), $link);
-		$this->links->record($link, LinkActivityMapper::OPENED, $reviewer);
+		// A Member previewing the link is no Reviewer opening it
+		if (!$member) {
+			$this->links->record($link, LinkActivityMapper::OPENED, $reviewer);
+		}
 
 		$this->initialState->provideInitialState('token', $this->getToken());
 		// Nextcloud logs a warning for null, so a landing page gives none
@@ -91,23 +85,11 @@ class PublicController extends AuthPublicShareController {
 			'description' => $link->description(),
 			'reviewer' => $reviewer?->getName(),
 			'downloadAll' => $flags['canDownload'] ? $this->urls->linkToRoute('deliver.PublicApi.download', ['token' => $this->getToken()]) : null,
+			// Members preview the link as Reviewers see it and review in the app (story 59)
+			'memberUrl' => $member ? $this->urls->linkToRoute('deliver.page.index') . ($version === null ? '' : 'versions/' . $version->getId()) : null,
 		]);
 		Util::addScript(Application::APP_ID, 'deliver-public');
 		return $response;
-	}
-
-	/**
-	 * A Member works in the app, never with a Reviewer's reduced rights (story
-	 * 59). Whoever can open the file through Files is one (ADR 0009).
-	 */
-	private function memberUrl(ReviewLink $link, ?Version $version): ?string {
-		$user = $this->userSession->getUser();
-		$nodeId = $version?->getFileId() ?? (array_values($link->assets())[0]['versions'][0] ?? null)?->getFileId();
-		if ($user === null || $nodeId === null || $this->root->getUserFolder($user->getUID())->getFirstNodeById($nodeId) === null) {
-			return null;
-		}
-		$app = $this->urls->linkToRoute('deliver.page.index');
-		return $version === null ? $app : $app . 'versions/' . $version->getId();
 	}
 
 	/**

@@ -7,12 +7,12 @@ import assetIcon from '@mdi/svg/svg/filmstrip.svg?raw'
 import audioIcon from '@mdi/svg/svg/waveform.svg?raw'
 import { n, t } from '@nextcloud/l10n'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DueDate from './DueDate.vue'
+import MediaStill from './MediaStill.vue'
 import { useLongPress } from '../composables/longpress.js'
-import { previewUrl } from '../lib/preview.js'
 
 const props = defineProps({
 	/** An Asset with its Version Stack, newest first */
@@ -35,8 +35,6 @@ const autoStacked = computed(() => props.canWrite && !isMobile.value && props.as
 /** Comments by others on any Version of the Stack that I have not had on screen */
 const unseen = computed(() => props.asset.versions.reduce((sum, version) => sum + version.unseen, 0))
 const audio = computed(() => newest.value.mimeType?.startsWith('audio/'))
-/** Set when the server could not render a still; the icon stands in */
-const noPreview = ref(false)
 /** Requested changes outweigh approvals: the newest Version is not through while anyone wants changes (story 88) */
 const decision = computed(() => {
 	const { approved = 0, changes = 0 } = newest.value.approvals
@@ -65,12 +63,12 @@ const status = computed(() => {
 	<li class="deliver-card" v-on="press">
 		<RouterLink class="deliver-card__link" :to="`/versions/${newest.id}`">
 			<div class="deliver-card__still">
-				<img
-					v-if="!noPreview && !audio && newest.state === 'ready'"
-					:src="previewUrl(newest.fileId, 400)"
-					alt=""
-					@error="noPreview = true">
-				<NcIconSvgWrapper v-else :svg="audio ? audioIcon : assetIcon" :size="40" />
+				<NcIconSvgWrapper :svg="audio ? audioIcon : assetIcon" :size="40" />
+				<MediaStill
+					v-if="!audio && newest.state === 'ready'"
+					:fileId="newest.fileId"
+					:playUrl="newest.mimeType?.startsWith('video/') ? newest.playUrl : null"
+					fit="contain" />
 				<span class="deliver-card__version">{{ t('deliver', 'V{number}', { number: newest.number }) }}</span>
 				<span
 					v-if="unseen"

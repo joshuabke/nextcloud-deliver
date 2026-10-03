@@ -162,9 +162,18 @@ class ReviewLinkTest extends TestCase {
 		self::assertStringContainsString("/s/{$replacement['data']['token']}?r=", $jo['link']);
 	}
 
-	public function testAMemberOpeningTheLinkLandsInTheApp(): void {
+	public function testAMemberPreviewsTheLinkButReviewsInTheApp(): void {
 		$page = $this->nc->request('GET', "/apps/deliver/s/{$this->token}/versions/{$this->versionId}");
-		self::assertSame(303, $page['status'], 'a Member never reviews with reduced rights');
+		self::assertSame(200, $page['status'], 'the page shows what Reviewers see');
+		preg_match('/id="initial-state-deliver-link" value="([^"]+)"/', $page['body'], $state);
+		self::assertStringEndsWith("/apps/deliver/versions/{$this->versionId}", json_decode(base64_decode($state[1]), true)['memberUrl'], 'with the way into the app');
+
+		$api = fn (string $method, string $path, array $json = []) => $this->nc->request($method, "/apps/deliver/s/{$this->token}$path", $json === [] ? null : json_encode($json), ['Content-Type: application/json', 'Accept: application/json']);
+		$context = json_decode($api('GET', "/api/context?versionId={$this->versionId}")['body'], true);
+		self::assertSame(['member', false], [$context['me']['type'], $context['flags']['canComment']], 'read only, as a Member and not as a Reviewer');
+		self::assertSame(403, $api('POST', "/api/versions/{$this->versionId}/comments", ['inFrame' => 1, 'body' => 'from the preview'])['status']);
+		self::assertSame(403, $api('POST', '/api/reviewer', ['name' => 'Me'])['status'], 'a Member never becomes a Reviewer of their own link');
+		self::assertSame([], $this->nc->ocs('GET', "/links/{$this->linkId}/activity")['data'], 'a preview is no activity');
 	}
 
 	public function testAMemberEditsAReviewerAndRenewsTheirLink(): void {

@@ -407,7 +407,9 @@
 		"_%n media job failed. The Deliver admin settings show why and retry it._::_%n media jobs failed. The Deliver admin settings show why and retry them._": [
 			"%n Medienjob ist fehlgeschlagen. Die Deliver-Verwaltungseinstellungen zeigen, warum, und wiederholen ihn.",
 			"%n Medienjobs sind fehlgeschlagen. Die Deliver-Verwaltungseinstellungen zeigen, warum, und wiederholen sie."
-		]
+		],
+		"A preview of what Reviewers see. You comment and approve in Deliver.": "Eine Vorschau dessen, was Reviewer sehen. Kommentieren und abnehmen können Sie in Deliver.",
+		"Select all": "Alle auswählen"
 	},
 	"pluralForm": "nplurals=2; plural=(n != 1);"
 }

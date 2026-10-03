@@ -42,6 +42,8 @@ class PublicApiController extends PublicShareController {
 	use GuardsErrors;
 	use ReviewLinkToken;
 
+	private ?bool $member = null;
+
 	public function __construct(
 		string $appName,
 		IRequest $request,
@@ -73,7 +75,9 @@ class PublicApiController extends PublicShareController {
 			if ($reviewer !== null) {
 				$this->reviewers->cameBy($reviewer, $link->token());
 			}
-			$this->links->record($link, LinkActivityMapper::VIEWED, $reviewer, $version);
+			if (!$this->member()) {
+				$this->links->record($link, LinkActivityMapper::VIEWED, $reviewer, $version);
+			}
 			$flags = $this->flags($link, $reviewer);
 			return [
 				'versionId' => $version->getId(),
@@ -114,8 +118,10 @@ class PublicApiController extends PublicShareController {
 					'count' => count($versions),
 					'mimeType' => $link->originalFile($newest)?->getMimetype(),
 					'dueDate' => $asset->getDueDate(),
-					// A frame of the video stands in where Nextcloud renders no still (no ffmpeg)
-					'playUrl' => $this->mayPlayOriginal($newest, $canDownload) ? $original : $this->mediaUrl($newest, 'proxy'),
+					// For scrubbing on hover, and a frame of it where Nextcloud renders no still (no ffmpeg)
+					'playUrl' => $newest->getProxyState() === DerivedMedia::STATE_READY || !$this->mayPlayOriginal($newest, $canDownload)
+						? $this->mediaUrl($newest, 'proxy')
+						: $original,
 					'downloadUrl' => $canDownload ? $original . '?download=1' : null,
 				];
 			}
@@ -157,7 +163,9 @@ class PublicApiController extends PublicShareController {
 				}
 				$names[$name] = true;
 				$zip->addResource($file->fopen('rb'), $name, $file->getSize(), $file->getMTime());
-				$this->links->record($link, LinkActivityMapper::DOWNLOADED, $reviewer, $newest);
+				if (!$this->member()) {
+					$this->links->record($link, LinkActivityMapper::DOWNLOADED, $reviewer, $newest);
+				}
 			}
 			return $zip;
 		} catch (NotFoundException) {
@@ -187,7 +195,9 @@ class PublicApiController extends PublicShareController {
 			}
 			if ($this->request->getParam('download') !== null && $canDownload) {
 				// The download button, not the player, which asks for ranges of the same file (story 124)
-				$this->links->record($link, LinkActivityMapper::DOWNLOADED, $this->reviewer(), $version);
+				if (!$this->member()) {
+					$this->links->record($link, LinkActivityMapper::DOWNLOADED, $this->reviewer(), $version);
+				}
 				$response = RangeFileResponse::ofFile($file, null);
 				$response->addHeader('Content-Disposition', 'attachment; filename="' . rawurlencode($file->getName()) . '"');
 				return $response;
@@ -223,6 +233,9 @@ class PublicApiController extends PublicShareController {
 	public function claim(string $name, ?string $email = null, ?bool $mailReplies = null, ?bool $mailComments = null, ?bool $mailVersions = null): Response {
 		return $this->guard(function () use ($name, $email, $mailReplies, $mailComments, $mailVersions) {
 			$link = $this->link();
+			if ($this->member()) {
+				throw new AccessDeniedException('Members review in Deliver itself');
+			}
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
 			$reviewer = $this->reviewers->claim($link->ownerUid(), $name, $email, $wishes);
 			$this->reviewers->cameBy($reviewer, $link->token());
@@ -342,6 +355,9 @@ class PublicApiController extends PublicShareController {
 
 	/** Who is writing: the Reviewer this browser carries, or someone without a name yet */
 	private function me(): array {
+		if ($this->member()) {
+			return ['type' => 'member', 'name' => $this->userSession->getUser()?->getDisplayName() ?? ''];
+		}
 		$reviewer = $this->reviewer();
 		return $reviewer === null
 			// A logged-in visitor gets their display name offered (story 58)
@@ -360,8 +376,14 @@ class PublicApiController extends PublicShareController {
 	 * @return array<string, mixed>
 	 */
 	private function flags(ReviewLink $link, ?Reviewer $reviewer): array {
-		$flags = $link->flags();
-		return $reviewer === null ? $flags : $reviewer->over($flags);
+		$flags = $reviewer === null ? $link->flags() : $reviewer->over($link->flags());
+		// A Member's preview reads only: they comment and approve in the app (story 59)
+		return $this->member() ? ['canComment' => false] + $flags : $flags;
+	}
+
+	/** A logged-in Member previewing the link, rather than a Reviewer */
+	private function member(): bool {
+		return $this->member ??= $this->links->isMember($this->link(), $this->userSession->getUser()?->getUID());
 	}
 
 	/** A Reviewer comments while the link or their own rights allow it, and never resolves */

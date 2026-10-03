@@ -7,8 +7,9 @@ import { n, t } from '@nextcloud/l10n'
 import { computed, onBeforeUnmount, onMounted, reactive } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import DueDate from './DueDate.vue'
-import { previewUrl } from '../lib/preview.js'
+import MediaStill from './MediaStill.vue'
 
 // A link with several Assets opens on a grid of them, under its description (stories 123, 125)
 const props = defineProps({
@@ -22,8 +23,6 @@ const props = defineProps({
 
 const emit = defineEmits(['open'])
 
-/** Assets without a still from Nextcloud: a frame of the video stands in */
-const noStill = reactive(new Set())
 const isAudio = (asset) => asset.mimeType?.startsWith('audio/')
 
 /** Assets picked for one ZIP, as on Frame.io */
@@ -50,6 +49,10 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 <template>
 	<div class="deliver-landing">
 		<div class="deliver-landing__page">
+			<NcNoteCard v-if="link.memberUrl" type="info">
+				{{ t('deliver', 'A preview of what Reviewers see. You comment and approve in Deliver.') }}
+				<a :href="link.memberUrl" class="deliver-landing__open-app">{{ t('deliver', 'Open in Deliver') }}</a>
+			</NcNoteCard>
 			<div class="deliver-landing__head">
 				<div class="deliver-landing__intro">
 					<h2>{{ link.title }}</h2>
@@ -61,6 +64,12 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 					</p>
 				</div>
 				<div class="deliver-landing__actions">
+					<NcButton
+						v-if="link.downloadAll && selected.size < assets.length"
+						variant="tertiary"
+						@click="assets.forEach((asset) => selected.add(asset.assetId))">
+						{{ t('deliver', 'Select all') }}
+					</NcButton>
 					<span v-if="me" class="deliver-landing__me">
 						<NcIconSvgWrapper :svg="accountIcon" :size="20" />
 						{{ t('deliver', 'Reviewing as {name}', { name: me }) }}
@@ -98,20 +107,7 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 							@click="emit('open', asset.newestId)">
 							<span class="deliver-landing__still">
 								<NcIconSvgWrapper :svg="isAudio(asset) ? audioIcon : videoIcon" :size="40" />
-								<img
-									v-if="!noStill.has(asset.assetId)"
-									:src="previewUrl(asset.fileId, 400)"
-									alt=""
-									loading="lazy"
-									@error="noStill.add(asset.assetId)">
-								<video
-									v-else-if="!isAudio(asset) && asset.playUrl"
-									:src="asset.playUrl + '#t=1'"
-									preload="metadata"
-									muted
-									playsinline
-									tabindex="-1"
-									@error="$event.target.hidden = true" />
+								<MediaStill :fileId="asset.fileId" :playUrl="isAudio(asset) ? null : asset.playUrl" />
 								<span class="deliver-landing__badge">{{ t('deliver', 'V{number}', { number: asset.number }) }}</span>
 							</span>
 						</button>
@@ -172,6 +168,12 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 	max-width: 1200px;
 	margin: 0 auto;
 	padding: calc(6 * var(--default-grid-baseline)) calc(4 * var(--default-grid-baseline));
+}
+
+.deliver-landing__open-app {
+	margin-inline-start: var(--default-grid-baseline);
+	font-weight: bold;
+	text-decoration: underline;
 }
 
 .deliver-landing__head {
@@ -312,16 +314,6 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 	overflow: hidden;
 	background: #0c0c0e;
 	color: #6c6c74;
-}
-
-.deliver-landing__still img,
-.deliver-landing__still video {
-	position: absolute;
-	inset: 0;
-	width: 100%;
-	height: 100%;
-	object-fit: cover;
-	pointer-events: none;
 }
 
 .deliver-landing__badge {
