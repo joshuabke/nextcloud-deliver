@@ -3,8 +3,8 @@ import { n, t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
-import NcDateTime from '@nextcloud/vue/components/NcDateTime'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
+import LinkActivityDialog from './LinkActivityDialog.vue'
 import ShareLinkItem from './ShareLinkItem.vue'
 import { errorMessage, linkApi } from '../api.js'
 
@@ -24,19 +24,7 @@ const item = ref(null)
 const isProject = computed(() => props.share.kind === 'project')
 const picked = computed(() => new Set(props.share.assetIds ?? []))
 const pickError = ref(null)
-/** Who opened the link, watched and downloaded what, newest first (story 124) */
-const activity = ref(null)
-linkApi(props.share).activity().then((rows) => {
-	activity.value = rows
-}).catch(() => {
-	activity.value = []
-})
-
-const DOINGS = {
-	opened: t('deliver', 'opened the link'),
-	viewed: t('deliver', 'watched'),
-	downloaded: t('deliver', 'downloaded'),
-}
+const showActivity = ref(false)
 
 /**
  * The whole Project, or only the Assets picked (story 120)
@@ -120,23 +108,10 @@ function toggleAsset(id, on) {
 				{{ t('deliver', 'Auto Intake: review every media file in the Project folder') }}
 			</NcCheckboxRadioSwitch>
 		</div>
-		<section v-if="canWrite" class="deliver-link-dialog__section">
-			<h3>{{ t('deliver', 'Activity') }}</h3>
-			<p v-if="activity?.length === 0" class="deliver-link-dialog__hint">
-				{{ t('deliver', 'Nobody has opened the link yet.') }}
-			</p>
-			<ul v-else-if="activity" class="deliver-link-dialog__activity">
-				<li v-for="(entry, index) in activity" :key="index">
-					<strong>{{ entry.reviewer?.name ?? t('deliver', 'Someone without a name') }}</strong>
-					{{ DOINGS[entry.kind] }}
-					<template v-if="entry.version">
-						{{ t('deliver', '{name}, Version {number}', { name: entry.version.name, number: entry.version.number }) }}
-					</template>
-					<NcDateTime class="deliver-link-dialog__hint" :timestamp="entry.at * 1000" />
-				</li>
-			</ul>
-		</section>
 		<template #actions>
+			<NcButton v-if="canWrite" @click="showActivity = true">
+				{{ t('deliver', 'Activity') }}
+			</NcButton>
 			<NcButton
 				v-if="canWrite && share.review && !item?.inviting"
 				class="deliver-link-dialog__invite"
@@ -144,6 +119,7 @@ function toggleAsset(id, on) {
 				{{ t('deliver', 'Invite a Reviewer') }}
 			</NcButton>
 		</template>
+		<LinkActivityDialog v-if="showActivity" :share="share" @close="showActivity = false" />
 	</NcDialog>
 </template>
 
@@ -163,18 +139,6 @@ function toggleAsset(id, on) {
 
 .deliver-link-dialog__assets {
 	padding-inline-start: calc(4 * var(--default-grid-baseline));
-}
-
-.deliver-link-dialog__activity {
-	max-height: 240px;
-	overflow-y: auto;
-}
-
-.deliver-link-dialog__activity li {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--default-grid-baseline);
-	padding: 2px 0;
 }
 
 .deliver-link-dialog__error {

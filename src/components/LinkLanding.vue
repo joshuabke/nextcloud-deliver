@@ -100,12 +100,11 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 							v-if="asset.downloadUrl"
 							:href="asset.downloadUrl"
 							variant="tertiary"
-							size="small"
 							:aria-label="t('deliver', 'Download {name}', { name: asset.name })"
 							:title="t('deliver', 'Download the original')"
 							download>
 							<template #icon>
-								<NcIconSvgWrapper :svg="downloadIcon" :size="20" />
+								<NcIconSvgWrapper :svg="downloadIcon" />
 							</template>
 						</NcButton>
 					</div>
@@ -179,9 +178,10 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 	display: inline-flex;
 	align-items: center;
 	gap: var(--default-grid-baseline);
-	padding: 4px 12px 4px 8px;
+	height: var(--default-clickable-area);
+	padding: 0 12px 0 8px;
 	border: 1px solid var(--landing-border);
-	border-radius: var(--border-radius-pill);
+	border-radius: var(--border-radius-element);
 	background: var(--landing-surface);
 	color: var(--color-text-maxcontrast);
 }

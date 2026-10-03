@@ -272,7 +272,6 @@ OC.L10N.register(
 		"Show the picture": "Bild zeigen",
 		"Show time as": "Zeit anzeigen als",
 		"Side by side": "Nebeneinander",
-		"Someone without a name": "Jemand ohne Namen",
 		"Sort by": "Sortieren nach",
 		"Sound of V{number}": "Ton von V{number}",
 		"Sound of V{number}; click for the other side": "Ton von V{number}; klicken Sie für die andere Seite",
@@ -401,9 +400,10 @@ OC.L10N.register(
 		"{name}, Version {number}": "{name}, Version {number}",
 		"{queued} waiting, {running} running, {failed} failed": "{queued} wartend, {running} laufend, {failed} fehlgeschlagen",
 		"−{seconds} s": "−{seconds} s",
-		"Reviewing as {name}": "Sie prüfen als {name}",
+		"Reviewing as {name}": "Sie reviewen als {name}",
 		"Download all": "Alle herunterladen",
-		"Download {name}": "{name} herunterladen"
+		"Download {name}": "{name} herunterladen",
+		"Anonymous": "Anonym"
 	},
 	"nplurals=2; plural=(n != 1);"
 );
