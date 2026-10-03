@@ -99,15 +99,19 @@ A Nextcloud user who can open a Version's file through Files permissions; read a
 _Avoid_: Owner (except for the file's actual owner), collaborator, team
 
 **Reviewer**:
-Anyone who reaches a Version through a Share Link instead of Files permissions, identified by a self-given name (prefilled from their account if they happen to be logged in). Reviewers only ever touch their own Comments.
+Anyone who reaches a Version through a Share Link or Project Link instead of Files permissions, identified by a self-given name (prefilled from their account if they happen to be logged in). Reviewers only ever touch their own Comments.
 _Avoid_: Guest, anonymous user, client, external user
 
 **Share Link**:
-A Nextcloud link share with Deliver's review flag switched on: it contains at least one Asset and shows a Review button. Deliver owns no link type of its own; password, expiry and download permission stay share properties, and a link without the flag stays an ordinary share.
+A Nextcloud link share with Deliver's review flag switched on: it contains at least one Asset and shows a Review button. Password, expiry and download permission stay share properties, and a link without the flag stays an ordinary share. For a whole Project or a choice of its Assets there is the Project Link.
 _Avoid_: Review Link, Deliver link, token link
 
+**Project Link**:
+A review link Deliver makes for a Project (ADR 0010): it shows the whole Project, growing as Assets join, or the Assets the Member picks, with its own password, expiry, pause switch and rights. It shows only files its Member may share, and goes with its Project.
+_Avoid_: Project share, collection link
+
 **Personal Link**:
-A Share Link URL carrying a Reviewer's own key, so that whoever opens it is that Reviewer, forever, on any device. Issued by a Member as an invitation or shown to a Reviewer after they name themselves.
+A Share Link or Project Link URL carrying a Reviewer's own key, so that whoever opens it is that Reviewer, forever, on any device. Issued by a Member as an invitation or shown to a Reviewer after they name themselves.
 _Avoid_: Invite link, magic link, session
 
 **Unseen**:
@@ -174,7 +178,7 @@ The German translation (`l10n/de` with "du", `l10n/de_DE` with "Sie") uses these
 | Frame, Range | Frame, Bereich |
 | Resolved (and its opposite) | Erledigt (Offen) |
 | Member, Reviewer | Mitglied, Reviewer |
-| Share Link, Personal Link | Freigabelink, Persönlicher Link |
+| Share Link, Project Link, Personal Link | Freigabelink, Projekt-Link, Persönlicher Link |
 | Unseen | Ungesehen |
 | Proxy, Thumbnail Strip, Waveform | Proxy, Vorschauleiste, Wellenform |
 | Missing | Fehlt |

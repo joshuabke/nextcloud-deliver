@@ -174,6 +174,17 @@ Classical recordings are made in Takes: many passes over the same passages, part
 118. As a Member or Reviewer who may comment, I want to comment on the selected Take at the play position, and see every Take's Comments as markers on its lane, so that "T. 40 in RP12 is the one" lands where it belongs.
 119. As a Member, I want a Take or Mix delivered again under the same name to replace its file and keep its Comments, and to be asked first when it already has Comments (unconfirmed, a Mix becomes a new Version and a Take is skipped, since Takes have no Versions), so that a re-render never loses feedback nor silently puts it on different audio.
 
+### Project Links
+
+A Project's files can lie anywhere (ADR 0009), so a Nextcloud Share Link cannot carry a whole Project. A Project Link can (ADR 0010); it follows what a Frame.io Share offers.
+
+120. As a Member, I want to create a Project Link for any Project, showing the whole Project as it grows or only the Assets I pick, so that one Project goes out to different people with different access.
+121. As a Member, I want to set a Project Link's password, expiry, comments, comments on older Versions, Watermark and download, and whether it shows only the newest Version of each Asset, so that each link has its own access level.
+122. As a Member, I want to pause a Project Link and switch it on again without losing its Reviewers, so that I can hold back a link without deleting it.
+123. As a Member, I want to give a link a description that Reviewers see above its Assets, so that the client knows what they are looking at.
+124. As a Member, I want to see per link who opened it, which Versions they watched and what they downloaded, and when, so that I know whether the client has seen the cut.
+125. As a Reviewer, I want a link with several Assets to open on a grid of them, and a link with one Asset straight in the player, so that I find my way without a file list.
+
 ## Implementation Decisions
 
 ### Repository and stack
@@ -193,6 +204,8 @@ Files is the source of truth (ADR 0002). Deliver's tables hold only review state
 - **Comment**: version id, parent comment id (nullable, one level), author reference (user id or reviewer id), in frame, out frame (nullable), body, resolved flag, created and updated timestamps. Frames are stored at the Version's fps; seconds are never persisted. An audio-only Version counts in milliseconds: its frame rate is 1000/1 whatever the Project's, so a Frame is a millisecond, its Frames never change meaning with the Project setting, and Takes line up to the millisecond (ADR 0007). Shown as timecode or frames, its position is converted to the Project's frame rate for display only. A Broadcast WAV's time reference becomes its start timecode.
 - **Review flags on a share**: Deliver stores nothing of its own for a Share Link. Whether a share is a review surface (`deliver/review`, off unless set), whether Reviewers may comment (`deliver/comment`) and whether older Versions accept Comments (`deliver/older`) are Nextcloud share attributes, so they are created, copied and deleted with the share. Password, expiry, revocation and "hide download" are the share's own properties (ADR 0004); Deliver sets password and expiry and deletes the share through Nextcloud's share manager, so its sharing policy applies.
 - **Reviewer**: owner user id (the Member who invited them), name, email (nullable), secret key, created at. A Reviewer has a Personal Link through every review Share Link of their owner. A Personal Link is the share URL plus the Reviewer's key. Reviewers are never deleted while they have Comments: removing one clears their key, so their Personal Links stop working and they leave every list while their Comments keep the name; revoking a Share Link does not touch them, and a Member can issue a fresh Personal Link for an existing Reviewer under a new Share Link.
+- **Project Link**: Project, owner user id (the Member who made it), token, label, description, password hash (`IHasher`), expiry date, the picked Assets (none: the whole Project), flags for comments, older Versions, Watermark, download, only the newest Version and paused. Removed with its Project (ADR 0010).
+- **Link activity**: token, Reviewer (nullable), what happened (opened, viewed a Version, downloaded it), Version, time. Kept per token, so it covers Share Links and Project Links alike.
 - **Seen state**: per person (user id or reviewer id) per Version, the timestamp up to which Comments have been on screen. Everything created after it is Unseen.
 - **Project mute**: per user id per project, or for No Project.
 - **Job**: kind (probe, proxy, thumbnails, waveform), version id, state, progress, attempts, stderr tail, timestamps. One table for background jobs and the optional worker; designed so an external worker can claim rows later without a schema change (ADR 0003).
