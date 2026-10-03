@@ -7,7 +7,7 @@ import { usePublicPreviews } from './lib/preview.js'
 
 import '@nextcloud/dialogs/style.css'
 
-// Reviewers reach Deliver through the share token, never through OCS (ADR 0004)
+// Reviewers reach Deliver through the link's token, never through OCS (ADR 0011)
 const token = loadState('deliver', 'token')
 usePublicApi(token)
 usePublicPreviews(token)

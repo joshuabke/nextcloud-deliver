@@ -91,7 +91,7 @@ class ReviewerService {
 		$this->reviewers->deleteLinks([$reviewer->getId()]);
 	}
 
-	/** Remembers the Share Link the Reviewer was invited through or came in by */
+	/** Remembers the Project Link the Reviewer was invited through or came in by */
 	public function cameBy(Reviewer $reviewer, string $token): void {
 		$this->reviewers->recordLink($reviewer->getId(), $token, $this->time->getTime());
 	}

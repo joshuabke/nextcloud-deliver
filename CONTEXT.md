@@ -73,7 +73,7 @@ A Member of the Version named in a Comment with `@`, who is notified even from a
 _Avoid_: Tag, ping
 
 **Watermark**:
-The Reviewer's name and the date, repeated across the picture on a Share Link that asks for it. An overlay in the player, not burned into the media.
+The Reviewer's name and the date, repeated across the picture on a Project Link that asks for it. An overlay in the player, not burned into the media.
 _Avoid_: Stamp, overlay (alone)
 
 **Due Date**:
@@ -99,19 +99,15 @@ A Nextcloud user who can open a Version's file through Files permissions; read a
 _Avoid_: Owner (except for the file's actual owner), collaborator, team
 
 **Reviewer**:
-Anyone who reaches a Version through a Share Link or Project Link instead of Files permissions, identified by a self-given name (prefilled from their account if they happen to be logged in). Reviewers only ever touch their own Comments.
+Anyone who reaches a Version through a Project Link instead of Files permissions, identified by a self-given name (prefilled from their account if they happen to be logged in). Reviewers only ever touch their own Comments.
 _Avoid_: Guest, anonymous user, client, external user
 
-**Share Link**:
-A Nextcloud link share with Deliver's review flag switched on: it contains at least one Asset and shows a Review button. Password, expiry and download permission stay share properties, and a link without the flag stays an ordinary share. For a whole Project or a choice of its Assets there is the Project Link.
-_Avoid_: Review Link, Deliver link, token link
-
 **Project Link**:
-A review link Deliver makes for a Project (ADR 0010): it shows the whole Project, growing as Assets join, or the Assets the Member picks, with its own password, expiry, pause switch and rights. It shows only files its Member may share, and goes with its Project.
-_Avoid_: Project share, collection link
+The only review link (ADR 0010, 0011): Deliver makes it for a Project and it shows the whole Project, growing as Assets join, or the Assets the Member picks, with its own password, expiry, pause switch and rights. Made on No Project, it shows only Assets of No Project that the Member picks, at least one; an Asset leaves it once it joins a Project. It shows only files its Member may share, and goes with its Project.
+_Avoid_: Project share, collection link, Share Link (a Nextcloud link made in Files shows files and is never a review surface)
 
 **Personal Link**:
-A Share Link or Project Link URL carrying a Reviewer's own key, so that whoever opens it is that Reviewer, forever, on any device. Issued by a Member as an invitation or shown to a Reviewer after they name themselves.
+A Project Link URL carrying a Reviewer's own key, so that whoever opens it is that Reviewer, forever, on any device. Issued by a Member as an invitation or shown to a Reviewer after they name themselves.
 _Avoid_: Invite link, magic link, session
 
 **Unseen**:
@@ -178,7 +174,7 @@ The German translation (`l10n/de` with "du", `l10n/de_DE` with "Sie") uses these
 | Frame, Range | Frame, Bereich |
 | Resolved (and its opposite) | Erledigt (Offen) |
 | Member, Reviewer | Mitglied, Reviewer |
-| Share Link, Project Link, Personal Link | Freigabelink, Projekt-Link, Persönlicher Link |
+| Project Link, Personal Link | Projekt-Link, Persönlicher Link |
 | Unseen | Ungesehen |
 | Proxy, Thumbnail Strip, Waveform | Proxy, Vorschauleiste, Wellenform |
 | Missing | Fehlt |

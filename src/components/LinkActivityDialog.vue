@@ -9,7 +9,7 @@ import { linkApi } from '../api.js'
 
 // Who opened a link, watched and downloaded what, newest first (story 124)
 const props = defineProps({
-	/** A Share Link or Project Link as the Project's navigation lists it */
+	/** A Project Link as the Project's navigation lists it */
 	share: { type: Object, required: true },
 })
 

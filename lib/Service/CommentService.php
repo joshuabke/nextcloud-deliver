@@ -21,7 +21,7 @@ use OCP\Files\NotFoundException;
 /**
  * Comments on one Version, anchored to Frames. Who may do what is decided
  * before a request gets here: the Viewer carries what the person's folder
- * permissions or Share Link allow.
+ * permissions or Project Link allow.
  */
 class CommentService {
 	/** The usual reactions, shown first; any other single emoji is welcome too (story 91) */

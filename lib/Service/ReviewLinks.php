@@ -16,17 +16,16 @@ use OCA\Deliver\Db\VersionMapper;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
+use OCP\IConfig;
 use OCP\IURLGenerator;
 use OCP\Security\IHasher;
 
 /**
- * Finds the link behind a token, a Project Link (ADR 0010) or a Share Link
- * (ADR 0004), and does what is alike for both: Versions behind it,
- * Reviewers who came by it, and its activity.
+ * Finds the Review Link behind a token (ADR 0011) and what goes with it:
+ * Versions behind it, Reviewers who came by it, and its activity.
  */
 class ReviewLinks {
 	public function __construct(
-		private ShareReviewService $sharing,
 		private ProjectLinkMapper $projectLinks,
 		private ProjectMapper $projects,
 		private AssetMapper $assets,
@@ -38,17 +37,17 @@ class ReviewLinks {
 		private IHasher $hasher,
 		private IURLGenerator $urls,
 		private ITimeFactory $time,
+		private IConfig $config,
 	) {
 	}
 
 	/** @throws NotFoundException no link with this token */
 	public function byToken(string $token): ReviewLink {
-		$link = $this->projectLinks->findByToken($token);
-		return $link === null ? $this->sharing->wrap($this->sharing->byToken($token)) : $this->ofProjectLink($link);
+		return $this->of($this->projectLinks->findByToken($token) ?? throw new NotFoundException('Link not found'));
 	}
 
-	public function ofProjectLink(ProjectLink $link): ProjectReviewLink {
-		return new ProjectReviewLink($link, $this->projects, $this->assets, $this->versions, $this->root, $this->hasher, $this->urls, $this->time);
+	public function of(ProjectLink $link): ReviewLink {
+		return new ReviewLink($link, $this->projects, $this->assets, $this->versions, $this->root, $this->hasher, $this->urls, $this->time);
 	}
 
 	/** @throws NotFoundException the Version is outside what the link shows */
@@ -57,7 +56,7 @@ class ReviewLinks {
 	}
 
 	/**
-	 * The Version of a file behind the link, for the Review button in a shared file list.
+	 * The Version of a file behind the link, for its still and a link straight to it.
 	 *
 	 * @throws NotFoundException the file is not enabled for review here
 	 */
@@ -151,17 +150,14 @@ class ReviewLinks {
 	}
 
 	/**
-	 * The Review view of the Version through a link of the Reviewer's Member
-	 * that shows it, with the Reviewer's key, for mails; a Project Link of the
-	 * Version's Project first, else the nearest review Share Link; null when
-	 * none does any more. It opens the player straight away.
+	 * The Review view of the Version through a live link of the Reviewer's
+	 * Member that shows it, with the Reviewer's key, for mails; null when none
+	 * does any more. It opens the player straight away.
 	 */
 	public function reviewLinkFor(Version $version, Reviewer $reviewer): ?string {
-		$owner = $reviewer->getOwnerUid();
 		$token = null;
-		$projectId = $version->getProjectId();
-		foreach ($projectId === null ? [] : $this->projectLinks->findByProject($projectId, $owner) as $each) {
-			$link = $this->ofProjectLink($each);
+		foreach ($this->projectLinks->findByProject($version->getProjectId(), $reviewer->getOwnerUid()) as $each) {
+			$link = $this->of($each);
 			try {
 				if ($link->isLive() && $link->version($version) === $version) {
 					$token = $link->token();
@@ -170,9 +166,17 @@ class ReviewLinks {
 			} catch (NotFoundException) {
 			}
 		}
-		$token ??= $this->sharing->reviewShareFor($owner, $version->getFileId())?->getToken();
 		return $token === null ? null
-			: $this->sharing->instanceUrl($this->urls->linkToRoute('deliver.Public.showVersion', ['token' => $token, 'versionId' => $version->getId()]))
+			: $this->instanceUrl($this->urls->linkToRoute('deliver.Public.showVersion', ['token' => $token, 'versionId' => $version->getId()]))
 				. '?r=' . rawurlencode((string)$reviewer->getSecretKey());
+	}
+
+	/** An absolute URL that works from a background job too, where the request knows no host */
+	public function instanceUrl(string $path): string {
+		$base = parse_url($this->config->getSystemValueString('overwrite.cli.url'));
+		if (!isset($base['scheme'], $base['host'])) {
+			return $this->urls->getAbsoluteURL($path);
+		}
+		return $base['scheme'] . '://' . $base['host'] . (isset($base['port']) ? ':' . $base['port'] : '') . $path;
 	}
 }

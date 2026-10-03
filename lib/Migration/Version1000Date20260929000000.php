@@ -104,12 +104,9 @@ class Version1000Date20260929000000 extends SimpleMigrationStep {
 		$t->addIndex(['version_id'], 'deliver_comment_version_idx');
 		$t->addIndex(['parent_id'], 'deliver_comment_parent_idx');
 
-		// No table for Share Links: Reviewers arrive through Nextcloud's own shares and
-		// Deliver's flags are share attributes (deliver/review, comment, older, watermark), ADR 0004.
-
 		$t = $schema->createTable('deliver_reviewers');
 		$t->addColumn('id', Types::BIGINT, ['autoincrement' => true, 'notnull' => true]);
-		// The Member who invited them, or whose Share Link they named themselves on
+		// The Member who invited them, or whose Project Link they named themselves on
 		$t->addColumn('owner_uid', Types::STRING, ['notnull' => true, 'length' => 64]);
 		$t->addColumn('name', Types::STRING, ['notnull' => true, 'length' => 255]);
 		$t->addColumn('email', Types::STRING, ['notnull' => false, 'length' => 255]);
@@ -120,7 +117,7 @@ class Version1000Date20260929000000 extends SimpleMigrationStep {
 		$t->addColumn('mail_replies', Types::BOOLEAN, ['notnull' => false]);
 		$t->addColumn('mail_comments', Types::BOOLEAN, ['notnull' => false]);
 		$t->addColumn('mail_versions', Types::BOOLEAN, ['notnull' => false]);
-		// Their own rights over those of the Share Link they come by; null: the link decides
+		// Their own rights over those of the Project Link they come by; null: the link decides
 		$t->addColumn('can_comment', Types::BOOLEAN, ['notnull' => false]);
 		$t->addColumn('allow_older', Types::BOOLEAN, ['notnull' => false]);
 		$t->addColumn('watermark', Types::BOOLEAN, ['notnull' => false]);
@@ -163,7 +160,7 @@ class Version1000Date20260929000000 extends SimpleMigrationStep {
 		$t->addIndex(['version_id'], 'deliver_job_version_idx');
 		$t->addIndex(['state', 'kind'], 'deliver_job_state_idx');
 
-		// Which link a Reviewer was invited through or came in by, a Share Link or a Project Link, by its token
+		// Which link a Reviewer was invited through or came in by, a Project Link, by its token
 		$t = $schema->createTable('deliver_reviewer_links');
 		$t->addColumn('id', Types::BIGINT, ['autoincrement' => true, 'notnull' => true]);
 		$t->addColumn('reviewer_id', Types::BIGINT, ['notnull' => true]);
@@ -172,10 +169,10 @@ class Version1000Date20260929000000 extends SimpleMigrationStep {
 		$t->setPrimaryKey(['id']);
 		$t->addUniqueIndex(['reviewer_id', 'token'], 'deliver_revlink_uniq');
 
-		// Project Links: Deliver's own review links for a whole Project or picked Assets (ADR 0010)
+		// Review Links: a whole Project or picked Assets; without a Project, picked Assets of No Project (ADR 0011)
 		$t = $schema->createTable('deliver_project_links');
 		$t->addColumn('id', Types::BIGINT, ['autoincrement' => true, 'notnull' => true]);
-		$t->addColumn('project_id', Types::BIGINT, ['notnull' => true]);
+		$t->addColumn('project_id', Types::BIGINT, ['notnull' => false]);
 		$t->addColumn('owner_uid', Types::STRING, ['notnull' => true, 'length' => 64]);
 		$t->addColumn('token', Types::STRING, ['notnull' => true, 'length' => 32]);
 		$t->addColumn('label', Types::STRING, ['notnull' => false, 'length' => 255]);

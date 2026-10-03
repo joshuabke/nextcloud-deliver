@@ -8,8 +8,7 @@ Erste Veröffentlichung im App Store.
 - Kommentare auf einem Frame oder Bereich, mit Antworten, Zeichnungen, Erwähnungen, Reaktionen und Anhängen, und Erledigt, sobald sie umgesetzt sind.
 - Versionsstapel für die Fassungen eines Schnitts, und zwei Versionen nebeneinander oder unter einem Wischer, synchron abgespielt.
 - Abnahme: eine Version abnehmen oder Änderungen wünschen, und alle sehen, wer was entschieden hat.
-- Review für Externe über Nextclouds eigene Freigabelinks, mit einem Persönlichen Link für jeden Reviewer, eigenen Rechten und auf Wunsch einem Wasserzeichen mit dem Namen des Reviewers.
-- Projekt-Links für ein ganzes Projekt oder ausgewählte Assets, wo auch immer die Dateien liegen: Passwort, Ablaufdatum, Pause, Kommentare, Download, nur die neueste Version, eine Beschreibung über einem Raster der Assets mit Download einzeln oder als ZIP, und wer was geöffnet, angesehen und heruntergeladen hat.
+- Review für Externe über Projekt-Links, Delivers eigene Links für ein ganzes Projekt oder ausgewählte Assets, wo auch immer die Dateien liegen, und für einzelne Dateien Ohne Projekt: Passwort, Ablaufdatum, Pause, Kommentare, Download, nur die neueste Version, eine Beschreibung über einem Raster der Assets mit Download einzeln, als ZIP aller oder der ausgewählten, und wer was geöffnet, angesehen und heruntergeladen hat. Jeder Reviewer bekommt einen Persönlichen Link, eigene Rechte und auf Wunsch ein Wasserzeichen mit seinem Namen. Freigaben in Dateien bleiben gewöhnliche Nextcloud-Freigaben.
 - Fälligkeitsdaten mit Erinnerung, ungesehene Kommentare, Benachrichtigungen und Mails, und Live-Aktualisierung ohne Neuladen.
 - Export der Kommentare als EDL, FCP7 XML, FCPXML oder CSV, als Marker für den Schnitt.
 - Audio zählt auf die Millisekunde: angezeigt als `m:ss.mmm`, umschaltbar auf Timecode oder Frames in der Bildrate des Projekts.

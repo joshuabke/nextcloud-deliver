@@ -129,7 +129,7 @@ class NotificationTest extends TestCase {
 	}
 
 	public function testAReviewerChoosesWhatIsMailed(): void {
-		$link = $this->nc->ocs('POST', "/files/{$this->nc->fileId($this->root)}/shares")['data'];
+		$link = $this->nc->ocs('POST', "/projects/{$this->projectId}/links")['data'];
 		$email = 'reviewer-' . bin2hex(random_bytes(4)) . '@example.test';
 		$reviewer = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $link['token']);
 		$claimed = $reviewer->call('POST', '/api/reviewer', ['name' => 'Kim', 'email' => $email, 'mailComments' => true]);
@@ -145,7 +145,6 @@ class NotificationTest extends TestCase {
 		$this->nc->ocs('GET', "/projects/{$this->projectId}");
 		self::assertSame(['Version 2 of cut_v2.mp4 is ready for review', "{$this->owner} commented on cut.mp4"], $this->subjectsTo($email));
 		self::assertSame(403, (new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $link['token']))->call('PUT', '/api/reviewer', ['mailVersions' => false])['status'], 'only as the Reviewer');
-		$this->nc->ocsForm('DELETE', "/ocs/v2.php/apps/files_sharing/api/v1/shares/{$link['id']}");
 	}
 
 	/** @return list<string> subjects of the mails to one address, newest first */
@@ -166,7 +165,7 @@ class NotificationTest extends TestCase {
 	}
 
 	public function testAReviewerWithAnEmailHearsOfReplies(): void {
-		$link = $this->nc->ocs('POST', "/files/{$this->nc->fileId($this->root)}/shares");
+		$link = $this->nc->ocs('POST', "/projects/{$this->projectId}/links");
 		self::assertTrue($link['data']['canMail'], 'the dev instance mails into Mailpit');
 		$email = 'reviewer-' . bin2hex(random_bytes(4)) . '@example.test';
 		$reviewer = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $link['data']['token']);
@@ -184,6 +183,5 @@ class NotificationTest extends TestCase {
 		// On the instance's own address, whichever address the reply came through
 		$base = rtrim((string)shell_exec('php /var/www/html/occ config:system:get overwrite.cli.url'));
 		self::assertStringContainsString("$base/apps/deliver/s/{$link['data']['token']}/versions/{$this->versionId}?r=", $mail['Text'], 'straight into the Review view, as that Reviewer');
-		$this->nc->ocsForm('DELETE', "/ocs/v2.php/apps/files_sharing/api/v1/shares/{$link['data']['id']}");
 	}
 }

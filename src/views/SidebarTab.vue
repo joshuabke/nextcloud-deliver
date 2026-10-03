@@ -1,7 +1,5 @@
 <script setup>
-import { emit } from '@nextcloud/event-bus'
 import { Permission } from '@nextcloud/files'
-import { getClient, getDefaultPropfind, getRootPath, resultToNode } from '@nextcloud/files/dav'
 import { n, t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import { computed, ref, watch } from 'vue'
@@ -151,12 +149,6 @@ function saveSettings(settings) {
 	})
 }
 
-/** The file list shows a link's share icon once it has the node again, as Nextcloud's own sharing tab does */
-async function refreshNode() {
-	const { data } = await getClient().stat(getRootPath() + props.node.path, { details: true, data: getDefaultPropfind() })
-	emit('files:node:updated', resultToNode(data))
-}
-
 /** Removes the Project with all its review data (story 9) */
 async function remove() {
 	if (await confirmProjectRemoval()) {
@@ -230,8 +222,8 @@ async function remove() {
 		</section>
 
 		<section v-if="asset || project" class="deliver-tab__section">
-			<h4>{{ t('deliver', 'Share Links') }}</h4>
-			<ShareLinks :fileId="node.fileid" :canWrite="canWrite" @changed="refreshNode" />
+			<h4>{{ t('deliver', 'Review Links') }}</h4>
+			<ShareLinks :projectId="asset ? asset.projectId : project.id" :assetId="asset?.assetId ?? null" />
 		</section>
 
 		<NcNoteCard v-if="error" type="error">

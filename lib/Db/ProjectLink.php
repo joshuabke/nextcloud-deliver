@@ -10,8 +10,8 @@ use OCP\AppFramework\Db\Entity;
  * A review link of Deliver's own for a Project (ADR 0010): the whole Project
  * or picked Assets, with password, expiry, pause and rights of its own.
  *
- * @method int getProjectId()
- * @method void setProjectId(int $projectId)
+ * @method ?int getProjectId()
+ * @method void setProjectId(?int $projectId)
  * @method string getOwnerUid()
  * @method void setOwnerUid(string $ownerUid)
  * @method string getToken()

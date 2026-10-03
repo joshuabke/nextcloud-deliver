@@ -29,7 +29,7 @@ An hourly scan compares every Project with its folder, next to the file listener
 
 ## Live updates
 
-The Review view asks for changes every five seconds (thirty in a hidden tab). Where Nextcloud runs the [notify_push](https://github.com/nextcloud/notify_push) app, every new or changed Comment, Reaction or Approval is pushed to the Project's Members as well, and their open Review views update at once. Reviewers on a Share Link have no account to push to and keep polling.
+The Review view asks for changes every five seconds (thirty in a hidden tab). Where Nextcloud runs the [notify_push](https://github.com/nextcloud/notify_push) app, every new or changed Comment, Reaction or Approval is pushed to the Project's Members as well, and their open Review views update at once. Reviewers on a Project Link have no account to push to and keep polling.
 
 ## Deployment
 

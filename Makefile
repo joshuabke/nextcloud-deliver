@@ -11,7 +11,7 @@ up:
 	# settings made before that can be overwritten, so wait for Apache to answer
 	@until $(COMPOSE) exec -T nextcloud php -r 'exit(@file_get_contents("http://localhost/status.php") === false ? 1 : 0);'; do echo "waiting for Apache…"; sleep 2; done
 	$(OCC) app:disable firstrunwizard
-	# Integration tests knock on invalid Share Link tokens on purpose; the
+	# Integration tests knock on invalid link tokens on purpose; the
 	# bruteforce protection would answer 429 from the tenth knock on. Reset first:
 	# resetting is itself a no-op once the protection is off.
 	$(OCC) security:bruteforce:reset 127.0.0.1

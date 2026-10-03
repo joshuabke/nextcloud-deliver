@@ -1,5 +1,5 @@
 /**
- * The Watermark over the picture on a Share Link (story 94): one line of
+ * The Watermark over the picture on a Project Link (story 94): one line of
  * text, repeated diagonally as an SVG tile, so a screen recording carries it
  * wherever it is cropped.
  *
