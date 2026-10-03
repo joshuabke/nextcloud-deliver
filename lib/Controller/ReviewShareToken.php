@@ -4,19 +4,22 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Controller;
 
-use OCA\Deliver\Service\ShareReviewService;
+use OCA\Deliver\Service\ReviewLink;
+use OCA\Deliver\Service\ReviewLinks;
 use OCP\AppFramework\Http\Response;
 use OCP\Files\NotFoundException;
-use OCP\Share\IShare;
 
 /**
  * The token checks both public controllers share. The framework calls them
- * before any action runs, so password and expiry of the share apply (ADR 0004).
+ * before any action runs, so password and expiry of the link apply, whether
+ * a Share Link's (ADR 0004) or a Project Link's (ADR 0010).
  *
- * @property ShareReviewService $sharing
+ * @property ReviewLinks $links
  */
 trait ReviewShareToken {
-	/** Cookie that remembers a Reviewer on this browser, one per Share Link */
+	private ?ReviewLink $resolved = null;
+
+	/** Cookie that remembers a Reviewer on this browser, one per link */
 	public static function cookieName(string $token): string {
 		return 'deliver_reviewer_' . $token;
 	}
@@ -26,24 +29,25 @@ trait ReviewShareToken {
 		$response->addCookie(self::cookieName($this->getToken()), $key, new \DateTime('+10 years'), 'Lax');
 	}
 
-	private function share(): IShare {
-		return $this->sharing->byToken($this->getToken());
+	/** @throws NotFoundException no link with this token */
+	private function link(): ReviewLink {
+		return $this->resolved ??= $this->links->byToken($this->getToken());
 	}
 
-	/** Only a share a Member switched review on for is a review surface */
+	/** Only a live link is a review surface: review on, not paused, not expired */
 	public function isValidToken(): bool {
 		try {
-			return $this->sharing->isReview($this->share());
+			return $this->link()->isLive();
 		} catch (NotFoundException) {
 			return false;
 		}
 	}
 
 	protected function getPasswordHash(): ?string {
-		return $this->share()->getPassword();
+		return $this->link()->passwordHash();
 	}
 
 	protected function isPasswordProtected(): bool {
-		return $this->share()->getPassword() !== null;
+		return $this->link()->passwordHash() !== null;
 	}
 }

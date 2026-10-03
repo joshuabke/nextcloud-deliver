@@ -35,9 +35,14 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | PUT | `/comments/{id}/resolved` `{resolved}` | Resolve or unresolve, needs write access |
 | GET | `/files/{fileId}/shares` | The Share Links of a file or folder, with Deliver's flags |
 | POST | `/files/{fileId}/shares` | A Share Link with review already on |
-| PUT | `/shares/{shareId}` `{review, canComment, allowOlder, watermark, password, expireDate}` | Switch review on a Share Link, set its flags, and its password and expiry (`''` removes either) under Nextcloud's sharing policy |
+| PUT | `/shares/{shareId}` `{review, canComment, allowOlder, watermark, latestOnly, canDownload, description, password, expireDate}` | Switch review on a Share Link, set its flags, and its password and expiry (`''` removes either) under Nextcloud's sharing policy |
 | DELETE | `/shares/{shareId}` | Delete the Share Link from Nextcloud |
-| GET | `/projects/{id}/shares` | The user's Share Links on the Project's folder, inside it or on one of its files (not a folder that merely holds one), and their Reviewers who came by them |
+| GET | `/projects/{id}/shares` | My Project Links of the Project, my Share Links on its folder, inside it or on one of its files (not a folder that merely holds one), and my Reviewers who came by any of them, each with a Personal Link through every link with review on, keyed by token |
+| POST | `/projects/{id}/links` | A Project Link (ADR 0010), live and showing the whole Project |
+| PUT | `/links/{id}` `{review, canComment, allowOlder, watermark, canDownload, latestOnly, label, description, password, expireDate, assetIds}` | Change a Project Link; `''` removes password, expiry or description, `assetIds: null` shows the whole Project again; `review: false` pauses it |
+| DELETE | `/links/{id}` | Delete a Project Link |
+| GET/POST | `/links/{id}/reviewers` | Its Reviewers with Personal Links; invite one `{name, email}` |
+| GET | `/links/{id}/activity`, `/shares/{shareId}/activity` | Who opened the link, watched or downloaded which Version, newest first |
 | GET | `/shares/{shareId}/reviewers` | The Reviewers of the Member who made the link, each with a Personal Link through this share |
 | POST | `/shares/{shareId}/reviewers` `{name, email}` | Invite a Reviewer; the answer carries the Personal Link |
 | DELETE | `/reviewers/{id}` | Remove a Reviewer: their Personal Links stop working, their Comments stay |
@@ -46,15 +51,16 @@ Rights follow each Version's file (ADR 0009): read access views and comments, wr
 
 A Personal Link is the share URL plus the Reviewer's key, `/s/{token}?r={key}`. Opening it stores the key in a cookie for that share, so the browser keeps the identity.
 
-Reviewers never touch OCS. Their surface hangs off the share token, needs no account, and is checked by the public-share middleware before Deliver sees it:
+Reviewers never touch OCS. Their surface hangs off the token of a Share Link or a Project Link, needs no account, and is checked by the public-share middleware before Deliver sees it:
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/apps/deliver/s/{token}` | The review page; `?fileId=` opens a specific file |
+| GET | `/apps/deliver/s/{token}` | The review page: a link with one Asset opens it, with more a grid of them under the link's description; `?fileId=` opens a specific file |
 | GET | `/apps/deliver/s/{token}/versions/{versionId}` | The review page on one Version |
 | GET | `/apps/deliver/s/{token}/api/context` | Project settings, Asset and Version Stack behind the link |
-| GET | `/apps/deliver/s/{token}/api/assets` | What the link shows, for the Review button in the file list |
-| GET | `/apps/deliver/s/{token}/media/{versionId}/{kind}` | Derived media, or `original` where the share hides downloads and no Proxy is made |
+| GET | `/apps/deliver/s/{token}/api/assets` | What the link shows, for the Review button in the file list and the grid |
+| GET | `/apps/deliver/s/{token}/preview?fileId=&x=&y=` | The still of a file behind the link |
+| GET | `/apps/deliver/s/{token}/media/{versionId}/{kind}` | Derived media, or `original` where the link hides downloads and no Proxy is made, or for a Project Link; `?download=1` downloads it and notes that in the link's activity |
 | POST | `/apps/deliver/s/{token}/api/reviewer` `{name, email}` | Name yourself; the answer carries the Personal Link |
 | GET/POST | `/apps/deliver/s/{token}/api/versions/{id}/comments` | Read and write Comments as a Reviewer |
 | PUT/DELETE | `/apps/deliver/s/{token}/api/comments/{id}` | Change or remove one's own Comment |

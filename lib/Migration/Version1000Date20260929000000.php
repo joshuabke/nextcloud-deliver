@@ -163,14 +163,49 @@ class Version1000Date20260929000000 extends SimpleMigrationStep {
 		$t->addIndex(['version_id'], 'deliver_job_version_idx');
 		$t->addIndex(['state', 'kind'], 'deliver_job_state_idx');
 
-		// Which Share Links a Reviewer was invited through or came in by
+		// Which link a Reviewer was invited through or came in by, a Share Link or a Project Link, by its token
 		$t = $schema->createTable('deliver_reviewer_links');
 		$t->addColumn('id', Types::BIGINT, ['autoincrement' => true, 'notnull' => true]);
 		$t->addColumn('reviewer_id', Types::BIGINT, ['notnull' => true]);
-		$t->addColumn('share_id', Types::BIGINT, ['notnull' => true]);
+		$t->addColumn('token', Types::STRING, ['notnull' => true, 'length' => 32]);
 		$t->addColumn('created_at', Types::BIGINT, ['notnull' => true]);
 		$t->setPrimaryKey(['id']);
-		$t->addUniqueIndex(['reviewer_id', 'share_id'], 'deliver_revlink_uniq');
+		$t->addUniqueIndex(['reviewer_id', 'token'], 'deliver_revlink_uniq');
+
+		// Project Links: Deliver's own review links for a whole Project or picked Assets (ADR 0010)
+		$t = $schema->createTable('deliver_project_links');
+		$t->addColumn('id', Types::BIGINT, ['autoincrement' => true, 'notnull' => true]);
+		$t->addColumn('project_id', Types::BIGINT, ['notnull' => true]);
+		$t->addColumn('owner_uid', Types::STRING, ['notnull' => true, 'length' => 64]);
+		$t->addColumn('token', Types::STRING, ['notnull' => true, 'length' => 32]);
+		$t->addColumn('label', Types::STRING, ['notnull' => false, 'length' => 255]);
+		$t->addColumn('description', Types::TEXT, ['notnull' => false]);
+		$t->addColumn('password_hash', Types::STRING, ['notnull' => false, 'length' => 255]);
+		// YYYY-MM-DD; the link works through that day
+		$t->addColumn('expire_date', Types::STRING, ['notnull' => false, 'length' => 10]);
+		// JSON list of Asset ids; null shows the whole Project
+		$t->addColumn('asset_ids', Types::TEXT, ['notnull' => false]);
+		$t->addColumn('review', Types::BOOLEAN, ['notnull' => false]);
+		$t->addColumn('can_comment', Types::BOOLEAN, ['notnull' => false]);
+		$t->addColumn('allow_older', Types::BOOLEAN, ['notnull' => false]);
+		$t->addColumn('watermark', Types::BOOLEAN, ['notnull' => false]);
+		$t->addColumn('can_download', Types::BOOLEAN, ['notnull' => false]);
+		$t->addColumn('latest_only', Types::BOOLEAN, ['notnull' => false]);
+		$t->addColumn('created_at', Types::BIGINT, ['notnull' => true]);
+		$t->setPrimaryKey(['id']);
+		$t->addUniqueIndex(['token'], 'deliver_plink_token_uniq');
+		$t->addIndex(['project_id'], 'deliver_plink_project_idx');
+
+		// What happened on a link: opened, a Version viewed or downloaded; by token, for both kinds of link
+		$t = $schema->createTable('deliver_link_activity');
+		$t->addColumn('id', Types::BIGINT, ['autoincrement' => true, 'notnull' => true]);
+		$t->addColumn('token', Types::STRING, ['notnull' => true, 'length' => 32]);
+		$t->addColumn('reviewer_id', Types::BIGINT, ['notnull' => false]);
+		$t->addColumn('kind', Types::STRING, ['notnull' => true, 'length' => 16]);
+		$t->addColumn('version_id', Types::BIGINT, ['notnull' => false]);
+		$t->addColumn('created_at', Types::BIGINT, ['notnull' => true]);
+		$t->setPrimaryKey(['id']);
+		$t->addIndex(['token'], 'deliver_activity_token_idx');
 
 		// Approvals: one decision per person and Version (story 88)
 		$t = $schema->createTable('deliver_approvals');
