@@ -63,7 +63,11 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 			</div>
 			<ul class="deliver-landing__grid">
 				<li v-for="asset in assets" :key="asset.assetId" class="deliver-landing__card">
-					<button type="button" class="deliver-landing__open" @click="emit('open', asset.newestId)">
+					<button
+						type="button"
+						class="deliver-landing__open"
+						:aria-label="asset.name"
+						@click="emit('open', asset.newestId)">
 						<span class="deliver-landing__still">
 							<NcIconSvgWrapper :svg="isAudio(asset) ? audioIcon : videoIcon" :size="40" />
 							<img
