@@ -9,6 +9,7 @@ First release in the App Store.
 - Version Stacks for the iterations of a cut, and two Versions side by side or under a wipe, playing in sync.
 - Approvals: approve a Version or request changes, and everyone sees who decided what.
 - Review for outsiders on Nextcloud's own Share Links, with a Personal Link for every Reviewer, their own rights and an optional Watermark with their name.
+- Project Links for a whole Project or picked Assets, wherever the files lie: password, expiry, pause, comments, download, only the newest Version, a description above a grid of the Assets with downloads one by one or as a ZIP, and who opened, watched and downloaded what.
 - Due Dates with reminders, Unseen Comments, notifications and mail, and live updates without reloading.
 - Export of the Comments as EDL, FCP7 XML, FCPXML or CSV, as markers for the editing application.
 - Audio counts to the millisecond: shown as `m:ss.mmm`, switchable to timecode or frames at the Project's frame rate.

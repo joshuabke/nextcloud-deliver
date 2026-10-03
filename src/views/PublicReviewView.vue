@@ -1,4 +1,6 @@
 <script setup>
+import accountIcon from '@mdi/svg/svg/account-circle-outline.svg?raw'
+import backIcon from '@mdi/svg/svg/arrow-left.svg?raw'
 import previousIcon from '@mdi/svg/svg/chevron-left.svg?raw'
 import nextIcon from '@mdi/svg/svg/chevron-right.svg?raw'
 import downloadIcon from '@mdi/svg/svg/download.svg?raw'
@@ -17,6 +19,7 @@ import AssetStepper from '../components/AssetStepper.vue'
 import CommentPanel from '../components/CommentPanel.vue'
 import DueDate from '../components/DueDate.vue'
 import ImageViewer from '../components/ImageViewer.vue'
+import LinkLanding from '../components/LinkLanding.vue'
 import ReviewerMailSettings from '../components/ReviewerMailSettings.vue'
 import ReviewLayout from '../components/ReviewLayout.vue'
 import VersionPicker from '../components/VersionPicker.vue'
@@ -27,8 +30,10 @@ import { useReview } from '../composables/review.js'
 import { useCommentsStore } from '../store/comments.js'
 
 const props = defineProps({
-	/** The Version the Share Link opened on */
+	/** The Version the link opened on; none opens the grid of its Assets */
 	versionId: { type: Number, default: null },
+	/** The link's title and description for that grid, with the Reviewer's name and the ZIP of all, if any */
+	link: { type: Object, default: () => ({ title: '', description: null, reviewer: null, downloadAll: null }) },
 })
 
 const store = useCommentsStore()
@@ -41,8 +46,8 @@ const personalLink = ref(null)
 const reviewer = ref(null)
 const reviewerName = computed(() => reviewer.value?.name ?? '')
 const current = ref(props.versionId)
-/** The newest Version of every Asset the share shows, to step through */
-const newest = ref([])
+/** The newest Version of every Asset the link shows, to step through; null while loading */
+const newest = ref(null)
 
 /** Who watches, and when: the Reviewer's name once they gave one (story 94) */
 const watermarkText = computed(() => [
@@ -50,7 +55,8 @@ const watermarkText = computed(() => [
 	new Date().toLocaleDateString(getLanguage()),
 ].join(' · '))
 const version = computed(() => context.value?.versions.find((each) => each.id === current.value) ?? null)
-const assetIndex = computed(() => newest.value.findIndex((each) => each.assetId === context.value?.asset?.id))
+const assetIndex = computed(() => (newest.value ?? []).findIndex((each) => each.assetId === context.value?.asset?.id))
+const assetCount = computed(() => newest.value?.length ?? 0)
 
 const { player, panel, mode, clock, anchor, pin, hold, release, jump, posted, drawing, draft, draw, range, markRange, clearRange } = useReview({
 	version,
@@ -61,6 +67,8 @@ const { player, panel, mode, clock, anchor, pin, hold, release, jump, posted, dr
 
 watch(current, async (versionId) => {
 	if (versionId === null) {
+		store.stop()
+		context.value = null
 		return
 	}
 	error.value = null
@@ -72,12 +80,12 @@ watch(current, async (versionId) => {
 	}
 }, { immediate: true })
 
-if (props.versionId !== null) {
-	listPublicAssets().then((entries) => {
-		const seen = new Set()
-		newest.value = entries.filter((each) => !seen.has(each.assetId) && seen.add(each.assetId))
-	}).catch(() => {})
-}
+listPublicAssets().then((entries) => {
+	const seen = new Set()
+	newest.value = entries.filter((each) => !seen.has(each.assetId) && seen.add(each.assetId))
+}).catch(() => {
+	newest.value = []
+})
 
 onBeforeUnmount(() => store.stop())
 
@@ -93,7 +101,7 @@ async function reload() {
  * @param {number} by - -1 for the previous Asset, 1 for the next
  */
 function step(by) {
-	const next = newest.value[assetIndex.value + by]
+	const next = newest.value?.[assetIndex.value + by]
 	if (next) {
 		current.value = next.newestId
 	}
@@ -124,9 +132,15 @@ async function claim({ name, email, mail }) {
 			{{ error }}
 		</NcNoteCard>
 		<NcEmptyContent
-			v-else-if="versionId === null"
+			v-else-if="current === null && newest?.length === 0"
 			:name="t('deliver', 'Nothing to review here')"
 			:description="t('deliver', 'This link shows no file that is enabled for review.')" />
+		<LinkLanding
+			v-else-if="current === null && newest"
+			:link="link"
+			:assets="newest"
+			:me="reviewerName || link.reviewer || ''"
+			@open="current = $event" />
 		<NcEmptyContent v-else-if="!context" :name="t('deliver', 'Loading…')">
 			<template #icon>
 				<NcLoadingIcon />
@@ -134,6 +148,16 @@ async function claim({ name, email, mail }) {
 		</NcEmptyContent>
 		<ReviewLayout v-else v-model:panelOpen="panelOpen">
 			<template #start>
+				<NcButton
+					v-if="assetCount > 1"
+					variant="tertiary"
+					:aria-label="t('deliver', 'All Assets')"
+					:title="t('deliver', 'All Assets')"
+					@click="current = null">
+					<template #icon>
+						<NcIconSvgWrapper :svg="backIcon" />
+					</template>
+				</NcButton>
 				<div class="deliver-public__crumbs">
 					<h2 class="deliver-layout__title">
 						{{ context.asset?.name }}
@@ -143,14 +167,21 @@ async function claim({ name, email, mail }) {
 				<DueDate v-if="!isMobile" :modelValue="context.asset?.dueDate ?? null" />
 			</template>
 			<template #center>
-				<AssetStepper :index="assetIndex" :count="newest.length" @step="step" />
+				<AssetStepper :index="assetIndex" :count="assetCount" @step="step" />
 			</template>
 			<template #end>
+				<span
+					v-if="reviewerName && !isMobile"
+					class="deliver-public__me"
+					:title="t('deliver', 'Reviewing as {name}', { name: reviewerName })">
+					<NcIconSvgWrapper :svg="accountIcon" :size="20" />
+					{{ reviewerName }}
+				</span>
 				<ApprovalControl />
 				<VersionPicker :versions="context.versions" :current="current" @select="current = $event" />
 				<NcButton
-					v-if="context.flags.canDownload && version?.url && !isMobile"
-					:href="version.url"
+					v-if="version?.downloadUrl && !isMobile"
+					:href="version.downloadUrl"
 					variant="tertiary"
 					:aria-label="t('deliver', 'Download the original')"
 					:title="t('deliver', 'Download the original')"
@@ -161,9 +192,9 @@ async function claim({ name, email, mail }) {
 				</NcButton>
 			</template>
 
-			<template v-if="newest.length > 1 || (context.flags.canDownload && version?.url)" #menu>
+			<template v-if="assetCount > 1 || version?.downloadUrl" #menu>
 				<NcActionButton
-					v-if="newest.length > 1"
+					v-if="assetCount > 1"
 					:disabled="assetIndex <= 0"
 					closeAfterClick
 					@click="step(-1)">
@@ -173,8 +204,8 @@ async function claim({ name, email, mail }) {
 					{{ t('deliver', 'Previous Asset') }}
 				</NcActionButton>
 				<NcActionButton
-					v-if="newest.length > 1"
-					:disabled="assetIndex < 0 || assetIndex >= newest.length - 1"
+					v-if="assetCount > 1"
+					:disabled="assetIndex < 0 || assetIndex >= assetCount - 1"
 					closeAfterClick
 					@click="step(1)">
 					<template #icon>
@@ -182,7 +213,7 @@ async function claim({ name, email, mail }) {
 					</template>
 					{{ t('deliver', 'Next Asset') }}
 				</NcActionButton>
-				<NcActionLink v-if="context.flags.canDownload && version?.url" :href="version.url" download>
+				<NcActionLink v-if="version?.downloadUrl" :href="version.downloadUrl" download>
 					<template #icon>
 						<NcIconSvgWrapper :svg="downloadIcon" />
 					</template>
@@ -250,6 +281,18 @@ async function claim({ name, email, mail }) {
 	align-items: flex-start;
 	min-width: 0;
 	padding-inline-start: var(--default-grid-baseline);
+}
+
+.deliver-public__me {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	max-width: 200px;
+	padding-inline: 8px;
+	overflow: hidden;
+	color: var(--color-text-maxcontrast);
+	white-space: nowrap;
+	text-overflow: ellipsis;
 }
 
 .deliver-layout__notice code {

@@ -6,6 +6,7 @@ namespace OCA\Deliver\Listener;
 
 use OCA\Deliver\AppInfo\Application;
 use OCA\Deliver\Controller\PublicController;
+use OCA\Deliver\Service\ReviewLinks;
 use OCA\Deliver\Service\ShareReviewService;
 use OCA\Files_Sharing\Event\BeforeTemplateRenderedEvent;
 use OCP\AppFramework\Services\IInitialState;
@@ -28,6 +29,7 @@ use OCP\Util;
 class LoadPublicSharePageListener implements IEventListener {
 	public function __construct(
 		private ShareReviewService $sharing,
+		private ReviewLinks $links,
 		private IInitialState $initialState,
 		private IRequest $request,
 		private IURLGenerator $urls,
@@ -60,7 +62,7 @@ class LoadPublicSharePageListener implements IEventListener {
 		try {
 			$node = $share->getNode();
 			if ($node instanceof File) {
-				$version = $this->sharing->versionForFile($share, $node->getId());
+				$version = $this->links->versionForFile($this->sharing->wrap($share), $node->getId());
 				$reviewUrl = $this->urls->linkToRoute('deliver.Public.showVersion', ['token' => $token, 'versionId' => $version->getId()]);
 			}
 		} catch (NotFoundException) {

@@ -238,7 +238,10 @@ class ShareReviewTest extends TestCase {
 
 	public function testHiddenDownloadsKeepTheShareFromHandingOutTheOriginal(): void {
 		$open = $this->reviewer()->call('GET', '/api/context?versionId=' . $this->versionId);
-		self::assertStringContainsString('/public.php/dav/files/', $open['data']['versions'][0]['url']);
+		self::assertStringContainsString('/public.php/dav/files/', $open['data']['versions'][0]['url'], 'the player streams from the share');
+		$download = (string)$open['data']['versions'][0]['downloadUrl'];
+		self::assertSame(200, $this->reviewer()->raw(substr($download, strpos($download, $this->token) + strlen($this->token)))['status']);
+		self::assertContains('downloaded', array_column($this->nc->ocs('GET', "/shares/{$this->shareId}/activity")['data'], 'kind'), 'the download button goes through Deliver, which notes it');
 
 		$hidden = $this->nc->ocsForm('PUT', "/ocs/v2.php/apps/files_sharing/api/v1/shares/{$this->shareId}", ['hideDownload' => 'true']);
 		self::assertSame(200, $hidden['status'], json_encode($hidden['data']));
@@ -247,6 +250,7 @@ class ShareReviewTest extends TestCase {
 		$url = (string)$context['data']['versions'][0]['url'];
 		self::assertStringContainsString('/media/', $url, 'without a Proxy the original still plays, but through Deliver');
 		self::assertStringNotContainsString('/dav/', $url);
+		self::assertNull($context['data']['versions'][0]['downloadUrl']);
 	}
 
 	public function testAProjectListsItsLinksAndWhoCameByThem(): void {
@@ -267,8 +271,8 @@ class ShareReviewTest extends TestCase {
 		$reviewers = array_column($listed['data']['reviewers'], null, 'name');
 		self::assertSame([$reviewers['Kim']['id']], $links[$this->shareId]['reviewerIds'], 'invited through the folder link');
 		self::assertSame([$reviewers['Lea']['id']], $links[$fileLink['data']['id']]['reviewerIds'], 'named themselves on the file link');
-		$kimLinks = array_column($reviewers['Kim']['links'], 'url', 'shareId');
-		self::assertStringContainsString($fileLink['data']['token'], $kimLinks[$fileLink['data']['id']], 'every Reviewer has a Personal Link through every review link');
+		$kimLinks = array_column($reviewers['Kim']['links'], 'url', 'token');
+		self::assertStringContainsString($fileLink['data']['token'], $kimLinks[$fileLink['data']['token']], 'every Reviewer has a Personal Link through every review link');
 	}
 
 	public function testALinkSaysWhichFilesAreNotUpForReview(): void {
