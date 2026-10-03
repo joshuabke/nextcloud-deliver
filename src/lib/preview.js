@@ -8,10 +8,11 @@ import { generateUrl } from '@nextcloud/router'
 let shareToken = null
 
 /**
- * Reviewers have no session, so their previews come through the share's own
- * endpoint instead of the one for Members.
+ * Reviewers have no session, so their previews come through the link's own
+ * endpoint instead of the one for Members; a Project Link has no Nextcloud
+ * share to ask (ADR 0010).
  *
- * @param {string} token - the share token of the public page
+ * @param {string} token - the token of the public page
  */
 export function usePublicPreviews(token) {
 	shareToken = token
@@ -26,5 +27,5 @@ export function previewUrl(fileId, size = 64) {
 	const query = `?fileId=${fileId}&x=${size}&y=${size}&a=1`
 	return shareToken === null
 		? generateUrl('/core/preview' + query)
-		: generateUrl('/apps/files_sharing/publicpreview/{token}', { token: shareToken }) + query
+		: generateUrl('/apps/deliver/s/{token}/preview', { token: shareToken }) + query
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Controller;
 
+use OCA\Deliver\Db\LinkActivityMapper;
 use OCA\Deliver\Db\Reviewer;
 use OCA\Deliver\Db\Version;
 use OCA\Deliver\Http\RangeFileResponse;
@@ -13,28 +14,28 @@ use OCA\Deliver\Service\CommentService;
 use OCA\Deliver\Service\DerivedMedia;
 use OCA\Deliver\Service\ProjectService;
 use OCA\Deliver\Service\ReviewerService;
-use OCA\Deliver\Service\ShareReviewService;
+use OCA\Deliver\Service\ReviewLink;
+use OCA\Deliver\Service\ReviewLinks;
 use OCA\Deliver\Service\StackService;
 use OCA\Deliver\Service\Viewer;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\Attribute\PublicPage;
+use OCP\AppFramework\Http\FileDisplayResponse;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\Response;
 use OCP\AppFramework\PublicShareController;
-use OCP\Files\File;
-use OCP\Files\Folder;
 use OCP\Files\NotFoundException;
+use OCP\IPreview;
 use OCP\IRequest;
 use OCP\ISession;
 use OCP\IURLGenerator;
 use OCP\IUserSession;
-use OCP\Share\IShare;
 
 /**
- * The API behind a Share Link. Token, password and expiry are checked by the
- * framework before an action runs (ADR 0004); what is left here is who the
- * Reviewer is and what the share's Deliver flags allow.
+ * The API behind a Share Link or a Project Link. Token, password and expiry
+ * are checked by the framework before an action runs (ADR 0004, 0010); what
+ * is left here is who the Reviewer is and what the link's flags allow.
  */
 class PublicApiController extends PublicShareController {
 	use GuardsErrors;
@@ -44,7 +45,7 @@ class PublicApiController extends PublicShareController {
 		string $appName,
 		IRequest $request,
 		ISession $session,
-		private ShareReviewService $sharing,
+		private ReviewLinks $links,
 		private ReviewerService $reviewers,
 		private CommentService $comments,
 		private DerivedMedia $media,
@@ -53,35 +54,38 @@ class PublicApiController extends PublicShareController {
 		private IURLGenerator $urls,
 		private IUserSession $userSession,
 		private ApprovalService $approvals,
+		private IPreview $previews,
 	) {
 		parent::__construct($appName, $request, $session);
 	}
 
-	/** One Version with its Version Stack, as far as the share shows it */
+	/** One Version with its Version Stack, as far as the link shows it */
 	#[PublicPage]
 	#[NoCSRFRequired]
 	public function context(int $versionId): Response {
 		return $this->guard(function () use ($versionId) {
-			$share = $this->share();
-			$version = $this->sharing->version($share, $versionId);
+			$link = $this->link();
+			$version = $this->links->version($link, $versionId);
 			$project = $this->projects->settingsOf($version);
-			$stack = $this->sharing->assets($share)[$version->getAssetId()] ?? null;
+			$stack = $link->assets()[$version->getAssetId()] ?? null;
 			$reviewer = $this->reviewer();
 			if ($reviewer !== null) {
-				$this->reviewers->cameBy($reviewer, (int)$share->getId());
+				$this->reviewers->cameBy($reviewer, $link->token());
 			}
-			$flags = $this->flags($share, $reviewer);
+			$this->links->record($link, LinkActivityMapper::VIEWED, $reviewer, $version);
+			$flags = $this->flags($link, $reviewer);
 			return [
 				'versionId' => $version->getId(),
 				'flags' => $flags,
+				'description' => $link->description(),
 				'project' => [
-					'name' => $share->getNode()->getName(),
+					'name' => $link->title(),
 					'fps' => ['num' => $project->getFpsNum(), 'den' => $project->getFpsDen()],
 					'timecodeMode' => $project->getTimecodeMode(),
 				],
 				'asset' => $stack === null ? null : ['id' => $stack['asset']->getId(), 'name' => $this->stacks->nameOf($stack['asset']), 'dueDate' => $stack['asset']->getDueDate()],
 				'versions' => $stack === null ? [] : array_map(
-					fn (Version $each) => $this->describe($share, $each, $flags['canDownload']),
+					fn (Version $each) => $this->describe($link, $each, $flags['canDownload']),
 					$stack['versions'],
 				),
 				'me' => $this->me(),
@@ -90,15 +94,17 @@ class PublicApiController extends PublicShareController {
 	}
 
 	/**
-	 * Every file the share shows that is an Asset, for the Review button in
-	 * the shared file list. The button opens the newest Version (story 61).
+	 * Every file the link shows that is an Asset, for the Review button in
+	 * the shared file list and the grid of a link's landing page. The button
+	 * opens the newest Version (story 61).
 	 */
 	#[PublicPage]
 	#[NoCSRFRequired]
 	public function assets(): Response {
 		return $this->guard(function () {
+			$link = $this->link();
 			$result = [];
-			foreach ($this->sharing->assets($this->share()) as ['asset' => $asset, 'versions' => $versions]) {
+			foreach ($link->assets() as ['asset' => $asset, 'versions' => $versions]) {
 				foreach ($versions as $version) {
 					// The Review button opens the file's own Version; stepping through Assets lands on the newest
 					$result[] = [
@@ -106,6 +112,11 @@ class PublicApiController extends PublicShareController {
 						'versionId' => $version->getId(),
 						'newestId' => $versions[0]->getId(),
 						'assetId' => $asset->getId(),
+						'name' => $this->stacks->nameOf($asset),
+						'number' => $versions[0]->getNumber(),
+						'count' => count($versions),
+						'mimeType' => $link->originalFile($versions[0])?->getMimetype(),
+						'dueDate' => $asset->getDueDate(),
 					];
 				}
 			}
@@ -122,18 +133,45 @@ class PublicApiController extends PublicShareController {
 	#[NoCSRFRequired]
 	public function media(int $versionId, string $kind): Response {
 		try {
-			$share = $this->share();
-			$version = $this->sharing->version($share, $versionId);
+			$link = $this->link();
+			$version = $this->links->version($link, $versionId);
 			if ($kind !== 'original') {
 				// Not generated (yet) is a 404 as well; the player falls back to the original
 				return RangeFileResponse::ofSimpleFile($this->media->file($version, $kind), $this->request->getHeader('Range'));
 			}
-			$file = $this->originalFile($share, $version);
-			if ($file === null || !$this->mayPlayOriginal($version, $this->sharing->flags($share)['canDownload'])) {
+			$file = $link->originalFile($version);
+			$canDownload = $this->flags($link, $this->reviewer())['canDownload'];
+			if ($file === null || !$this->mayPlayOriginal($version, $canDownload)) {
 				return new Response(Http::STATUS_NOT_FOUND);
+			}
+			if ($this->request->getParam('download') !== null && $canDownload) {
+				// The download button, not the player, which asks for ranges of the same file (story 124)
+				$this->links->record($link, LinkActivityMapper::DOWNLOADED, $this->reviewer(), $version);
+				$response = RangeFileResponse::ofFile($file, null);
+				$response->addHeader('Content-Disposition', 'attachment; filename="' . rawurlencode($file->getName()) . '"');
+				return $response;
 			}
 			return RangeFileResponse::ofFile($file, $this->request->getHeader('Range'));
 		} catch (NotFoundException) {
+			return new Response(Http::STATUS_NOT_FOUND);
+		}
+	}
+
+	/**
+	 * The still of a file behind the link, as Nextcloud renders it, for the
+	 * grid; a Project Link has no share of Nextcloud's to ask for it.
+	 */
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function preview(int $fileId, int $x = 64, int $y = 64): Response {
+		try {
+			$link = $this->link();
+			$file = $link->originalFile($this->links->versionForFile($link, $fileId));
+			if ($file === null) {
+				return new Response(Http::STATUS_NOT_FOUND);
+			}
+			return new FileDisplayResponse($this->previews->getPreview($file, min($x, 1024), min($y, 1024), true));
+		} catch (NotFoundException|\InvalidArgumentException) {
 			return new Response(Http::STATUS_NOT_FOUND);
 		}
 	}
@@ -143,13 +181,13 @@ class PublicApiController extends PublicShareController {
 	#[NoCSRFRequired]
 	public function claim(string $name, ?string $email = null, ?bool $mailReplies = null, ?bool $mailComments = null, ?bool $mailVersions = null): Response {
 		return $this->guard(function () use ($name, $email, $mailReplies, $mailComments, $mailVersions) {
-			$share = $this->share();
+			$link = $this->link();
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
-			$reviewer = $this->reviewers->claim($share->getSharedBy(), $name, $email, $wishes);
-			$this->reviewers->cameBy($reviewer, (int)$share->getId());
+			$reviewer = $this->reviewers->claim($link->ownerUid(), $name, $email, $wishes);
+			$this->reviewers->cameBy($reviewer, $link->token());
 			// A JSONResponse, because a DataResponse loses its cookies on the way out
 			$response = new JSONResponse(
-				$this->reviewers->serialize($reviewer) + ['link' => $this->sharing->personalLink($share, $reviewer)],
+				$this->reviewers->serialize($reviewer) + ['link' => $link->personalLink($reviewer)],
 				Http::STATUS_CREATED,
 			);
 			$this->rememberReviewer($response, $reviewer->getSecretKey());
@@ -225,8 +263,7 @@ class PublicApiController extends PublicShareController {
 	#[NoCSRFRequired]
 	public function attachment(int $id): Response {
 		try {
-			$share = $this->share();
-			$version = $this->sharing->version($share, $this->comments->versionIdOfAttachment($id));
+			$version = $this->links->version($this->link(), $this->comments->versionIdOfAttachment($id));
 			[$file, $attachment] = $this->comments->attachment($version, $id);
 			return AttachmentResponse::of($file, $attachment);
 		} catch (NotFoundException) {
@@ -243,30 +280,27 @@ class PublicApiController extends PublicShareController {
 		});
 	}
 
-	/** A Version as the Review view shows it, with the original only where the share allows */
-	private function describe(IShare $share, Version $version, bool $canDownload): array {
+	/** A Version as the Review view shows it, with the original only where the link allows */
+	private function describe(ReviewLink $link, Version $version, bool $canDownload): array {
 		$media = $this->urls->linkToRoute('deliver.PublicApi.media', [
 			'token' => $this->getToken(),
 			'versionId' => $version->getId(),
 			'kind' => '__kind__',
 		]);
+		$original = str_replace('__kind__', 'original', $media);
 		$url = match (true) {
-			$canDownload => $this->sharing->mediaUrl($share, $version),
-			$this->mayPlayOriginal($version, false) => str_replace('__kind__', 'original', $media),
+			$canDownload => $link->directUrl($version) ?? $original,
+			$this->mayPlayOriginal($version, false) => $original,
 			default => null,
 		};
-		return $this->projects->describeVersion($version, $this->projects->settingsOf($version), $url, $media);
+		return $this->projects->describeVersion($version, $this->projects->settingsOf($version), $url, $media)
+			// Always through Deliver, never a share's WebDAV URL, so the link's activity notes it (story 124)
+			+ ['downloadUrl' => $canDownload ? $original . '?download=1' : null];
 	}
 
 	/** Without downloads, the original plays only while no Proxy is made for it */
 	private function mayPlayOriginal(Version $version, bool $canDownload): bool {
 		return $canDownload || in_array($version->getProxyState(), [DerivedMedia::STATE_NONE, DerivedMedia::STATE_FAILED], true);
-	}
-
-	private function originalFile(IShare $share, Version $version): ?File {
-		$node = $share->getNode();
-		$found = $node instanceof Folder ? $node->getFirstNodeById($version->getFileId()) : $node;
-		return $found instanceof File && $found->getId() === $version->getFileId() ? $found : null;
 	}
 
 	/** Who is writing: the Reviewer this browser carries, or someone without a name yet */
@@ -280,7 +314,7 @@ class PublicApiController extends PublicShareController {
 
 	private function reviewer(): ?Reviewer {
 		$key = $this->request->getCookie(self::cookieName($this->getToken())) ?? $this->request->getParam('r');
-		return $this->reviewers->byKey(is_string($key) ? $key : null, $this->share());
+		return $this->reviewers->byKey(is_string($key) ? $key : null, $this->link());
 	}
 
 	/**
@@ -288,15 +322,15 @@ class PublicApiController extends PublicShareController {
 	 *
 	 * @return array<string, mixed>
 	 */
-	private function flags(IShare $share, ?Reviewer $reviewer): array {
-		$flags = $this->sharing->flags($share);
+	private function flags(ReviewLink $link, ?Reviewer $reviewer): array {
+		$flags = $link->flags();
 		return $reviewer === null ? $flags : $reviewer->over($flags);
 	}
 
-	/** A Reviewer comments while the share or their own rights allow it, and never resolves */
-	private function viewer(IShare $share): Viewer {
+	/** A Reviewer comments while the link or their own rights allow it, and never resolves */
+	private function viewer(ReviewLink $link): Viewer {
 		$reviewer = $this->reviewer();
-		$flags = $this->flags($share, $reviewer);
+		$flags = $this->flags($link, $reviewer);
 		return $reviewer === null
 			? Viewer::unnamed($flags['canComment'], $flags['allowOlder'])
 			: Viewer::reviewer($reviewer->getId(), $flags['canComment'], $flags['allowOlder']);
@@ -304,15 +338,15 @@ class PublicApiController extends PublicShareController {
 
 	private function onVersion(int $versionId, callable $action, int $status = Http::STATUS_OK): Response {
 		return $this->guard(function () use ($versionId, $action) {
-			$share = $this->share();
-			return $action($this->viewer($share), $this->sharing->version($share, $versionId));
+			$link = $this->link();
+			return $action($this->viewer($link), $this->links->version($link, $versionId));
 		}, $status);
 	}
 
 	private function onComment(int $id, callable $action, int $status = Http::STATUS_OK): Response {
 		return $this->guard(function () use ($id, $action) {
-			$share = $this->share();
-			return $action($this->viewer($share), $this->sharing->version($share, $this->comments->versionIdOf($id)));
+			$link = $this->link();
+			return $action($this->viewer($link), $this->links->version($link, $this->comments->versionIdOf($id)));
 		}, $status);
 	}
 }

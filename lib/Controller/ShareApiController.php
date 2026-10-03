@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace OCA\Deliver\Controller;
 
 use OCA\Deliver\Service\AccessDeniedException;
+use OCA\Deliver\Service\ProjectLinkService;
 use OCA\Deliver\Service\ProjectService;
 use OCA\Deliver\Service\ReviewerService;
+use OCA\Deliver\Service\ReviewLinks;
 use OCA\Deliver\Service\ShareReviewService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -24,6 +26,8 @@ class ShareApiController extends OCSController {
 		private ShareReviewService $sharing,
 		private ProjectService $projects,
 		private ReviewerService $reviewers,
+		private ReviewLinks $links,
+		private ProjectLinkService $projectLinks,
 		private ?string $userId,
 	) {
 		parent::__construct($appName, $request);
@@ -75,15 +79,28 @@ class ShareApiController extends OCSController {
 		return $reviewer;
 	}
 
-	/** Every Share Link of mine on a Project's folder or files, and my Reviewers who came by them, for its navigation (story 100) */
+	/**
+	 * My Project Links of a Project, my Share Links on its folder or files,
+	 * and my Reviewers who came by any of them, paused or not, each with their
+	 * Personal Link through every one with review on, for its navigation (story 100)
+	 */
 	#[NoAdminRequired]
 	public function inProject(int $id): Response {
 		return $this->guard(function () use ($id) {
-			[$project, $folder, $fileIds] = $this->projects->filesOf((string)$this->userId, $id);
-			$listed = $this->sharing->linksUnder((string)$this->userId, $folder, $fileIds);
-			$notEnabled = $project === null ? [] : $this->projects->notEnabled((string)$this->userId, $project, array_column($listed['links'], 'fileId'));
-			$listed['links'] = array_map(static fn (array $link) => $link + ['notEnabled' => $notEnabled[$link['fileId']] ?? 0], $listed['links']);
-			return $listed;
+			$uid = (string)$this->userId;
+			[$project, $folder, $fileIds] = $this->projects->filesOf($uid, $id);
+			$links = $this->sharing->linksUnder($uid, $folder, $fileIds);
+			$notEnabled = $project === null ? [] : $this->projects->notEnabled($uid, $project, array_column($links, 'fileId'));
+			$projectLinks = $project === null ? [] : $this->projectLinks->listFor($uid, $project->getId());
+			$all = [...$projectLinks, ...$links];
+			$live = array_filter($all, static fn (array $link) => $link['review']);
+			['reviewers' => $reviewers, 'cameBy' => $cameBy] = $this->links->reviewersBy($uid, array_column($all, 'token'), array_column($live, 'url', 'token'));
+			$withReviewers = static fn (array $link) => $link + ['reviewerIds' => $cameBy[$link['token']] ?? []];
+			return [
+				'projectLinks' => array_map($withReviewers, $projectLinks),
+				'links' => array_map(static fn (array $link) => $withReviewers($link) + ['notEnabled' => $notEnabled[$link['fileId']] ?? 0], $links),
+				'reviewers' => $reviewers,
+			];
 		});
 	}
 
@@ -101,13 +118,16 @@ class ShareApiController extends OCSController {
 		?bool $watermark = null,
 		?string $password = null,
 		?string $expireDate = null,
+		?bool $latestOnly = null,
+		?bool $canDownload = null,
+		?string $description = null,
 	): Response {
-		return $this->guard(function () use ($shareId, $review, $canComment, $allowOlder, $watermark, $password, $expireDate) {
+		return $this->guard(function () use ($shareId, $review, $canComment, $allowOlder, $watermark, $password, $expireDate, $latestOnly, $canDownload, $description) {
 			if ($password !== null || $expireDate !== null) {
 				$this->sharing->protect((string)$this->userId, $shareId, $password, $expireDate);
 			}
 			return $this->sharing->serialize(
-				$this->sharing->setFlags((string)$this->userId, $shareId, $review, $canComment, $allowOlder, $watermark),
+				$this->sharing->setFlags((string)$this->userId, $shareId, $review, $canComment, $allowOlder, $watermark, $latestOnly, $canDownload, $description),
 			);
 		});
 	}
@@ -119,11 +139,17 @@ class ShareApiController extends OCSController {
 
 	#[NoAdminRequired]
 	public function reviewers(int $shareId): Response {
-		return $this->guard(fn () => $this->sharing->reviewersOf((string)$this->userId, $shareId));
+		return $this->guard(fn () => $this->links->reviewersOf($this->sharing->ownLink((string)$this->userId, $shareId)));
 	}
 
 	#[NoAdminRequired]
 	public function invite(int $shareId, string $name, ?string $email = null): Response {
-		return $this->guard(fn () => $this->sharing->invite((string)$this->userId, $shareId, $name, $email), Http::STATUS_CREATED);
+		return $this->guard(fn () => $this->links->invite($this->sharing->ownLink((string)$this->userId, $shareId), $name, $email), Http::STATUS_CREATED);
+	}
+
+	/** Who opened the link, watched and downloaded what (story 124) */
+	#[NoAdminRequired]
+	public function activity(int $shareId): Response {
+		return $this->guard(fn () => $this->links->activityOf($this->sharing->ownLink((string)$this->userId, $shareId)));
 	}
 }

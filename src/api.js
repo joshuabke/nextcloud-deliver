@@ -86,9 +86,26 @@ export const markSeen = (versionId, at) => axios.post(url(`/versions/${versionId
 export const listShares = (fileId) => axios.get(url(`/files/${fileId}/shares`)).then(data)
 export const createShareLink = (fileId) => axios.post(url(`/files/${fileId}/shares`)).then(data)
 export const setShareFlags = (shareId, flags) => axios.put(url(`/shares/${shareId}`), flags).then(data)
-export const deleteShareLink = (shareId) => axios.delete(url(`/shares/${shareId}`)).then(data)
-export const listReviewers = (shareId) => axios.get(url(`/shares/${shareId}/reviewers`)).then(data)
-export const inviteReviewer = (shareId, name, email) => axios.post(url(`/shares/${shareId}/reviewers`), { name, email }).then(data)
+
+// Project Links (ADR 0010): Deliver's own links for a whole Project or picked Assets
+export const createProjectLink = (projectId) => axios.post(url(`/projects/${projectId}/links`)).then(data)
+
+/**
+ * What a link's settings, Reviewers and activity go through, for either kind of link
+ *
+ * @param {{id: number, kind: string}} link - a Share Link (kind "share") or Project Link (kind "project")
+ * @return {{update: (fields: object) => Promise<object>, remove: () => Promise<void>, reviewers: () => Promise<object[]>, invite: (name: string, email: ?string) => Promise<object>, activity: () => Promise<object[]>}}
+ */
+export function linkApi(link) {
+	const base = link.kind === 'project' ? `/links/${link.id}` : `/shares/${link.id}`
+	return {
+		update: (fields) => axios.put(url(base), fields).then(data),
+		remove: () => axios.delete(url(base)).then(data),
+		reviewers: () => axios.get(url(`${base}/reviewers`)).then(data),
+		invite: (name, email) => axios.post(url(`${base}/reviewers`), { name, email }).then(data),
+		activity: () => axios.get(url(`${base}/activity`)).then(data),
+	}
+}
 
 export const getPipelineSettings = () => axios.get(url('/admin/settings')).then(data)
 export const savePipelineSettings = (settings) => axios.put(url('/admin/settings'), settings).then(data)

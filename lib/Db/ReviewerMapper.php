@@ -38,12 +38,12 @@ class ReviewerMapper extends Mapper {
 		return $this->findEntities($qb);
 	}
 
-	/** Remembers that the Reviewer was invited through or came in by this Share Link; once is enough */
-	public function recordLink(int $reviewerId, int $shareId, int $at): void {
+	/** Remembers that the Reviewer was invited through or came in by this link, by its token; once is enough */
+	public function recordLink(int $reviewerId, string $token, int $at): void {
 		$qb = $this->db->getQueryBuilder();
 		$qb->insert('deliver_reviewer_links')->values([
 			'reviewer_id' => $qb->createNamedParameter($reviewerId),
-			'share_id' => $qb->createNamedParameter($shareId),
+			'token' => $qb->createNamedParameter($token),
 			'created_at' => $qb->createNamedParameter($at),
 		]);
 		try {
@@ -57,19 +57,19 @@ class ReviewerMapper extends Mapper {
 
 	/**
 	 * @param list<int> $reviewerIds
-	 * @return array<int, list<int>> Share Link id → the Reviewers who came by it
+	 * @return array<string, list<int>> link token → the Reviewers who came by it
 	 */
 	public function reviewersByLink(array $reviewerIds): array {
 		if ($reviewerIds === []) {
 			return [];
 		}
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('reviewer_id', 'share_id')->from('deliver_reviewer_links')
+		$qb->select('reviewer_id', 'token')->from('deliver_reviewer_links')
 			->where($qb->expr()->in('reviewer_id', $qb->createNamedParameter($reviewerIds, IQueryBuilder::PARAM_INT_ARRAY)));
 		$result = $qb->executeQuery();
 		$byLink = [];
 		foreach ($result->fetchAll() as $row) {
-			$byLink[(int)$row['share_id']][] = (int)$row['reviewer_id'];
+			$byLink[(string)$row['token']][] = (int)$row['reviewer_id'];
 		}
 		$result->closeCursor();
 		return $byLink;
