@@ -69,8 +69,9 @@ class StackService {
 	}
 
 	/**
-	 * The Asset in the file's folder and Project with this base name. Null
-	 * when there is none, or more than one: then a Member decides (story 14).
+	 * The Asset in the file's folder and Project with this base name and the
+	 * same kind of media. Null when there is none, or more than one: then a
+	 * Member decides (story 14).
 	 */
 	private function onlyCandidate(?Project $project, File $file, string $base, ?string $enabledBy): ?Asset {
 		$parentId = $file->getParent()->getId();
@@ -81,7 +82,7 @@ class StackService {
 			default => [],
 		};
 		foreach ($assets as $asset) {
-			if ($asset->getParentId() === $parentId && strcasecmp($this->nameOf($asset), $base) === 0) {
+			if ($asset->getParentId() === $parentId && strcasecmp($this->nameOf($asset), $base) === 0 && $this->sameKind($asset, $file)) {
 				$found[] = $asset;
 			}
 		}
@@ -156,6 +157,13 @@ class StackService {
 	 * Project: a Version Stack never spans Projects (ADR 0009). The Asset it
 	 * leaves is deleted if that was its last Version.
 	 */
+	/** Whether the Asset's newest Version, in the same folder as the file, is the same kind of media */
+	private function sameKind(Asset $asset, File $file): bool {
+		$newest = $this->versions->findNewest($asset->getId());
+		$other = $newest === null ? null : $file->getParent()->getFirstNodeById($newest->getFileId());
+		return $other instanceof File && Reviewable::kind($other->getMimetype()) === Reviewable::kind($file->getMimetype());
+	}
+
 	public function stack(Version $version, int $assetId, ?int $number): Version {
 		$target = $this->assets->find($assetId);
 		if ($target === null) {

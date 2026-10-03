@@ -33,6 +33,7 @@ import { useLiveUpdates } from '../composables/live.js'
 import { usePanelOpen } from '../composables/panel.js'
 import { useReview } from '../composables/review.js'
 import { groupByFolder, uploadFolder } from '../lib/folders.js'
+import { acceptFor } from '../lib/media.js'
 import { fpsValue } from '../lib/timecode.js'
 import { decodeWaveform } from '../lib/waveform.js'
 import { useCommentsStore } from '../store/comments.js'
@@ -246,7 +247,7 @@ async function upload(event) {
 				<input
 					ref="fileInput"
 					type="file"
-					accept="video/*,audio/*"
+					:accept="acceptFor(version?.mimeType)"
 					hidden
 					@change="upload">
 				<NcButton v-if="version?.url && !isMobile" @click="sharing = true">
