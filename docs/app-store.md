@@ -71,6 +71,6 @@ The certificate needs no secret: the workflow fetches the public `deliver.crt` f
 
 The code signature (`appinfo/signature.json`) covers every file, so nothing in the tarball may change after signing. The store requires signed apps, and a signed app has to stay signed.
 
-A version with a pre-release part (`1.0.0-beta.1`) becomes a pre-release on GitHub and lands in the store's beta channel, which only instances set to beta see.
+A version with a pre-release part (`1.0.0-beta.1`) becomes a pre-release on GitHub and lands in the store's beta channel. Nextcloud offers such versions only to instances whose update channel is beta, daily or git (`AppFetcher` in the server), so a managed Nextcloud on the stable channel never sees them. The beta therefore ships as plain 0.9.x versions, marked as beta in the description and the changelog.
 
 Once any instance has installed a store release, the database schema only moves forward through new migrations; the shipped migration is never rewritten again.

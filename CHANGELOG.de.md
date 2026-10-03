@@ -1,8 +1,8 @@
 # Änderungen
 
-## 1.0.0 – unveröffentlicht
+## 0.9.7 – unveröffentlicht
 
-Erste Veröffentlichung im App Store.
+Erste Veröffentlichung im App Store, als Beta: Probier sie an echten Projekten aus, aber behalte eigene Backups und rechne mit Ecken und Kanten. Rückmeldungen gehen in die GitHub-Issues.
 
 - Eine Video-, Audio- oder Bilddatei in der Dateien-Seitenleiste zum Review freigeben, in ein Projekt nach Wahl oder in keins, oder einen ganzen Ordner zum Projekt machen, das jede Mediendatei darin aufnimmt. Projekte sammeln Dateien von überall, und wer eine Datei öffnen kann, sieht ihr Review. Dateien bleibt die Quelle der Wahrheit: Nichts wird kopiert oder verschoben.
 - Kommentare auf einem Frame oder Bereich, mit Antworten, Zeichnungen, Erwähnungen, Reaktionen und Anhängen, und Erledigt, sobald sie umgesetzt sind.
@@ -14,4 +14,5 @@ Erste Veröffentlichung im App Store.
 - Audio zählt auf die Millisekunde: angezeigt als `m:ss.mmm`, umschaltbar auf Timecode oder Frames in der Bildrate des Projekts.
 - Proxys, Vorschauleisten und Wellenformen, wenn ffmpeg installiert ist; ohne ffmpeg spielen browsertaugliche Dateien so, wie sie sind, MOV, MP4 und Broadcast-WAV behalten Bildrate und Start-Timecode, WebM und MKV ihre Bildrate, und Audio bekommt trotzdem seine Wellenform.
 - Funktioniert auf dem Handy: Review-Ansicht, Zeichnen mit dem Finger und die Projektliste sind für kleine Bildschirme gemacht.
+- Fehlersuche ohne Shell: Prüfungen in der Verwaltungsübersicht, fehlgeschlagene Medienjobs im Nextcloud-Protokoll und aus den Deliver-Einstellungen wiederholbar, und ein Support-Bericht für Fehlermeldungen.
 - Englisch und Deutsch.

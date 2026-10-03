@@ -397,7 +397,18 @@ OC.L10N.register(
 		"Download selection": "Auswahl herunterladen",
 		"Folders and links": "Ordner und Links",
 		"Review Links": "Review-Links",
-		"Review Links on {name}": "Review-Links für {name}"
+		"Review Links on {name}": "Review-Links für {name}",
+		"Retry failed jobs": "Fehlgeschlagene Jobs wiederholen",
+		"Troubleshooting": "Fehlersuche",
+		"Download support report": "Support-Bericht herunterladen",
+		"Deliver background jobs": "Deliver-Hintergrundjobs",
+		"Deliver media jobs": "Deliver-Medienjobs",
+		"Failures also go to the Nextcloud log, under the app deliver. For a bug report, attach the support report: versions, settings, the queue and its latest failures, and how many Projects, Versions and links there are. It holds no names, Comments or Reviewers, but ffmpeg errors can show file paths, so read it before you post it.": "Fehler landen auch im Nextcloud-Protokoll, unter der App deliver. Häng einem Fehlerbericht den Support-Bericht an: Versionen, Einstellungen, die Warteschlange mit ihren letzten Fehlern und wie viele Projekte, Versionen und Links es gibt. Er enthält keine Namen, Kommentare oder Reviewer, aber ffmpeg-Fehler können Dateipfade zeigen. Lies ihn also, bevor du ihn veröffentlichst.",
+		"Background jobs do not run by cron, so Deliver makes Proxies, Thumbnail Strips and Waveforms only while someone has a page open, and Due Date reminders come late. Switch background jobs to Cron.": "Hintergrundjobs laufen nicht per Cron. Deshalb erzeugt Deliver Proxies, Vorschauleisten und Wellenformen nur, solange jemand eine Seite offen hat, und Erinnerungen an Fälligkeitsdaten kommen zu spät. Stell die Hintergrundjobs auf Cron um.",
+		"_%n media job failed. The Deliver admin settings show why and retry it._::_%n media jobs failed. The Deliver admin settings show why and retry them._": [
+			"%n Medienjob ist fehlgeschlagen. Die Deliver-Verwaltungseinstellungen zeigen, warum, und wiederholen ihn.",
+			"%n Medienjobs sind fehlgeschlagen. Die Deliver-Verwaltungseinstellungen zeigen, warum, und wiederholen sie."
+		]
 	},
 	"nplurals=2; plural=(n != 1);"
 );

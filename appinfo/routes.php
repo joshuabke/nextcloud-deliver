@@ -78,5 +78,7 @@ return [
 		['name' => 'comment_api#resolve', 'url' => '/api/v1/comments/{id}/resolved', 'verb' => 'PUT'],
 		['name' => 'admin_settings#show', 'url' => '/api/v1/admin/settings', 'verb' => 'GET'],
 		['name' => 'admin_settings#update', 'url' => '/api/v1/admin/settings', 'verb' => 'PUT'],
+		['name' => 'admin_settings#report', 'url' => '/api/v1/admin/report', 'verb' => 'GET'],
+		['name' => 'admin_settings#retry', 'url' => '/api/v1/admin/jobs/retry', 'verb' => 'POST'],
 	],
 ];

@@ -6,7 +6,7 @@ import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcSettingsSection from '@nextcloud/vue/components/NcSettingsSection'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
-import { errorMessage, getPipelineSettings, savePipelineSettings } from '../api.js'
+import { errorMessage, getPipelineSettings, getSupportReport, retryFailedJobs, savePipelineSettings } from '../api.js'
 import { useBusy } from '../composables/busy.js'
 
 const ENCODERS = [
@@ -32,6 +32,25 @@ onMounted(async () => {
 		error.value = errorMessage(e)
 	}
 })
+
+/** Puts failed jobs back into the queue, for instance after ffmpeg was fixed */
+function retry() {
+	return run(async () => {
+		status.value = (await retryFailedJobs()).status
+	})
+}
+
+/** The support report as a JSON file, for a bug report */
+function downloadReport() {
+	return run(async () => {
+		const report = await getSupportReport()
+		const link = document.createElement('a')
+		link.href = URL.createObjectURL(new Blob([JSON.stringify(report, null, '\t')], { type: 'application/json' }))
+		link.download = `deliver-report-${report.generated.slice(0, 10)}.json`
+		link.click()
+		URL.revokeObjectURL(link.href)
+	})
+}
 
 /** Saves everything; a hardware encoder is tested with a one-second encode on the server */
 function save() {
@@ -125,6 +144,17 @@ function save() {
 				<h4>{{ t('deliver', 'Last failed job') }}</h4>
 				<pre class="deliver-admin__log">{{ status.lastError }}</pre>
 			</template>
+			<NcButton v-if="queue.failed" :disabled="busy" @click="retry">
+				{{ t('deliver', 'Retry failed jobs') }}
+			</NcButton>
+		</NcSettingsSection>
+
+		<NcSettingsSection
+			:name="t('deliver', 'Troubleshooting')"
+			:description="t('deliver', 'Failures also go to the Nextcloud log, under the app deliver. For a bug report, attach the support report: versions, settings, the queue and its latest failures, and how many Projects, Versions and links there are. It holds no names, Comments or Reviewers, but ffmpeg errors can show file paths, so read it before you post it.')">
+			<NcButton :disabled="busy" @click="downloadReport">
+				{{ t('deliver', 'Download support report') }}
+			</NcButton>
 		</NcSettingsSection>
 	</div>
 	<NcNoteCard v-else-if="error" type="error">

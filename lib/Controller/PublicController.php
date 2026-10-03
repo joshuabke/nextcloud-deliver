@@ -80,7 +80,10 @@ class PublicController extends AuthPublicShareController {
 		$this->links->record($link, LinkActivityMapper::OPENED, $reviewer);
 
 		$this->initialState->provideInitialState('token', $this->getToken());
-		$this->initialState->provideInitialState('versionId', $version?->getId());
+		// Nextcloud logs a warning for null, so a landing page gives none
+		if ($version !== null) {
+			$this->initialState->provideInitialState('versionId', $version->getId());
+		}
 		// For the landing page of a link with several Assets (stories 123, 125)
 		$flags = $reviewer === null ? $link->flags() : $reviewer->over($link->flags());
 		$this->initialState->provideInitialState('link', [

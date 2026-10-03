@@ -31,6 +31,17 @@ An hourly scan compares every Project with its folder, next to the file listener
 
 The Review view asks for changes every five seconds (thirty in a hidden tab). Where Nextcloud runs the [notify_push](https://github.com/nextcloud/notify_push) app, every new or changed Comment, Reaction or Approval is pushed to the Project's Members as well, and their open Review views update at once. Reviewers on a Project Link have no account to push to and keep polling.
 
+## Troubleshooting
+
+Everything here works without a shell, as on a hosted Nextcloud.
+
+- **Overview** (Administration settings → Overview) carries two checks of Deliver's: background jobs should run by Cron, since with AJAX Deliver makes media only while someone has a page open and Due Date reminders come late; and failed media jobs, with a link to Deliver's settings.
+- **Deliver's settings** show the queue and the last failure with ffmpeg's output, and retry all failed jobs once the cause is fixed.
+- **The Nextcloud log** (the Logging app) has every failed media job and every mail that could not be sent, under the app `deliver`.
+- **Support report**: Deliver's settings download a JSON file with the versions of Deliver, Nextcloud, PHP and the database, the background job mode, the media settings, the queue with its last ten failures and how many Projects, Versions, Comments and links there are. It holds no names, Comments or Reviewers, but ffmpeg's output can carry file paths: read it before you attach it to an issue.
+
+Deliver's data lives in Nextcloud's database (`oc_deliver_*` tables) and derived media in app data, so a Nextcloud backup covers it. Deliver offers no export of its own tables: they hold Reviewers' addresses and link password hashes, which belong in a backup, not in a bug report.
+
 ## Deployment
 
 `deploy/` has a Compose example for a server of your own: Nextcloud with ffmpeg and the VAAPI drivers, Postgres, Redis, a cron container and an optional derived-media worker. See [deploy/README.md](../deploy/README.md).
