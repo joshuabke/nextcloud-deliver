@@ -153,11 +153,11 @@ A file generated from a Version's Comments for import into an editing applicatio
 _Avoid_: Download, report
 
 **Delivery**:
-One run of an editing application's Deliver action that puts new Versions or Takes into a Project, together with their Sidecar. Several works can go out in one Delivery.
+One run of an editing application's Deliver action that puts new Versions or Takes into a Project and sends Deliver their Sidecars. Several works can go out in one Delivery.
 _Avoid_: Publish, release, upload (and never Export, which is Comments going the other way)
 
 **Sidecar**:
-A `deliver.json` file in a Project folder, written by the delivering tool, that supplies start timecodes and Waveforms for the files beside it and marks the folder as a Take Folder when it holds Takes. Lets Deliver work fully without ffmpeg.
+What the delivering tool sends Deliver through its API for each audio file it delivers: the Session Time of its first sample, its duration and its Waveform. It stands over any probe and lets Deliver work fully without ffmpeg. Not a file: nothing lands in the folder.
 _Avoid_: Manifest, metadata file
 
 ## German

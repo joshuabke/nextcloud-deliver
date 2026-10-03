@@ -48,6 +48,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setDerivedError(?string $derivedError)
  * @method ?bool getPlayable()
  * @method void setPlayable(bool $playable)
+ * @method ?bool getSidecar()
+ * @method void setSidecar(bool $sidecar)
  * @method ?bool getAutoStacked()
  * @method void setAutoStacked(bool $autoStacked)
  * @method string getState()
@@ -78,6 +80,7 @@ class Version extends Entity {
 	protected string $state = self::STATE_READY;
 	/** Whether browsers play the original; null until ffprobe has looked */
 	protected ?bool $playable = null;
+	protected ?bool $sidecar = null;
 	/** Set when the filename convention stacked this Version, so a Member can undo it */
 	protected ?bool $autoStacked = null;
 	protected string $proxyState = 'none';
@@ -96,6 +99,7 @@ class Version extends Entity {
 		$this->addType('dropFrame', 'boolean');
 		$this->addType('autoStacked', 'boolean');
 		$this->addType('playable', 'boolean');
+		$this->addType('sidecar', 'boolean');
 		$this->addType('startFrame', 'integer');
 		$this->addType('durationFrames', 'integer');
 		$this->addType('width', 'integer');

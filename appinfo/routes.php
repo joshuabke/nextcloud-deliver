@@ -65,6 +65,7 @@ return [
 		['name' => 'project_api#unstackVersion', 'url' => '/api/v1/versions/{id}/unstack', 'verb' => 'POST'],
 		['name' => 'project_api#regenerate', 'url' => '/api/v1/versions/{id}/regenerate', 'verb' => 'POST'],
 		['name' => 'project_api#waveform', 'url' => '/api/v1/versions/{id}/waveform', 'verb' => 'POST'],
+		['name' => 'project_api#sidecar', 'url' => '/api/v1/versions/{id}/sidecar', 'verb' => 'PUT'],
 		['name' => 'project_api#members', 'url' => '/api/v1/versions/{id}/members', 'verb' => 'GET'],
 		['name' => 'comment_api#index', 'url' => '/api/v1/versions/{versionId}/comments', 'verb' => 'GET'],
 		['name' => 'comment_api#create', 'url' => '/api/v1/versions/{versionId}/comments', 'verb' => 'POST'],

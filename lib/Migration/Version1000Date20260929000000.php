@@ -75,6 +75,8 @@ class Version1000Date20260929000000 extends SimpleMigrationStep {
 		$t->addColumn('state', Types::STRING, ['notnull' => true, 'length' => 16, 'default' => 'ready']);
 		$t->addColumn('auto_stacked', Types::BOOLEAN, ['notnull' => false, 'default' => false]);
 		$t->addColumn('playable', Types::BOOLEAN, ['notnull' => false]);
+		// Start, duration and Waveform came from the delivering tool's Sidecar (ADR 0012); the probe leaves them be
+		$t->addColumn('sidecar', Types::BOOLEAN, ['notnull' => false]);
 		$t->addColumn('proxy_state', Types::STRING, ['notnull' => true, 'length' => 16, 'default' => 'none']);
 		$t->addColumn('thumbs_state', Types::STRING, ['notnull' => true, 'length' => 16, 'default' => 'none']);
 		$t->addColumn('waveform_state', Types::STRING, ['notnull' => true, 'length' => 16, 'default' => 'none']);

@@ -461,6 +461,22 @@ class ProjectService {
 		return $this->versionPayload($this->versions->find($versionId) ?? $version, $uid);
 	}
 
+	/**
+	 * What the delivering tool knows of a file it rendered and delivered (ADR 0012)
+	 *
+	 * @param array{rate?: mixed, peaks?: mixed} $waveform
+	 * @throws InvalidRequestException outside the Sidecar's limits, or not audio
+	 */
+	public function giveSidecar(string $uid, int $versionId, float $start, float $duration, array $waveform): array {
+		$version = $this->writableVersion($uid, $versionId);
+		$peaks = $waveform['peaks'] ?? null;
+		if (!is_int($waveform['rate'] ?? null) || !is_array($peaks) || !array_is_list($peaks)) {
+			throw new InvalidRequestException('A Sidecar\'s Waveform has a whole rate and a list of peaks');
+		}
+		$this->media->acceptSidecar($version, $start, $duration, $waveform['rate'], $peaks);
+		return $this->versionPayload($version, $uid);
+	}
+
 	/** What a Member's browser decoded where the server has no ffmpeg (ADR 0003) */
 	public function giveWaveform(string $uid, int $versionId, array $peaks, int $durationFrames): array {
 		[$version] = $this->reachVersion($uid, $versionId);

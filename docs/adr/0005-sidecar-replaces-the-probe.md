@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by [0012](0012-sidecar-goes-through-the-api.md)
 ---
 
 # A Sidecar from the delivering tool replaces the probe

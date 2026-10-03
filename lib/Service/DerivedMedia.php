@@ -55,6 +55,8 @@ class DerivedMedia {
 
 	private const THUMB_WIDTH = 160;
 	private const WAVEFORM_BUCKETS = 2000;
+	/** Peaks a second a Sidecar may carry (spec: Takes and Sidecar) */
+	private const SIDECAR_MAX_RATE = 100;
 	/** Seconds between two progress writes to the job row */
 	private const PROGRESS_INTERVAL = 2;
 
@@ -95,9 +97,9 @@ class DerivedMedia {
 		$this->enqueue($versionId, Job::KIND_PROBE);
 	}
 
-	/** Deletes the derived media of a Version and queues it again */
+	/** Deletes the derived media of a Version and queues it again; a Sidecar's Waveform cannot be made again, so it stays */
 	public function regenerate(int $versionId): void {
-		$this->forget($versionId);
+		$this->forget($versionId, true);
 		$this->queue($versionId);
 	}
 
@@ -122,6 +124,11 @@ class DerivedMedia {
 	public function process(Job $job): void {
 		$version = $this->versions->find($job->getVersionId());
 		if ($version === null) {
+			$this->jobs->delete($job);
+			return;
+		}
+		// What a Sidecar said stands: no probe over it, and its Waveform is finer than one made here (ADR 0012)
+		if ($version->getSidecar() && in_array($job->getKind(), [Job::KIND_PROBE, Job::KIND_WAVEFORM], true)) {
 			$this->jobs->delete($job);
 			return;
 		}
@@ -327,6 +334,41 @@ class DerivedMedia {
 	}
 
 	/**
+	 * What the delivering tool knows of an audio file it rendered: where it
+	 * starts on the session's timeline, how long it is and its Waveform at
+	 * `rate` peaks a second (ADR 0012). It stands over any probe.
+	 *
+	 * @param list<int|float> $peaks
+	 * @throws InvalidRequestException out of the limits, or not audio
+	 */
+	public function acceptSidecar(Version $version, float $start, float $duration, int $rate, array $peaks): void {
+		if ($start < 0 || $duration <= 0 || $rate < 1 || $rate > self::SIDECAR_MAX_RATE || $peaks === [] || count($peaks) > (int)ceil($duration * $rate) + 1) {
+			throw new InvalidRequestException('A Sidecar starts at 0 or later, lasts more than 0 seconds and has 1 to ' . self::SIDECAR_MAX_RATE . ' peaks a second over its duration');
+		}
+		foreach ($peaks as $peak) {
+			if (!is_int($peak) && !is_float($peak) || $peak < 0 || $peak > 1) {
+				throw new InvalidRequestException('Peaks run from 0 to 1');
+			}
+		}
+		$file = $this->fileOf($version);
+		if ($file === null || !str_starts_with($file->getMimeType(), 'audio/')) {
+			throw new InvalidRequestException('A Sidecar describes audio files only');
+		}
+		$this->jobs->deleteBy('version_id', $version->getId());
+		$this->put($version, 'waveform', json_encode(['rate' => $rate, 'peaks' => array_map(static fn ($peak) => round((float)$peak, 3), $peaks)], JSON_THROW_ON_ERROR));
+		// Audio counts in milliseconds (ADR 0007)
+		$version->setStartFrame((int)round($start * 1000));
+		$version->setDurationFrames((int)round($duration * 1000));
+		$version->setHasAudio(true);
+		$version->setHasVideo(false);
+		$version->setPlayable(true);
+		$version->setSidecar(true);
+		$version->setWaveformState(self::STATE_READY);
+		$version->setDerivedError(null);
+		$this->versions->update($version);
+	}
+
+	/**
 	 * Reads the PCM in chunks, one per bucket, so an hour of audio does not
 	 * have to fit into memory.
 	 *
@@ -489,18 +531,30 @@ class DerivedMedia {
 	}
 
 	/** Deletes the derived media and open jobs of a Version */
-	public function forget(int $versionId): void {
+	public function forget(int $versionId, bool $keepSidecar = false): void {
 		$this->jobs->deleteBy('version_id', $versionId);
 		$version = $this->versions->find($versionId);
+		$keep = $keepSidecar && $version?->getSidecar() === true;
 		if ($version !== null) {
 			$version->setProxyState(self::STATE_NONE);
 			$version->setThumbsState(self::STATE_NONE);
-			$version->setWaveformState(self::STATE_NONE);
+			if (!$keep) {
+				$version->setWaveformState(self::STATE_NONE);
+			}
 			$version->setDerivedError(null);
 			$this->versions->update($version);
 		}
 		try {
-			$this->appDataFactory->get(Application::APP_ID)->getFolder((string)$versionId)->delete();
+			$folder = $this->appDataFactory->get(Application::APP_ID)->getFolder((string)$versionId);
+			if (!$keep) {
+				$folder->delete();
+				return;
+			}
+			foreach ($folder->getDirectoryListing() as $file) {
+				if ($file->getName() !== self::FILES['waveform']) {
+					$file->delete();
+				}
+			}
 		} catch (NotFoundException) {
 			// nothing was generated
 		}

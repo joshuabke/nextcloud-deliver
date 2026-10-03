@@ -110,6 +110,12 @@ class ProjectApiController extends OCSController {
 		return $this->guard(fn () => $this->service->giveWaveform((string)$this->userId, $id, $peaks, $durationFrames));
 	}
 
+	/** Start, duration and Waveform from the tool that delivered the file, instead of a probe (ADR 0012) */
+	#[NoAdminRequired]
+	public function sidecar(int $id, float $start, float $duration, array $waveform): Response {
+		return $this->guard(fn () => $this->service->giveSidecar((string)$this->userId, $id, $start, $duration, $waveform));
+	}
+
 	#[NoAdminRequired]
 	public function version(int $id): Response {
 		return $this->guard(fn () => $this->service->versionContext((string)$this->userId, $id));
