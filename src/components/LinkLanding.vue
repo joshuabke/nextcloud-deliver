@@ -7,7 +7,6 @@ import { n, t } from '@nextcloud/l10n'
 import { computed, onBeforeUnmount, onMounted, reactive } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
-import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import DueDate from './DueDate.vue'
 import MediaStill from './MediaStill.vue'
 
@@ -49,10 +48,12 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 <template>
 	<div class="deliver-landing">
 		<div class="deliver-landing__page">
-			<NcNoteCard v-if="link.memberUrl" type="info">
+			<div v-if="link.memberUrl" class="deliver-landing__preview">
 				{{ t('deliver', 'A preview of what Reviewers see. You comment and approve in Deliver.') }}
-				<a :href="link.memberUrl" class="deliver-landing__open-app">{{ t('deliver', 'Open in Deliver') }}</a>
-			</NcNoteCard>
+				<NcButton :href="link.memberUrl" variant="primary">
+					{{ t('deliver', 'Open in Deliver') }}
+				</NcButton>
+			</div>
 			<div class="deliver-landing__head">
 				<div class="deliver-landing__intro">
 					<h2>{{ link.title }}</h2>
@@ -170,10 +171,18 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 	padding: calc(6 * var(--default-grid-baseline)) calc(4 * var(--default-grid-baseline));
 }
 
-.deliver-landing__open-app {
-	margin-inline-start: var(--default-grid-baseline);
-	font-weight: bold;
-	text-decoration: underline;
+/* A Member's preview: the page as Reviewers see it, and the way into the app */
+.deliver-landing__preview {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: calc(2 * var(--default-grid-baseline));
+	margin-bottom: calc(4 * var(--default-grid-baseline));
+	padding: calc(2 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline));
+	border: 1px solid var(--color-primary-element);
+	border-radius: var(--border-radius-large);
+	background: var(--landing-surface);
 }
 
 .deliver-landing__head {

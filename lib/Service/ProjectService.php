@@ -890,10 +890,9 @@ class ProjectService {
 					'unseen' => $unseen[$version->getId()] ?? 0,
 					'approvals' => $approvalCounts[$version->getId()],
 					// The card scrubs through it on hover, and shows a frame of it where Nextcloud renders no still
-					'playUrl' => $this->urls->linkToRoute('deliver.media.show', [
-						'id' => $version->getId(),
-						'kind' => $version->getProxyState() === DerivedMedia::STATE_READY ? 'proxy' : 'original',
-					]),
+					'playUrl' => $version->getProxyState() === DerivedMedia::STATE_READY
+						? $this->urls->linkToRoute('deliver.media.show', ['id' => $version->getId(), 'kind' => 'proxy'])
+						: ($file === null ? null : $this->davUrl($uid, $file)),
 					// Queued or running derived media, with the running job's progress
 					'processing' => array_intersect(
 						[$version->getProxyState(), $version->getThumbsState(), $version->getWaveformState()],
