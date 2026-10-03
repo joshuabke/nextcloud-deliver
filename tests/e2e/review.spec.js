@@ -377,8 +377,7 @@ test.describe('Review view', () => {
 
 		// A Reviewer on a phone: name first, then a Range by its button
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
-		const folderId = await fileId(api, `/remote.php/dav/files/${USER}/${folder}`)
-		const link = (await (await api.post(`/ocs/v2.php/apps/deliver/api/v1/files/${folderId}/shares?format=json`)).json()).ocs.data
+		const link = (await (await api.post(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`)).json()).ocs.data
 		// Only the newest Version takes Comments on this link
 		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
 		const newest = project.ocs.data.assets.find((asset) => asset.versions.some((version) => version.id === versionId)).versions[0].id
@@ -414,10 +413,9 @@ test.describe('Review view', () => {
 		await guest.close()
 	})
 
-	test('a Reviewer names themselves and comments through a Share Link', async ({ playwright }) => {
+	test('a Reviewer names themselves and comments through a Project Link', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
-		const folderId = await fileId(api, `/remote.php/dav/files/${USER}/${folder}`)
-		const link = (await (await api.post(`/ocs/v2.php/apps/deliver/api/v1/files/${folderId}/shares?format=json`)).json()).ocs.data
+		const link = (await (await api.post(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`)).json()).ocs.data
 		// Only the newest Version takes Comments on this link
 		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
 		const newest = project.ocs.data.assets[0].versions[0].id

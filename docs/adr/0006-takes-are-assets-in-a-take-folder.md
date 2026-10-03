@@ -9,5 +9,5 @@ Takes of a recording are parallel passes over the same music, not iterations, so
 ## Consequences
 
 - Comments, Approvals and Unseen work on Takes unchanged, because they are Versions of ordinary Assets.
-- The Project view and Share Links show a Take Folder as one entry that opens the comparison; its Takes are not listed one by one.
+- The Project view and review links show a Take Folder as one entry that opens the comparison; its Takes are not listed one by one.
 - Two Takes are comparable only as far as the recording session put them at the same Session Time; Deliver never aligns them itself.

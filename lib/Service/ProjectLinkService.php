@@ -16,10 +16,8 @@ use OCP\IConfig;
 use OCP\Security\Events\ValidatePasswordPolicyEvent;
 use OCP\Security\IHasher;
 use OCP\Security\ISecureRandom;
-use OCP\Share\Exceptions\ShareNotFound;
-use OCP\Share\IManager as IShareManager;
 
-/** A Member's Project Links (ADR 0010): made, changed and removed by the Member who made them */
+/** A Member's Project Links (ADR 0010, 0011): made, changed and removed by the Member who made them */
 class ProjectLinkService {
 	private const TOKEN_LENGTH = 20;
 
@@ -29,7 +27,6 @@ class ProjectLinkService {
 		private ProjectService $projects,
 		private AssetMapper $assets,
 		private ReviewLinks $reviewLinks,
-		private IShareManager $shares,
 		private ISecureRandom $random,
 		private IHasher $hasher,
 		private IEventDispatcher $events,
@@ -39,14 +36,25 @@ class ProjectLinkService {
 	}
 
 	/**
-	 * A new link on a Project the Member sees, live and showing all of it (story 120)
+	 * A new link on a Project the Member sees, live and showing all of it or
+	 * the Assets given (story 120); on No Project, the Assets given of it.
 	 *
+	 * @param ?list<int> $assetIds
 	 * @throws NotFoundException the Project is not in reach
+	 * @throws InvalidRequestException a link on No Project without Assets
 	 */
-	public function create(string $uid, int $projectId): array {
-		$this->projects->visible($uid, $projectId);
+	public function create(string $uid, int $projectId, ?array $assetIds = null): array {
 		$link = new ProjectLink();
-		$link->setProjectId($projectId);
+		if ($projectId === ProjectService::NONE) {
+			$link->setProjectId(null);
+		} else {
+			$this->projects->visible($uid, $projectId);
+			$link->setProjectId($projectId);
+		}
+		$link->setAssetIds($this->picked($link, $assetIds));
+		if ($link->getProjectId() === null && $link->getAssetIds() === null) {
+			throw new InvalidRequestException('A link on No Project shows the Assets picked for it');
+		}
 		$link->setOwnerUid($uid);
 		$link->setToken($this->newToken());
 		$link->setReview(true);
@@ -61,7 +69,7 @@ class ProjectLinkService {
 
 	/**
 	 * Changes what is given; '' removes password, expiry and description, and
-	 * an empty $assetIds or null means the whole Project again.
+	 * an empty $assetIds or null means the whole Project again (not on No Project).
 	 *
 	 * @param array<string, mixed> $fields review, canComment, allowOlder, watermark, canDownload, latestOnly, label, description, password, expireDate, assetIds
 	 * @throws InvalidRequestException a password the policy refuses, an expiry in the past or no date
@@ -86,7 +94,11 @@ class ProjectLinkService {
 			$link->setExpireDate($this->expiry((string)$fields['expireDate']));
 		}
 		if (array_key_exists('assetIds', $fields)) {
-			$link->setAssetIds($this->picked($link, $fields['assetIds']));
+			$picked = $this->picked($link, $fields['assetIds']);
+			if ($picked === null && $link->getProjectId() === null) {
+				throw new InvalidRequestException('A link on No Project shows the Assets picked for it');
+			}
+			$link->setAssetIds($picked);
 		}
 		return $this->serialize($this->links->update($link));
 	}
@@ -98,9 +110,10 @@ class ProjectLinkService {
 		$this->links->delete($link);
 	}
 
-	/** @return list<array<string, mixed>> the Member's links on a Project, for its navigation */
+	/** @return list<array<string, mixed>> the Member's links on a Project, or on No Project for 0, for its navigation */
 	public function listFor(string $uid, int $projectId): array {
-		return array_map(fn (ProjectLink $link) => $this->serialize($link), $this->links->findByProject($projectId, $uid));
+		$links = $this->links->findByProject($projectId === ProjectService::NONE ? null : $projectId, $uid);
+		return array_map(fn (ProjectLink $link) => $this->serialize($link), $links);
 	}
 
 	/**
@@ -108,18 +121,18 @@ class ProjectLinkService {
 	 *
 	 * @throws NotFoundException|AccessDeniedException
 	 */
-	public function ownLink(string $uid, int $id): ProjectReviewLink {
-		return $this->reviewLinks->ofProjectLink($this->own($uid, $id));
+	public function ownLink(string $uid, int $id): ReviewLink {
+		return $this->reviewLinks->of($this->own($uid, $id));
 	}
 
 	public function serialize(ProjectLink $link): array {
-		$reviewLink = $this->reviewLinks->ofProjectLink($link);
+		$reviewLink = $this->reviewLinks->of($link);
 		return [
 			'id' => $link->getId(),
 			'kind' => 'project',
 			'token' => $link->getToken(),
 			'url' => $reviewLink->url(),
-			'projectId' => $link->getProjectId(),
+			'projectId' => $link->getProjectId() ?? ProjectService::NONE,
 			'label' => $link->getLabel(),
 			'description' => $link->getDescription(),
 			'hasPassword' => $link->getPasswordHash() !== null,
@@ -142,17 +155,10 @@ class ProjectLinkService {
 		return $link;
 	}
 
-	/** A token no link of either kind has, longer than Nextcloud's own */
 	private function newToken(): string {
 		do {
 			$token = $this->random->generate(self::TOKEN_LENGTH, ISecureRandom::CHAR_HUMAN_READABLE);
-			try {
-				$this->shares->getShareByToken($token);
-				$taken = true;
-			} catch (ShareNotFound) {
-				$taken = $this->links->findByToken($token) !== null;
-			}
-		} while ($taken);
+		} while ($this->links->findByToken($token) !== null);
 		return $token;
 	}
 
@@ -184,12 +190,16 @@ class ProjectLinkService {
 		return $date;
 	}
 
-	/** The picked Assets of the link's Project as JSON, or null for all of it */
+	/** The picked Assets of the link's Project, or of No Project, as JSON; null for all of it */
 	private function picked(ProjectLink $link, mixed $assetIds): ?string {
 		if (!is_array($assetIds) || $assetIds === []) {
 			return null;
 		}
-		$ofProject = array_map(static fn ($asset) => $asset->getId(), $this->assets->findByProject($link->getProjectId()));
-		return json_encode(array_values(array_intersect(array_map('intval', $assetIds), $ofProject)), JSON_THROW_ON_ERROR);
+		$projectId = $link->getProjectId();
+		$ofProject = array_map(
+			static fn ($asset) => $asset->getId(),
+			array_filter($this->assets->findByIds(array_map('intval', $assetIds)), static fn ($asset) => $asset->getProjectId() === $projectId),
+		);
+		return $ofProject === [] && $projectId === null ? null : json_encode(array_values($ofProject), JSON_THROW_ON_ERROR);
 	}
 }

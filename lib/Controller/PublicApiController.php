@@ -34,13 +34,13 @@ use OCP\IURLGenerator;
 use OCP\IUserSession;
 
 /**
- * The API behind a Share Link or a Project Link. Token, password and expiry
- * are checked by the framework before an action runs (ADR 0004, 0010); what
- * is left here is who the Reviewer is and what the link's flags allow.
+ * The API behind a Project Link. Token, password and expiry are checked by
+ * the framework before an action runs (ADR 0011); what is left here is who
+ * the Reviewer is and what the link's flags allow.
  */
 class PublicApiController extends PublicShareController {
 	use GuardsErrors;
-	use ReviewShareToken;
+	use ReviewLinkToken;
 
 	public function __construct(
 		string $appName,
@@ -94,11 +94,7 @@ class PublicApiController extends PublicShareController {
 		});
 	}
 
-	/**
-	 * Every file the link shows that is an Asset, for the Review button in
-	 * the shared file list and the grid of a link's landing page. The button
-	 * opens the newest Version (story 61).
-	 */
+	/** Every Asset the link shows with its newest Version, for the landing page and stepping through Assets */
 	#[PublicPage]
 	#[NoCSRFRequired]
 	public function assets(): Response {
@@ -109,7 +105,8 @@ class PublicApiController extends PublicShareController {
 			foreach ($link->assets() as ['asset' => $asset, 'versions' => $versions]) {
 				$newest = $versions[0];
 				$original = $this->mediaUrl($newest, 'original');
-				$each = [
+				$result[] = [
+					'fileId' => $newest->getFileId(),
 					'newestId' => $newest->getId(),
 					'assetId' => $asset->getId(),
 					'name' => $this->stacks->nameOf($asset),
@@ -121,10 +118,6 @@ class PublicApiController extends PublicShareController {
 					'playUrl' => $this->mayPlayOriginal($newest, $canDownload) ? $original : $this->mediaUrl($newest, 'proxy'),
 					'downloadUrl' => $canDownload ? $original . '?download=1' : null,
 				];
-				foreach ($versions as $version) {
-					// The Review button opens the file's own Version; stepping through Assets lands on the newest
-					$result[] = ['fileId' => $version->getFileId(), 'versionId' => $version->getId()] + $each;
-				}
 			}
 			return $result;
 		});
@@ -332,13 +325,9 @@ class PublicApiController extends PublicShareController {
 	private function describe(ReviewLink $link, Version $version, bool $canDownload): array {
 		$media = $this->mediaUrl($version, '__kind__');
 		$original = $this->mediaUrl($version, 'original');
-		$url = match (true) {
-			$canDownload => $link->directUrl($version) ?? $original,
-			$this->mayPlayOriginal($version, false) => $original,
-			default => null,
-		};
+		$url = $this->mayPlayOriginal($version, $canDownload) ? $original : null;
 		return $this->projects->describeVersion($version, $this->projects->settingsOf($version), $url, $media)
-			// Always through Deliver, never a share's WebDAV URL, so the link's activity notes it (story 124)
+			// Asked for as a download, so the link's activity notes it (story 124)
 			+ ['downloadUrl' => $canDownload ? $original . '?download=1' : null];
 	}
 

@@ -8,8 +8,8 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Projects are collections and access follows the file (ADR 0009): a file
- * shared on its own brings its review along, a Share Link shows Assets of
- * any Project, and Reviewers belong to the Member who invited them.
+ * shared on its own brings its review along, a link on No Project shows the
+ * Assets picked of it, and Reviewers belong to the Member who invited them.
  */
 class CollectionsTest extends TestCase {
 	private NextcloudClient $admin;
@@ -96,55 +96,49 @@ class CollectionsTest extends TestCase {
 		self::assertSame([], $this->guest->ocs('GET', '/projects/0')['data']['assets'], 'No Project lists only what the guest enabled');
 	}
 
-	public function testAShareLinkShowsAssetsOfAnyProject(): void {
+	public function testALinkOnNoProjectShowsThePickedAssets(): void {
 		$project = $this->owner->ocs('POST', '/projects', ['name' => 'Acme spot'])['data']['id'];
 		$this->enable('clients/acme/cut.mp4', $project);
-		$this->enable('clients/acme/teaser.mp4', 0);
+		$teaser = $this->enable('clients/acme/teaser.mp4', 0);
 
-		$link = $this->owner->ocs('POST', '/files/' . $this->owner->fileId('clients') . '/shares');
+		self::assertSame(400, $this->owner->ocs('POST', '/projects/0/links')['status'], 'No Project is never shared whole');
+		$link = $this->owner->ocs('POST', '/projects/0/links', ['assetIds' => [$teaser['assetId']]]);
 		self::assertSame(201, $link['status'], json_encode($link['data']));
-		$this->shareIds[] = $link['data']['id'];
+		self::assertSame([0, [$teaser['assetId']]], [$link['data']['projectId'], $link['data']['assetIds']]);
 		$visitor = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $link['data']['token']);
-		$assets = $visitor->call('GET', '/api/assets');
-		self::assertSame(200, $assets['status'], json_encode($assets['data']));
-		self::assertCount(2, $assets['data'], 'one in a Project, one in No Project, both under the link');
+		self::assertSame(['teaser'], array_column($visitor->call('GET', '/api/assets')['data'], 'name'));
+		self::assertSame([$link['data']['id']], array_column($this->owner->ocs('GET', '/projects/0/links')['data']['links'], 'id'), 'No Project lists its links');
 
-		// The Project's navigation lists links on its own files, not a folder that merely holds one of them
-		$fileLink = $this->owner->ocs('POST', '/files/' . $this->owner->fileId('clients/acme/cut.mp4') . '/shares')['data'];
-		$this->shareIds[] = $fileLink['id'];
-		$links = $this->owner->ocs('GET', "/projects/$project/shares")['data']['links'];
-		self::assertSame([$fileLink['id']], array_column($links, 'id'));
-		self::assertFalse($links[0]['isProject'], 'the Project has no folder of its own');
+		$this->owner->ocs('PUT', "/assets/{$teaser['assetId']}/project", ['projectId' => $project]);
+		self::assertSame([], $visitor->call('GET', '/api/assets')['data'], 'an Asset leaves the link once it joins a Project');
 	}
 
 	public function testReviewersBelongToTheMemberWhoInvitedThem(): void {
 		$first = $this->owner->ocs('POST', '/projects', ['name' => 'Acme spot'])['data']['id'];
 		$this->enable('clients/acme/cut.mp4', $first);
-		$this->enable('sound/mix.wav', 0);
-		$cutLink = $this->owner->ocs('POST', '/files/' . $this->owner->fileId('clients/acme/cut.mp4') . '/shares')['data'];
-		$mixLink = $this->owner->ocs('POST', '/files/' . $this->owner->fileId('sound/mix.wav') . '/shares')['data'];
-		array_push($this->shareIds, $cutLink['id'], $mixLink['id']);
+		$mix = $this->enable('sound/mix.wav', 0);
+		$cutLink = $this->owner->ocs('POST', "/projects/$first/links")['data'];
+		$mixLink = $this->owner->ocs('POST', '/projects/0/links', ['assetIds' => [$mix['assetId']]])['data'];
 
-		$invited = $this->owner->ocs('POST', "/shares/{$cutLink['id']}/reviewers", ['name' => 'Kim']);
+		$invited = $this->owner->ocs('POST', "/links/{$cutLink['id']}/reviewers", ['name' => 'Kim']);
 		self::assertSame(201, $invited['status'], json_encode($invited['data']));
-		$onMix = array_column($this->owner->ocs('GET', "/shares/{$mixLink['id']}/reviewers")['data'], 'link', 'name');
+		$onMix = array_column($this->owner->ocs('GET', "/links/{$mixLink['id']}/reviewers")['data'], 'link', 'name');
 		self::assertStringContainsString("/s/{$mixLink['token']}?r=", $onMix['Kim'], 'Kim has a Personal Link through every link of the Member, whatever the Project');
 
 		$asKim = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $mixLink['token']);
-		$mixVersion = $asKim->call('GET', '/api/assets')['data'][0]['versionId'];
+		$mixVersion = $asKim->call('GET', '/api/assets')['data'][0]['newestId'];
 		$context = $asKim->call('GET', "/api/context?versionId=$mixVersion&r={$invited['data']['key']}");
 		self::assertSame(['reviewer', 'Kim'], [$context['data']['me']['type'], $context['data']['me']['name']]);
 
 		// Another Member's link does not know Kim
 		$this->owner->put('sound/other.wav', 'not really audio');
 		$this->shareWithGuest('sound', 31);
-		$guestFile = $this->guest->fileId('sound/other.wav');
-		self::assertSame(201, $this->guest->ocs('POST', '/assets', ['fileId' => $guestFile])['status']);
-		$guestLink = $this->guest->ocs('POST', "/files/$guestFile/shares")['data'];
+		$other = $this->guest->ocs('POST', '/assets', ['fileId' => $this->guest->fileId('sound/other.wav')]);
+		self::assertSame(201, $other['status']);
+		$guestLink = $this->guest->ocs('POST', '/projects/0/links', ['assetIds' => [$other['data']['assetId']]])['data'];
 		$asStranger = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $guestLink['token']);
-		$otherVersion = $asStranger->call('GET', '/api/assets')['data'][0]['versionId'];
+		$otherVersion = $asStranger->call('GET', '/api/assets')['data'][0]['newestId'];
 		$context = $asStranger->call('GET', "/api/context?versionId=$otherVersion&r={$invited['data']['key']}");
 		self::assertSame('unnamed', $context['data']['me']['type']);
-		$this->guest->ocsForm('DELETE', "/ocs/v2.php/apps/files_sharing/api/v1/shares/{$guestLink['id']}");
 	}
 }

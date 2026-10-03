@@ -11,12 +11,12 @@ use OCP\Files\NotFoundException;
 
 /**
  * The token checks both public controllers share. The framework calls them
- * before any action runs, so password and expiry of the link apply, whether
- * a Share Link's (ADR 0004) or a Project Link's (ADR 0010).
+ * before any action runs, so password and expiry of the Review Link apply
+ * (ADR 0011).
  *
  * @property ReviewLinks $links
  */
-trait ReviewShareToken {
+trait ReviewLinkToken {
 	private ?ReviewLink $resolved = null;
 
 	/** Cookie that remembers a Reviewer on this browser, one per link */

@@ -20,7 +20,6 @@ OC.L10N.register(
 		"All Projects": "Alle Projekte",
 		"Also on older Versions": "Auch auf älteren Versionen",
 		"An attachment is at most 25 MB: {names}": "Ein Anhang ist höchstens 25 MB groß: {names}",
-		"An ordinary link: people see and play the files, but no Comments.": "Ein gewöhnlicher Link: Man sieht und spielt die Dateien, aber ohne Kommentare.",
 		"Approval": "Abnahme",
 		"Approve": "Abnehmen",
 		"Approve this Version": "Diese Version abnehmen",
@@ -29,7 +28,6 @@ OC.L10N.register(
 		"As the link says": "Wie beim Link",
 		"Attach files": "Dateien anhängen",
 		"Attach files, up to five of 25 MB each": "Dateien anhängen, bis zu fünf mit je 25 MB",
-		"Auto Intake: review every media file in the Project folder": "Automatische Aufnahme: jede Mediendatei im Projektordner reviewen",
 		"Auto Intake: review every media file in this folder": "Automatische Aufnahme: jede Mediendatei in diesem Ordner reviewen",
 		"Back to the Review": "Zurück zum Review",
 		"Back to {project}": "Zurück zu {project}",
@@ -100,7 +98,6 @@ OC.L10N.register(
 		"Filter": "Filter",
 		"Find a Project": "Projekt finden",
 		"Find an Asset": "Asset finden",
-		"Folders and Share Links": "Ordner und Freigabelinks",
 		"Frame counter": "Frame-Zähler",
 		"Frame rate when a file does not tell": "Framerate, wenn eine Datei keine angibt",
 		"Frames": "Frames",
@@ -128,7 +125,6 @@ OC.L10N.register(
 		"Leave fullscreen": "Vollbild verlassen",
 		"Link copied": "Link kopiert",
 		"Link is live": "Link ist aktiv",
-		"Link to the whole Project folder": "Link auf den ganzen Projektordner",
 		"Links": "Links",
 		"Loading Project…": "Projekt wird geladen …",
 		"Loading Version…": "Version wird geladen …",
@@ -207,7 +203,6 @@ OC.L10N.register(
 		"Pause (Space)": "Pause (Leertaste)",
 		"Paused: the link shows nothing until you switch it on again.": "Pausiert: Der Link zeigt nichts, bis du ihn wieder einschaltest.",
 		"Pen": "Stift",
-		"People with this link get a Review button and can leave frame-accurate Comments.": "Wer diesen Link hat, bekommt einen Review-Knopf und kann framegenau kommentieren.",
 		"Personal Link copied": "Persönlicher Link kopiert",
 		"Personal Links": "Persönliche Links",
 		"Pick the folder for the new Project": "Wähle den Ordner für das neue Projekt",
@@ -222,7 +217,6 @@ OC.L10N.register(
 		"Project": "Projekt",
 		"Project Link": "Projekt-Link",
 		"Project Link {number}": "Projekt-Link {number}",
-		"Project folder": "Projektordner",
 		"Project from a folder": "Projekt aus einem Ordner",
 		"Project settings": "Projekteinstellungen",
 		"Projects": "Projekte",
@@ -244,9 +238,7 @@ OC.L10N.register(
 		"Reply": "Antworten",
 		"Request changes": "Änderungen anfordern",
 		"Resolved": "Erledigt",
-		"Review": "Review",
 		"Review in Deliver": "Review in Deliver",
-		"Review on this link": "Review auf diesem Link",
 		"Reviewers": "Reviewer",
 		"Reviewers may comment": "Reviewer dürfen kommentieren",
 		"Reviewers may download the original": "Reviewer dürfen das Original herunterladen",
@@ -262,9 +254,6 @@ OC.L10N.register(
 		"Settings of {name}": "Einstellungen von {name}",
 		"Settings of {project}": "Einstellungen von {project}",
 		"Share": "Teilen",
-		"Share Link on {name}": "Freigabelink auf {name}",
-		"Share Links": "Freigabelinks",
-		"Share Links on {name}": "Freigabelinks auf {name}",
 		"Show": "Anzeigen",
 		"Show Comments": "Kommentare einblenden",
 		"Show in Files": "In Dateien zeigen",
@@ -360,10 +349,6 @@ OC.L10N.register(
 			"%n ungesehener Kommentar",
 			"%n ungesehene Kommentare"
 		],
-		"_%n media file here is not up for review, so Reviewers see it without a Review button._::_%n media files here are not up for review, so Reviewers see them without a Review button._": [
-			"%n Mediendatei hier ist nicht zum Review freigegeben, Reviewer sehen sie also ohne Review-Knopf.",
-			"%n Mediendateien hier sind nicht zum Review freigegeben, Reviewer sehen sie also ohne Review-Knopf."
-		],
 		"_%n reply_::_%n replies_": [
 			"%n Antwort",
 			"%n Antworten"
@@ -409,7 +394,10 @@ OC.L10N.register(
 			"%n abwählen",
 			"%n abwählen"
 		],
-		"Download selection": "Auswahl herunterladen"
+		"Download selection": "Auswahl herunterladen",
+		"Folders and links": "Ordner und Links",
+		"Review Links": "Review-Links",
+		"Review Links on {name}": "Review-Links für {name}"
 	},
 	"nplurals=2; plural=(n != 1);"
 );

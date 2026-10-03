@@ -55,7 +55,7 @@ const uploading = ref(false)
 const fileInput = ref(null)
 /** The phone's date picker for a first Due Date; once set, the date in the bar changes it */
 const pickingDue = ref(false)
-/** The Share Links of this Version's file, in a dialog */
+/** The Project Links of this Version's Asset, in a dialog */
 const sharing = ref(false)
 /** Who can be mentioned in this Project */
 const members = ref([])
@@ -356,10 +356,10 @@ async function upload(event) {
 		@close="pickingDue = false" />
 	<NcDialog
 		v-if="sharing && version"
-		:name="t('deliver', 'Share Links on {name}', { name: version.name })"
+		:name="t('deliver', 'Review Links on {name}', { name: context.asset.name })"
 		size="normal"
 		@closing="sharing = false">
-		<ShareLinks :fileId="version.fileId" :canWrite="context.canWrite" />
+		<ShareLinks :projectId="context.project.id" :assetId="context.asset.id" />
 	</NcDialog>
 </template>
 

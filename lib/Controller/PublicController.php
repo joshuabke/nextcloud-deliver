@@ -24,9 +24,9 @@ use OCP\IURLGenerator;
 use OCP\IUserSession;
 use OCP\Util;
 
-/** The review page behind a Share Link or a Project Link */
+/** The review page behind a Project Link (ADR 0011) */
 class PublicController extends AuthPublicShareController {
-	use ReviewShareToken;
+	use ReviewLinkToken;
 
 	public function __construct(
 		string $appName,
@@ -45,24 +45,19 @@ class PublicController extends AuthPublicShareController {
 	#[PublicPage]
 	#[NoCSRFRequired]
 	public function showShare(): TemplateResponse {
-		$fileId = $this->request->getParam('fileId');
-		return $this->page($fileId === null ? null : (int)$fileId, null);
+		return $this->page(null);
 	}
 
 	#[PublicPage]
 	#[NoCSRFRequired]
 	public function showVersion(int $versionId): TemplateResponse {
-		return $this->page(null, $versionId);
+		return $this->page($versionId);
 	}
 
-	private function page(?int $fileId, ?int $versionId): TemplateResponse {
+	private function page(?int $versionId): TemplateResponse {
 		$link = $this->link();
 		try {
-			$version = match (true) {
-				$versionId !== null => $this->links->version($link, $versionId),
-				$fileId !== null => $this->links->versionForFile($link, $fileId),
-				default => $this->onlyVersion($link),
-			};
+			$version = $versionId === null ? $this->onlyVersion($link) : $this->links->version($link, $versionId);
 		} catch (NotFoundException) {
 			$version = null;
 		}
@@ -104,7 +99,7 @@ class PublicController extends AuthPublicShareController {
 	 */
 	private function memberUrl(ReviewLink $link, ?Version $version): ?string {
 		$user = $this->userSession->getUser();
-		$nodeId = $version?->getFileId() ?? $link->memberNodeId();
+		$nodeId = $version?->getFileId() ?? (array_values($link->assets())[0]['versions'][0] ?? null)?->getFileId();
 		if ($user === null || $nodeId === null || $this->root->getUserFolder($user->getUID())->getFirstNodeById($nodeId) === null) {
 			return null;
 		}

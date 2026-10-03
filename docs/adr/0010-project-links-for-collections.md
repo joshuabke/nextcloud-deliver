@@ -18,7 +18,7 @@ It does not bring back a password prompt of Deliver's own. The review page and i
 
 ## Consequences
 
-- "Create Review Link" in Deliver makes a Project Link, for a Folder Project too. Nextcloud Share Links made in Files keep working and are listed after them.
+- "Create Review Link" in Deliver makes a Project Link, for a Folder Project too. Since ADR 0011 it is the only review link; Nextcloud Share Links no longer review.
 - A Project Link shows only files the Member who made it may share in Nextcloud, as a reshare would; it shows nothing once they lose access, and goes with its Project.
-- Reviewers, Personal Links and the activity of a link are keyed by its token, so they work alike for both kinds of link. Only the newest Version, the description (a Share Link's note) and download apply to Share Links as well; pausing a Share Link stays switching its review off.
-- Deliver now stores tokens and password hashes again, for Project Links only. ADR 0004 stands for Share Links.
+- Reviewers, Personal Links and the activity of a link are keyed by its token.
+- Deliver now stores tokens and password hashes again, for Project Links.

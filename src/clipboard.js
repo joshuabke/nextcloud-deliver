@@ -2,7 +2,7 @@ import { showError, showSuccess } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
 
 /**
- * Copies a Share Link or Personal Link and says so.
+ * Copies a Project Link or Personal Link and says so.
  *
  * @param {string} link - the link to copy
  * @param {string} done - what the toast says once it is copied

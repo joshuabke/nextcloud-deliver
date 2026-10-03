@@ -89,7 +89,7 @@ class ApprovalTest extends TestCase {
 	}
 
 	public function testReviewersDecideOnlyWhereTheyMayComment(): void {
-		$link = $this->nc->ocs('POST', "/files/{$this->nc->fileId($this->root)}/shares")['data'];
+		$link = $this->nc->ocs('POST', "/projects/{$this->projectId}/links")['data'];
 		$reviewer = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $link['token']);
 
 		self::assertSame(403, $reviewer->call('PUT', "/api/versions/{$this->versionId}/approval", ['status' => 'approved'])['status'], 'no name yet');
@@ -98,7 +98,7 @@ class ApprovalTest extends TestCase {
 		self::assertSame(200, $decided['status'], json_encode($decided['data']));
 		self::assertSame([['reviewer', 'Mara', 'changes']], array_map(static fn ($a) => [$a['author']['type'], $a['author']['name'], $a['status']], $decided['data']));
 
-		$this->nc->ocs('PUT', "/shares/{$link['id']}", ['canComment' => false]);
+		$this->nc->ocs('PUT', "/links/{$link['id']}", ['canComment' => false]);
 		self::assertSame(403, $reviewer->call('PUT', "/api/versions/{$this->versionId}/approval", ['status' => 'approved'])['status']);
 	}
 }

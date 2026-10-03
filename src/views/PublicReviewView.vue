@@ -81,8 +81,7 @@ watch(current, async (versionId) => {
 }, { immediate: true })
 
 listPublicAssets().then((entries) => {
-	const seen = new Set()
-	newest.value = entries.filter((each) => !seen.has(each.assetId) && seen.add(each.assetId))
+	newest.value = entries
 }).catch(() => {
 	newest.value = []
 })

@@ -8,7 +8,7 @@ use OCA\Deliver\Db\Comment;
 
 /**
  * Who is looking at a Version and what they may do. A Member's rights come
- * from the Version's file (ADR 0009), a Reviewer's from the Share Link (ADR 0004); past
+ * from the Version's file (ADR 0009), a Reviewer's from the Project Link (ADR 0011); past
  * this point both are handled alike.
  */
 final class Viewer {
@@ -20,7 +20,7 @@ final class Viewer {
 		public readonly bool $canComment,
 		/** Comment on a Version that is not the newest in its Stack */
 		public readonly bool $canCommentOnOlder,
-		/** Someone on a Share Link who may comment as soon as they give a name */
+		/** Someone on a Project Link who may comment as soon as they give a name */
 		public readonly bool $canCommentOnceNamed = false,
 	) {
 	}
@@ -35,7 +35,7 @@ final class Viewer {
 	}
 
 	/**
-	 * Someone on a Share Link who has not given a name yet: reads, but does
+	 * Someone on a Project Link who has not given a name yet: reads, but does
 	 * not write. Where the link takes Comments, the Review view asks for the
 	 * name instead of saying that commenting is off.
 	 */

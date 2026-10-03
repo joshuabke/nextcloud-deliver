@@ -8,8 +8,8 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Project Links (ADR 0010): a review link of Deliver's own for a whole
- * Project or the Assets a Member picks, on the same review page and API as a
- * Share Link, with password, expiry, pause, rights and activity of its own.
+ * Project or the Assets a Member picks, on the review page and API under
+ * /s/{token}, with password, expiry, pause, rights and activity of its own.
  */
 class ProjectLinkTest extends TestCase {
 	private NextcloudClient $nc;
@@ -74,8 +74,8 @@ class ProjectLinkTest extends TestCase {
 		$this->nc->ocs('GET', "/projects/{$this->projectId}");
 		self::assertCount(3, $visitor->call('GET', '/api/assets')['data'], 'a new Asset of the Project shows up by itself');
 
-		$listed = $this->nc->ocs('GET', "/projects/{$this->projectId}/shares")['data'];
-		self::assertSame([$link['id']], array_column($listed['projectLinks'], 'id'), 'the navigation lists it');
+		$listed = $this->nc->ocs('GET', "/projects/{$this->projectId}/links")['data'];
+		self::assertSame([$link['id']], array_column($listed['links'], 'id'), 'the navigation lists it');
 	}
 
 	public function testPickedAssetsLimitTheLink(): void {
@@ -149,16 +149,16 @@ class ProjectLinkTest extends TestCase {
 		$context = $kim->call('GET', "/api/context?versionId=$versionId");
 		self::assertSame(['reviewer', 'Kim'], [$context['data']['me']['type'], $context['data']['me']['name']]);
 
-		$shares = $this->nc->ocs('GET', "/projects/{$this->projectId}/shares")['data'];
+		$shares = $this->nc->ocs('GET', "/projects/{$this->projectId}/links")['data'];
 		self::assertSame(['Kim'], array_column($shares['reviewers'], 'name'), 'the Project lists who came by its link');
-		self::assertSame([$invited['data']['id']], array_column($shares['projectLinks'], 'reviewerIds')[0]);
+		self::assertSame([$invited['data']['id']], array_column($shares['links'], 'reviewerIds')[0]);
 
 		$activity = $this->nc->ocs('GET', "/links/{$link['id']}/activity")['data'];
 		self::assertSame(['viewed', 'opened'], array_column(array_slice($activity, 0, 2), 'kind'), 'newest first');
 		self::assertSame(['Kim', $versionId], [$activity[0]['reviewer']['name'], $activity[0]['versionId']]);
 
 		$this->change($link['id'], ['review' => false]);
-		$paused = $this->nc->ocs('GET', "/projects/{$this->projectId}/shares")['data'];
+		$paused = $this->nc->ocs('GET', "/projects/{$this->projectId}/links")['data'];
 		self::assertSame(['Kim'], array_column($paused['reviewers'], 'name'), 'pausing the link keeps its Reviewers in reach');
 		self::assertSame([], $paused['reviewers'][0]['links'], 'but no Personal Link goes through a paused one');
 	}

@@ -657,18 +657,6 @@ class ProjectService {
 	}
 
 	/**
-	 * A Project, or No Project for 0, with its folder and the files of it
-	 * this Member can open, for its Share Links.
-	 *
-	 * @return array{0: ?Project, 1: ?Folder, 2: list<int>}
-	 */
-	public function filesOf(string $uid, int $id): array {
-		[$project, $folder] = $id === self::NONE ? [null, null] : $this->visible($uid, $id);
-		$files = $this->visibleStacks($project, $uid, $this->root->getUserFolder($uid))[2];
-		return [$project, $folder, array_values(array_map(static fn (File $file) => $file->getId(), $files))];
-	}
-
-	/**
 	 * A Project this Member can see, with its folder where they reach it.
 	 *
 	 * @return array{0: Project, 1: ?Folder}
@@ -800,24 +788,6 @@ class ProjectService {
 				yield $node;
 			}
 		}
-	}
-
-	/**
-	 * Media files under each shared node that are no Assets, so a Reviewer
-	 * sees them without a Review button. Only a Folder Project without Auto
-	 * Intake has any.
-	 *
-	 * @param list<int> $nodeIds files and folders the user can reach
-	 * @return array<int, int> node id => how many
-	 */
-	public function notEnabled(string $uid, Project $project, array $nodeIds): array {
-		$home = $this->root->getUserFolder($uid);
-		$counts = [];
-		foreach ($nodeIds as $nodeId) {
-			$node = $project->getFolderId() === null ? null : $home->getFirstNodeById($nodeId);
-			$counts[$nodeId] = $node === null ? 0 : count($this->looseFiles($project, $node));
-		}
-		return $counts;
 	}
 
 	/**

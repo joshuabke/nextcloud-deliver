@@ -19,6 +19,6 @@ Since a Project no longer has one folder whose permissions it could borrow, acce
 - Removing a Project never deletes review data: its Assets go to No Project. Deleting a file for good still purges its Version (ADR 0002).
 - A file is one Version at most, in one Project or none. Auto Intake takes in only files no Project holds; a file that moves keeps its Project, wherever it goes.
 - Notifications, Mentions and live updates reach the people who can open the Version's file; muting stays per Project, with one more mute for No Project.
-- Reviewers belong to the Member who invited them, and a Personal Link works through every review Share Link of that Member, whatever Projects the shared files are in. A review Share Link shows every Asset under the shared node, whatever its Project.
+- Reviewers belong to the Member who invited them, and a Personal Link works through every Project Link of that Member (ADR 0011).
 - Attachments live in Deliver's app data, like derived media, and go with their Comment.
 - A Version Stack never spans Projects: stacking a file onto an Asset brings it into that Asset's Project, and needs write access to both files.

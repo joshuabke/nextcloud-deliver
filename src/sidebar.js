@@ -2,14 +2,12 @@ import { showError, showInfo } from '@nextcloud/dialogs'
 import { getSidebar, registerFileAction } from '@nextcloud/files'
 import { t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
-import { registerSidebarAction } from '@nextcloud/sharing/ui'
 import { defineCustomElement } from 'vue'
-import ShareReviewAction from './views/ShareReviewAction.vue'
 import { errorMessage, getAssetForFile } from './api.js'
 import icon from './icon.svg?raw'
 import { reviewable } from './lib/media.js'
 
-// Deliver in the Files app: the sidebar tab, the "Open in Deliver" action, and the review switch in the link settings
+// Deliver in the Files app: the sidebar tab and the "Open in Deliver" action
 
 const tagName = 'deliver-files-sidebar-tab'
 const isMedia = (node) => reviewable(node?.mime)
@@ -48,14 +46,4 @@ registerFileAction({
 		}
 		return null
 	},
-})
-
-// Nextcloud's link settings get Deliver's review switch, so a Share Link turns into a review surface where it is made
-customElements.define('oca_deliver-share-review', defineCustomElement(ShareReviewAction, { shadowRoot: false }))
-registerSidebarAction({
-	id: 'deliver-share-review',
-	element: 'oca_deliver-share-review',
-	order: 50,
-	// Link and email shares, the two kinds that reach Reviewers
-	enabled: (share) => [3, 4].includes(share.type),
 })
