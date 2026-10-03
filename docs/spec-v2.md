@@ -119,6 +119,7 @@ Deliver becomes a proper Nextcloud app, rebuilt from scratch, in which media fil
 79. As an admin, I want an `occ` command that regenerates derived media for a Project or the whole instance, so that app data is disposable.
 80. As a Member, I want a "regenerate" button on a Version, so that a broken Proxy can be rebuilt without an admin.
 81. As an admin, I want derived media in app data, never in user folders, so that sync clients and shares never see it.
+126. As an admin of a hosted Nextcloud without a shell, I want setup checks on the admin overview for the background job mode and failed media jobs, failures in the Nextcloud log, a button that retries failed jobs, and a support report without names or Comments to attach to an issue, so that I can find and report problems without `occ`.
 
 ### Product hygiene
 

@@ -105,6 +105,8 @@ export function linkApi(link) {
 
 export const getPipelineSettings = () => axios.get(url('/admin/settings')).then(data)
 export const savePipelineSettings = (settings) => axios.put(url('/admin/settings'), settings).then(data)
+export const getSupportReport = () => axios.get(url('/admin/report')).then(data)
+export const retryFailedJobs = () => axios.post(url('/admin/jobs/retry')).then(data)
 
 // Public review page only
 export const getPublicContext = (params) => axios.get(url('/context'), { params }).then(data)
