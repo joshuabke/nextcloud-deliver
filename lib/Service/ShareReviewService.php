@@ -6,6 +6,7 @@ namespace OCA\Deliver\Service;
 
 use OCA\Deliver\Db\Asset;
 use OCA\Deliver\Db\AssetMapper;
+use OCA\Deliver\Db\LinkActivityMapper;
 use OCA\Deliver\Db\Version;
 use OCA\Deliver\Db\VersionMapper;
 use OCP\Constants;
@@ -41,6 +42,7 @@ class ShareReviewService {
 		private VersionMapper $versions,
 		private IURLGenerator $urls,
 		private IConfig $config,
+		private LinkActivityMapper $activity,
 	) {
 	}
 
@@ -231,9 +233,11 @@ class ShareReviewService {
 		}
 	}
 
-	/** Deletes the Share Link from Nextcloud: it stops working for everyone, Personal Links through it too */
+	/** Deletes the Share Link from Nextcloud: it stops working for everyone, Personal Links through it too; its activity goes with it */
 	public function deleteLink(string $uid, int $shareId): void {
-		$this->shares->deleteShare($this->ownShare($uid, $shareId));
+		$share = $this->ownShare($uid, $shareId);
+		$this->shares->deleteShare($share);
+		$this->activity->deleteByToken($share->getToken());
 	}
 
 	/** The nearest review Share Link of a Member from a file up to their home, for mails */

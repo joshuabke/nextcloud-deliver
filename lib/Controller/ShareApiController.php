@@ -81,8 +81,8 @@ class ShareApiController extends OCSController {
 
 	/**
 	 * My Project Links of a Project, my Share Links on its folder or files,
-	 * and my Reviewers who came by any of them, each with their Personal Link
-	 * through every one with review on, for its navigation (story 100)
+	 * and my Reviewers who came by any of them, paused or not, each with their
+	 * Personal Link through every one with review on, for its navigation (story 100)
 	 */
 	#[NoAdminRequired]
 	public function inProject(int $id): Response {
@@ -92,8 +92,9 @@ class ShareApiController extends OCSController {
 			$links = $this->sharing->linksUnder($uid, $folder, $fileIds);
 			$notEnabled = $project === null ? [] : $this->projects->notEnabled($uid, $project, array_column($links, 'fileId'));
 			$projectLinks = $project === null ? [] : $this->projectLinks->listFor($uid, $project->getId());
-			$live = array_filter([...$projectLinks, ...$links], static fn (array $link) => $link['review']);
-			['reviewers' => $reviewers, 'cameBy' => $cameBy] = $this->links->reviewersBy($uid, array_column($live, 'url', 'token'));
+			$all = [...$projectLinks, ...$links];
+			$live = array_filter($all, static fn (array $link) => $link['review']);
+			['reviewers' => $reviewers, 'cameBy' => $cameBy] = $this->links->reviewersBy($uid, array_column($all, 'token'), array_column($live, 'url', 'token'));
 			$withReviewers = static fn (array $link) => $link + ['reviewerIds' => $cameBy[$link['token']] ?? []];
 			return [
 				'projectLinks' => array_map($withReviewers, $projectLinks),

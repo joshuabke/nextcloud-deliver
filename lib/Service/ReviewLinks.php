@@ -125,16 +125,17 @@ class ReviewLinks {
 	}
 
 	/**
-	 * The user's Reviewers who came by one of these links, each with their
-	 * Personal Link through every one of them, and who came by which link.
+	 * The user's Reviewers who came by one of these links, paused or not, each
+	 * with their Personal Link through every live one, and who came by which link.
 	 *
-	 * @param array<string, string> $urls token → URL of each link listed
+	 * @param list<string> $tokens every link listed
+	 * @param array<string, string> $urls token → URL of each live link
 	 * @return array{reviewers: list<array<string, mixed>>, cameBy: array<string, list<int>>}
 	 */
-	public function reviewersBy(string $uid, array $urls): array {
+	public function reviewersBy(string $uid, array $tokens, array $urls): array {
 		$reviewers = $this->reviewerMapper->findByOwners([$uid]);
 		$cameBy = $this->reviewerMapper->reviewersByLink(array_map(static fn (Reviewer $reviewer) => $reviewer->getId(), $reviewers));
-		$cameBy = array_intersect_key($cameBy, $urls);
+		$cameBy = array_intersect_key($cameBy, array_flip($tokens));
 		$shown = array_merge([], ...array_values($cameBy));
 		$reviewers = array_values(array_filter($reviewers, static fn (Reviewer $reviewer) => in_array($reviewer->getId(), $shown, true)));
 		return [

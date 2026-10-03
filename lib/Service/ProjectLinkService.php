@@ -61,7 +61,7 @@ class ProjectLinkService {
 
 	/**
 	 * Changes what is given; '' removes password, expiry and description, and
-	 * an empty $assetIds of null means the whole Project again.
+	 * an empty $assetIds or null means the whole Project again.
 	 *
 	 * @param array<string, mixed> $fields review, canComment, allowOlder, watermark, canDownload, latestOnly, label, description, password, expireDate, assetIds
 	 * @throws InvalidRequestException a password the policy refuses, an expiry in the past or no date
@@ -186,7 +186,7 @@ class ProjectLinkService {
 
 	/** The picked Assets of the link's Project as JSON, or null for all of it */
 	private function picked(ProjectLink $link, mixed $assetIds): ?string {
-		if (!is_array($assetIds)) {
+		if (!is_array($assetIds) || $assetIds === []) {
 			return null;
 		}
 		$ofProject = array_map(static fn ($asset) => $asset->getId(), $this->assets->findByProject($link->getProjectId()));

@@ -91,6 +91,10 @@ class ProjectLinkTest extends TestCase {
 
 		self::assertNull($this->change($link['id'], ['assetIds' => null])['assetIds']);
 		self::assertCount(2, $visitor->call('GET', '/api/assets')['data'], 'back to the whole Project');
+
+		$this->change($link['id'], ['assetIds' => [$cut['id']]]);
+		self::assertNull($this->change($link['id'], ['assetIds' => []])['assetIds'], 'unpicking the last Asset is the whole Project again');
+		self::assertCount(2, $visitor->call('GET', '/api/assets')['data']);
 	}
 
 	public function testPasswordExpiryAndPause(): void {
@@ -152,6 +156,11 @@ class ProjectLinkTest extends TestCase {
 		$activity = $this->nc->ocs('GET', "/links/{$link['id']}/activity")['data'];
 		self::assertSame(['viewed', 'opened'], array_column(array_slice($activity, 0, 2), 'kind'), 'newest first');
 		self::assertSame(['Kim', $versionId], [$activity[0]['reviewer']['name'], $activity[0]['versionId']]);
+
+		$this->change($link['id'], ['review' => false]);
+		$paused = $this->nc->ocs('GET', "/projects/{$this->projectId}/shares")['data'];
+		self::assertSame(['Kim'], array_column($paused['reviewers'], 'name'), 'pausing the link keeps its Reviewers in reach');
+		self::assertSame([], $paused['reviewers'][0]['links'], 'but no Personal Link goes through a paused one');
 	}
 
 	public function testALinkShowsOnlyWhatItsMemberMayShare(): void {

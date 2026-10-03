@@ -13,6 +13,9 @@ use OCP\Share\IShare;
 
 /** A Nextcloud Share Link with review on (ADR 0004): password, expiry and revocation are the share's own */
 class ShareReviewLink extends ReviewLink {
+	/** @var array<int, array{asset: \OCA\Deliver\Db\Asset, versions: non-empty-list<Version>}>|null walked once per request */
+	private ?array $stacks = null;
+
 	public function __construct(
 		public readonly IShare $share,
 		private ShareReviewService $sharing,
@@ -64,7 +67,7 @@ class ShareReviewLink extends ReviewLink {
 	}
 
 	protected function stacks(): array {
-		return $this->sharing->assets($this->share);
+		return $this->stacks ??= $this->sharing->assets($this->share);
 	}
 
 	protected function contains(Version $version): bool {

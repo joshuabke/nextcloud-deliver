@@ -26,7 +26,6 @@ import VideoPlayer from '../components/VideoPlayer.vue'
 import { claimReviewer, errorMessage, getPublicContext, listPublicAssets } from '../api.js'
 import { usePanelOpen } from '../composables/panel.js'
 import { useReview } from '../composables/review.js'
-import { downloadUrl } from '../lib/links.js'
 import { useCommentsStore } from '../store/comments.js'
 
 const props = defineProps({
@@ -172,8 +171,8 @@ async function claim({ name, email, mail }) {
 				<ApprovalControl />
 				<VersionPicker :versions="context.versions" :current="current" @select="current = $event" />
 				<NcButton
-					v-if="context.flags.canDownload && version?.url && !isMobile"
-					:href="downloadUrl(version.url)"
+					v-if="version?.downloadUrl && !isMobile"
+					:href="version.downloadUrl"
 					variant="tertiary"
 					:aria-label="t('deliver', 'Download the original')"
 					:title="t('deliver', 'Download the original')"
@@ -184,7 +183,7 @@ async function claim({ name, email, mail }) {
 				</NcButton>
 			</template>
 
-			<template v-if="assetCount > 1 || (context.flags.canDownload && version?.url)" #menu>
+			<template v-if="assetCount > 1 || version?.downloadUrl" #menu>
 				<NcActionButton
 					v-if="assetCount > 1"
 					:disabled="assetIndex <= 0"
@@ -205,7 +204,7 @@ async function claim({ name, email, mail }) {
 					</template>
 					{{ t('deliver', 'Next Asset') }}
 				</NcActionButton>
-				<NcActionLink v-if="context.flags.canDownload && version?.url" :href="downloadUrl(version.url)" download>
+				<NcActionLink v-if="version?.downloadUrl" :href="version.downloadUrl" download>
 					<template #icon>
 						<NcIconSvgWrapper :svg="downloadIcon" />
 					</template>

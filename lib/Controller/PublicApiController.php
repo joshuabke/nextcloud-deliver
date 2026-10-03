@@ -287,12 +287,15 @@ class PublicApiController extends PublicShareController {
 			'versionId' => $version->getId(),
 			'kind' => '__kind__',
 		]);
+		$original = str_replace('__kind__', 'original', $media);
 		$url = match (true) {
-			$canDownload => $link->directUrl($version) ?? str_replace('__kind__', 'original', $media),
-			$this->mayPlayOriginal($version, false) => str_replace('__kind__', 'original', $media),
+			$canDownload => $link->directUrl($version) ?? $original,
+			$this->mayPlayOriginal($version, false) => $original,
 			default => null,
 		};
-		return $this->projects->describeVersion($version, $this->projects->settingsOf($version), $url, $media);
+		return $this->projects->describeVersion($version, $this->projects->settingsOf($version), $url, $media)
+			// Always through Deliver, never a share's WebDAV URL, so the link's activity notes it (story 124)
+			+ ['downloadUrl' => $canDownload ? $original . '?download=1' : null];
 	}
 
 	/** Without downloads, the original plays only while no Proxy is made for it */
