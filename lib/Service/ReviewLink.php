@@ -16,6 +16,9 @@ use OCP\Files\NotFoundException;
  * picks the kind; everything after that is the same.
  */
 abstract class ReviewLink {
+	/** The switches of a link, as flags() returns them and a Member sets them */
+	public const FLAGS = ['review', 'canComment', 'allowOlder', 'watermark', 'canDownload', 'latestOnly'];
+
 	abstract public function token(): string;
 
 	/** The Member whose Reviewers come by it */

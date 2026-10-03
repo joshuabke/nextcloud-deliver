@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Deliver\Controller;
 
 use OCA\Deliver\Service\ProjectLinkService;
+use OCA\Deliver\Service\ReviewLink;
 use OCA\Deliver\Service\ReviewLinks;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -16,7 +17,7 @@ use OCP\IRequest;
 class ProjectLinkApiController extends OCSController {
 	use GuardsErrors;
 
-	private const FIELDS = ['review', 'canComment', 'allowOlder', 'watermark', 'canDownload', 'latestOnly', 'label', 'description', 'password', 'expireDate', 'assetIds'];
+	private const FIELDS = [...ReviewLink::FLAGS, 'label', 'description', 'password', 'expireDate', 'assetIds'];
 
 	public function __construct(
 		string $appName,

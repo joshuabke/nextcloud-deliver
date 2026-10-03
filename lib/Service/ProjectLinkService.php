@@ -68,7 +68,7 @@ class ProjectLinkService {
 	 */
 	public function update(string $uid, int $id, array $fields): array {
 		$link = $this->own($uid, $id);
-		foreach (['review', 'canComment', 'allowOlder', 'watermark', 'canDownload', 'latestOnly'] as $flag) {
+		foreach (ReviewLink::FLAGS as $flag) {
 			if (isset($fields[$flag])) {
 				$link->{'set' . ucfirst($flag)}((bool)$fields[$flag]);
 			}
