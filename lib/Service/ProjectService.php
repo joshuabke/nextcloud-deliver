@@ -370,7 +370,13 @@ class ProjectService {
 	 */
 	public function stackVersion(string $uid, int $versionId, int $assetId, ?int $number): array {
 		$version = $this->writableVersion($uid, $versionId);
-		$this->writableAsset($uid, $this->assets->find($assetId) ?? throw new NotFoundException('Asset not found'));
+		$newest = $this->writableAsset($uid, $this->assets->find($assetId) ?? throw new NotFoundException('Asset not found'));
+		$home = $this->root->getUserFolder($uid);
+		$file = $home->getFirstNodeById($version->getFileId());
+		$other = $home->getFirstNodeById($newest->getFileId());
+		if ($file instanceof File && $other instanceof File && Reviewable::kind($file->getMimetype()) !== Reviewable::kind($other->getMimetype())) {
+			throw new InvalidRequestException('A Version Stack holds one kind of media: video, audio or stills');
+		}
 		return $this->versionPayload($this->stacks->stack($version, $assetId, $number), $uid);
 	}
 

@@ -11,7 +11,8 @@ describe('filename convention', () => {
 	})
 })
 
-const asset = (id, name, file, path = '') => ({ id, name, path, versions: [{ name: file }] })
+const TYPES = { mp4: 'video/mp4', mov: 'video/quicktime', mp3: 'audio/mpeg' }
+const asset = (id, name, file, path = '', mimeType = TYPES[file.split('.').pop()]) => ({ id, name, path, versions: [{ name: file, mimeType }] })
 
 describe('stack suggestions', () => {
 	it('offers the Assets a name points at when Deliver did not dare to stack', () => {
@@ -28,6 +29,16 @@ describe('stack suggestions', () => {
 	it('keeps folders apart', () => {
 		const assets = [asset(1, 'cut', 'cut.mp4', 'scenes'), asset(2, 'cut', 'cut_v2.mp4', '')]
 		expect(stackSuggestions(assets).size).toBe(0)
+	})
+
+	it('keeps kinds of media apart, but not containers', () => {
+		const assets = [asset(1, 'cut', 'cut.mp4'), asset(2, 'cut', 'cut.mov'), asset(3, 'cut', 'cut_v2.mp3'), asset(4, 'cut', 'cut_v3.mp4')]
+		expect(stackSuggestions(assets).get(4).map((a) => a.id)).toEqual([1, 2])
+		expect(stackSuggestions(assets).has(3)).toBe(false)
+	})
+
+	it('says nothing for a Missing file, whose kind is unknown', () => {
+		expect(stackSuggestions([asset(1, 'cut', 'cut.mp4'), asset(2, 'cut', 'cut_v2.mp4', '', null)]).size).toBe(0)
 	})
 
 	it('says nothing about an Asset that is already a Stack', () => {
