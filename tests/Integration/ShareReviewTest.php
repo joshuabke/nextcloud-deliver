@@ -267,8 +267,8 @@ class ShareReviewTest extends TestCase {
 		$reviewers = array_column($listed['data']['reviewers'], null, 'name');
 		self::assertSame([$reviewers['Kim']['id']], $links[$this->shareId]['reviewerIds'], 'invited through the folder link');
 		self::assertSame([$reviewers['Lea']['id']], $links[$fileLink['data']['id']]['reviewerIds'], 'named themselves on the file link');
-		$kimLinks = array_column($reviewers['Kim']['links'], 'url', 'shareId');
-		self::assertStringContainsString($fileLink['data']['token'], $kimLinks[$fileLink['data']['id']], 'every Reviewer has a Personal Link through every review link');
+		$kimLinks = array_column($reviewers['Kim']['links'], 'url', 'token');
+		self::assertStringContainsString($fileLink['data']['token'], $kimLinks[$fileLink['data']['token']], 'every Reviewer has a Personal Link through every review link');
 	}
 
 	public function testALinkSaysWhichFilesAreNotUpForReview(): void {
