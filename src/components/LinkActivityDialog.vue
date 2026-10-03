@@ -1,7 +1,6 @@
 <script setup>
 import { t } from '@nextcloud/l10n'
 import { ref } from 'vue'
-import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcDateTime from '@nextcloud/vue/components/NcDateTime'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
@@ -42,13 +41,6 @@ const DOINGS = {
 			<tr v-for="(entry, index) in activity" :key="index">
 				<td>
 					<span class="deliver-activity__who" :class="{ 'deliver-activity__who--anonymous': !entry.reviewer }">
-						<NcAvatar
-							v-if="entry.reviewer"
-							:displayName="entry.reviewer.name"
-							isNoUser
-							disableMenu
-							hideStatus
-							:size="20" />
 						{{ entry.reviewer?.name ?? t('deliver', 'Anonymous') }}
 					</span>
 				</td>
@@ -80,11 +72,10 @@ const DOINGS = {
 }
 
 .deliver-activity__who {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
+	display: inline-block;
 	max-width: 200px;
-	padding: 2px 10px 2px 2px;
+	vertical-align: middle;
+	padding: 2px 10px;
 	border-radius: var(--border-radius-element);
 	background: var(--color-primary-element-light);
 	color: var(--color-primary-element-light-text);
@@ -94,13 +85,13 @@ const DOINGS = {
 }
 
 .deliver-activity__who--anonymous {
-	padding-inline-start: 10px;
 	background: var(--color-background-dark);
 	color: var(--color-text-maxcontrast);
 }
 
 .deliver-activity__what {
 	width: 100%;
+	white-space: normal;
 	overflow-wrap: anywhere;
 }
 
