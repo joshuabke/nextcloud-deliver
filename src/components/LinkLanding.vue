@@ -4,14 +4,14 @@ import downloadIcon from '@mdi/svg/svg/download.svg?raw'
 import audioIcon from '@mdi/svg/svg/music-note-outline.svg?raw'
 import videoIcon from '@mdi/svg/svg/play-box-outline.svg?raw'
 import { n, t } from '@nextcloud/l10n'
-import { onBeforeUnmount, onMounted, reactive } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DueDate from './DueDate.vue'
 import { previewUrl } from '../lib/preview.js'
 
 // A link with several Assets opens on a grid of them, under its description (stories 123, 125)
-defineProps({
+const props = defineProps({
 	/** The link's title and description, and where to download all of it, if the link lets */
 	link: { type: Object, required: true },
 	/** The newest Version of every Asset behind the link */
@@ -25,6 +25,22 @@ const emit = defineEmits(['open'])
 /** Assets without a still from Nextcloud: a frame of the video stands in */
 const noStill = reactive(new Set())
 const isAudio = (asset) => asset.mimeType?.startsWith('audio/')
+
+/** Assets picked for one ZIP, as on Frame.io */
+const selected = reactive(new Set())
+const selectionUrl = computed(() => props.link.downloadAll + '?assetIds=' + [...selected].join(','))
+
+/**
+ * @param {number} assetId - the Asset picked or dropped
+ * @param {boolean} on - picked or not
+ */
+function toggle(assetId, on) {
+	if (on) {
+		selected.add(assetId)
+	} else {
+		selected.delete(assetId)
+	}
+}
 
 // Nextcloud's header and footer step aside, as for the Review view
 onMounted(() => document.body.classList.add('deliver-review'))
@@ -49,8 +65,19 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 						<NcIconSvgWrapper :svg="accountIcon" :size="20" />
 						{{ t('deliver', 'Reviewing as {name}', { name: me }) }}
 					</span>
+					<template v-if="selected.size > 0">
+						<NcButton variant="tertiary" @click="selected.clear()">
+							{{ n('deliver', 'Deselect %n', 'Deselect %n', selected.size) }}
+						</NcButton>
+						<NcButton :href="selectionUrl" variant="primary" download>
+							<template #icon>
+								<NcIconSvgWrapper :svg="downloadIcon" />
+							</template>
+							{{ t('deliver', 'Download selection') }}
+						</NcButton>
+					</template>
 					<NcButton
-						v-if="link.downloadAll"
+						v-else-if="link.downloadAll"
 						:href="link.downloadAll"
 						variant="secondary"
 						download>
@@ -63,30 +90,40 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 			</div>
 			<ul class="deliver-landing__grid">
 				<li v-for="asset in assets" :key="asset.assetId" class="deliver-landing__card">
-					<button
-						type="button"
-						class="deliver-landing__open"
-						:aria-label="asset.name"
-						@click="emit('open', asset.newestId)">
-						<span class="deliver-landing__still">
-							<NcIconSvgWrapper :svg="isAudio(asset) ? audioIcon : videoIcon" :size="40" />
-							<img
-								v-if="!noStill.has(asset.assetId)"
-								:src="previewUrl(asset.fileId, 400)"
-								alt=""
-								loading="lazy"
-								@error="noStill.add(asset.assetId)">
-							<video
-								v-else-if="!isAudio(asset) && asset.playUrl"
-								:src="asset.playUrl + '#t=1'"
-								preload="metadata"
-								muted
-								playsinline
-								tabindex="-1"
-								@error="$event.target.hidden = true" />
-							<span class="deliver-landing__badge">{{ t('deliver', 'V{number}', { number: asset.number }) }}</span>
-						</span>
-					</button>
+					<div class="deliver-landing__media">
+						<button
+							type="button"
+							class="deliver-landing__open"
+							:aria-label="asset.name"
+							@click="emit('open', asset.newestId)">
+							<span class="deliver-landing__still">
+								<NcIconSvgWrapper :svg="isAudio(asset) ? audioIcon : videoIcon" :size="40" />
+								<img
+									v-if="!noStill.has(asset.assetId)"
+									:src="previewUrl(asset.fileId, 400)"
+									alt=""
+									loading="lazy"
+									@error="noStill.add(asset.assetId)">
+								<video
+									v-else-if="!isAudio(asset) && asset.playUrl"
+									:src="asset.playUrl + '#t=1'"
+									preload="metadata"
+									muted
+									playsinline
+									tabindex="-1"
+									@error="$event.target.hidden = true" />
+								<span class="deliver-landing__badge">{{ t('deliver', 'V{number}', { number: asset.number }) }}</span>
+							</span>
+						</button>
+						<input
+							v-if="link.downloadAll"
+							type="checkbox"
+							class="deliver-landing__pick"
+							:class="{ 'deliver-landing__pick--shown': selected.size > 0 }"
+							:checked="selected.has(asset.assetId)"
+							:aria-label="t('deliver', 'Select {name}', { name: asset.name })"
+							@change="toggle(asset.assetId, $event.target.checked)">
+					</div>
 					<div class="deliver-landing__foot">
 						<button
 							type="button"
@@ -229,6 +266,42 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 	width: 100%;
 }
 
+.deliver-landing__media {
+	position: relative;
+}
+
+/* Shown on hover, once anything is picked, and always where there is no hover */
+.deliver-landing__pick {
+	position: absolute;
+	top: calc(2 * var(--default-grid-baseline));
+	inset-inline-start: calc(2 * var(--default-grid-baseline));
+	width: 22px;
+	height: 22px;
+	min-height: 0;
+	margin: 0;
+	accent-color: var(--color-primary-element);
+	cursor: pointer;
+	opacity: 0;
+}
+
+.deliver-landing__card:hover .deliver-landing__pick,
+.deliver-landing__pick:focus-visible,
+.deliver-landing__pick:checked,
+.deliver-landing__pick--shown {
+	opacity: 1;
+}
+
+@media (hover: none) {
+	.deliver-landing__pick {
+		opacity: 1;
+	}
+}
+
+.deliver-landing__card:has(.deliver-landing__pick:checked) {
+	border-color: var(--color-primary-element);
+	box-shadow: 0 0 0 1px var(--color-primary-element);
+}
+
 .deliver-landing__still {
 	position: relative;
 	display: flex;
@@ -254,7 +327,7 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 .deliver-landing__badge {
 	position: absolute;
 	top: calc(2 * var(--default-grid-baseline));
-	inset-inline-start: calc(2 * var(--default-grid-baseline));
+	inset-inline-end: calc(2 * var(--default-grid-baseline));
 	padding: 0 6px;
 	border-radius: var(--border-radius);
 	background: rgba(0, 0, 0, 0.75);

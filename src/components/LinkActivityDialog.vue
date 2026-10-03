@@ -100,4 +100,26 @@ const DOINGS = {
 	white-space: nowrap;
 	text-align: end;
 }
+/* A phone: name and time on one line, what happened under them */
+@media (max-width: 600px) {
+	.deliver-activity tr {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) max-content;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.deliver-activity td {
+		border-bottom: none;
+	}
+
+	.deliver-activity td.deliver-activity__what {
+		grid-column: 1 / -1;
+		grid-row: 2;
+		padding-top: 0;
+	}
+
+	.deliver-activity__who {
+		max-width: 100%;
+	}
+}
 </style>

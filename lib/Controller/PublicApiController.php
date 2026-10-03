@@ -131,12 +131,15 @@ class PublicApiController extends PublicShareController {
 	}
 
 	/**
-	 * The newest Version of every Asset the link shows as one ZIP, where the
-	 * link lets the Reviewer download (story 124); each counts as a download.
+	 * The newest Version of every Asset the link shows, or of those picked, as
+	 * one ZIP, where the link lets the Reviewer download (story 124); each
+	 * counts as a download.
+	 *
+	 * @param string $assetIds comma-separated; empty for all of them
 	 */
 	#[PublicPage]
 	#[NoCSRFRequired]
-	public function download(): Response {
+	public function download(string $assetIds = ''): Response {
 		try {
 			$link = $this->link();
 			$reviewer = $this->reviewer();
@@ -145,7 +148,11 @@ class PublicApiController extends PublicShareController {
 			}
 			$zip = new ZipResponse($this->request, $link->title() !== '' ? $link->title() : 'download');
 			$names = [];
-			foreach ($link->assets() as ['versions' => [$newest]]) {
+			$chosen = $link->assets();
+			if ($assetIds !== '') {
+				$chosen = array_intersect_key($chosen, array_flip(array_map('intval', explode(',', $assetIds))));
+			}
+			foreach ($chosen as ['versions' => [$newest]]) {
 				$file = $link->originalFile($newest);
 				if ($file === null) {
 					continue;

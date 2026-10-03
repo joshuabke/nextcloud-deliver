@@ -178,6 +178,11 @@ class ProjectLinkTest extends TestCase {
 		$kinds = array_count_values(array_column($this->nc->ocs('GET', "/links/{$link['id']}/activity")['data'], 'kind'));
 		self::assertSame(2, $kinds['downloaded'] ?? 0, 'each file in it counts as a download');
 
+		$cut = array_column($listed, 'assetId', 'name')['cut'];
+		$picked = $visitor->raw("/download?assetIds=$cut");
+		self::assertStringContainsString('cut.mp4', $picked['body']);
+		self::assertStringNotContainsString('teaser.mp4', $picked['body'], 'a selection zips only what is picked');
+
 		$this->change($link['id'], ['canDownload' => false]);
 		self::assertSame([null, null], array_column($visitor->call('GET', '/api/assets')['data'], 'downloadUrl'));
 		self::assertSame(404, $visitor->raw('/download')['status']);

@@ -403,7 +403,13 @@ OC.L10N.register(
 		"Reviewing as {name}": "Du reviewst als {name}",
 		"Download all": "Alle herunterladen",
 		"Download {name}": "{name} herunterladen",
-		"Anonymous": "Anonym"
+		"Anonymous": "Anonym",
+		"Select {name}": "{name} auswählen",
+		"_Deselect %n_::_Deselect %n_": [
+			"%n abwählen",
+			"%n abwählen"
+		],
+		"Download selection": "Auswahl herunterladen"
 	},
 	"nplurals=2; plural=(n != 1);"
 );
