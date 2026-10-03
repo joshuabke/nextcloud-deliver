@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Service;
 
-use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\Version;
-use OCP\AppFramework\Db\DoesNotExistException;
 use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
 
@@ -21,7 +19,6 @@ class LiveUpdates {
 	private const QUEUE = 'OCA\\NotifyPush\\Queue\\IQueue';
 
 	public function __construct(
-		private ProjectMapper $projects,
 		private Members $members,
 		private ContainerInterface $container,
 		private LoggerInterface $logger,
@@ -33,12 +30,7 @@ class LiveUpdates {
 		if ($queue === null) {
 			return;
 		}
-		try {
-			$folderId = $this->projects->find($version->getProjectId())->getFolderId();
-		} catch (DoesNotExistException) {
-			return;
-		}
-		foreach ($this->members->of($folderId) as $uid) {
+		foreach ($this->members->of($version->getFileId()) as $uid) {
 			try {
 				$queue->push('notify_custom', ['user' => $uid, 'message' => self::MESSAGE, 'body' => ['versionId' => $version->getId()]]);
 			} catch (\Throwable $e) {

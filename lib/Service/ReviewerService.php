@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Service;
 
-use OCA\Deliver\Db\Project;
 use OCA\Deliver\Db\Reviewer;
 use OCA\Deliver\Db\ReviewerMapper;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Files\NotFoundException;
 use OCP\Security\ISecureRandom;
+use OCP\Share\IShare;
 
 /**
  * Reviewers of a Project. A Reviewer's secret key is their identity: the
@@ -26,15 +26,16 @@ class ReviewerService {
 	}
 
 	/**
-	 * A new Reviewer, named by themselves on a Share Link or invited by a Member.
+	 * A new Reviewer of a Member, named by themselves on that Member's Share
+	 * Link or invited by them (ADR 0009).
 	 *
 	 * @param array{replies?: ?bool, comments?: ?bool, versions?: ?bool} $mail what they want mailed
 	 * @throws InvalidRequestException the name is empty or the email is not one
 	 */
-	public function claim(Project $project, string $name, ?string $email, array $mail = []): Reviewer {
+	public function claim(string $ownerUid, string $name, ?string $email, array $mail = []): Reviewer {
 		$email = self::email($email);
 		$reviewer = new Reviewer();
-		$reviewer->setProjectId($project->getId());
+		$reviewer->setOwnerUid($ownerUid);
 		$reviewer->setName(self::name($name));
 		$reviewer->setEmail($email);
 		$reviewer->setSecretKey($this->random->generate(self::KEY_LENGTH, ISecureRandom::CHAR_ALPHANUMERIC));
@@ -125,13 +126,13 @@ class ReviewerService {
 		return $this->reviewers->find($id) ?? throw new NotFoundException('Reviewer not found');
 	}
 
-	/** The Reviewer with this key, if they belong to this Project */
-	public function byKey(?string $key, Project $project): ?Reviewer {
+	/** The Reviewer with this key, if they belong to the Member who made this link */
+	public function byKey(?string $key, IShare $share): ?Reviewer {
 		if ($key === null || $key === '') {
 			return null;
 		}
 		$reviewer = $this->reviewers->findByKey($key);
-		return $reviewer?->getProjectId() === $project->getId() ? $reviewer : null;
+		return $reviewer?->getOwnerUid() === $share->getSharedBy() ? $reviewer : null;
 	}
 
 	public function serialize(Reviewer $reviewer): array {

@@ -9,7 +9,7 @@ use OCP\Files\File;
 /**
  * The audio of a Version as a WAV file with the Comments as embedded
  * markers, which Logic, Cubase, Nuendo and Sequoia read from the file itself.
- * Only the download is written, to a temporary file; the Project folder stays
+ * Only the download is written, to a temporary file; the file in Files stays
  * untouched (ADR 0002).
  */
 class WavExport {

@@ -114,19 +114,22 @@ class CommentApiTest extends TestCase {
 		self::assertSame(400, $react($this->nc, '<b>👍</b>', true)['status']);
 	}
 
-	public function testAttachmentsLiveInTheProjectFolder(): void {
+	public function testAttachmentsLiveInAppDataNotInFiles(): void {
 		$comment = $this->comment($this->nc, ['inFrame' => 7, 'body' => 'like this']);
 		$attached = $this->nc->upload("/comments/{$comment['id']}/attachments", 'reference.png', 'not really a picture');
 		self::assertSame(201, $attached['status'], json_encode($attached['data']));
 		self::assertSame(['reference.png', 20], [$attached['data']['attachments'][0]['name'], $attached['data']['attachments'][0]['size']]);
 		$id = $attached['data']['attachments'][0]['id'];
 
-		// The file sits in the Project folder, and is no Asset even with Auto Intake
+		// Kept in app data (ADR 0009): nothing appears in Files, so nothing becomes an Asset, and a second of the same name is its own
 		$again = $this->nc->upload("/comments/{$comment['id']}/attachments", 'reference.png', 'a second one');
-		self::assertSame('reference (2).png', $again['data']['attachments'][1]['name']);
+		self::assertSame('reference.png', $again['data']['attachments'][1]['name']);
+		self::assertSame(404, $this->nc->request('PROPFIND', "/remote.php/dav/files/admin/{$this->root}/.deliver-attachments")['status']);
 		self::assertSame(['cut'], array_column($this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'], 'name'));
 		$downloaded = $this->nc->request('GET', "/index.php/apps/deliver/attachments/$id");
 		self::assertSame([200, 'not really a picture'], [$downloaded['status'], $downloaded['body']]);
+		$second = $this->nc->request('GET', "/index.php/apps/deliver/attachments/{$again['data']['attachments'][1]['id']}");
+		self::assertSame('a second one', $second['body']);
 
 		$odd = $this->nc->upload("/comments/{$comment['id']}/attachments", '..', 'x');
 		self::assertSame([201, 'attachment'], [$odd['status'], $odd['data']['attachments'][2]['name']], 'a name that is only dots becomes a plain one');

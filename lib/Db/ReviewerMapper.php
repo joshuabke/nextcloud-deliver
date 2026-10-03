@@ -22,11 +22,17 @@ class ReviewerMapper extends Mapper {
 		return $this->findEntities($qb)[0] ?? null;
 	}
 
-	/** @return Reviewer[] */
-	public function findByProject(int $projectId): array {
+	/**
+	 * @param list<string> $uids
+	 * @return Reviewer[] the Reviewers of these Members, oldest first
+	 */
+	public function findByOwners(array $uids): array {
+		if ($uids === []) {
+			return [];
+		}
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')->from($this->getTableName())
-			->where($qb->expr()->eq('project_id', $qb->createNamedParameter($projectId)))
+			->where($qb->expr()->in('owner_uid', $qb->createNamedParameter($uids, IQueryBuilder::PARAM_STR_ARRAY)))
 			->orderBy('created_at');
 		return $this->findEntities($qb);
 	}

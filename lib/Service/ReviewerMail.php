@@ -27,7 +27,18 @@ class ReviewerMail {
 		private ReviewerMapper $reviewers,
 		private ShareReviewService $sharing,
 		private LoggerInterface $logger,
+		private Members $members,
 	) {
+	}
+
+	/**
+	 * The Reviewers who may hear of a Version: those of the Members who can
+	 * open its file; a mail goes out only where a review link of theirs shows it.
+	 *
+	 * @return \OCA\Deliver\Db\Reviewer[]
+	 */
+	private function reviewersOf(Version $version): array {
+		return $this->reviewers->findByOwners($this->members->of($version->getFileId()));
 	}
 
 	/**
@@ -59,7 +70,7 @@ class ReviewerMail {
 	 */
 	public function commented(Comment $comment, ?Comment $parent, Version $version, string $author): void {
 		$l = $this->l10n->get(Application::APP_ID);
-		foreach ($this->reviewers->findByProject($version->getProjectId()) as $reviewer) {
+		foreach ($this->reviewersOf($version) as $reviewer) {
 			$repliedTo = $parent !== null && $parent->getReviewerId() === $reviewer->getId() && $reviewer->mailWishes()['replies'];
 			if ($reviewer->getId() === $comment->getReviewerId() || $repliedTo || !$reviewer->mailWishes()['comments']) {
 				continue;
@@ -74,7 +85,7 @@ class ReviewerMail {
 	/** Mails a new Version to the Reviewers who want to hear of them */
 	public function versionArrived(Version $version): void {
 		$l = $this->l10n->get(Application::APP_ID);
-		foreach ($this->reviewers->findByProject($version->getProjectId()) as $reviewer) {
+		foreach ($this->reviewersOf($version) as $reviewer) {
 			if ($reviewer->mailWishes()['versions']) {
 				$this->send($reviewer, $version, 'deliver.ReviewerVersion',
 					$l->t('Version %s of %s is ready for review', [(string)$version->getNumber(), $version->getName()]),

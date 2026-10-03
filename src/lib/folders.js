@@ -58,7 +58,8 @@ export function projectDavPath(path) {
 
 /**
  * Every folder of a Project that holds Assets, with the folders around them,
- * for the Project's navigation (story 100).
+ * for the Project's navigation (story 100). A path with a leading slash runs
+ * from the Member's home, outside the Project folder (ADR 0009), and keeps it.
  *
  * @param {Array<{path: string}>} assets - the Assets of a Project
  * @return {Array<{path: string, name: string, depth: number, count: number}>} sorted by path, the Project folder itself left out
@@ -67,14 +68,15 @@ export function folderTree(assets) {
 	const counts = new Map()
 	for (const asset of assets) {
 		const parts = asset.path.split('/').filter(Boolean)
+		const root = asset.path.startsWith('/') ? '/' : ''
 		parts.forEach((part, index) => {
-			const path = parts.slice(0, index + 1).join('/')
+			const path = root + parts.slice(0, index + 1).join('/')
 			counts.set(path, (counts.get(path) ?? 0) + 1)
 		})
 	}
 	return [...counts.entries()]
 		.sort(([a], [b]) => a.localeCompare(b))
-		.map(([path, count]) => ({ path, name: path.split('/').pop(), depth: path.split('/').length - 1, count }))
+		.map(([path, count]) => ({ path, name: path.split('/').pop(), depth: path.split('/').filter(Boolean).length - 1, count }))
 }
 
 /**

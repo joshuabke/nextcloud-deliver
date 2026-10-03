@@ -12,6 +12,8 @@ import { t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import NcButton from '@nextcloud/vue/components/NcButton'
+import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
@@ -63,11 +65,11 @@ function openMenu(event, project) {
 		y: event.clientY,
 		items: [
 			{ label: t('deliver', 'Open'), icon: openIcon, action: () => router.push(`/projects/${project.id}`) },
-			{ label: t('deliver', 'Project settings'), icon: settingsIcon, action: () => { settings.value = project } },
+			!project.none && { label: t('deliver', 'Project settings'), icon: settingsIcon, action: () => { settings.value = project } },
 			project.muted
 				? { label: t('deliver', 'Notify me again'), icon: unmuteIcon, action: () => save(project, { muted: false }) }
 				: { label: t('deliver', 'Mute notifications'), icon: muteIcon, action: () => save(project, { muted: true }) },
-			{ label: t('deliver', 'Open in Files'), icon: filesIcon, href: generateUrl('/apps/files/') + '?' + new URLSearchParams({ dir: projectDir(project.path) }) },
+			project.path && { label: t('deliver', 'Open in Files'), icon: filesIcon, href: generateUrl('/apps/files/') + '?' + new URLSearchParams({ dir: projectDir(project.path) }) },
 			project.canWrite && { label: t('deliver', 'Remove Project'), icon: removeIcon, danger: true, action: () => remove(project) },
 		].filter(Boolean),
 	}
@@ -100,7 +102,22 @@ async function remove(project) {
 	}
 }
 
-/** Picks a folder, or makes one, and turns it into a Project with Auto Intake (story 98) */
+/** The name of a new Project, while its dialog is open */
+const naming = ref(null)
+
+/** A Project by name, which collects files from anywhere without moving them (ADR 0009) */
+async function createNamed() {
+	error.value = null
+	try {
+		const project = await store.createNamed(naming.value)
+		naming.value = null
+		router.push(`/projects/${project.id}`)
+	} catch (e) {
+		error.value = errorMessage(e)
+	}
+}
+
+/** Picks a folder, or makes one, and turns it into a Folder Project with Auto Intake (story 98) */
 async function create() {
 	error.value = null
 	let folder
@@ -161,13 +178,38 @@ async function create() {
 				@contextmenu.prevent="openMenu($event, project)"
 				@menu="openMenu($event, project)" />
 			<li>
-				<button type="button" class="deliver-projects__new" @click="create">
+				<button type="button" class="deliver-projects__new" @click="naming = ''">
 					<NcIconSvgWrapper :svg="projects.length ? addIcon : icon" :size="projects.length ? 32 : 48" />
 					<strong>{{ t('deliver', 'New Project') }}</strong>
-					<span>{{ t('deliver', 'Pick a folder or make one') }}</span>
+					<span>{{ t('deliver', 'Give it a name and add files from anywhere') }}</span>
+				</button>
+			</li>
+			<li>
+				<button type="button" class="deliver-projects__new" @click="create">
+					<NcIconSvgWrapper :svg="filesIcon" :size="32" />
+					<strong>{{ t('deliver', 'Project from a folder') }}</strong>
+					<span>{{ t('deliver', 'Every media file in the folder is reviewed') }}</span>
 				</button>
 			</li>
 		</ul>
+		<NcDialog
+			v-if="naming !== null"
+			:name="t('deliver', 'New Project')"
+			size="small"
+			@closing="naming = null">
+			<form id="deliver-new-project" @submit.prevent="createNamed">
+				<NcTextField v-model="naming" :label="t('deliver', 'Name')" autofocus />
+			</form>
+			<template #actions>
+				<NcButton
+					type="submit"
+					form="deliver-new-project"
+					variant="primary"
+					:disabled="!naming.trim()">
+					{{ t('deliver', 'Create') }}
+				</NcButton>
+			</template>
+		</NcDialog>
 		<ContextMenu
 			v-if="menu"
 			v-bind="menu"

@@ -13,7 +13,6 @@ use OCA\Deliver\Db\MuteMapper;
 use OCA\Deliver\Db\Project;
 use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\ReactionMapper;
-use OCA\Deliver\Db\ReviewerMapper;
 use OCA\Deliver\Db\SeenMapper;
 use OCA\Deliver\Db\Version;
 use OCA\Deliver\Db\VersionMapper;
@@ -40,7 +39,6 @@ class StackService {
 		private ApprovalMapper $approvals,
 		private ReactionMapper $reactions,
 		private AttachmentMapper $attachments,
-		private ReviewerMapper $reviewers,
 		private DerivedMedia $media,
 		private NotificationService $notifications,
 		private ReviewerMail $reviewerMail,
@@ -48,31 +46,41 @@ class StackService {
 		private IRootFolder $root,
 		private ITimeFactory $time,
 		private IDBConnection $db,
+		private AttachmentStore $attachmentFiles,
 	) {
 	}
 
 	/**
-	 * Registers a media file of the Project: as a new Asset, or as the next
-	 * Version of the one Asset in its folder that its name points at.
+	 * Registers a media file: as a new Asset, or as the next Version of the one
+	 * Asset in its folder that its name points at. A file is one Version at
+	 * most, so a file already enabled stays where it is (ADR 0009).
+	 *
+	 * @param ?Project $project null for No Project
+	 * @param ?string $enabledBy the Member who enabled it; null for Auto Intake
 	 */
-	public function intake(Project $project, File $file): Version {
-		$known = $this->versions->findByProjectAndFile($project->getId(), $file->getId());
+	public function intake(?Project $project, File $file, ?string $enabledBy = null): Version {
+		$known = $this->versions->findByFile($file->getId());
 		if ($known !== null) {
 			return $known;
 		}
 		$suggestion = VersionNaming::parse($file->getName());
-		$target = $suggestion === null ? null : $this->onlyCandidate($project, $file, $suggestion['base']);
-		return $this->register($project, $file, $suggestion['number'] ?? 1, $target);
+		$target = $suggestion === null ? null : $this->onlyCandidate($project, $file, $suggestion['base'], $enabledBy);
+		return $this->register($project, $file, $suggestion['number'] ?? 1, $target, $enabledBy);
 	}
 
 	/**
-	 * The Asset in the file's folder with this base name. Null when there is
-	 * none, or more than one: then a Member decides (story 14).
+	 * The Asset in the file's folder and Project with this base name. Null
+	 * when there is none, or more than one: then a Member decides (story 14).
 	 */
-	private function onlyCandidate(Project $project, File $file, string $base): ?Asset {
+	private function onlyCandidate(?Project $project, File $file, string $base, ?string $enabledBy): ?Asset {
 		$parentId = $file->getParent()->getId();
 		$found = [];
-		foreach ($this->assets->findByProject($project->getId()) as $asset) {
+		$assets = match (true) {
+			$project !== null => $this->assets->findByProject($project->getId()),
+			$enabledBy !== null => $this->assets->findUnassigned($enabledBy),
+			default => [],
+		};
+		foreach ($assets as $asset) {
 			if ($asset->getParentId() === $parentId && strcasecmp($this->nameOf($asset), $base) === 0) {
 				$found[] = $asset;
 			}
@@ -95,18 +103,19 @@ class StackService {
 	 * is stacked automatically. When a concurrent request registered the same
 	 * file first, that Version wins.
 	 */
-	private function register(Project $project, File $file, int $number, ?Asset $asset): Version {
+	private function register(?Project $project, File $file, int $number, ?Asset $asset, ?string $enabledBy): Version {
 		$stacked = $asset !== null;
 		$this->db->beginTransaction();
 		try {
 			if ($asset === null) {
 				$asset = new Asset();
-				$asset->setProjectId($project->getId());
+				$asset->setProjectId($project?->getId());
+				$asset->setEnabledBy($enabledBy);
 				$asset->setParentId($file->getParent()->getId());
 				$asset = $this->assets->insert($asset);
 			}
 			$version = new Version();
-			$version->setProjectId($project->getId());
+			$version->setProjectId($asset->getProjectId());
 			$version->setAssetId($asset->getId());
 			$version->setFileId($file->getId());
 			$version->setNumber($this->freeNumber($asset->getId(), $number));
@@ -121,7 +130,7 @@ class StackService {
 			return $version;
 		} catch (DbException $e) {
 			$this->db->rollBack();
-			$known = $this->versions->findByProjectAndFile($project->getId(), $file->getId());
+			$known = $this->versions->findByFile($file->getId());
 			if ($e->getReason() !== DbException::REASON_UNIQUE_CONSTRAINT_VIOLATION || $known === null) {
 				throw $e;
 			}
@@ -143,24 +152,21 @@ class StackService {
 	}
 
 	/**
-	 * Moves a Version onto another Asset (story 15). The Asset it leaves is
-	 * deleted if that was its last Version.
-	 *
-	 * @throws InvalidRequestException the two are not in the same Project
+	 * Moves a Version onto another Asset (story 15), and so into that Asset's
+	 * Project: a Version Stack never spans Projects (ADR 0009). The Asset it
+	 * leaves is deleted if that was its last Version.
 	 */
 	public function stack(Version $version, int $assetId, ?int $number): Version {
 		$target = $this->assets->find($assetId);
 		if ($target === null) {
 			throw new NotFoundException('Asset not found');
 		}
-		if ($target->getProjectId() !== $version->getProjectId()) {
-			throw new InvalidRequestException('Assets of different Projects do not stack');
-		}
 		if ($target->getId() === $version->getAssetId()) {
 			return $version;
 		}
 		$leaving = $version->getAssetId();
 		$version->setAssetId($target->getId());
+		$version->setProjectId($target->getProjectId());
 		$version->setNumber($this->freeNumber($target->getId(), $number ?? $this->nextNumber($target->getId())));
 		$version->setAutoStacked(false);
 		$version = $this->versions->update($version);
@@ -175,9 +181,11 @@ class StackService {
 			return $this->versions->update($version);
 		}
 		$file = $this->root->getFirstNodeById($version->getFileId());
+		$leaving = $this->assets->find($version->getAssetId());
 		$asset = new Asset();
-		$asset->setProjectId($version->getProjectId());
-		$asset->setParentId($file?->getParent()->getId() ?? $this->assets->find($version->getAssetId())?->getParentId() ?? 0);
+		$asset->setProjectId($leaving?->getProjectId());
+		$asset->setEnabledBy($leaving?->getEnabledBy());
+		$asset->setParentId($file?->getParent()->getId() ?? $leaving?->getParentId() ?? 0);
 		$asset = $this->assets->insert($asset);
 		$version->setAssetId($asset->getId());
 		$version->setAutoStacked(false);
@@ -205,8 +213,43 @@ class StackService {
 	}
 
 	/**
-	 * The file is still in the Project, perhaps renamed or moved (story 20):
-	 * the Version is not Missing, and its name and folder follow the file.
+	 * Puts an Asset with its Versions into a Project, or into No Project for
+	 * the Member who moved it there. The files stay where they are (ADR 0009).
+	 */
+	public function assign(Asset $asset, ?Project $project, string $uid): Asset {
+		$asset->setProjectId($project?->getId());
+		if ($project === null) {
+			$asset->setEnabledBy($uid);
+		}
+		$asset = $this->assets->update($asset);
+		$this->versions->setProjectOfAsset($asset->getId(), $project?->getId());
+		return $asset;
+	}
+
+	/**
+	 * Looks at a Version's file wherever it lies: gone for good purges the
+	 * Version, only in the trash makes it Missing, anywhere else it follows
+	 * the file (stories 18 to 20). Deleting a folder from the trash fires no
+	 * event per file, so this is how those Versions go.
+	 */
+	public function check(Version $version): void {
+		$nodes = $this->root->getById($version->getFileId());
+		if ($nodes === []) {
+			$this->purge($version);
+			return;
+		}
+		foreach ($nodes as $node) {
+			if ($node instanceof File && preg_match('#^/[^/]+/files/#', $node->getPath()) === 1) {
+				$this->follow($version, $node);
+				return;
+			}
+		}
+		$this->markMissing($version);
+	}
+
+	/**
+	 * The file is still there, perhaps renamed or moved (story 20): the
+	 * Version is not Missing, and its name and folder follow the file.
 	 */
 	public function follow(Version $version, File $file): void {
 		if ($version->getState() !== Version::STATE_READY || $version->getName() !== $file->getName()) {
@@ -222,7 +265,7 @@ class StackService {
 		}
 	}
 
-	/** The file left the Project folder or went to the trash: the Version is Missing, its Comments stay (story 18) */
+	/** The file went to the trash: the Version is Missing, its Comments stay (story 18) */
 	public function markMissing(Version $version): void {
 		if ($version->getState() === Version::STATE_MISSING) {
 			return;
@@ -240,8 +283,10 @@ class StackService {
 		$this->media->forget($version->getId());
 		$commentIds = array_map(static fn ($comment) => $comment->getId(), $this->comments->findByVersion($version->getId()));
 		$this->reactions->deleteByComments($commentIds);
-		// Attached files stay in the folder, like every file when Deliver lets go
 		$this->attachments->deleteByComments($commentIds);
+		foreach ($commentIds as $commentId) {
+			$this->attachmentFiles->forget($commentId);
+		}
 		$this->comments->deleteBy('version_id', $version->getId());
 		$this->seen->deleteBy('version_id', $version->getId());
 		$this->approvals->deleteBy('version_id', $version->getId());
@@ -250,14 +295,13 @@ class StackService {
 		$this->dropIfEmpty($assetId);
 	}
 
-	/** Deletes the Project with everything Deliver holds for it (stories 9 and 11). The files stay. */
-	public function purgeProject(Project $project): void {
-		foreach ($this->versions->findByProject($project->getId()) as $version) {
-			$this->purge($version);
-		}
-		$this->assets->deleteBy('project_id', $project->getId());
-		$this->reviewers->deleteLinks(array_map(static fn ($reviewer) => $reviewer->getId(), $this->reviewers->findByProject($project->getId())));
-		$this->reviewers->deleteBy('project_id', $project->getId());
+	/**
+	 * Removes a Project; its Assets go to No Project with all their review
+	 * data, for whoever enabled each or else the Member removing it (story 9).
+	 */
+	public function removeProject(Project $project, string $uid): void {
+		$this->assets->release($project->getId(), $uid);
+		$this->versions->release($project->getId());
 		$this->mutes->deleteByProject($project->getId());
 		$this->projects->delete($project);
 	}

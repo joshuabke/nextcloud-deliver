@@ -31,6 +31,16 @@ describe('folders', () => {
 		])
 	})
 
+	it('keeps the leading slash of folders outside a Project folder, which run from home (ADR 0009)', () => {
+		const tree = folderTree([{ path: '/Clients/Acme' }, { path: 'Raw' }])
+		expect(tree.map((folder) => [folder.path, folder.name, folder.depth])).toEqual([
+			['/Clients', 'Clients', 0],
+			['/Clients/Acme', 'Acme', 1],
+			['Raw', 'Raw', 0],
+		])
+		expect(inFolder({ path: '/Clients/Acme' }, '/Clients')).toBe(true)
+	})
+
 	it('keeps a folder\'s Assets and those below it', () => {
 		expect([inFolder({ path: 'Interviews/Raw' }, 'Interviews'), inFolder({ path: 'Interviews 2' }, 'Interviews'), inFolder({ path: '' }, '')]).toEqual([true, false, true])
 	})

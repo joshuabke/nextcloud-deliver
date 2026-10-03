@@ -29,7 +29,7 @@ export function confirmRemoval(title, text, confirm) {
 export function confirmProjectRemoval() {
 	return confirmRemoval(
 		t('deliver', 'Remove Project?'),
-		t('deliver', 'Its Comments and Version Stacks are deleted. The files stay untouched.'),
+		t('deliver', 'Its Assets keep their Comments and go to No Project. The files stay untouched.'),
 		t('deliver', 'Remove Project'),
 	)
 }

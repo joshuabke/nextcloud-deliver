@@ -48,7 +48,7 @@ class ExportService {
 	 */
 	public function export(Viewer $viewer, Version $version, Project $project, string $format, bool $unresolvedOnly, bool $zeroBased, ?string $liveSet = null): array {
 		if (!$viewer->canWrite) {
-			throw new AccessDeniedException('Exporting needs write access to the Project folder');
+			throw new AccessDeniedException('Exporting needs write access to the file');
 		}
 		if (!isset(self::FORMATS[$format])) {
 			throw new InvalidRequestException('Exports come as ' . implode(', ', array_keys(self::FORMATS)));

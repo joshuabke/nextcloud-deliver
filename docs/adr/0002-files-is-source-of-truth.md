@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: accepted; what a Project is and who its Members are is superseded by 0009
 ---
 
 # Files is the source of truth; Deliver stores only review state

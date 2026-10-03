@@ -10,8 +10,8 @@ use OCP\AppFramework\Db\Entity;
  * One file as one iteration of an Asset. Media metadata counts Frames: the
  * frame rate is a fraction, start timecode and duration are Frame counts.
  *
- * @method int getProjectId()
- * @method void setProjectId(int $projectId)
+ * @method ?int getProjectId()
+ * @method void setProjectId(?int $projectId)
  * @method int getAssetId()
  * @method void setAssetId(int $assetId)
  * @method int getFileId()
@@ -59,7 +59,8 @@ class Version extends Entity {
 	public const STATE_READY = 'ready';
 	public const STATE_MISSING = 'missing';
 
-	protected int $projectId = 0;
+	/** The Asset's Project, copied for queries by Project */
+	protected ?int $projectId = null;
 	protected int $assetId = 0;
 	protected int $fileId = 0;
 	protected ?int $number = null;

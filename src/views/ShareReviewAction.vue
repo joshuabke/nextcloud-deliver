@@ -2,7 +2,7 @@
 import { t } from '@nextcloud/l10n'
 import { computed, onMounted, ref } from 'vue'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
-import { getAssetForFile, getProjectForFolder, setShareFlags } from '../api.js'
+import { getAssetForFile, setShareFlags } from '../api.js'
 
 /**
  * Deliver's review switch inside Nextcloud's own link settings, where Share
@@ -18,7 +18,7 @@ const props = defineProps({
 	onSave: { type: Function, default: null },
 })
 
-/** Only files and folders that are part of a Project can be reviewed */
+/** A file once it is enabled; any folder, since enabled files of any Project can lie in it (ADR 0009) */
 const reviewable = ref(false)
 const initial = computed(() => {
 	const attribute = (key) => props.share?.attributes?.find((each) => each.scope === 'deliver' && each.key === key)?.value
@@ -29,7 +29,7 @@ const flags = ref({ ...initial.value })
 
 onMounted(async () => {
 	const fileid = props.node?.fileid
-	reviewable.value = await (props.node?.type === 'folder' ? getProjectForFolder(fileid) : getAssetForFile(fileid)).then(() => true, () => false)
+	reviewable.value = props.node?.type === 'folder' || await getAssetForFile(fileid).then(() => true, () => false)
 	props.onSave?.(async () => {
 		const id = props.share?.id
 		const changed = Object.keys(flags.value).some((key) => flags.value[key] !== initial.value[key])

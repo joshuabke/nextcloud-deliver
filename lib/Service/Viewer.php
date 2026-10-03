@@ -8,7 +8,7 @@ use OCA\Deliver\Db\Comment;
 
 /**
  * Who is looking at a Version and what they may do. A Member's rights come
- * from the Project folder, a Reviewer's from the Share Link (ADR 0004); past
+ * from the Version's file (ADR 0009), a Reviewer's from the Share Link (ADR 0004); past
  * this point both are handled alike.
  */
 final class Viewer {

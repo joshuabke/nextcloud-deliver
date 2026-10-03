@@ -7,8 +7,10 @@ namespace OCA\Deliver\Db;
 use OCP\AppFramework\Db\Entity;
 
 /**
- * @method int getProjectId()
- * @method void setProjectId(int $projectId)
+ * @method ?int getProjectId()
+ * @method void setProjectId(?int $projectId)
+ * @method ?string getEnabledBy()
+ * @method void setEnabledBy(?string $enabledBy)
  * @method int getParentId()
  * @method void setParentId(int $parentId)
  * @method ?string getNameOverride()
@@ -18,7 +20,9 @@ use OCP\AppFramework\Db\Entity;
  * @method void setDueReminded(?string $dueReminded)
  */
 class Asset extends Entity {
-	protected int $projectId = 0;
+	/** Null: No Project, where it waits for whoever enabled it (ADR 0009) */
+	protected ?int $projectId = null;
+	protected ?string $enabledBy = null;
 	protected int $parentId = 0;
 	protected ?string $nameOverride = null;
 	/** A calendar day, YYYY-MM-DD (story 93) */
