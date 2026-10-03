@@ -20,8 +20,9 @@ import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import ReviewerDialog from '../components/ReviewerDialog.vue'
 import ShareLinkDialog from '../components/ShareLinkDialog.vue'
-import { createShareLink, errorMessage, listProjectShares } from '../api.js'
+import { createShareLink, errorMessage, listProjectShares, removeReviewer } from '../api.js'
 import { copyLink } from '../clipboard.js'
+import { confirmReviewerRemoval } from '../confirm.js'
 import { folderTree } from '../lib/folders.js'
 import { useProjectsStore } from '../store/projects.js'
 
@@ -111,6 +112,23 @@ async function setAutoIntake(on) {
  */
 function replace(updated) {
 	editing.value = { ...editing.value, ...updated }
+}
+
+/**
+ * From the Reviewer's dialog
+ *
+ * @param {object} reviewer - a Reviewer of the list
+ */
+async function dropReviewer(reviewer) {
+	if (await confirmReviewerRemoval(reviewer.name)) {
+		try {
+			await removeReviewer(reviewer.id)
+			person.value = null
+			await load()
+		} catch (e) {
+			showError(errorMessage(e))
+		}
+	}
 }
 
 /**
@@ -254,6 +272,7 @@ function personalLink(reviewer) {
 				@autoIntake="setAutoIntake"
 				@update="replace"
 				@person="openPerson"
+				@deleted="closeEditing"
 				@close="closeEditing" />
 			<ReviewerDialog
 				v-if="person"
@@ -261,6 +280,7 @@ function personalLink(reviewer) {
 				:links="links"
 				:canWrite="project?.canWrite ?? false"
 				@changed="load()"
+				@remove="dropReviewer(person)"
 				@close="person = null" />
 		</template>
 	</NcAppNavigation>

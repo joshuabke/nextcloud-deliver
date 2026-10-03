@@ -20,7 +20,7 @@ const props = defineProps({
 	canWrite: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['changed', 'close'])
+const emit = defineEmits(['changed', 'close', 'remove'])
 
 const name = ref(props.reviewer.name)
 const email = ref(props.reviewer.email ?? '')
@@ -129,6 +129,9 @@ async function renew() {
 			</ul>
 		</div>
 		<template v-if="canWrite" #actions>
+			<NcButton variant="tertiary" :disabled="busy" @click="emit('remove')">
+				{{ t('deliver', 'Remove Reviewer') }}
+			</NcButton>
 			<NcButton variant="error" :disabled="busy" @click="renew">
 				{{ t('deliver', 'New Personal Links') }}
 			</NcButton>

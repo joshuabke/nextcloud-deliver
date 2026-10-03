@@ -35,10 +35,12 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | PUT | `/comments/{id}/resolved` `{resolved}` | Resolve or unresolve, needs write access |
 | GET | `/files/{fileId}/shares` | The Share Links of a file or folder, with Deliver's flags |
 | POST | `/files/{fileId}/shares` | A Share Link with review already on |
-| PUT | `/shares/{shareId}` `{review, canComment, allowOlder}` | Switch review on a Share Link and set its flags |
-| GET | `/projects/{id}/shares` | The user's Share Links that show something of the Project, and their Reviewers who came by them |
+| PUT | `/shares/{shareId}` `{review, canComment, allowOlder, watermark, password, expireDate}` | Switch review on a Share Link, set its flags, and its password and expiry (`''` removes either) under Nextcloud's sharing policy |
+| DELETE | `/shares/{shareId}` | Delete the Share Link from Nextcloud |
+| GET | `/projects/{id}/shares` | The user's Share Links on the Project's folder, inside it or on one of its files (not a folder that merely holds one), and their Reviewers who came by them |
 | GET | `/shares/{shareId}/reviewers` | The Reviewers of the Member who made the link, each with a Personal Link through this share |
 | POST | `/shares/{shareId}/reviewers` `{name, email}` | Invite a Reviewer; the answer carries the Personal Link |
+| DELETE | `/reviewers/{id}` | Remove a Reviewer: their Personal Links stop working, their Comments stay |
 
 Rights follow each Version's file (ADR 0009): read access views and comments, write access manages. Missing write access answers 403; a request that clashes with the current state (a nested Folder Project, a taken Version Number, an older Version closed for Comments) answers 409.
 

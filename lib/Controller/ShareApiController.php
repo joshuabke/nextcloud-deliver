@@ -58,6 +58,12 @@ class ShareApiController extends OCSController {
 		return $this->guard(fn () => $this->reviewers->serialize($this->reviewers->renewKey($this->writableReviewer($id))));
 	}
 
+	/** The Reviewer's Personal Links stop working and they leave the lists; their Comments stay */
+	#[NoAdminRequired]
+	public function removeReviewer(int $id): Response {
+		return $this->guard(fn () => $this->reviewers->remove($this->writableReviewer($id)));
+	}
+
 	/**
 	 * @throws AccessDeniedException the Reviewer is another Member's (ADR 0009)
 	 */
@@ -69,7 +75,7 @@ class ShareApiController extends OCSController {
 		return $reviewer;
 	}
 
-	/** Every Share Link of mine that shows something of a Project, and my Reviewers who came by them, for its navigation (story 100) */
+	/** Every Share Link of mine on a Project's folder or files, and my Reviewers who came by them, for its navigation (story 100) */
 	#[NoAdminRequired]
 	public function inProject(int $id): Response {
 		return $this->guard(function () use ($id) {
@@ -87,10 +93,28 @@ class ShareApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
-	public function update(int $shareId, ?bool $review = null, ?bool $canComment = null, ?bool $allowOlder = null, ?bool $watermark = null): Response {
-		return $this->guard(fn () => $this->sharing->serialize(
-			$this->sharing->setFlags((string)$this->userId, $shareId, $review, $canComment, $allowOlder, $watermark),
-		));
+	public function update(
+		int $shareId,
+		?bool $review = null,
+		?bool $canComment = null,
+		?bool $allowOlder = null,
+		?bool $watermark = null,
+		?string $password = null,
+		?string $expireDate = null,
+	): Response {
+		return $this->guard(function () use ($shareId, $review, $canComment, $allowOlder, $watermark, $password, $expireDate) {
+			if ($password !== null || $expireDate !== null) {
+				$this->sharing->protect((string)$this->userId, $shareId, $password, $expireDate);
+			}
+			return $this->sharing->serialize(
+				$this->sharing->setFlags((string)$this->userId, $shareId, $review, $canComment, $allowOlder, $watermark),
+			);
+		});
+	}
+
+	#[NoAdminRequired]
+	public function destroy(int $shareId): Response {
+		return $this->guard(fn () => $this->sharing->deleteLink((string)$this->userId, $shareId));
 	}
 
 	#[NoAdminRequired]

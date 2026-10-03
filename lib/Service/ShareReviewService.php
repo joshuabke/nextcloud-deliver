@@ -16,6 +16,7 @@ use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;
 use OCP\Files\NotFoundException;
+use OCP\HintException;
 use OCP\IConfig;
 use OCP\IURLGenerator;
 use OCP\Share\Exceptions\ShareNotFound;
@@ -105,9 +106,9 @@ class ShareReviewService {
 	}
 
 	/**
-	 * The user's Share Links that show something of a Project: its folder,
-	 * anything inside it, or a file or folder with one of its files (ADR
-	 * 0009); and the user's Reviewers who came by one of them, for the
+	 * The user's Share Links that belong to a Project: on its folder,
+	 * anything inside it, or one of its files (ADR 0009), never a folder
+	 * that merely holds one of its files; and the user's Reviewers who came by one of them, for the
 	 * Project's navigation (story 100). A link names its file or folder, the
 	 * folder Files shows it in, and the Reviewers who were invited through or
 	 * came in by it; a Reviewer carries their Personal Link through every
@@ -159,7 +160,7 @@ class ShareReviewService {
 	}
 
 	/**
-	 * Whether a shared node shows something of the Project
+	 * Whether a shared node belongs to the Project
 	 *
 	 * @param list<Node> $files
 	 */
@@ -167,8 +168,9 @@ class ShareReviewService {
 		if ($folder !== null && ($node->getId() === $folder->getId() || str_starts_with($node->getPath(), $folder->getPath() . '/'))) {
 			return true;
 		}
+		// A folder that merely holds one of the files belongs to whatever else it holds, not to this Project
 		foreach ($files as $file) {
-			if ($file->getId() === $node->getId() || ($node instanceof Folder && str_starts_with($file->getPath(), $node->getPath() . '/'))) {
+			if ($file->getId() === $node->getId()) {
 				return true;
 			}
 		}
@@ -218,6 +220,38 @@ class ShareReviewService {
 		$reviewer = $this->reviewers->claim($share->getSharedBy(), $name, $email);
 		$this->reviewers->cameBy($reviewer, $shareId);
 		return $this->reviewerWithLink($share, $reviewer);
+	}
+
+	/**
+	 * Password and expiry of a Share Link, as Nextcloud's own link settings
+	 * set them and under the same sharing policy; '' removes either.
+	 *
+	 * @throws InvalidRequestException the date is none, or the sharing policy refuses it
+	 */
+	public function protect(string $uid, int $shareId, ?string $password, ?string $expireDate): void {
+		$share = $this->ownShare($uid, $shareId);
+		if ($password !== null) {
+			$share->setPassword($password === '' ? null : $password);
+		}
+		if ($expireDate !== null) {
+			$date = $expireDate === '' ? null : \DateTime::createFromFormat('!Y-m-d', $expireDate);
+			if ($date === false) {
+				throw new InvalidRequestException('The expiry is a date such as 2026-12-31');
+			}
+			$share->setExpirationDate($date);
+		}
+		try {
+			$this->shares->updateShare($share);
+		} catch (HintException $e) {
+			throw new InvalidRequestException($e->getHint());
+		} catch (\InvalidArgumentException $e) {
+			throw new InvalidRequestException($e->getMessage());
+		}
+	}
+
+	/** Deletes the Share Link from Nextcloud: it stops working for everyone, Personal Links through it too */
+	public function deleteLink(string $uid, int $shareId): void {
+		$this->shares->deleteShare($this->ownShare($uid, $shareId));
 	}
 
 	/** The share URL plus the Reviewer's key: whoever opens it is that Reviewer */
@@ -301,6 +335,7 @@ class ShareReviewService {
 			'url' => $this->shareUrl($share),
 			'label' => $share->getLabel(),
 			'hasPassword' => $share->getPassword() !== null,
+			'expireDate' => $share->getExpirationDate()?->format('Y-m-d'),
 			// Whether Reviewers can be mailed about Replies at all (story 66)
 			'canMail' => ReviewerMail::configured($this->config),
 		] + $this->flags($share);

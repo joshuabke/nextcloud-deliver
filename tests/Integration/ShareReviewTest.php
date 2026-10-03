@@ -182,6 +182,19 @@ class ShareReviewTest extends TestCase {
 		self::assertSame(404, $asReviewer->call('GET', '/api/context?versionId=' . $this->versionId)['status'], 'the API answers nothing until the password is given');
 	}
 
+	public function testAMemberSetsPasswordAndExpiryInDeliver(): void {
+		$protected = $this->nc->ocs('PUT', "/shares/{$this->shareId}", ['password' => 'Review-' . bin2hex(random_bytes(6)), 'expireDate' => '2099-12-31']);
+		self::assertSame(200, $protected['status'], json_encode($protected['data']));
+		self::assertSame([true, '2099-12-31'], [$protected['data']['hasPassword'], $protected['data']['expireDate']]);
+		self::assertSame(303, $this->reviewer()->raw('')['status'], 'Nextcloud asks for the password');
+
+		$open = $this->nc->ocs('PUT', "/shares/{$this->shareId}", ['password' => '', 'expireDate' => '']);
+		self::assertSame([false, null], [$open['data']['hasPassword'], $open['data']['expireDate']]);
+		self::assertSame(200, $this->reviewer()->raw('')['status']);
+
+		self::assertSame(400, $this->nc->ocs('PUT', "/shares/{$this->shareId}", ['expireDate' => '2001-01-01'])['status'], 'Nextcloud refuses a date in the past');
+	}
+
 	public function testVersionsOutsideTheShareStayOutside(): void {
 		$this->nc->mkdir("{$this->root}/scenes");
 		$this->nc->put("{$this->root}/scenes/intro.mp4", 'not really a video');
@@ -286,6 +299,25 @@ class ShareReviewTest extends TestCase {
 		self::assertNotSame($invited['data']['key'], $renewed['data']['key']);
 		$old = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $this->token);
 		self::assertSame('unnamed', $old->call('GET', "/api/context?versionId={$this->versionId}&r=" . $invited['data']['key'])['data']['me']['type'], 'the old Personal Link names nobody any more');
+	}
+
+	public function testAMemberRemovesAReviewerWhoseCommentsStay(): void {
+		$invited = $this->nc->ocs('POST', "/shares/{$this->shareId}/reviewers", ['name' => 'Kim']);
+		$id = $invited['data']['id'];
+		$this->comment($this->reviewer(), ['inFrame' => 0, 'body' => 'Kim was here', 'r' => $invited['data']['key']]);
+
+		self::assertSame(200, $this->nc->ocs('DELETE', "/reviewers/$id")['status']);
+		self::assertNotContains($id, array_column($this->nc->ocs('GET', "/shares/{$this->shareId}/reviewers")['data'], 'id'));
+		self::assertSame([], $this->nc->ocs('GET', "/projects/{$this->projectId}/shares")['data']['reviewers']);
+		self::assertSame('unnamed', $this->reviewer()->call('GET', "/api/context?versionId={$this->versionId}&r=" . $invited['data']['key'])['data']['me']['type'], 'the Personal Link names nobody any more');
+		$comments = $this->nc->ocs('GET', "/versions/{$this->versionId}/comments")['data']['comments'];
+		self::assertSame(['reviewer', 'Kim'], [$comments[0]['author']['type'], $comments[0]['author']['name']], 'their Comments keep their name');
+	}
+
+	public function testAMemberDeletesAReviewLink(): void {
+		self::assertSame(200, $this->nc->ocs('DELETE', "/shares/{$this->shareId}")['status']);
+		self::assertSame([], $this->nc->ocs('GET', "/files/{$this->nc->fileId($this->root)}/shares")['data']);
+		self::assertSame(404, $this->reviewer()->call('GET', '/api/assets')['status'], 'the link is gone from Nextcloud, not only from review');
 	}
 
 	public function testTheReviewButtonOpensTheVersionOfTheFileItSitsOn(): void {

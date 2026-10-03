@@ -5,8 +5,8 @@ import { generateUrl } from '@nextcloud/router'
 import { registerSidebarAction } from '@nextcloud/sharing/ui'
 import { defineCustomElement } from 'vue'
 import ShareReviewAction from './views/ShareReviewAction.vue'
-import icon from '../img/app.svg?raw'
 import { errorMessage, getAssetForFile } from './api.js'
+import icon from './icon.svg?raw'
 import { reviewable } from './lib/media.js'
 
 // Deliver in the Files app: the sidebar tab, the "Open in Deliver" action, and the review switch in the link settings

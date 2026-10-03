@@ -1,13 +1,12 @@
 <script setup>
 import { n, t } from '@nextcloud/l10n'
-import { generateUrl } from '@nextcloud/router'
 import { ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import ShareLinkItem from './ShareLinkItem.vue'
 
-const props = defineProps({
+defineProps({
 	/** A Share Link as the Project's navigation lists it */
 	share: { type: Object, required: true },
 	canWrite: { type: Boolean, default: false },
@@ -15,13 +14,9 @@ const props = defineProps({
 	autoIntake: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['update', 'person', 'close', 'autoIntake'])
+const emit = defineEmits(['update', 'person', 'close', 'autoIntake', 'deleted'])
 
 const item = ref(null)
-
-/** Password and expiry are Nextcloud's own share settings */
-const manageUrl = generateUrl('/apps/files/files/{fileId}', { fileId: props.share.fileId })
-	+ '?' + new URLSearchParams({ dir: props.share.dir, opendetails: 'true' })
 </script>
 
 <template>
@@ -35,7 +30,8 @@ const manageUrl = generateUrl('/apps/files/files/{fileId}', { fileId: props.shar
 			:canWrite="canWrite"
 			inDialog
 			@update="emit('update', $event)"
-			@person="emit('person', $event)" />
+			@person="emit('person', $event)"
+			@deleted="emit('deleted')" />
 		<div v-if="canWrite && share.review && (share.notEnabled > 0 || autoIntake)" class="deliver-link-dialog__intake">
 			<p v-if="share.notEnabled > 0" class="deliver-link-dialog__hint">
 				{{ n('deliver', '%n media file here is not up for review, so Reviewers see it without a Review button.', '%n media files here are not up for review, so Reviewers see them without a Review button.', share.notEnabled) }}
@@ -53,9 +49,6 @@ const manageUrl = generateUrl('/apps/files/files/{fileId}', { fileId: props.shar
 				class="deliver-link-dialog__invite"
 				@click="item.startInvite()">
 				{{ t('deliver', 'Invite a Reviewer') }}
-			</NcButton>
-			<NcButton :href="manageUrl">
-				{{ t('deliver', 'Password and expiry in Files') }}
 			</NcButton>
 		</template>
 	</NcDialog>

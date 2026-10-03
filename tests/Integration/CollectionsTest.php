@@ -109,9 +109,11 @@ class CollectionsTest extends TestCase {
 		self::assertSame(200, $assets['status'], json_encode($assets['data']));
 		self::assertCount(2, $assets['data'], 'one in a Project, one in No Project, both under the link');
 
-		// The Project's navigation lists the link, which shows one of its files
+		// The Project's navigation lists links on its own files, not a folder that merely holds one of them
+		$fileLink = $this->owner->ocs('POST', '/files/' . $this->owner->fileId('clients/acme/cut.mp4') . '/shares')['data'];
+		$this->shareIds[] = $fileLink['id'];
 		$links = $this->owner->ocs('GET', "/projects/$project/shares")['data']['links'];
-		self::assertSame([$link['data']['id']], array_column($links, 'id'));
+		self::assertSame([$fileLink['id']], array_column($links, 'id'));
 		self::assertFalse($links[0]['isProject'], 'the Project has no folder of its own');
 	}
 

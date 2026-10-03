@@ -30,6 +30,7 @@ export const listMembers = (versionId) => axios.get(url(`/versions/${versionId}/
 export const listProjectShares = (id) => axios.get(url(`/projects/${id}/shares`)).then(data)
 export const updateReviewerAsMember = (id, fields) => axios.put(url(`/reviewers/${id}`), fields).then(data)
 export const renewReviewerKey = (id) => axios.post(url(`/reviewers/${id}/key`)).then(data)
+export const removeReviewer = (id) => axios.delete(url(`/reviewers/${id}`)).then(data)
 export const muteProject = (id, muted) => axios.put(url(`/projects/${id}/mute`), { muted }).then(data)
 
 export const getVersion = (id) => axios.get(url(`/versions/${id}`)).then(data)
@@ -85,6 +86,7 @@ export const markSeen = (versionId, at) => axios.post(url(`/versions/${versionId
 export const listShares = (fileId) => axios.get(url(`/files/${fileId}/shares`)).then(data)
 export const createShareLink = (fileId) => axios.post(url(`/files/${fileId}/shares`)).then(data)
 export const setShareFlags = (shareId, flags) => axios.put(url(`/shares/${shareId}`), flags).then(data)
+export const deleteShareLink = (shareId) => axios.delete(url(`/shares/${shareId}`)).then(data)
 export const listReviewers = (shareId) => axios.get(url(`/shares/${shareId}/reviewers`)).then(data)
 export const inviteReviewer = (shareId, name, email) => axios.post(url(`/shares/${shareId}/reviewers`), { name, email }).then(data)
 

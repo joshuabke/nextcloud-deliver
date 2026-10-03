@@ -7,13 +7,12 @@ import compareIcon from '@mdi/svg/svg/compare.svg?raw'
 import shareIcon from '@mdi/svg/svg/share-variant-outline.svg?raw'
 import uploadIcon from '@mdi/svg/svg/tray-arrow-up.svg?raw'
 import { t } from '@nextcloud/l10n'
-import { generateUrl } from '@nextcloud/router'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
-import NcActionLink from '@nextcloud/vue/components/NcActionLink'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
@@ -26,13 +25,14 @@ import DueDateDialog from '../components/DueDateDialog.vue'
 import ExportMenu from '../components/ExportMenu.vue'
 import ImageViewer from '../components/ImageViewer.vue'
 import ReviewLayout from '../components/ReviewLayout.vue'
+import ShareLinks from '../components/ShareLinks.vue'
 import VersionPicker from '../components/VersionPicker.vue'
 import VideoPlayer from '../components/VideoPlayer.vue'
 import { errorMessage, getVersion, giveWaveform, listMembers, updateAsset, uploadNextVersion } from '../api.js'
 import { useLiveUpdates } from '../composables/live.js'
 import { usePanelOpen } from '../composables/panel.js'
 import { useReview } from '../composables/review.js'
-import { filesDir, groupByFolder, uploadFolder } from '../lib/folders.js'
+import { groupByFolder, uploadFolder } from '../lib/folders.js'
 import { fpsValue } from '../lib/timecode.js'
 import { decodeWaveform } from '../lib/waveform.js'
 import { useCommentsStore } from '../store/comments.js'
@@ -55,6 +55,8 @@ const uploading = ref(false)
 const fileInput = ref(null)
 /** The phone's date picker for a first Due Date; once set, the date in the bar changes it */
 const pickingDue = ref(false)
+/** The Share Links of this Version's file, in a dialog */
+const sharing = ref(false)
 /** Who can be mentioned in this Project */
 const members = ref([])
 
@@ -74,11 +76,6 @@ const compareWith = computed(() => {
 	return (stack[index + 1] ?? stack[0])?.id
 })
 const folderUrl = computed(() => uploadFolder(context.value?.versions ?? []))
-
-/** Nextcloud's own share dialog, on the file of this Version */
-const shareUrl = computed(() => version.value?.url
-	? generateUrl('/apps/files/files/{fileId}', { fileId: version.value.fileId }) + '?' + new URLSearchParams({ dir: filesDir(version.value.url), opendetails: 'true' })
-	: null)
 
 const { player, panel, mode, clock, anchor, pin, hold, release, jump, posted, drawing, draft, draw, range, markRange, clearRange } = useReview({
 	version,
@@ -252,7 +249,7 @@ async function upload(event) {
 					accept="video/*,audio/*"
 					hidden
 					@change="upload">
-				<NcButton v-if="shareUrl && !isMobile" :href="shareUrl" :title="t('deliver', 'Share in Files; switch on review in the link settings')">
+				<NcButton v-if="version?.url && !isMobile" @click="sharing = true">
 					<template #icon>
 						<NcIconSvgWrapper :svg="shareIcon" />
 					</template>
@@ -291,12 +288,12 @@ async function upload(event) {
 					</template>
 					{{ t('deliver', 'Set a Due Date') }}
 				</NcActionButton>
-				<NcActionLink v-if="shareUrl" :href="shareUrl">
+				<NcActionButton v-if="version?.url" closeAfterClick @click="sharing = true">
 					<template #icon>
 						<NcIconSvgWrapper :svg="shareIcon" />
 					</template>
 					{{ t('deliver', 'Share') }}
-				</NcActionLink>
+				</NcActionButton>
 			</template>
 		</template>
 
@@ -357,6 +354,13 @@ async function upload(event) {
 		:modelValue="context.asset.dueDate"
 		@update:modelValue="setDue"
 		@close="pickingDue = false" />
+	<NcDialog
+		v-if="sharing && version"
+		:name="t('deliver', 'Share Links on {name}', { name: version.name })"
+		size="normal"
+		@closing="sharing = false">
+		<ShareLinks :fileId="version.fileId" :canWrite="context.canWrite" />
+	</NcDialog>
 </template>
 
 <style scoped>

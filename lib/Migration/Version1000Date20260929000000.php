@@ -113,7 +113,8 @@ class Version1000Date20260929000000 extends SimpleMigrationStep {
 		$t->addColumn('owner_uid', Types::STRING, ['notnull' => true, 'length' => 64]);
 		$t->addColumn('name', Types::STRING, ['notnull' => true, 'length' => 255]);
 		$t->addColumn('email', Types::STRING, ['notnull' => false, 'length' => 255]);
-		$t->addColumn('secret_key', Types::STRING, ['notnull' => true, 'length' => 64]);
+		// Null once the Reviewer is removed: no Personal Link names them any more, their Comments keep the name
+		$t->addColumn('secret_key', Types::STRING, ['notnull' => false, 'length' => 64]);
 		$t->addColumn('created_at', Types::BIGINT, ['notnull' => true]);
 		// What they want mailed: Replies, others' Comments, new Versions; null is the default
 		$t->addColumn('mail_replies', Types::BOOLEAN, ['notnull' => false]);

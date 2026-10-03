@@ -33,3 +33,30 @@ export function confirmProjectRemoval() {
 		t('deliver', 'Remove Project'),
 	)
 }
+
+/**
+ * Asks before a Share Link is deleted from Nextcloud.
+ *
+ * @return {Promise<boolean>} whether the person confirmed
+ */
+export function confirmLinkDeletion() {
+	return confirmRemoval(
+		t('deliver', 'Delete this link?'),
+		t('deliver', 'It stops working for everyone who has it, Personal Links through it too. Comments stay.'),
+		t('deliver', 'Delete link'),
+	)
+}
+
+/**
+ * Asks before a Reviewer is removed.
+ *
+ * @param {string} name - the Reviewer's name
+ * @return {Promise<boolean>} whether the person confirmed
+ */
+export function confirmReviewerRemoval(name) {
+	return confirmRemoval(
+		t('deliver', 'Remove {name}?', { name }),
+		t('deliver', 'Their Personal Links stop working and they leave the list. Their Comments stay theirs.'),
+		t('deliver', 'Remove Reviewer'),
+	)
+}
