@@ -101,6 +101,27 @@ class DerivedMedia {
 		$this->queue($versionId);
 	}
 
+	/**
+	 * A file written again in place is read again as on intake: what the probe
+	 * said and all its derived media go, also a Waveform handed in for the old
+	 * content (spec: Delivering again)
+	 */
+	public function reread(Version $version): void {
+		$version->setFpsNum(null);
+		$version->setFpsDen(null);
+		$version->setDropFrame(false);
+		$version->setStartFrame(null);
+		$version->setDurationFrames(null);
+		$version->setWidth(null);
+		$version->setHeight(null);
+		$version->setHasVideo(false);
+		$version->setHasAudio(false);
+		$version->setPlayable(null);
+		$this->versions->update($version);
+		$this->forget($version->getId());
+		$this->queue($version->getId());
+	}
+
 	private function enqueue(int $versionId, string $kind): void {
 		if ($this->jobs->findPending($versionId, $kind) !== null) {
 			return;
