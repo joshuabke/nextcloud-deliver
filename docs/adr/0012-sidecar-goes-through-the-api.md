@@ -25,4 +25,4 @@ The reasons to move:
 - A server without ffmpeg has no failed job for a file with a Sidecar, because its pending jobs are dropped when the Sidecar arrives.
 - The Sidecar describes audio files only; it is a contract with reaper-deliver through the API and changes only compatibly.
 - A Take Folder (not built yet) will be marked through Deliver's API too, not by a file in the folder.
-- ADR 0005 is superseded in where the Sidecar lives and how it arrives.
+- ADR 0005 is superseded in where the Sidecar lives and how it arrives, and ADR 0008 in how a Take Folder is marked: through Deliver's API, not by `"takes": true` in a Sidecar.

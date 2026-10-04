@@ -53,10 +53,16 @@ class DerivedMedia {
 		'matroska' => ['video' => ['h264', 'vp8', 'vp9', 'av1'], 'audio' => ['aac', 'opus', 'vorbis', 'flac', 'mp3']],
 	];
 
+	/** The audio families above by mimetype, for a Sidecar's file, which no probe reads */
+	private const PLAYABLE_AUDIO = ['audio/mpeg', 'audio/aac', 'audio/flac', 'audio/ogg', 'audio/wav'];
+
 	private const THUMB_WIDTH = 160;
 	private const WAVEFORM_BUCKETS = 2000;
 	/** Peaks a second a Sidecar may carry (spec: Takes and Sidecar) */
 	private const SIDECAR_MAX_RATE = 100;
+	/** Seconds a Sidecar may last, and peaks it may carry, so its Waveform in app data stays small */
+	private const SIDECAR_MAX_DURATION = 86400;
+	private const SIDECAR_MAX_PEAKS = 1000000;
 	/** Seconds between two progress writes to the job row */
 	private const PROGRESS_INTERVAL = 2;
 
@@ -104,7 +110,7 @@ class DerivedMedia {
 	}
 
 	private function enqueue(int $versionId, string $kind): void {
-		if ($this->jobs->findPending($versionId, $kind) !== null) {
+		if ($this->jobs->findPending($versionId, $kind) !== null || $this->sidecarStands($versionId, $kind)) {
 			return;
 		}
 		$job = new Job();
@@ -127,9 +133,8 @@ class DerivedMedia {
 			$this->jobs->delete($job);
 			return;
 		}
-		// What a Sidecar said stands: no probe over it, and its Waveform is finer than one made here (ADR 0012)
-		if ($version->getSidecar() && in_array($job->getKind(), [Job::KIND_PROBE, Job::KIND_WAVEFORM], true)) {
-			$this->jobs->delete($job);
+		if ($this->sidecarStands($version->getId(), (string)$job->getKind())) {
+			$this->dropForSidecar($job);
 			return;
 		}
 		$this->mark($version->getId(), $job->getKind(), self::STATE_RUNNING);
@@ -150,6 +155,11 @@ class DerivedMedia {
 			$this->mark($version->getId(), $job->getKind(), self::STATE_READY);
 			$this->jobs->delete($job);
 		} catch (\Throwable $e) {
+			// A Sidecar that arrived meanwhile made the job needless, not failed
+			if ($this->sidecarStands($version->getId(), (string)$job->getKind())) {
+				$this->dropForSidecar($job);
+				return;
+			}
 			$error = $this->ffmpeg->tail($e->getMessage());
 			// Into Nextcloud's log too, where an admin without a shell looks first
 			$this->logger->warning('Deliver could not make the {kind} of Version {version}', ['kind' => $job->getKind(), 'version' => $version->getId(), 'exception' => $e]);
@@ -163,8 +173,26 @@ class DerivedMedia {
 		}
 	}
 
+	/** What a Sidecar said stands: no probe over it, and its Waveform is finer than one made here (ADR 0012) */
+	private function sidecarStands(int $versionId, string $kind): bool {
+		return in_array($kind, [Job::KIND_PROBE, Job::KIND_WAVEFORM], true)
+			&& $this->versions->find($versionId)?->getSidecar() === true;
+	}
+
+	/** A Waveform job queued or started before the Sidecar arrived leaves the Sidecar's Waveform ready */
+	private function dropForSidecar(Job $job): void {
+		$this->jobs->delete($job);
+		if ($job->getKind() === Job::KIND_WAVEFORM) {
+			$this->mark($job->getVersionId(), Job::KIND_WAVEFORM, self::STATE_READY);
+		}
+	}
+
 	private function runProbe(Version $version, string $path): void {
 		$probed = $this->probe->apply($version, $path);
+		// A Sidecar that arrived while ffprobe ran stands over what it found
+		if ($this->sidecarStands($version->getId(), Job::KIND_PROBE)) {
+			return;
+		}
 		if ($probed === null) {
 			throw new \RuntimeException($this->ffmpeg->version($this->ffmpeg->ffprobe()) === null
 				? 'Without ffmpeg, Deliver cannot read this format'
@@ -301,6 +329,9 @@ class DerivedMedia {
 		} finally {
 			@unlink($pcm);
 		}
+		if ($this->sidecarStands($version->getId(), Job::KIND_WAVEFORM)) {
+			return;
+		}
 		$this->put($version, 'waveform', json_encode(['peaks' => $peaks], JSON_THROW_ON_ERROR));
 	}
 
@@ -342,8 +373,9 @@ class DerivedMedia {
 	 * @throws InvalidRequestException out of the limits, or not audio
 	 */
 	public function acceptSidecar(Version $version, float $start, float $duration, int $rate, array $peaks): void {
-		if ($start < 0 || $duration <= 0 || $rate < 1 || $rate > self::SIDECAR_MAX_RATE || $peaks === [] || count($peaks) > (int)ceil($duration * $rate) + 1) {
-			throw new InvalidRequestException('A Sidecar starts at 0 or later, lasts more than 0 seconds and has 1 to ' . self::SIDECAR_MAX_RATE . ' peaks a second over its duration');
+		if ($start < 0 || $duration <= 0 || $duration > self::SIDECAR_MAX_DURATION || $rate < 1 || $rate > self::SIDECAR_MAX_RATE
+			|| $peaks === [] || count($peaks) > min((int)ceil($duration * $rate) + 1, self::SIDECAR_MAX_PEAKS)) {
+			throw new InvalidRequestException('A Sidecar starts at 0 or later, lasts more than 0 and at most ' . self::SIDECAR_MAX_DURATION . ' seconds and has 1 to ' . self::SIDECAR_MAX_RATE . ' peaks a second over its duration, ' . self::SIDECAR_MAX_PEAKS . ' at most');
 		}
 		foreach ($peaks as $peak) {
 			if (!is_int($peak) && !is_float($peak) || $peak < 0 || $peak > 1) {
@@ -357,11 +389,14 @@ class DerivedMedia {
 		$this->jobs->deleteBy('version_id', $version->getId());
 		$this->put($version, 'waveform', json_encode(['rate' => $rate, 'peaks' => array_map(static fn ($peak) => round((float)$peak, 3), $peaks)], JSON_THROW_ON_ERROR));
 		// Audio counts in milliseconds (ADR 0007)
+		$version->setFpsNum(Probe::AUDIO_FPS[0]);
+		$version->setFpsDen(Probe::AUDIO_FPS[1]);
+		$version->setDropFrame(false);
 		$version->setStartFrame((int)round($start * 1000));
 		$version->setDurationFrames((int)round($duration * 1000));
 		$version->setHasAudio(true);
 		$version->setHasVideo(false);
-		$version->setPlayable(true);
+		$version->setPlayable(in_array($file->getMimeType(), self::PLAYABLE_AUDIO, true));
 		$version->setSidecar(true);
 		$version->setWaveformState(self::STATE_READY);
 		$version->setDerivedError(null);

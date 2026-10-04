@@ -21,7 +21,7 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | POST | `/versions/{id}/stack` `{assetId, number}` | Stack a Version onto another Asset |
 | POST | `/versions/{id}/unstack` | Take a Version out of its Stack, which is also the undo |
 | POST | `/versions/{id}/regenerate` | Delete the Version's derived media and queue it again; a Sidecar's Waveform stays |
-| PUT | `/versions/{id}/sidecar` `{start, duration, waveform: {rate, peaks}}` | The Sidecar of an audio file from the tool that delivered it (ADR 0012): Session Time of the first sample and duration in seconds, a Waveform of 1 to 100 peaks a second, each 0 to 1, at most ceil(duration × rate) + 1 of them; stands over any probe, replaces an earlier one, needs write access, 400 outside the limits |
+| PUT | `/versions/{id}/sidecar` `{start, duration, waveform: {rate, peaks}}` | The Sidecar of an audio file from the tool that delivered it (ADR 0012): Session Time of the first sample and duration in seconds, at most 86400, a Waveform of 1 to 100 peaks a second, each 0 to 1, at most ceil(duration × rate) + 1 and 1,000,000 of them; stands over any probe, replaces an earlier one, needs write access, 400 outside the limits |
 | GET | `/admin/settings` | Pipeline settings and status, admins only |
 | PUT | `/admin/settings` `{ffmpegPath, ffprobePath, maxJobs, maxHeight, thumbCap, hwEncoder, hwDevice, extraArgs}` | Save and test the encoder, admins only |
 | GET | `/apps/deliver/versions/{id}/export/{format}` `?unresolvedOnly=1&zeroBased=1` | The Comments as `edl` (DaVinci Resolve markers), `fcpxml` (FCP7 XML, Premiere Pro), `fcpx` (FCPXML, Final Cut Pro) or `csv`, and for audio as `wav` (embedded markers), `midi` (marker meta events) or `reaper` (Region/Marker Manager CSV); needs write access |
