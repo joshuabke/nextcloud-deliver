@@ -67,6 +67,13 @@ class StackApiTest extends TestCase {
 		self::assertSame(400, $refused['status'], 'audio never joins a video\'s Version Stack');
 	}
 
+	public function testTheNextCutStacksOnACutWhoseFileIsInTheTrash(): void {
+		$this->put('cut.mp4');
+		$this->nc->delete("{$this->root}/cut.mp4");
+		$this->put('cut_v2.mp4');
+		self::assertSame(['cut_v2.mp4', 'cut.mp4'], array_column($this->stack('cut'), 'name'), 'a Missing Version keeps its kind of media');
+	}
+
 	public function testTheFilenameConventionStacksAndTheMemberCanUndoIt(): void {
 		$this->put('cut_v1.mp4');
 		$this->put('cut_v2.mp4');

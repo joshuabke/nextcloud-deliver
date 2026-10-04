@@ -39,7 +39,7 @@ The integer a Member assigns to a Version, unique within its Version Stack. Sugg
 _Avoid_: Revision number, iteration
 
 **Version Stack**:
-The ordered set of Versions belonging to one Asset, newest on top.
+The ordered set of Versions belonging to one Asset, newest on top. It holds one kind of media, video, audio or stills, whatever the container of each Version.
 _Avoid_: History
 
 ### Review

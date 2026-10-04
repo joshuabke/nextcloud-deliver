@@ -1,4 +1,4 @@
-import { mediaKind } from './media.js'
+import { mediaKind, stackKind } from './media.js'
 import { parseVersionName } from './versionName.js'
 
 /**
@@ -25,7 +25,8 @@ export function stackSuggestions(assets) {
 		const candidates = assets.filter((other) => other.id !== asset.id
 			&& other.path === asset.path
 			&& other.name.toLowerCase() === parsed.base.toLowerCase()
-			&& kind !== null && mediaKind(other.versions[0]?.mimeType) === kind)
+			// A Stack of Missing files only has no known kind, which does not rule it out
+			&& kind !== null && (stackKind(other.versions) ?? kind) === kind)
 		if (candidates.length > 0) {
 			suggestions.set(asset.id, candidates)
 		}

@@ -39,7 +39,7 @@ import { useQuery } from '../composables/query.js'
 import { confirmRemoval } from '../confirm.js'
 import { FILTER_LABELS, FILTERS, found, passes, SORT_OPTIONS, sortAssets, SORTS } from '../lib/filters.js'
 import { groupByFolder, inFolder, projectDavPath, projectDir } from '../lib/folders.js'
-import { acceptFor } from '../lib/media.js'
+import { acceptFor, stackKind } from '../lib/media.js'
 import { stackSuggestions } from '../lib/suggestions.js'
 import { useProjectsStore } from '../store/projects.js'
 
@@ -261,7 +261,7 @@ async function uploadStacked(event) {
 	uploading.value = true
 	error.value = null
 	try {
-		await uploadNextVersion(davFolder(stackOn.value.path), file, stackOn.value.id)
+		await uploadNextVersion(davFolder(stackOn.value.path), file, stackOn.value.id, stackKind(stackOn.value.versions))
 	} catch (e) {
 		error.value = errorMessage(e)
 	} finally {

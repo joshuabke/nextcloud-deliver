@@ -21,6 +21,12 @@ export const reviewable = (mimeType) => /^(video|audio)\//.test(mimeType ?? '') 
 export const mediaKind = (mimeType) => !mimeType ? null : STILL.test(mimeType) ? 'image' : mimeType.split('/')[0]
 
 /**
+ * @param {Array<{mimeType?: string|null}>} versions - a Version Stack
+ * @return {string|null} the kind of media it holds, going by any Version whose file is there; null when none is
+ */
+export const stackKind = (versions) => mediaKind(versions.find((version) => version.mimeType)?.mimeType)
+
+/**
  * @param {string|null|undefined} mimeType - a file's type
  * @return {string} what a file input for the next Version of it accepts
  */

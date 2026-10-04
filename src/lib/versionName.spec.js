@@ -37,6 +37,11 @@ describe('stack suggestions', () => {
 		expect(stackSuggestions(assets).has(3)).toBe(false)
 	})
 
+	it('still offers an Asset whose files are Missing', () => {
+		const assets = [asset(1, 'cut', 'cut.mp4', '', null), asset(2, 'cut', 'cut.mov'), asset(3, 'cut', 'cut_v2.mp4')]
+		expect(stackSuggestions(assets).get(3).map((a) => a.id)).toEqual([1, 2])
+	})
+
 	it('says nothing for a Missing file, whose kind is unknown', () => {
 		expect(stackSuggestions([asset(1, 'cut', 'cut.mp4'), asset(2, 'cut', 'cut_v2.mp4', '', null)]).size).toBe(0)
 	})

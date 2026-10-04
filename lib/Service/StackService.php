@@ -93,6 +93,21 @@ class StackService {
 		return count($found) === 1 ? $found[0] : null;
 	}
 
+	/**
+	 * Whether the Asset holds the same kind of media as the file, going by any
+	 * of its Versions whose file is still there, in the trash too. When none
+	 * is, nothing speaks against it.
+	 */
+	private function sameKind(Asset $asset, File $file): bool {
+		foreach ($this->versions->findByAsset($asset->getId()) as $version) {
+			$other = $this->root->getFirstNodeById($version->getFileId());
+			if ($other instanceof File) {
+				return Reviewable::kind($other->getMimetype()) === Reviewable::kind($file->getMimetype());
+			}
+		}
+		return true;
+	}
+
 	/** A Member's name for the Asset, else the base name of its newest Version */
 	public function nameOf(Asset $asset): string {
 		$override = $asset->getNameOverride();
@@ -161,13 +176,6 @@ class StackService {
 	 * Project: a Version Stack never spans Projects (ADR 0009). The Asset it
 	 * leaves is deleted if that was its last Version.
 	 */
-	/** Whether the Asset's newest Version, in the same folder as the file, is the same kind of media */
-	private function sameKind(Asset $asset, File $file): bool {
-		$newest = $this->versions->findNewest($asset->getId());
-		$other = $newest === null ? null : $file->getParent()->getFirstNodeById($newest->getFileId());
-		return $other instanceof File && Reviewable::kind($other->getMimetype()) === Reviewable::kind($file->getMimetype());
-	}
-
 	public function stack(Version $version, int $assetId, ?int $number): Version {
 		$target = $this->assets->find($assetId);
 		if ($target === null) {

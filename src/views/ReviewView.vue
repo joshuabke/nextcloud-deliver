@@ -33,7 +33,7 @@ import { useLiveUpdates } from '../composables/live.js'
 import { usePanelOpen } from '../composables/panel.js'
 import { useReview } from '../composables/review.js'
 import { groupByFolder, uploadFolder } from '../lib/folders.js'
-import { acceptFor } from '../lib/media.js'
+import { acceptFor, stackKind } from '../lib/media.js'
 import { fpsValue } from '../lib/timecode.js'
 import { decodeWaveform } from '../lib/waveform.js'
 import { useCommentsStore } from '../store/comments.js'
@@ -160,7 +160,7 @@ async function upload(event) {
 	uploading.value = true
 	error.value = null
 	try {
-		const versionId = await uploadNextVersion(folderUrl.value, file, context.value.asset.id)
+		const versionId = await uploadNextVersion(folderUrl.value, file, context.value.asset.id, stackKind(context.value.versions))
 		projects.fetch(context.value.project.id).catch(() => {})
 		router.push(`/versions/${versionId}`)
 	} catch (e) {
