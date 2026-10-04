@@ -60,16 +60,18 @@ class PublicController extends AuthPublicShareController {
 		}
 
 		$response = new TemplateResponse(Application::APP_ID, 'public', [], TemplateResponse::RENDER_AS_PUBLIC);
-		$member = $this->links->isMember($link, $this->userSession->getUser()?->getUID());
+		// A Member of what the page shows previews it, and is no Reviewer opening it, whichever key comes along (story 59)
+		$shown = $version === null ? array_column(array_column($link->assets(), 'versions'), 0) : [$version];
+		$member = $this->links->isMember($this->userSession->getUser()?->getUID(), ...$shown);
 
-		$key = $this->request->getParam('r');
-		if (is_string($key) && $key !== '') {
-			$this->rememberReviewer($response, $key);
-		}
-		$cookie = $this->request->getCookie(self::cookieName($this->getToken()));
-		$reviewer = $this->reviewers->byKey(is_string($key) && $key !== '' ? $key : (is_string($cookie) ? $cookie : null), $link);
-		// A Member previewing the link is no Reviewer opening it
+		$reviewer = null;
 		if (!$member) {
+			$key = $this->request->getParam('r');
+			if (is_string($key) && $key !== '') {
+				$this->rememberReviewer($response, $key);
+			}
+			$cookie = $this->request->getCookie(self::cookieName($this->getToken()));
+			$reviewer = $this->reviewers->byKey(is_string($key) && $key !== '' ? $key : (is_string($cookie) ? $cookie : null), $link);
 			$this->links->record($link, LinkActivityMapper::OPENED, $reviewer);
 		}
 
@@ -85,8 +87,8 @@ class PublicController extends AuthPublicShareController {
 			'description' => $link->description(),
 			'reviewer' => $reviewer?->getName(),
 			'downloadAll' => $flags['canDownload'] ? $this->urls->linkToRoute('deliver.PublicApi.download', ['token' => $this->getToken()]) : null,
-			// Members preview the link as Reviewers see it and review in the app (story 59)
-			'memberUrl' => $member ? $this->urls->linkToRoute('deliver.page.index') . ($version === null ? '' : 'versions/' . $version->getId()) : null,
+			// The landing of a Member's preview leads into the app; in the player, the context of each Version does (story 59)
+			'memberUrl' => $member && $version === null ? $this->urls->linkToRoute('deliver.page.index') : null,
 		]);
 		Util::addScript(Application::APP_ID, 'deliver-public');
 		return $response;

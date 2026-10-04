@@ -91,9 +91,8 @@ onBeforeUnmount(() => store.stop())
 /** Reloads what the share shows of this Version, for instance once its Proxy is ready */
 async function reload() {
 	context.value = await getPublicContext({ versionId: current.value })
-	if (context.value.me?.type === 'reviewer') {
-		reviewer.value = context.value.me
-	}
+	// A Member's preview of a Version names no Reviewer, even where they review another Version as one
+	reviewer.value = context.value.me?.type === 'reviewer' ? context.value.me : null
 }
 
 /**
@@ -221,9 +220,9 @@ async function claim({ name, email, mail }) {
 			</template>
 
 			<template #notice>
-				<NcNoteCard v-if="link.memberUrl" type="info" class="deliver-layout__notice">
+				<NcNoteCard v-if="context.me?.type === 'member'" type="info" class="deliver-layout__notice">
 					{{ t('deliver', 'A preview of what Reviewers see. You comment and approve in Deliver.') }}
-					<a :href="link.memberUrl" class="deliver-public__open">{{ t('deliver', 'Open in Deliver') }}</a>
+					<a :href="context.me.url" class="deliver-public__open">{{ t('deliver', 'Open in Deliver') }}</a>
 				</NcNoteCard>
 				<NcNoteCard v-if="error" type="error" class="deliver-layout__notice">
 					{{ error }}

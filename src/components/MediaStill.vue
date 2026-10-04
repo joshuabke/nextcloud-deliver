@@ -16,8 +16,12 @@ const props = defineProps({
 const noStill = ref(false)
 /** The video could not be read; the parent's icon shows through */
 const noVideo = ref(false)
-/** The mouse is over it, so the video shows */
+/** The mouse is over it, so the video shows once it has a frame */
 const scrubbing = ref(false)
+/** The mouse came by once: the video stays loaded, so the next hover does not start over */
+const hovered = ref(false)
+/** The video has a frame to show in place of the still */
+const ready = ref(false)
 /** Where the mouse is, 0 to 1 */
 const at = ref(0)
 const video = ref(null)
@@ -34,6 +38,7 @@ function scrub(event) {
 	const box = event.currentTarget.getBoundingClientRect()
 	at.value = Math.min(Math.max((event.clientX - box.left) / box.width, 0), 1)
 	scrubbing.value = true
+	hovered.value = true
 	const element = video.value
 	if (element && Number.isFinite(element.duration) && !element.seeking) {
 		element.currentTime = at.value * element.duration
@@ -43,9 +48,21 @@ function scrub(event) {
 /** Once the video can seek, or finished a seek, it follows the mouse to where it is now */
 function catchUp() {
 	const element = video.value
-	if (scrubbing.value && element && Math.abs(element.currentTime - at.value * element.duration) > 0.05) {
+	if (scrubbing.value && element && Number.isFinite(element.duration) && Math.abs(element.currentTime - at.value * element.duration) > 0.05) {
 		element.currentTime = at.value * element.duration
 	}
+}
+
+/** The video has a frame now, so it can stand in for the still */
+function shown() {
+	ready.value = true
+	catchUp()
+}
+
+/** The video cannot be read: the still stays, or the parent's icon shows through */
+function failed() {
+	noVideo.value = true
+	scrubbing.value = false
 }
 
 /** Back to the still, or to the first second where the video is the still */
@@ -65,13 +82,14 @@ function leave() {
 		@mouseleave="leave">
 		<img
 			v-if="!noStill"
-			v-show="!scrubbing"
+			v-show="!scrubbing || !ready"
 			:src="previewUrl(fileId, 400)"
 			alt=""
 			loading="lazy"
 			@error="noStill = true">
 		<video
-			v-if="playUrl && !noVideo && (noStill || scrubbing)"
+			v-if="playUrl && !noVideo && (noStill || hovered)"
+			v-show="noStill || (scrubbing && ready)"
 			ref="video"
 			:src="playUrl + '#t=1'"
 			preload="metadata"
@@ -79,8 +97,9 @@ function leave() {
 			playsinline
 			tabindex="-1"
 			@loadedmetadata="catchUp"
-			@seeked="catchUp"
-			@error="noVideo = true" />
+			@loadeddata="shown"
+			@seeked="shown"
+			@error="failed" />
 		<span v-if="scrubbing" class="deliver-still__at" :style="{ width: `${at * 100}%` }" />
 	</span>
 </template>

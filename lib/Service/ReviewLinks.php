@@ -65,21 +65,21 @@ class ReviewLinks {
 	}
 
 	/**
-	 * Whether a logged-in user is a Member of what the link shows: they can
-	 * open one of its files in Files (ADR 0009). They preview the link as
-	 * Reviewers see it but review in the app (story 59).
+	 * Whether a logged-in user is a Member of each of these Versions: they can
+	 * open its file in Files, as rights follow each file (ADR 0009). They
+	 * preview it as Reviewers see it but review it in the app (story 59).
 	 */
-	public function isMember(ReviewLink $link, ?string $uid): bool {
-		if ($uid === null) {
+	public function isMember(?string $uid, Version ...$versions): bool {
+		if ($uid === null || $versions === []) {
 			return false;
 		}
 		$home = $this->root->getUserFolder($uid);
-		foreach ($link->assets() as ['versions' => [$newest]]) {
-			if ($home->getFirstNodeById($newest->getFileId()) !== null) {
-				return true;
+		foreach ($versions as $version) {
+			if ($home->getFirstNodeById($version->getFileId()) === null) {
+				return false;
 			}
 		}
-		return false;
+		return true;
 	}
 
 	/** Remembers what happened on a link (story 124) */

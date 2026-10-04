@@ -42,8 +42,6 @@ class PublicApiController extends PublicShareController {
 	use GuardsErrors;
 	use ReviewLinkToken;
 
-	private ?bool $member = null;
-
 	public function __construct(
 		string $appName,
 		IRequest $request,
@@ -71,14 +69,16 @@ class PublicApiController extends PublicShareController {
 			$version = $this->links->version($link, $versionId);
 			$project = $this->projects->settingsOf($version);
 			$stack = $link->assets()[$version->getAssetId()] ?? null;
-			$reviewer = $this->reviewer();
+			// A Member previews the Version read only, never as the Reviewer whose key this browser carries (story 59)
+			$member = $this->member($version);
+			$reviewer = $member ? null : $this->reviewer();
 			if ($reviewer !== null) {
 				$this->reviewers->cameBy($reviewer, $link->token());
 			}
-			if (!$this->member()) {
+			if (!$member) {
 				$this->links->record($link, LinkActivityMapper::VIEWED, $reviewer, $version);
 			}
-			$flags = $this->flags($link, $reviewer);
+			$flags = ($member ? ['canComment' => false] : []) + $this->flags($link, $reviewer);
 			return [
 				'versionId' => $version->getId(),
 				'flags' => $flags,
@@ -93,7 +93,7 @@ class PublicApiController extends PublicShareController {
 					fn (Version $each) => $this->describe($link, $each, $flags['canDownload']),
 					$stack['versions'],
 				),
-				'me' => $this->me(),
+				'me' => $this->me($version, $member, $reviewer),
 			];
 		});
 	}
@@ -163,7 +163,7 @@ class PublicApiController extends PublicShareController {
 				}
 				$names[$name] = true;
 				$zip->addResource($file->fopen('rb'), $name, $file->getSize(), $file->getMTime());
-				if (!$this->member()) {
+				if (!$this->member($newest)) {
 					$this->links->record($link, LinkActivityMapper::DOWNLOADED, $reviewer, $newest);
 				}
 			}
@@ -195,7 +195,7 @@ class PublicApiController extends PublicShareController {
 			}
 			if ($this->request->getParam('download') !== null && $canDownload) {
 				// The download button, not the player, which asks for ranges of the same file (story 124)
-				if (!$this->member()) {
+				if (!$this->member($version)) {
 					$this->links->record($link, LinkActivityMapper::DOWNLOADED, $this->reviewer(), $version);
 				}
 				$response = RangeFileResponse::ofFile($file, null);
@@ -233,7 +233,8 @@ class PublicApiController extends PublicShareController {
 	public function claim(string $name, ?string $email = null, ?bool $mailReplies = null, ?bool $mailComments = null, ?bool $mailVersions = null): Response {
 		return $this->guard(function () use ($name, $email, $mailReplies, $mailComments, $mailVersions) {
 			$link = $this->link();
-			if ($this->member()) {
+			// Who is a Member of everything the link shows reviews it in Deliver itself
+			if ($this->member(...array_column(array_column($link->assets(), 'versions'), 0))) {
 				throw new AccessDeniedException('Members review in Deliver itself');
 			}
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
@@ -353,12 +354,15 @@ class PublicApiController extends PublicShareController {
 		return $canDownload || in_array($version->getProxyState(), [DerivedMedia::STATE_NONE, DerivedMedia::STATE_FAILED], true);
 	}
 
-	/** Who is writing: the Reviewer this browser carries, or someone without a name yet */
-	private function me(): array {
-		if ($this->member()) {
-			return ['type' => 'member', 'name' => $this->userSession->getUser()?->getDisplayName() ?? ''];
+	/** Who is writing: a Member previewing the Version, the Reviewer this browser carries, or someone without a name yet */
+	private function me(Version $version, bool $member, ?Reviewer $reviewer): array {
+		if ($member) {
+			return [
+				'type' => 'member',
+				'name' => $this->userSession->getUser()?->getDisplayName() ?? '',
+				'url' => $this->urls->linkToRoute('deliver.page.index') . 'versions/' . $version->getId(),
+			];
 		}
-		$reviewer = $this->reviewer();
 		return $reviewer === null
 			// A logged-in visitor gets their display name offered (story 58)
 			? ['type' => 'unnamed', 'name' => $this->userSession->getUser()?->getDisplayName() ?? '']
@@ -376,18 +380,19 @@ class PublicApiController extends PublicShareController {
 	 * @return array<string, mixed>
 	 */
 	private function flags(ReviewLink $link, ?Reviewer $reviewer): array {
-		$flags = $reviewer === null ? $link->flags() : $reviewer->over($link->flags());
-		// A Member's preview reads only: they comment and approve in the app (story 59)
-		return $this->member() ? ['canComment' => false] + $flags : $flags;
+		return $reviewer === null ? $link->flags() : $reviewer->over($link->flags());
 	}
 
-	/** A logged-in Member previewing the link, rather than a Reviewer */
-	private function member(): bool {
-		return $this->member ??= $this->links->isMember($this->link(), $this->userSession->getUser()?->getUID());
+	/** The logged-in user can open the file of each of these Versions, and previews them rather than reviewing (story 59) */
+	private function member(Version ...$versions): bool {
+		return $this->links->isMember($this->userSession->getUser()?->getUID(), ...$versions);
 	}
 
-	/** A Reviewer comments while the link or their own rights allow it, and never resolves */
-	private function viewer(ReviewLink $link): Viewer {
+	/** A Reviewer comments while the link or their own rights allow it, and never resolves; a Member's preview only reads */
+	private function viewer(ReviewLink $link, Version $version): Viewer {
+		if ($this->member($version)) {
+			return Viewer::unnamed(false, $link->flags()['allowOlder']);
+		}
 		$reviewer = $this->reviewer();
 		$flags = $this->flags($link, $reviewer);
 		return $reviewer === null
@@ -398,14 +403,16 @@ class PublicApiController extends PublicShareController {
 	private function onVersion(int $versionId, callable $action, int $status = Http::STATUS_OK): Response {
 		return $this->guard(function () use ($versionId, $action) {
 			$link = $this->link();
-			return $action($this->viewer($link), $this->links->version($link, $versionId));
+			$version = $this->links->version($link, $versionId);
+			return $action($this->viewer($link, $version), $version);
 		}, $status);
 	}
 
 	private function onComment(int $id, callable $action, int $status = Http::STATUS_OK): Response {
 		return $this->guard(function () use ($id, $action) {
 			$link = $this->link();
-			return $action($this->viewer($link), $this->links->version($link, $this->comments->versionIdOf($id)));
+			$version = $this->links->version($link, $this->comments->versionIdOf($id));
+			return $action($this->viewer($link, $version), $version);
 		}, $status);
 	}
 }

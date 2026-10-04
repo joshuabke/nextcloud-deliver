@@ -108,7 +108,7 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 							@click="emit('open', asset.newestId)">
 							<span class="deliver-landing__still">
 								<NcIconSvgWrapper :svg="isAudio(asset) ? audioIcon : videoIcon" :size="40" />
-								<MediaStill :fileId="asset.fileId" :playUrl="isAudio(asset) ? null : asset.playUrl" />
+								<MediaStill :fileId="asset.fileId" :playUrl="asset.mimeType?.startsWith('video/') ? asset.playUrl : null" />
 								<span class="deliver-landing__badge">{{ t('deliver', 'V{number}', { number: asset.number }) }}</span>
 							</span>
 						</button>

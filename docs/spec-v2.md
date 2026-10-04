@@ -263,7 +263,7 @@ File identity is always the Nextcloud file id, so renames and moves are free and
 - Reviewer (through a live Project Link): view, comment and reply when the link allows, edit and delete own (with the same rule for Comments others replied to), download the original unless the link hides downloads. Never resolve, never see Assets the link does not show.
 - Deliver never enforces a password of its own: it points out a review link without one, and an admin who wants the rule enforces it with Nextcloud's password policy, which applies to the passwords of Project Links as to Nextcloud's own.
 - Sharing in Files makes an ordinary Nextcloud link: Deliver adds nothing to it, no Comments, no reviewer session (ADR 0011).
-- A logged-in non-Member opening a Project Link becomes a Reviewer with the display name prefilled; a Member is redirected to the app view.
+- A logged-in non-Member opening a Project Link becomes a Reviewer with the display name prefilled. A Member of a Version's file previews it on the link read only, as Reviewers see it, never as a Reviewer whose key the browser carries and without counting in the link's activity, with the way into the app view (story 59); Versions whose files they cannot open they review as a Reviewer.
 - The public review route extends `AuthPublicShareController`, so the link's password prompt and expiry are enforced by core before Deliver runs. Deliver stores tokens and password hashes (`IHasher`) for its Project Links (ADRs 0010 and 0011); a Project Link shows only files its Member may reshare.
 - Reviewer sessions are a signed cookie holding the reviewer key; it never expires. The Personal Link re-establishes it on any device.
 
