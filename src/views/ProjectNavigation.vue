@@ -1,13 +1,11 @@
 <script setup>
 import reviewerIcon from '@mdi/svg/svg/account-outline.svg?raw'
 import copyIcon from '@mdi/svg/svg/content-copy.svg?raw'
-import imageLinkIcon from '@mdi/svg/svg/file-image-outline.svg?raw'
-import audioLinkIcon from '@mdi/svg/svg/file-music-outline.svg?raw'
-import videoLinkIcon from '@mdi/svg/svg/file-video-outline.svg?raw'
-import projectLinkIcon from '@mdi/svg/svg/folder-account-outline.svg?raw'
 import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
 import allIcon from '@mdi/svg/svg/folder-play-outline.svg?raw'
-import linkIcon from '@mdi/svg/svg/link-variant.svg?raw'
+import projectWideIcon from '@mdi/svg/svg/link-box-variant-outline.svg?raw'
+import pausedIcon from '@mdi/svg/svg/link-variant-off.svg?raw'
+import pickedIcon from '@mdi/svg/svg/playlist-check.svg?raw'
 import addIcon from '@mdi/svg/svg/plus.svg?raw'
 import { showError } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
@@ -20,7 +18,7 @@ import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import ReviewerDialog from '../components/ReviewerDialog.vue'
 import ShareLinkDialog from '../components/ShareLinkDialog.vue'
-import { createShareLink, errorMessage, listProjectShares, removeReviewer } from '../api.js'
+import { createProjectLink, errorMessage, listProjectLinks, removeReviewer } from '../api.js'
 import { copyLink } from '../clipboard.js'
 import { confirmReviewerRemoval } from '../confirm.js'
 import { folderTree } from '../lib/folders.js'
@@ -33,11 +31,11 @@ const props = defineProps({
 const store = useProjectsStore()
 const route = useRoute()
 const router = useRouter()
-/** My Share Links in this Project that have review on */
+/** My Project Links on this Project, paused ones too */
 const links = ref([])
 /** The Project's Reviewers, each once, with their Personal Link through every review link */
 const reviewers = ref([])
-/** The Share Link whose settings are open */
+/** The link whose settings are open */
 const editing = ref(null)
 /** The Reviewer whose settings are open */
 const person = ref(null)
@@ -51,28 +49,30 @@ const byId = computed(() => new Map(reviewers.value.map((reviewer) => [reviewer.
  * @param {number} id - the Project
  */
 async function load(id = props.id) {
-	const found = await listProjectShares(id).catch(() => ({ links: [], reviewers: [] }))
+	const found = await listProjectLinks(id).catch(() => ({ links: [], reviewers: [] }))
 	if (props.id === id) {
-		// The Project folder's link first: it is the one a Reviewer usually gets
-		links.value = found.links
-			.filter((share) => share.review)
-			.map((share) => ({ ...share, title: share.isProject ? t('deliver', 'Project folder') : (share.label || share.name) }))
-			.sort((a, b) => b.isProject - a.isProject || a.title.localeCompare(b.title))
+		links.value = found.links.map((link, index) => ({ ...link, title: titleOf(link, index) }))
 		reviewers.value = found.reviewers
 		person.value = person.value && (byId.value.get(person.value.id) ?? null)
 	}
 }
 
 /**
- * @param {object} share - a Share Link
- * @return {string} a folder with a person for the Project folder, else what kind of file it shows
+ * @param {object} link - a Project Link
+ * @param {number} index - its place in the list
+ * @return {string} its label, else the one Asset it shows, else a number
  */
-function iconOf(share) {
-	if (share.isProject) {
-		return projectLinkIcon
-	}
-	const kind = share.mimeType?.split('/')[0]
-	return { video: videoLinkIcon, audio: audioLinkIcon, image: imageLinkIcon }[kind] ?? linkIcon
+function titleOf(link, index) {
+	const only = link.assetIds?.length === 1 ? project.value?.assets.find((asset) => asset.id === link.assetIds[0]) : null
+	return link.label || only?.name || (index === 0 ? t('deliver', 'Project Link') : t('deliver', 'Project Link {number}', { number: index + 1 }))
+}
+
+/**
+ * @param {object} link - a Project Link
+ * @return {string} whether it is paused or shows all or picked Assets
+ */
+function iconOf(link) {
+	return !link.review ? pausedIcon : link.assetIds === null ? projectWideIcon : pickedIcon
 }
 
 watch(() => props.id, (id) => {
@@ -80,35 +80,19 @@ watch(() => props.id, (id) => {
 	load(id)
 }, { immediate: true })
 
-/** A new Share Link on the Project folder, review on, its settings open (story 45) */
+/** A new Project Link showing the whole Project, live, its settings open (stories 45, 120) */
 async function createLink() {
 	try {
-		const created = await createShareLink(project.value.folderId)
+		const created = await createProjectLink(props.id)
 		await load()
-		editing.value = links.value.find((share) => share.id === created.id) ?? null
+		editing.value = links.value.find((share) => share.token === created.token) ?? null
 	} catch (e) {
 		showError(errorMessage(e))
 	}
 }
 
 /**
- * Auto Intake from the link's settings: switched on, it takes in what is there,
- * so the counts and the Asset list are read again.
- *
- * @param {boolean} on - Auto Intake on or off
- */
-async function setAutoIntake(on) {
-	try {
-		await store.save(props.id, { autoIntake: on })
-		await Promise.all([load(), store.fetch(props.id)])
-		editing.value = links.value.find((share) => share.id === editing.value?.id) ?? editing.value
-	} catch (e) {
-		showError(errorMessage(e))
-	}
-}
-
-/**
- * @param {object} updated - the Share Link as the server returned it after a change
+ * @param {object} updated - the link as the server returned it after a change
  */
 function replace(updated) {
 	editing.value = { ...editing.value, ...updated }
@@ -157,16 +141,16 @@ async function openPerson(id) {
 
 /**
  * @param {object} reviewer - a Reviewer
- * @return {string} their Personal Link through the Project folder's link, or through the first review link
+ * @return {string} their Personal Link through the first live link
  */
 function personalLink(reviewer) {
 	const share = links.value[0]
-	return reviewer.links.find((each) => each.shareId === share?.id)?.url ?? reviewer.links[0]?.url
+	return reviewer.links.find((each) => each.token === share?.token)?.url ?? reviewer.links[0]?.url
 }
 </script>
 
 <template>
-	<NcAppNavigation :aria-label="t('deliver', 'Folders and Share Links')">
+	<NcAppNavigation :aria-label="t('deliver', 'Folders and links')">
 		<template #list>
 			<NcAppNavigationItem
 				:name="t('deliver', 'All Assets')"
@@ -195,15 +179,14 @@ function personalLink(reviewer) {
 				</template>
 			</NcAppNavigationItem>
 
-			<NcAppNavigationCaption :name="t('deliver', 'Share Links')" />
+			<NcAppNavigationCaption :name="t('deliver', 'Links')" />
 			<li v-if="links.length === 0" class="deliver-navigation__hint">
-				{{ t('deliver', 'No Share Link with review yet.') }}
+				{{ t('deliver', 'No link with review yet.') }}
 			</li>
 			<NcAppNavigationItem
 				v-for="share in links"
-				:key="share.id"
+				:key="share.token"
 				:name="share.title"
-				:title="share.isProject ? t('deliver', 'Link to the whole Project folder') : share.name"
 				:allowCollapse="share.reviewerIds.length > 0"
 				:open="true"
 				:inlineActions="1"
@@ -231,7 +214,7 @@ function personalLink(reviewer) {
 				</NcAppNavigationItem>
 			</NcAppNavigationItem>
 			<NcAppNavigationItem
-				v-if="project?.canWrite && project?.folderId"
+				v-if="project && !project.none"
 				:name="t('deliver', 'Create Review Link')"
 				@click="createLink">
 				<template #icon>
@@ -267,9 +250,7 @@ function personalLink(reviewer) {
 			<ShareLinkDialog
 				v-if="editing"
 				:share="editing"
-				:canWrite="project?.canWrite ?? false"
-				:autoIntake="project?.autoIntake ?? false"
-				@autoIntake="setAutoIntake"
+				:assets="project?.assets ?? []"
 				@update="replace"
 				@person="openPerson"
 				@deleted="closeEditing"

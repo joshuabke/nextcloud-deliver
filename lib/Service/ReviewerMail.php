@@ -25,7 +25,7 @@ class ReviewerMail {
 		private IConfig $config,
 		private IFactory $l10n,
 		private ReviewerMapper $reviewers,
-		private ShareReviewService $sharing,
+		private ReviewLinks $links,
 		private LoggerInterface $logger,
 		private Members $members,
 	) {
@@ -109,7 +109,7 @@ class ReviewerMail {
 		if ($email === null || !self::configured($this->config)) {
 			return;
 		}
-		$link = $this->sharing->reviewLinkFor($version, $reviewer);
+		$link = $this->links->reviewLinkFor($version, $reviewer);
 		if ($link === null) {
 			return;
 		}

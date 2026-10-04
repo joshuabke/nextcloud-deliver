@@ -7,16 +7,20 @@
 	<summary lang="de">Framegenaues Video-Review direkt in Nextcloud Dateien</summary>
 	<description><![CDATA[Frame-accurate video review where the files already are.
 
-Enable a video or audio file for review from the Files sidebar and it becomes an Asset; the folder it lies in becomes a Project, and a whole folder can be switched to Auto Intake so that everything in it counts. Members — whoever Files lets into the folder — and Reviewers, who arrive through an ordinary Nextcloud share link, leave Comments anchored to frames or ranges. Iterations of a cut stack up as Versions, and the feedback goes back into the editing application as markers.
+**Beta:** Deliver is new. Try it on real projects, but keep your own backups and expect rough edges; please report what you find on GitHub.
 
-Deliver never copies your media: Files stays the source of truth, and review runs on the share links you already hand out.
+Enable a video or audio file for review from the Files sidebar and it becomes an Asset, in a Project or in No Project; a whole folder can become a Project on Auto Intake so that everything in it counts. Members — whoever Files lets open the file — and Reviewers, who arrive through a Project Link for a whole Project or the Assets you pick, leave Comments anchored to frames or ranges. Iterations of a cut stack up as Versions, and the feedback goes back into the editing application as markers.
+
+Deliver never copies your media: Files stays the source of truth, and Projects collect files from wherever they lie.
 
 Screenshots: footage from Tears of Steel, (CC) Blender Foundation | mango.blender.org.]]></description>
 	<description lang="de"><![CDATA[Framegenaues Video-Review dort, wo die Dateien schon liegen.
 
-Gib eine Video- oder Audiodatei in der Dateien-Seitenleiste zum Review frei, und sie wird zum Asset; ihr Ordner wird zum Projekt, und ein ganzer Ordner lässt sich auf Automatische Aufnahme stellen, sodass alles darin zählt. Mitglieder – alle, die Dateien in den Ordner lässt – und Reviewer, die über einen gewöhnlichen Nextcloud-Freigabelink kommen, hinterlassen Kommentare auf Frames oder Bereichen. Neue Schnittfassungen stapeln sich als Versionen, und das Feedback geht als Marker zurück in den Schnitt.
+**Beta:** Deliver ist neu. Probier es an echten Projekten aus, aber behalte eigene Backups und rechne mit Ecken und Kanten; melde bitte, was dir auffällt, auf GitHub.
 
-Deliver kopiert deine Medien nie: Dateien bleibt die Quelle der Wahrheit, und das Review läuft über die Freigabelinks, die du ohnehin verschickst.
+Gib eine Video- oder Audiodatei in der Dateien-Seitenleiste zum Review frei, und sie wird zum Asset, in einem Projekt oder Ohne Projekt; ein ganzer Ordner lässt sich zum Projekt mit Automatischer Aufnahme machen, sodass alles darin zählt. Mitglieder – alle, die Dateien die Datei öffnen lässt – und Reviewer, die über einen Projekt-Link für ein ganzes Projekt oder ausgewählte Assets kommen, hinterlassen Kommentare auf Frames oder Bereichen. Neue Schnittfassungen stapeln sich als Versionen, und das Feedback geht als Marker zurück in den Schnitt.
+
+Deliver kopiert deine Medien nie: Dateien bleibt die Quelle der Wahrheit, und Projekte sammeln Dateien, wo auch immer sie liegen.
 
 Screenshots: Filmmaterial aus Tears of Steel, (CC) Blender Foundation | mango.blender.org.]]></description>
 	<version>0.9.7</version>

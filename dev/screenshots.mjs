@@ -161,10 +161,10 @@ async function seed() {
 	await ocs(await leo.put(`${API}/versions/${asset('TOS_0030_bridge').versions[0].id}/approval?format=json`, { data: { status: 'approved' } }))
 	await comment(leo, asset('TOS_0090_scope').versions[0], { inFrame: 60, body: 'Scope reticle flickers for two frames.' })
 
-	// A Share Link with review for the client, and her own Personal Link
-	const share = await ocs(await sarah.post(`${API}/files/${await fileId(sarah, cut)}/shares?format=json`))
-	await ocs(await sarah.put(`${API}/shares/${share.id}?format=json`, { data: { review: true, canComment: true, watermark: true } }))
-	const reviewer = await ocs(await sarah.post(`${API}/shares/${share.id}/reviewers?format=json`, { data: { name: 'Ines Visser' } }))
+	// A Project Link for the client, and her own Personal Link
+	const link = await ocs(await sarah.post(`${API}/projects/${project.id}/links?format=json`))
+	await ocs(await sarah.put(`${API}/links/${link.id}?format=json`, { data: { watermark: true } }))
+	const reviewer = await ocs(await sarah.post(`${API}/links/${link.id}/reviewers?format=json`, { data: { name: 'Ines Visser' } }))
 	const client = await request.newContext({ baseURL: URL })
 	const personal = new globalThis.URL(reviewer.link ?? reviewer.personalLink)
 	await client.get(personal.pathname + personal.search)
@@ -191,7 +191,7 @@ function worker() {
  * @param {{id: number}} seeded.flat - the close-up's v1
  * @param {{id: number}} seeded.graded - the close-up's v2
  * @param {string} seeded.personal - the Reviewer's Personal Link, path and query
- * @param {string} seeded.token - the Share Link's token
+ * @param {string} seeded.token - the Project Link's token
  */
 async function shoot({ project, flat, graded, personal, token }) {
 	mkdirSync(OUT, { recursive: true })

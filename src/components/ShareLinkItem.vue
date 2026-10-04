@@ -9,16 +9,16 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcPasswordField from '@nextcloud/vue/components/NcPasswordField'
+import NcTextArea from '@nextcloud/vue/components/NcTextArea'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
-import { deleteShareLink, inviteReviewer, listReviewers, removeReviewer, setShareFlags } from '../api.js'
+import { linkApi, removeReviewer } from '../api.js'
 import { copyLink } from '../clipboard.js'
 import { useBusy } from '../composables/busy.js'
 import { confirmLinkDeletion, confirmReviewerRemoval } from '../confirm.js'
 
 const props = defineProps({
-	/** One Share Link with Deliver's flags, as the server lists it */
+	/** One Project Link of the Member's, as the server lists it */
 	share: { type: Object, required: true },
-	canWrite: { type: Boolean, default: false },
 	/** In the Project's link dialog: each Reviewer's settings are offered, and the dialog's own button invites */
 	inDialog: { type: Boolean, default: false },
 })
@@ -26,7 +26,7 @@ const props = defineProps({
 const emit = defineEmits(['update', 'person', 'deleted'])
 
 const { busy, error, run } = useBusy()
-/** The Project's Reviewers, each with their Personal Link through this share; null while loading */
+/** The Member's Reviewers, each with their Personal Link through this link; null while loading */
 const reviewers = ref(null)
 const inviting = ref(false)
 const name = ref('')
@@ -70,14 +70,14 @@ function toggleExpiry(on) {
  * @param {object} flags - what to change: review, canComment, allowOlder, watermark; password and expireDate, empty to remove
  */
 function setFlags(flags) {
-	return run(async () => emit('update', await setShareFlags(props.share.id, flags)))
+	return run(async () => emit('update', await linkApi(props.share).update(flags)))
 }
 
-/** Deletes the link from Nextcloud, not only its review */
+/** Deletes the link: it stops working for everyone, Personal Links through it too */
 async function remove() {
 	if (await confirmLinkDeletion()) {
 		await run(async () => {
-			await deleteShareLink(props.share.id)
+			await linkApi(props.share).remove()
 			emit('deleted', props.share.id)
 		})
 	}
@@ -95,15 +95,21 @@ async function dropReviewer(reviewer) {
 	}
 }
 
-// Every Reviewer shows with their Personal Link through this share (story 55)
-watch(() => [props.share.id, props.share.review, props.canWrite], ([id, review, canWrite]) => {
+// Every Reviewer shows with their Personal Link through this link (story 55)
+watch(() => [props.share.token, props.share.review], ([, review]) => {
 	reviewers.value = null
-	if (review && canWrite) {
+	if (review) {
 		run(async () => {
-			reviewers.value = await listReviewers(id)
+			reviewers.value = await linkApi(props.share).reviewers()
 		})
 	}
 }, { immediate: true })
+
+/** What Reviewers read above the Assets (story 123) */
+const description = ref(props.share.description ?? '')
+watch(() => props.share.description, (value) => {
+	description.value = value ?? ''
+})
 
 /** Opens the form to invite a Reviewer, for a button outside */
 function startInvite() {
@@ -115,7 +121,7 @@ defineExpose({ startInvite, inviting })
 /** Invites a Reviewer by name and gets their Personal Link (story 53) */
 function invite() {
 	return run(async () => {
-		const reviewer = await inviteReviewer(props.share.id, name.value, email.value || null)
+		const reviewer = await linkApi(props.share).invite(name.value, email.value || null)
 		reviewers.value = [...(reviewers.value ?? []), reviewer]
 		name.value = ''
 		email.value = ''
@@ -138,7 +144,6 @@ function invite() {
 				</template>
 			</NcButton>
 			<NcButton
-				v-if="canWrite"
 				variant="tertiary"
 				:disabled="busy"
 				:aria-label="t('deliver', 'Delete link')"
@@ -149,16 +154,19 @@ function invite() {
 				</template>
 			</NcButton>
 		</div>
-		<NcButton
-			v-if="!share.review && canWrite"
-			variant="secondary"
+		<!-- A link pauses and goes live again with its Reviewers (story 122) -->
+		<NcCheckboxRadioSwitch
+			type="switch"
+			:modelValue="share.review"
 			:disabled="busy"
-			@click="setFlags({ review: true })">
-			{{ t('deliver', 'Review on this link') }}
-		</NcButton>
+			@update:modelValue="setFlags({ review: $event })">
+			{{ t('deliver', 'Link is live') }}
+		</NcCheckboxRadioSwitch>
+		<p v-if="!share.review" class="deliver-link__hint">
+			{{ t('deliver', 'Paused: the link shows nothing until you switch it on again.') }}
+		</p>
 
-		<!-- Nextcloud's own link settings, so nobody has to go to Files for them -->
-		<div v-if="canWrite" class="deliver-link__flags">
+		<div class="deliver-link__flags">
 			<NcCheckboxRadioSwitch
 				:modelValue="share.hasPassword || settingPassword"
 				:disabled="busy"
@@ -200,25 +208,44 @@ function invite() {
 			<div class="deliver-link__flags">
 				<NcCheckboxRadioSwitch
 					:modelValue="share.canComment"
-					:disabled="busy || !canWrite"
+					:disabled="busy"
 					@update:modelValue="setFlags({ canComment: $event })">
 					{{ t('deliver', 'Reviewers may comment') }}
 				</NcCheckboxRadioSwitch>
 				<NcCheckboxRadioSwitch
 					:modelValue="share.watermark"
-					:disabled="busy || !canWrite"
+					:disabled="busy"
 					@update:modelValue="setFlags({ watermark: $event })">
 					{{ t('deliver', 'Watermark with the Reviewer\'s name') }}
 				</NcCheckboxRadioSwitch>
 				<NcCheckboxRadioSwitch
 					:modelValue="share.allowOlder"
-					:disabled="busy || !canWrite || !share.canComment"
+					:disabled="busy || !share.canComment || share.latestOnly"
 					@update:modelValue="setFlags({ allowOlder: $event })">
 					{{ t('deliver', 'Also on older Versions') }}
 				</NcCheckboxRadioSwitch>
+				<NcCheckboxRadioSwitch
+					:modelValue="share.latestOnly"
+					:disabled="busy"
+					@update:modelValue="setFlags({ latestOnly: $event })">
+					{{ t('deliver', 'Only the newest Version') }}
+				</NcCheckboxRadioSwitch>
+				<NcCheckboxRadioSwitch
+					:modelValue="share.canDownload"
+					:disabled="busy"
+					@update:modelValue="setFlags({ canDownload: $event })">
+					{{ t('deliver', 'Reviewers may download the original') }}
+				</NcCheckboxRadioSwitch>
+				<NcTextArea
+					v-model="description"
+					class="deliver-link__description"
+					:label="t('deliver', 'Description for Reviewers')"
+					:disabled="busy"
+					resize="vertical"
+					@blur="description !== (share.description ?? '') && setFlags({ description })" />
 			</div>
 
-			<div v-if="canWrite" class="deliver-link__reviewers">
+			<div class="deliver-link__reviewers">
 				<p v-if="reviewers?.length === 0" class="deliver-link__hint">
 					{{ t('deliver', 'No Reviewers yet.') }}
 				</p>
@@ -318,6 +345,10 @@ function invite() {
 
 .deliver-link__field > :last-child {
 	flex: none;
+}
+
+.deliver-link__description {
+	margin-top: var(--default-grid-baseline);
 }
 
 .deliver-link__date {

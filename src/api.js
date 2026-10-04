@@ -6,9 +6,9 @@ import { generateOcsUrl, generateUrl } from '@nextcloud/router'
 let publicBase = null
 
 /**
- * Sends every following call through a Share Link instead of the OCS API.
+ * Sends every following call through a Project Link instead of the OCS API.
  *
- * @param {string} token - the share token
+ * @param {string} token - the link's token
  */
 export function usePublicApi(token) {
 	publicBase = generateUrl('/apps/deliver/s/{token}/api', { token })
@@ -27,7 +27,6 @@ export const updateProject = (id, settings) => axios.put(url(`/projects/${id}`),
 export const removeProject = (id) => axios.delete(url(`/projects/${id}`))
 // Who can be @mentioned on a Version: whoever can open its file
 export const listMembers = (versionId) => axios.get(url(`/versions/${versionId}/members`)).then(data)
-export const listProjectShares = (id) => axios.get(url(`/projects/${id}/shares`)).then(data)
 export const updateReviewerAsMember = (id, fields) => axios.put(url(`/reviewers/${id}`), fields).then(data)
 export const renewReviewerKey = (id) => axios.post(url(`/reviewers/${id}/key`)).then(data)
 export const removeReviewer = (id) => axios.delete(url(`/reviewers/${id}`)).then(data)
@@ -70,7 +69,7 @@ export function attachFile(id, file) {
 
 /**
  * @param {number} id - an attachment
- * @return {string} where the browser gets it, through the Share Link on the public page
+ * @return {string} where the browser gets it, through the Project Link on the public page
  */
 export function attachmentUrl(id) {
 	return publicBase === null
@@ -83,17 +82,33 @@ export const decideVersion = (versionId, status) => axios.put(url(`/versions/${v
 export const giveWaveform = (versionId, peaks, durationFrames) => axios.post(url(`/versions/${versionId}/waveform`), { peaks, durationFrames }).then(data)
 export const markSeen = (versionId, at) => axios.post(url(`/versions/${versionId}/seen`), { at }).then(data)
 
-export const listShares = (fileId) => axios.get(url(`/files/${fileId}/shares`)).then(data)
-export const createShareLink = (fileId) => axios.post(url(`/files/${fileId}/shares`)).then(data)
-export const setShareFlags = (shareId, flags) => axios.put(url(`/shares/${shareId}`), flags).then(data)
-export const deleteShareLink = (shareId) => axios.delete(url(`/shares/${shareId}`)).then(data)
-export const listReviewers = (shareId) => axios.get(url(`/shares/${shareId}/reviewers`)).then(data)
-export const inviteReviewer = (shareId, name, email) => axios.post(url(`/shares/${shareId}/reviewers`), { name, email }).then(data)
+// Project Links (ADR 0010, 0011): a whole Project or picked Assets; on No Project (id 0) picked Assets of it
+export const listProjectLinks = (projectId) => axios.get(url(`/projects/${projectId}/links`)).then(data)
+export const createProjectLink = (projectId, assetIds = null) => axios.post(url(`/projects/${projectId}/links`), { assetIds }).then(data)
+
+/**
+ * What a link's settings, Reviewers and activity go through
+ *
+ * @param {{id: number}} link - a Project Link
+ * @return {{update: (fields: object) => Promise<object>, remove: () => Promise<void>, reviewers: () => Promise<object[]>, invite: (name: string, email: ?string) => Promise<object>, activity: () => Promise<object[]>}}
+ */
+export function linkApi(link) {
+	const base = `/links/${link.id}`
+	return {
+		update: (fields) => axios.put(url(base), fields).then(data),
+		remove: () => axios.delete(url(base)).then(data),
+		reviewers: () => axios.get(url(`${base}/reviewers`)).then(data),
+		invite: (name, email) => axios.post(url(`${base}/reviewers`), { name, email }).then(data),
+		activity: () => axios.get(url(`${base}/activity`)).then(data),
+	}
+}
 
 export const getPipelineSettings = () => axios.get(url('/admin/settings')).then(data)
 export const savePipelineSettings = (settings) => axios.put(url('/admin/settings'), settings).then(data)
+export const getSupportReport = () => axios.get(url('/admin/report')).then(data)
+export const retryFailedJobs = () => axios.post(url('/admin/jobs/retry')).then(data)
 
-// Share Link only
+// Public review page only
 export const getPublicContext = (params) => axios.get(url('/context'), { params }).then(data)
 /**
  * @param {{replies: boolean, comments: boolean, versions: boolean}} mail - what the Reviewer wants mailed
@@ -113,7 +128,7 @@ export const claimReviewer = (name, email, mail) => axios.post(url('/reviewer'),
  * @return {Promise<object>} the Reviewer as stored
  */
 export const updateReviewer = (email, mail) => axios.put(url('/reviewer'), { email, ...mailFields(mail) }).then(data)
-/** Every file of the share that is an Asset: [{ fileId, versionId, assetId }], Versions of one Asset share its newest versionId */
+/** Every file behind the link that is an Asset: [{ fileId, versionId, assetId }], Versions of one Asset share its newest versionId */
 export const listPublicAssets = () => axios.get(url('/assets')).then(data)
 
 /**

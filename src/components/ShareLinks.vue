@@ -3,71 +3,74 @@ import { t } from '@nextcloud/l10n'
 import { ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import ShareLinkItem from './ShareLinkItem.vue'
-import { createShareLink, listShares } from '../api.js'
+import { createProjectLink, listProjectLinks } from '../api.js'
 import { useBusy } from '../composables/busy.js'
 
-// The Share Links of one file or folder, in the Files sidebar and in the Review view
+// The Project Links that show a Project or one of its Assets, in the Files sidebar and in the Review view
 const props = defineProps({
-	fileId: { type: Number, required: true },
-	canWrite: { type: Boolean, default: false },
+	/** The Project, 0 for No Project */
+	projectId: { type: Number, required: true },
+	/** One Asset of it; null for the whole Project */
+	assetId: { type: Number, default: null },
 })
 
-const emit = defineEmits(['changed'])
-
-const shares = ref([])
+const links = ref([])
 const { busy, error, run } = useBusy()
 
-watch(() => props.fileId, (fileId) => {
-	shares.value = []
+/**
+ * @param {object} link - a Project Link
+ * @return {boolean} whether it shows the Asset, or is about the whole Project
+ */
+const shows = (link) => props.assetId === null || link.assetIds === null || link.assetIds.includes(props.assetId)
+
+watch(() => [props.projectId, props.assetId], ([projectId, assetId]) => {
+	links.value = []
 	run(async () => {
-		const found = await listShares(fileId)
+		const found = (await listProjectLinks(projectId)).links
 		// The sidebar may have moved on to another node meanwhile
-		if (props.fileId === fileId) {
-			shares.value = found
+		if (props.projectId === projectId && props.assetId === assetId) {
+			links.value = found.filter(shows)
 		}
 	})
 }, { immediate: true })
 
-/** A new Share Link with review already on (story 45) */
+/** A new link, live, on the Asset alone or on the whole Project (stories 45, 120) */
 function addLink() {
 	return run(async () => {
-		shares.value = [...shares.value, await createShareLink(props.fileId)]
-		emit('changed')
+		links.value = [...links.value, await createProjectLink(props.projectId, props.assetId === null ? null : [props.assetId])]
 	})
 }
 
 /**
- * @param {object} updated - the Share Link as the server returned it
+ * @param {object} updated - the link as the server returned it
  */
 function replace(updated) {
-	shares.value = shares.value.map((each) => each.id === updated.id ? updated : each)
+	links.value = links.value.map((each) => each.id === updated.id ? updated : each)
 }
 
 /**
- * @param {number} id - the Share Link deleted
+ * @param {number} id - the link deleted
  */
 function drop(id) {
-	shares.value = shares.value.filter((each) => each.id !== id)
-	emit('changed')
+	links.value = links.value.filter((each) => each.id !== id)
 }
 </script>
 
 <template>
 	<div class="deliver-links">
-		<p v-if="shares.length === 0 && !busy" class="deliver-links__hint">
+		<p v-if="links.length === 0 && !busy" class="deliver-links__hint">
 			{{ t('deliver', 'No link yet.') }}
 		</p>
 		<ShareLinkItem
-			v-for="share in shares"
-			:key="share.id"
-			:share="share"
-			:canWrite="canWrite"
+			v-for="link in links"
+			:key="link.id"
+			:share="link"
 			@update="replace"
 			@deleted="drop" />
 		<p v-if="error" class="deliver-links__error">
 			{{ error }}
 		</p>
-		<NcButton :disabled="busy || !canWrite" variant="secondary" @click="addLink">
+		<NcButton :disabled="busy" variant="secondary" @click="addLink">
 			{{ t('deliver', 'Create Review Link') }}
 		</NcButton>
 	</div>

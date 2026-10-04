@@ -9,8 +9,10 @@ use OCA\Deliver\Db\Asset;
 use OCA\Deliver\Db\AssetMapper;
 use OCA\Deliver\Db\AttachmentMapper;
 use OCA\Deliver\Db\CommentMapper;
+use OCA\Deliver\Db\LinkActivityMapper;
 use OCA\Deliver\Db\MuteMapper;
 use OCA\Deliver\Db\Project;
+use OCA\Deliver\Db\ProjectLinkMapper;
 use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\ReactionMapper;
 use OCA\Deliver\Db\SeenMapper;
@@ -47,6 +49,8 @@ class StackService {
 		private ITimeFactory $time,
 		private IDBConnection $db,
 		private AttachmentStore $attachmentFiles,
+		private ProjectLinkMapper $projectLinks,
+		private LinkActivityMapper $activity,
 	) {
 	}
 
@@ -311,6 +315,11 @@ class StackService {
 		$this->assets->release($project->getId(), $uid);
 		$this->versions->release($project->getId());
 		$this->mutes->deleteByProject($project->getId());
+		// Its Project Links go with it (ADR 0010)
+		foreach ($this->projectLinks->findAllOf($project->getId()) as $link) {
+			$this->activity->deleteByToken($link->getToken());
+			$this->projectLinks->delete($link);
+		}
 		$this->projects->delete($project);
 	}
 

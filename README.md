@@ -2,6 +2,8 @@
 
 **Frame-accurate video and audio review, right where your files already are.**
 
+> **Beta.** The 0.9 releases are the beta: use Deliver on real projects, but keep your own backups and expect rough edges. 1.0 follows once the beta has settled.
+
 Deliver turns Nextcloud into a review tool for cuts, mixes and stills, in the spirit of Frame.io, but on your own server. Your team and your clients comment on exact Frames, draw on the picture, compare Versions and sign them off. The feedback goes back into the editing application as markers. Nothing is uploaded anywhere else and nothing is copied: Nextcloud Files stays the source of truth.
 
 ![The Review view: a Comment on a Range with a Drawing, Replies and Reactions](docs/screenshots/review.png)
@@ -12,12 +14,12 @@ Deliver turns Nextcloud into a review tool for cuts, mixes and stills, in the sp
 - **Comments on the Frame.** Anchor a Comment to a Frame or a Range, draw on the picture with pen, arrow or box, reply, react, mention a colleague, attach a reference, and resolve it once it is done.
 - **Versions that stack.** A new cut named `…_v2` next to `…_v1` lands on top of it by itself. Compare two Versions side by side or under a wipe, playing in sync.
 - **Sign-off.** Approve a Version or request changes, set Due Dates with reminders, and see at a glance what is unseen, approved or due.
-- **Clients without accounts.** Review runs on ordinary Nextcloud Share Links. Every Reviewer gets a Personal Link, rights of their own and, if you like, a Watermark with their name over the picture.
+- **Clients without accounts.** Review runs on Project Links: one link for a whole Project or the Assets you pick, with password, expiry, pause and a landing page. Every Reviewer gets a Personal Link, rights of their own and, if you like, a Watermark with their name over the picture.
 - **Back into the edit.** Export the Comments as markers for DaVinci Resolve (EDL), Premiere Pro (FCP7 XML), Final Cut Pro (FCPXML) or as CSV; for audio as WAV markers, MIDI, REAPER regions or into an Ableton Live Set.
 - **Heavy media, light browser.** With ffmpeg on the server, Deliver makes Proxies for formats a browser will not play, Thumbnail Strips for the timeline and Waveforms, with hardware encoding if you have it. Without ffmpeg, browser-native files play as they are.
 - **Everywhere.** Live updates without reloading, a Review view made for phones, English and German.
 
-| Compare two Versions under a wipe | A client on a Share Link, with Watermark |
+| Compare two Versions under a wipe | A client on a Project Link, with Watermark |
 | --- | --- |
 | ![Compare view: the flat v1 against the graded v2](docs/screenshots/compare.png) | ![A Reviewer's page with a Watermark and the Approval "Changes requested"](docs/screenshots/reviewer.png) |
 | **A Project: filters, Approvals, Due Dates** | **On a phone** |

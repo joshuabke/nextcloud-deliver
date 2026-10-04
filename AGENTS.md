@@ -5,7 +5,7 @@ Deliver is a Nextcloud app for frame-accurate video and audio review (a Frame.io
 ## Read first, in this order
 
 1. `CONTEXT.md` — the glossary. Use its terms verbatim in code, UI strings, commits and issues.
-2. `docs/adr/` — the decisions with lasting consequences (Files as source of truth, derived-media pipeline, review on Nextcloud Share Links; 0001 is superseded by 0004, 0006 by 0008). Code that contradicts an accepted one is a bug.
+2. `docs/adr/` — the decisions with lasting consequences (Files as source of truth, derived-media pipeline, review on Project Links only; 0001 is superseded by 0004, 0004 by 0011, 0006 by 0008). Code that contradicts an accepted one is a bug.
 3. `docs/spec-v2.md` — the full spec, from the rewrite through the milestones after it. The file is the only copy.
 
 ## Rewrite mechanics (settled, do not re-open)
@@ -22,8 +22,7 @@ Deliver is a Nextcloud app for frame-accurate video and audio review (a Frame.io
 - Nothing is released yet, so the code carries no backwards compatibility of any kind: no second input shape, no fallback for older data, no migration chain. The schema is one migration, changed in place until the first release. To apply a change on the dev instance, alter its tables by hand to match (or reset it: `make down`, delete `docker/`, `make up`); a fresh instance, as in CI, runs the migration as it stands.
 - Routes are cached per PHP process: after editing `appinfo/routes.php`, `docker compose restart nextcloud`, otherwise new verbs answer 405 and new paths 404.
 - File actions in `@nextcloud/files` 4 take **one context object** (`{ nodes, view, folder }`) in both `enabled` and `exec`; a `(nodes)` signature silently never shows the action. There is no `FileAction` class any more, `registerFileAction()` takes a plain object.
-- Scripts for the public share page go through `Util::addInitScript`, not `addScript`: the file list reads the action registry while it renders.
-- `make up` switches off the bruteforce protection, because the Share Link tests knock on invalid tokens on purpose; an instance that was throttled before keeps its records (`occ security:bruteforce:reset <ip>` while the protection is still on, or clear `oc_bruteforce_attempts`).
+- `make up` switches off the bruteforce protection, because the link tests knock on invalid tokens on purpose; an instance that was throttled before keeps its records (`occ security:bruteforce:reset <ip>` while the protection is still on, or clear `oc_bruteforce_attempts`).
 - The trash fires `MoveToTrashEvent` **and** `NodeDeletedEvent` for the same delete, and permanent deletion from the trash fires only a legacy `\OC_Hook`. So: the trash event marks the file id, the delete event skips what it marked, and a Missing Version whose file id no longer resolves is purged on the next read of its Project or by the hourly `ScanProjects` job.
 - Nextcloud `Entity` setters skip values equal to the property default, so a non-null default never reaches the INSERT; keep entity defaults `null` for columns the code sets explicitly.
 - The Files sidebar tab is a web component registered through `@nextcloud/files` (`src/sidebar.js`); the pre-33 `OCA.Files.Sidebar.Tab` API no longer exists.

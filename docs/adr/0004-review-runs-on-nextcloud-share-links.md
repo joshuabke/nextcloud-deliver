@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by [0011](0011-review-runs-on-project-links-only.md)
 ---
 
 # Review runs on Nextcloud Share Links, not on a link type of its own

@@ -9,7 +9,6 @@ use OCA\Deliver\Db\ReviewerMapper;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Files\NotFoundException;
 use OCP\Security\ISecureRandom;
-use OCP\Share\IShare;
 
 /**
  * Reviewers of a Project. A Reviewer's secret key is their identity: the
@@ -92,9 +91,9 @@ class ReviewerService {
 		$this->reviewers->deleteLinks([$reviewer->getId()]);
 	}
 
-	/** Remembers the Share Link the Reviewer was invited through or came in by */
-	public function cameBy(Reviewer $reviewer, int $shareId): void {
-		$this->reviewers->recordLink($reviewer->getId(), $shareId, $this->time->getTime());
+	/** Remembers the Project Link the Reviewer was invited through or came in by */
+	public function cameBy(Reviewer $reviewer, string $token): void {
+		$this->reviewers->recordLink($reviewer->getId(), $token, $this->time->getTime());
 	}
 
 	/** @throws InvalidRequestException the name is empty */
@@ -134,12 +133,12 @@ class ReviewerService {
 	}
 
 	/** The Reviewer with this key, if they belong to the Member who made this link */
-	public function byKey(?string $key, IShare $share): ?Reviewer {
+	public function byKey(?string $key, ReviewLink $link): ?Reviewer {
 		if ($key === null || $key === '') {
 			return null;
 		}
 		$reviewer = $this->reviewers->findByKey($key);
-		return $reviewer?->getOwnerUid() === $share->getSharedBy() ? $reviewer : null;
+		return $reviewer?->getOwnerUid() === $link->ownerUid() ? $reviewer : null;
 	}
 
 	public function serialize(Reviewer $reviewer): array {

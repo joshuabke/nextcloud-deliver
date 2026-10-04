@@ -118,7 +118,7 @@ function pickMention(member) {
 	})
 }
 
-/** On a Share Link that takes Comments, a Reviewer gives a name first (story 54) */
+/** On a Project Link that takes Comments, a Reviewer gives a name first (story 54) */
 const needsName = computed(() => store.me?.type === 'unnamed' && store.canComment !== false)
 const readOnly = computed(() => store.canComment === false)
 

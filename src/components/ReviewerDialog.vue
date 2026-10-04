@@ -15,7 +15,7 @@ import { confirmRemoval } from '../confirm.js'
 const props = defineProps({
 	/** A Reviewer of the Project, with their Personal Link through each review link */
 	reviewer: { type: Object, required: true },
-	/** The Project's Share Links with the title the navigation gives them, to name each Personal Link */
+	/** The Project's Project Links with the title the navigation gives them, to name each Personal Link */
 	links: { type: Array, required: true },
 	canWrite: { type: Boolean, default: false },
 })
@@ -120,8 +120,8 @@ async function renew() {
 				{{ t('deliver', 'Each one makes whoever opens it {name}. Give them to that person only.', { name: reviewer.name }) }}
 			</p>
 			<ul>
-				<li v-for="each in reviewer.links" :key="each.shareId" class="deliver-reviewer__link">
-					<span>{{ links.find((share) => share.id === each.shareId)?.title }}</span>
+				<li v-for="each in reviewer.links" :key="each.token" class="deliver-reviewer__link">
+					<span>{{ links.find((share) => share.token === each.token)?.title }}</span>
 					<NcButton variant="tertiary" @click="copyLink(each.url, t('deliver', 'Personal Link copied'))">
 						{{ t('deliver', 'Copy') }}
 					</NcButton>

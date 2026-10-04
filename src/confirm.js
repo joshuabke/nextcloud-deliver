@@ -35,7 +35,7 @@ export function confirmProjectRemoval() {
 }
 
 /**
- * Asks before a Share Link is deleted from Nextcloud.
+ * Asks before a Project Link is deleted.
  *
  * @return {Promise<boolean>} whether the person confirmed
  */

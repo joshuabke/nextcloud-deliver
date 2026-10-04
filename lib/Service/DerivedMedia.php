@@ -17,6 +17,7 @@ use OCP\Files\NotFoundException;
 use OCP\Files\SimpleFS\ISimpleFile;
 use OCP\Files\SimpleFS\ISimpleFolder;
 use OCP\IAppConfig;
+use Psr\Log\LoggerInterface;
 
 /**
  * Proxies, Thumbnail Strips and Waveforms (ADR 0003). They live in app data,
@@ -71,7 +72,22 @@ class DerivedMedia {
 		private IAppDataFactory $appDataFactory,
 		private IAppConfig $config,
 		private ITimeFactory $time,
+		private LoggerInterface $logger,
 	) {
+	}
+
+	/**
+	 * Queues every failed job again, for instance once ffmpeg is installed or fixed
+	 *
+	 * @return int how many
+	 */
+	public function retryFailed(): int {
+		$failed = $this->jobs->findFailed();
+		foreach ($failed as $job) {
+			$this->jobs->delete($job);
+			$this->enqueue($job->getVersionId(), (string)$job->getKind());
+		}
+		return count($failed);
 	}
 
 	/** Queues the probe, which then queues whatever else the Version needs */
@@ -128,6 +144,8 @@ class DerivedMedia {
 			$this->jobs->delete($job);
 		} catch (\Throwable $e) {
 			$error = $this->ffmpeg->tail($e->getMessage());
+			// Into Nextcloud's log too, where an admin without a shell looks first
+			$this->logger->warning('Deliver could not make the {kind} of Version {version}', ['kind' => $job->getKind(), 'version' => $version->getId(), 'exception' => $e]);
 			$this->mark($version->getId(), $job->getKind(), self::STATE_FAILED, $error);
 			$job->setState(Job::STATE_FAILED);
 			$job->setStderrTail($error);

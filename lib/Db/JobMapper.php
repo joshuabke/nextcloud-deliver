@@ -83,6 +83,16 @@ class JobMapper extends Mapper {
 			->executeStatement();
 	}
 
+	/** @return Job[] failed jobs, the latest first; all of them without a limit */
+	public function findFailed(?int $limit = null): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->eq('state', $qb->createNamedParameter(Job::STATE_FAILED)))
+			->orderBy('finished_at', 'DESC')
+			->setMaxResults($limit);
+		return $this->findEntities($qb);
+	}
+
 	public function findLastFailed(): ?Job {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')->from($this->getTableName())

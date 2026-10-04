@@ -7,7 +7,7 @@ namespace OCA\Deliver\Db;
 use OCP\AppFramework\Db\Entity;
 
 /**
- * Someone who reaches a Version through a Share Link instead of Files
+ * Someone who reaches a Version through a Project Link instead of Files
  * permissions. The secret key is their identity: a Personal Link carries it,
  * so the same person is the same author on any device, forever.
  *
@@ -35,7 +35,7 @@ use OCP\AppFramework\Db\Entity;
  * @method void setCreatedAt(int $createdAt)
  */
 class Reviewer extends Entity {
-	/** The Member they belong to: who invited them, or whose Share Link they named themselves on */
+	/** The Member they belong to: who invited them, or whose Project Link they named themselves on */
 	protected string $ownerUid = '';
 	protected ?string $name = null;
 	protected ?string $email = null;
@@ -45,7 +45,7 @@ class Reviewer extends Entity {
 	protected ?bool $mailReplies = null;
 	protected ?bool $mailComments = null;
 	protected ?bool $mailVersions = null;
-	/** Their own rights; null leaves it to the Share Link they come by */
+	/** Their own rights; null leaves it to the Project Link they come by */
 	protected ?bool $canComment = null;
 	protected ?bool $allowOlder = null;
 	protected ?bool $watermark = null;
@@ -66,7 +66,7 @@ class Reviewer extends Entity {
 	}
 
 	/**
-	 * @param array<string, mixed> $flags a Share Link's review flags
+	 * @param array<string, mixed> $flags a Project Link's review flags
 	 * @return array<string, mixed> the flags as they hold for this Reviewer
 	 */
 	public function over(array $flags): array {

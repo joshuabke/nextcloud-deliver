@@ -44,7 +44,7 @@ const props = defineProps({
 	/** How time is shown: { fps, mode, startFrame, dropFrame } */
 	clock: { type: Object, required: true },
 	canComment: { type: Boolean, default: false },
-	/** Text shown across the picture on a Share Link that asks for it (story 94) */
+	/** Text shown across the picture on a Project Link that asks for it (story 94) */
 	watermark: { type: String, default: null },
 	/** Whether the pointer draws on the picture (story 89) */
 	drawing: { type: Boolean, default: false },
@@ -76,7 +76,7 @@ const unplayable = ref(false)
 let reverse = null
 
 const fps = computed(() => props.version.fps)
-/** The original, where the browser can play it and the share hands it out */
+/** The original, where the browser can play it and the link hands it out */
 const original = computed(() => props.version.playable === false ? null : props.version.url)
 const proxy = computed(() => props.version.derived?.proxy?.url ?? null)
 /** The original by default; the Proxy is the lighter choice next to it, or the only one (ADR 0003) */
