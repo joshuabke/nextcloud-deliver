@@ -37,10 +37,11 @@ class WrittenAgainTest extends TestCase {
 	}
 
 	protected function tearDown(): void {
+		$this->nc->ocs('PUT', '/admin/settings', ['ffprobePath' => '']);
+		array_map('unlink', glob($this->fixture . '*') ?: []);
 		$this->nc->ocs('DELETE', "/projects/{$this->projectId}");
 		$this->nc->delete($this->root);
 		$this->nc->emptyTrash();
-		@unlink($this->fixture);
 	}
 
 	/** Makes the fixture with ffmpeg and writes it to the path, new or again */
@@ -134,6 +135,28 @@ class WrittenAgainTest extends TestCase {
 		self::assertNull($this->version($cut)['durationFrames']);
 		$this->drainQueue();
 		self::assertSame([['num' => 24000, 'den' => 1001], 'ready'], [$this->version($cut)['fps'], $this->version($cut)['derived']['waveform']['state']]);
+	}
+
+	public function testAProbeOfTheOldContentDoesNotLandOverTheNewOne(): void {
+		$this->write('mix.wav', '-f lavfi -i sine=duration=2 -ar 48000 -write_bext 1 -metadata time_reference=172800000 -f wav');
+		$mix = $this->versionId();
+		exec('ffmpeg -v error -y -f lavfi -i sine=duration=1 -f wav ' . escapeshellarg($this->fixture . '.new'));
+		// ffprobe reads the Broadcast WAV, and the file is written again before its answer arrives
+		$url = (getenv('DELIVER_TEST_URL') ?: 'http://localhost') . "/remote.php/dav/files/{$this->nc->user}/{$this->root}/mix.wav";
+		file_put_contents($this->fixture . '.ffprobe', sprintf(
+			"#!/bin/sh\nout=\$(ffprobe \"\$@\")\nif [ \"\$1\" != -version ] && [ ! -e %1\$s.done ]; then touch %1\$s.done; curl -s -u %2\$s:%3\$s -T %1\$s.new %4\$s; fi\nprintf '%%s' \"\$out\"\n",
+			escapeshellarg($this->fixture),
+			escapeshellarg($this->nc->user),
+			escapeshellarg(getenv('DELIVER_TEST_PASSWORD') ?: 'adminadmin123'),
+			escapeshellarg($url),
+		));
+		chmod($this->fixture . '.ffprobe', 0755);
+		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['ffprobePath' => $this->fixture . '.ffprobe'])['status']);
+
+		$this->drainQueue();
+		self::assertFileExists($this->fixture . '.done', 'the file was written again while the probe ran');
+		$read = $this->version($mix);
+		self::assertSame([0, 1000, null], [$read['startFrame'], $read['durationFrames'], $read['derived']['error']], 'the start of the old Broadcast WAV does not stick to the new file');
 	}
 
 	public function testANewFileIsQueuedOnce(): void {
