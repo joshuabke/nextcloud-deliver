@@ -73,8 +73,9 @@ class StackService {
 	}
 
 	/**
-	 * The Asset in the file's folder and Project with this base name. Null
-	 * when there is none, or more than one: then a Member decides (story 14).
+	 * The Asset in the file's folder and Project with this base name and the
+	 * same kind of media. Null when there is none, or more than one: then a
+	 * Member decides (story 14).
 	 */
 	private function onlyCandidate(?Project $project, File $file, string $base, ?string $enabledBy): ?Asset {
 		$parentId = $file->getParent()->getId();
@@ -85,11 +86,26 @@ class StackService {
 			default => [],
 		};
 		foreach ($assets as $asset) {
-			if ($asset->getParentId() === $parentId && strcasecmp($this->nameOf($asset), $base) === 0) {
+			if ($asset->getParentId() === $parentId && strcasecmp($this->nameOf($asset), $base) === 0 && $this->sameKind($asset, $file)) {
 				$found[] = $asset;
 			}
 		}
 		return count($found) === 1 ? $found[0] : null;
+	}
+
+	/**
+	 * Whether the Asset holds the same kind of media as the file, going by any
+	 * of its Versions whose file is still there, in the trash too. When none
+	 * is, nothing speaks against it.
+	 */
+	private function sameKind(Asset $asset, File $file): bool {
+		foreach ($this->versions->findByAsset($asset->getId()) as $version) {
+			$other = $this->root->getFirstNodeById($version->getFileId());
+			if ($other instanceof File) {
+				return Reviewable::kind($other->getMimetype()) === Reviewable::kind($file->getMimetype());
+			}
+		}
+		return true;
 	}
 
 	/** A Member's name for the Asset, else the base name of its newest Version */

@@ -8,6 +8,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { regenerateVersion, unstackVersion, updateVersion, uploadNextVersion } from '../api.js'
 import { useBusy } from '../composables/busy.js'
+import { stackKind } from '../lib/media.js'
 import { previewUrl } from '../lib/preview.js'
 
 const props = defineProps({
@@ -64,7 +65,7 @@ async function drop(event) {
 	if (!file) {
 		return
 	}
-	await run(() => uploadNextVersion(props.folderUrl, file, props.assetId))
+	await run(() => uploadNextVersion(props.folderUrl, file, props.assetId, stackKind(props.versions)))
 }
 </script>
 

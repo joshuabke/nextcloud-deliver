@@ -32,7 +32,7 @@ Deliver becomes a proper Nextcloud app, rebuilt from scratch, in which media fil
 12. As a Member, I want a file named `cut_v3.mp4` that arrives when exactly one Asset `cut` exists to be stacked automatically as Version 3, so that my sync-client workflow needs no browser visit.
 13. As a Member, I want to be notified when an automatic stack happens and to undo it with one click, so that wrong guesses cost nothing.
 14. As a Member, I want ambiguous filename matches to be offered as a suggestion instead of applied, so that two candidates never get merged silently.
-15. As a Member, I want to stack any two Assets by hand and set each Version's Version Number, so that naming conventions are never mandatory.
+15. As a Member, I want to stack any two Assets of the same kind of media by hand and set each Version's Version Number, so that naming conventions are never mandatory.
 16. As a Member, I want to unstack a Version back into its own Asset, so that mistakes are reversible.
 17. As a Member, I want to drop a file onto an Asset in the Deliver UI and have it uploaded into the same subfolder and stacked as the next Version, so that delivering a new cut is one gesture.
 18. As a Member, I want a Version whose file went to trash to show as Missing with its Comments intact, and to be notified, so that nothing is lost by accident.
@@ -215,7 +215,8 @@ File identity is always the Nextcloud file id, so renames and moves are free and
 ### Discovery and stacking
 
 - A file listener plus a periodic scan job keep Assets in sync. While Auto Intake is on, every new video or audio file in the folder that no Project holds becomes an Asset with Version 1 unless the filename convention matches; otherwise files become Assets only when a Member enables them, and the listener merely follows moves, renames and deletions of the files already enabled. The scan checks every Version's file by id, wherever it lies.
-- Convention parser: base name plus a suffix of the form `_v3`, `-v03`, ` v3`, `V3` (case-insensitive, optional separator, optional zero padding) before the extension. If exactly one Asset with that base name exists in the same folder and the same Project (or No Project), the file is stacked automatically at that Version Number (or next free number on collision), and the Version carries an undo mark until a Member takes note. Otherwise nothing is stacked and the app page offers the candidates for one click; the offer is derived from the Assets on screen, never stored, so it cannot go stale.
+- Convention parser: base name plus a suffix of the form `_v3`, `-v03`, ` v3`, `V3` (case-insensitive, optional separator, optional zero padding) before the extension. If exactly one Asset with that base name and the same kind of media exists in the same folder and the same Project (or No Project), the file is stacked automatically at that Version Number (or next free number on collision), and the Version carries an undo mark until a Member takes note. Otherwise nothing is stacked and the app page offers the candidates for one click; the offer is derived from the Assets on screen, never stored, so it cannot go stale.
+- A Version Stack holds one kind of media: video, audio or stills. The container may change from Version to Version (a cut as .mov, then as .mp4), but a mix never joins a cut of the same name: automatic stacks, the offered candidates and stacking by hand all keep to the kind, and the file picker for a new Version offers only that kind.
 - Stacks are always explicit rows; renaming a file never regroups anything.
 - Drop upload in the app writes the file into the previous Version's folder through the normal Nextcloud upload endpoint and then stacks it explicitly.
 

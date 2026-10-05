@@ -1,6 +1,7 @@
 import axios from '@nextcloud/axios'
 import { t } from '@nextcloud/l10n'
 import { generateOcsUrl, generateUrl } from '@nextcloud/router'
+import { mediaKind } from './lib/media.js'
 
 /** Set on the public review page; Members leave it null and use the OCS API */
 let publicBase = null
@@ -160,9 +161,15 @@ export async function uploadVersion(folderUrl, file) {
  * @param {string} folderUrl - WebDAV URL of the folder, without a trailing slash
  * @param {File} file - the new cut
  * @param {number} assetId - the Asset it belongs to
+ * @param {string|null} kind - the kind of media of its Version Stack, from stackKind; null when unknown
  * @return {Promise<number>} the id of the new Version
  */
-export async function uploadNextVersion(folderUrl, file, assetId) {
+export async function uploadNextVersion(folderUrl, file, assetId, kind) {
+	// Checked before the upload: a file of another kind would land in the folder as an Asset of its own
+	const theirs = mediaKind(file.type)
+	if (kind && theirs && theirs !== kind) {
+		throw new Error(t('deliver', 'A Version Stack holds one kind of media: video, audio or stills.'))
+	}
 	const asset = await enableFile(await uploadVersion(folderUrl, file))
 	if (asset.assetId !== assetId) {
 		await stackVersion(asset.versionId, assetId)

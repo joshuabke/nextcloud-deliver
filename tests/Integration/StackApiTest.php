@@ -52,6 +52,28 @@ class StackApiTest extends TestCase {
 		$this->nc->put("{$this->root}/$name", 'not really a video');
 	}
 
+	public function testAStackHoldsOneKindOfMedia(): void {
+		$this->put('cut.mp4');
+		$this->put('cut_v2.mp3');
+		$this->put('cut_v3.mov');
+		$byCount = [];
+		foreach ($this->assets() as $asset) {
+			$byCount[count($asset['versions'])] = $asset;
+		}
+		self::assertSame(['cut_v3.mov', 'cut.mp4'], array_column($byCount[2]['versions'] ?? [], 'name'), 'the next cut stacks on the first, whatever its container');
+		self::assertSame(['cut_v2.mp3'], array_column($byCount[1]['versions'] ?? [], 'name'), 'the mp3 of the same name stays an Asset of its own');
+
+		$refused = $this->nc->ocs('POST', "/versions/{$byCount[1]['versions'][0]['id']}/stack", ['assetId' => $byCount[2]['id']]);
+		self::assertSame(400, $refused['status'], 'audio never joins a video\'s Version Stack');
+	}
+
+	public function testTheNextCutStacksOnACutWhoseFileIsInTheTrash(): void {
+		$this->put('cut.mp4');
+		$this->nc->delete("{$this->root}/cut.mp4");
+		$this->put('cut_v2.mp4');
+		self::assertSame(['cut_v2.mp4', 'cut.mp4'], array_column($this->stack('cut'), 'name'), 'a Missing Version keeps its kind of media');
+	}
+
 	public function testTheFilenameConventionStacksAndTheMemberCanUndoIt(): void {
 		$this->put('cut_v1.mp4');
 		$this->put('cut_v2.mp4');
