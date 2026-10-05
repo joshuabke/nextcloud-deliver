@@ -109,20 +109,21 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertSame(409, $this->nc->ocs('POST', "/versions/{$version['id']}/waveform", ['peaks' => [0.5], 'durationFrames' => 4000])['status'], 'a browser does not overwrite it');
 	}
 
-	/** @return array<string, array{string, string}> */
+	/** @return array<string, array{string, string, ?int}> */
 	public static function audio(): array {
 		return [
-			'MP3' => ['-c:a libmp3lame -f mp3', 'take.mp3'],
-			'MP3 with an ID3 tag' => ['-c:a libmp3lame -metadata title=Take -id3v2_version 3 -f mp3', 'tagged.mp3'],
-			'FLAC' => ['-c:a flac -f flac', 'take.flac'],
-			'Ogg Vorbis' => ['-c:a libvorbis -f ogg', 'take.ogg'],
-			'Ogg Opus' => ['-c:a libopus -f ogg', 'take.opus'],
-			'AAC' => ['-c:a aac -f adts', 'take.aac'],
+			'MP3' => ['-c:a libmp3lame -f mp3', 'take.mp3', null],
+			'MP3 with an ID3 tag' => ['-c:a libmp3lame -metadata title=Take -id3v2_version 3 -f mp3', 'tagged.mp3', null],
+			// STREAMINFO counts the samples
+			'FLAC' => ['-c:a flac -f flac', 'take.flac', 2000],
+			'Ogg Vorbis' => ['-c:a libvorbis -f ogg', 'take.ogg', null],
+			'Ogg Opus' => ['-c:a libopus -f ogg', 'take.opus', null],
+			'AAC' => ['-c:a aac -f adts', 'take.aac', null],
 		];
 	}
 
 	#[DataProvider('audio')]
-	public function testAudioIsKnownAsAudio(string $args, string $name): void {
+	public function testAudioIsKnownAsAudio(string $args, string $name, ?int $duration): void {
 		$this->make("-f lavfi -i sine=duration=2 -ar 48000 $args");
 		$version = $this->upload($name);
 
@@ -134,7 +135,7 @@ class WithoutFfmpegTest extends TestCase {
 
 		// The browser decodes it and hands in what the server cannot work out
 		self::assertSame('none', $version['derived']['waveform']['state']);
-		self::assertNull($version['durationFrames']);
+		self::assertSame($duration, $version['durationFrames']);
 		$given = $this->nc->ocs('POST', "/versions/{$version['id']}/waveform", ['peaks' => [0.1, 0.5, 0.25], 'durationFrames' => 2000]);
 		self::assertSame(200, $given['status'], json_encode($given['data']));
 		$version = $this->nc->ocs('GET', "/versions/{$version['id']}")['data']['versions'][0];
