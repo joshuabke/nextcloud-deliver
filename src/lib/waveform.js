@@ -31,15 +31,31 @@ export function peaksOf(channels, buckets) {
  * Decodes the file at 8 kHz, which is all a Waveform needs and keeps an hour
  * of audio in a few hundred megabytes.
  *
- * @param {string} url - the file
+ * @param {string|Blob} source - the file's URL, or the file itself, as the browser that uploaded it still holds it
  * @return {Promise<{peaks: number[], seconds: number}>} the Waveform and the duration
  */
-export async function decodeWaveform(url) {
-	const response = await fetch(url)
-	if (!response.ok) {
-		throw new Error(`HTTP ${response.status}`)
+export async function decodeWaveform(source) {
+	const body = typeof source === 'string' ? await fetch(source) : source
+	if (body.ok === false) {
+		throw new Error(`HTTP ${body.status}`)
 	}
-	const audio = await new OfflineAudioContext(1, 1, 8000).decodeAudioData(await response.arrayBuffer())
+	const audio = await new OfflineAudioContext(1, 1, 8000).decodeAudioData(await body.arrayBuffer())
 	const channels = Array.from({ length: audio.numberOfChannels }, (_, index) => audio.getChannelData(index))
 	return { peaks: peaksOf(channels, BUCKETS), seconds: audio.duration }
+}
+
+/** UploadStatus.FINISHED of @nextcloud/upload 1.x */
+const FINISHED = 3
+
+/**
+ * An upload of the Files app (its @nextcloud/upload 1.x uploader) whose
+ * Waveform the uploading browser may hand in.
+ *
+ * @param {{status: number, file?: File, response?: {headers?: object}}} upload - as the uploader's notifier gets it
+ * @return {number|null} the file id of an uploaded audio file; null for anything else
+ */
+export function uploadedAudio(upload) {
+	// OC-FileId carries the instance id after the number, as in 00000123ocabc123
+	const fileId = parseInt(upload.response?.headers?.['oc-fileid'], 10)
+	return upload.status === FINISHED && upload.file?.type?.startsWith('audio/') && fileId > 0 ? fileId : null
 }

@@ -34,7 +34,7 @@ import DueDateDialog from '../components/DueDateDialog.vue'
 import FilterBar from '../components/FilterBar.vue'
 import ProjectSettingsDialog from '../components/ProjectSettingsDialog.vue'
 import VersionStack from '../components/VersionStack.vue'
-import { assignAsset, disableAsset, enableFile, errorMessage, stackVersion, updateAsset, uploadNextVersion, uploadVersion } from '../api.js'
+import { assignAsset, disableAsset, enableFile, errorMessage, handInWaveform, stackVersion, updateAsset, uploadNextVersion, uploadVersion } from '../api.js'
 import { useQuery } from '../composables/query.js'
 import { confirmRemoval } from '../confirm.js'
 import { FILTER_LABELS, FILTERS, found, passes, SORT_OPTIONS, sortAssets, SORTS } from '../lib/filters.js'
@@ -191,7 +191,7 @@ async function upload(files) {
 	uploading.value = true
 	try {
 		for (const file of media) {
-			await enableFile(await uploadVersion(folderUrl, file), project.value.id)
+			handInWaveform(file, await enableFile(await uploadVersion(folderUrl, file), project.value.id))
 		}
 	} catch (e) {
 		error.value = errorMessage(e)

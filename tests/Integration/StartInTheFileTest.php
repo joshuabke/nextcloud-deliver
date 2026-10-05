@@ -184,9 +184,12 @@ class StartInTheFileTest extends TestCase {
 	public function testTheToolHandsInItsWaveformBeforeTheProbeRan(bool $ffmpeg): void {
 		$this->make(null);
 		$id = $this->upload($ffmpeg);
+		$asset = "/files/{$this->nc->fileId("{$this->root}/take.mp3")}/asset";
+		self::assertSame(!$ffmpeg, $this->nc->ocs('GET', $asset)['data']['waveformFromBrowser'], 'the uploading browser decodes it only where the server cannot');
 		$given = $this->nc->ocs('POST', "/versions/$id/waveform", ['peaks' => [0.1, 0.5, 1], 'durationFrames' => 2000]);
 		self::assertSame(200, $given['status'], json_encode($given['data']));
 		self::assertSame(409, $this->nc->ocs('POST', "/versions/$id/waveform", ['peaks' => [0.2], 'durationFrames' => 2000])['status'], 'once is enough');
+		self::assertFalse($this->nc->ocs('GET', $asset)['data']['waveformFromBrowser'], 'once is enough');
 
 		$version = $this->processed($id);
 		self::assertSame(['num' => 1000, 'den' => 1], $version['fps']);
@@ -198,5 +201,15 @@ class StartInTheFileTest extends TestCase {
 			self::assertSame([0.1, 0.5, 1], $peaks);
 			self::assertSame(2000, $version['durationFrames'], 'milliseconds, as audio counts');
 		}
+	}
+
+	public function testAWavIsNotDecodedInTheBrowser(): void {
+		exec('ffmpeg -v error -y -f lavfi -i sine=duration=1 -f wav ' . escapeshellarg($this->fixture) . ' 2>&1', $output, $code);
+		self::assertSame(0, $code, implode("\n", $output));
+		$this->nc->ocs('PUT', '/admin/settings', ['ffmpegPath' => '/nonexistent/ffmpeg', 'ffprobePath' => '/nonexistent/ffprobe']);
+		$this->nc->put("{$this->root}/mix.wav", (string)file_get_contents($this->fixture));
+
+		$asset = $this->nc->ocs('GET', "/files/{$this->nc->fileId("{$this->root}/mix.wav")}/asset")['data'];
+		self::assertFalse($asset['waveformFromBrowser'], 'its Waveform comes from its PCM on the server');
 	}
 }

@@ -3,9 +3,10 @@ import { getSidebar, registerFileAction } from '@nextcloud/files'
 import { t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import { defineCustomElement } from 'vue'
-import { errorMessage, getAssetForFile } from './api.js'
+import { errorMessage, getAssetForFile, handInWaveform } from './api.js'
 import icon from './icon.svg?raw'
 import { reviewable } from './lib/media.js'
+import { uploadedAudio } from './lib/waveform.js'
 
 // Deliver in the Files app: the sidebar tab and the "Open in Deliver" action
 
@@ -47,3 +48,33 @@ registerFileAction({
 		return null
 	},
 })
+
+/**
+ * @param {object} upload - a finished or failed upload of the Files app
+ */
+function onUpload(upload) {
+	const fileId = uploadedAudio(upload)
+	if (fileId !== null) {
+		// 404 for a file that is no Asset
+		getAssetForFile(fileId).then((asset) => handInWaveform(upload.file, asset), () => {})
+	}
+}
+
+/*
+ * The Files app bundles @nextcloud/upload 1.x and keeps its uploader on
+ * window._nc_uploader, made when its upload menu mounts, which can be after
+ * this script ran. Deliver depends neither on that package (Vue 2 and
+ * @nextcloud/files 3) nor on the uploader of @nextcloud/files 4, which the
+ * Files app does not use, so it takes the instance from the page.
+ */
+const existing = window._nc_uploader
+let uploader
+Object.defineProperty(window, '_nc_uploader', {
+	configurable: true,
+	get: () => uploader,
+	set(value) {
+		uploader = value
+		uploader?.addNotifier?.(onUpload)
+	},
+})
+window._nc_uploader = existing
