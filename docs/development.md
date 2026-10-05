@@ -6,7 +6,13 @@ The vocabulary is in [CONTEXT.md](../CONTEXT.md), the decisions in [adr/](adr/),
 
 Everything runs in Docker; no local PHP is needed. Node 22 builds the frontend.
 
-The dev image is `deploy/Dockerfile` built for Nextcloud 34: ffmpeg and the VAAPI drivers, with `/dev/dri` passed in, so the hardware encoder of ADR 0003 can be tried on real hardware (`vainfo --display drm --device /dev/dri/renderD128`).
+The dev image is `deploy/Dockerfile` built for Nextcloud 34: ffmpeg and the VAAPI drivers, with `/dev/dri` passed in, so the hardware encoder of ADR 0003 can be tried on real hardware (`vainfo --display drm --device /dev/dri/renderD128`). A machine without `/dev/dri` (macOS, or Linux without an iGPU) fails `make up` with `error gathering device information`; drop the device in the gitignored `docker-compose.override.yml`, as CI does:
+
+```yaml
+services:
+  nextcloud:
+    devices: !reset []
+```
 
 ```sh
 make up               # Nextcloud 34 + ffmpeg + Postgres on http://localhost:8080 (admin / adminadmin123), enables the app

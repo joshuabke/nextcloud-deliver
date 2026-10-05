@@ -1,8 +1,8 @@
 # Changelog
 
-## 0.9.7 – unreleased
+## 0.8.0 – 2026-10-05
 
-First release in the App Store, as a beta: try it on real projects, but keep your own backups and expect rough edges. Feedback goes to the GitHub issues.
+First release in the App Store, as a pre-release: try it on real projects, but keep your own backups and expect rough edges. Feedback goes to the GitHub issues.
 
 - Enable a video, audio or image file for review from the Files sidebar, into a Project of your choice or none, or turn a whole folder into a Project that takes in every media file. Projects collect files from anywhere, and whoever can open a file sees its review. Files stays the source of truth: nothing is copied or moved, and a file written again in place keeps its Comments and is read again.
 - Comments anchored to a Frame or a Range, with Replies, Drawings, Mentions, Reactions and Attachments, and Resolved once they are done.

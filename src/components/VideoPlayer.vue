@@ -490,8 +490,12 @@ const waveformPoints = computed(() => {
 	const loudest = Math.max(0.15, ...peaks.value)
 	const step = 100 / peaks.value.length
 	const height = (peak) => (peak / loudest) * 48
-	const top = peaks.value.map((peak, i) => `${(i * step).toFixed(3)},${(50 - height(peak)).toFixed(2)}`)
-	const bottom = peaks.value.map((peak, i) => `${(i * step).toFixed(3)},${(50 + height(peak)).toFixed(2)}`).reverse()
+	// Each peak stands for a bucket of the timeline: drawn at its middle, with the
+	// first and last peak held out to the edges so the shape spans all of it
+	const xs = [0, ...peaks.value.map((peak, i) => (i + 0.5) * step), 100]
+	const ys = [peaks.value[0], ...peaks.value, peaks.value[peaks.value.length - 1]]
+	const top = ys.map((peak, i) => `${xs[i].toFixed(3)},${(50 - height(peak)).toFixed(2)}`)
+	const bottom = ys.map((peak, i) => `${xs[i].toFixed(3)},${(50 + height(peak)).toFixed(2)}`).reverse()
 	return [...top, ...bottom].join(' ')
 })
 
