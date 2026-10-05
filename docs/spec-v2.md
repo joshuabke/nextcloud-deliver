@@ -85,7 +85,7 @@ Deliver becomes a proper Nextcloud app, rebuilt from scratch, in which media fil
 56. As a Reviewer, I want to be recognised again on the same browser without the Personal Link, so that daily use is frictionless.
 57. As a Reviewer, I want to touch only my own Comments and never resolve anything, so that the editor stays in control.
 58. As a Nextcloud user who is not a Member, I want a Project Link to treat me as a Reviewer with my display name prefilled, so that colleagues without access to the files can still comment.
-59. As a Member, I want a Project Link to put me into the normal app view, so that I never work with reduced rights by accident.
+59. As a Member, I want a Project Link to show me what Reviewers see, read only, with a way into the normal app view, so that I can check a link before I send it and never work with reduced rights by accident.
 60. As a Reviewer, I want to download the original when the link allows it, one by one or the newest Versions of all or picked Assets as one ZIP, so that I can inspect them in my own tools.
 61. As a Reviewer, I want an Asset on a link to open its newest Version, with the older Versions one click away in the version picker unless the link shows only the newest, so that I review the current cut first.
 
@@ -185,6 +185,7 @@ A Project's files can lie anywhere (ADR 0009), so a Nextcloud Share Link cannot 
 123. As a Member, I want to give a link a description that Reviewers see above its Assets, so that the client knows what they are looking at.
 124. As a Member, I want to see per link who opened it, which Versions they watched and what they downloaded, and when, so that I know whether the client has seen the cut.
 125. As a Reviewer, I want a link with several Assets to open on a grid of them, and a link with one Asset straight in the player, so that I find my way without a file list.
+127. As a Reviewer or Member, I want to scrub through a video by moving the mouse over its still, and to see a frame of it where the server renders no still, so that I find the right cut without opening each one.
 
 ## Implementation Decisions
 
@@ -263,7 +264,7 @@ File identity is always the Nextcloud file id, so renames and moves are free and
 - Reviewer (through a live Project Link): view, comment and reply when the link allows, edit and delete own (with the same rule for Comments others replied to), download the original unless the link hides downloads. Never resolve, never see Assets the link does not show.
 - Deliver never enforces a password of its own: it points out a review link without one, and an admin who wants the rule enforces it with Nextcloud's password policy, which applies to the passwords of Project Links as to Nextcloud's own.
 - Sharing in Files makes an ordinary Nextcloud link: Deliver adds nothing to it, no Comments, no reviewer session (ADR 0011).
-- A logged-in non-Member opening a Project Link becomes a Reviewer with the display name prefilled; a Member is redirected to the app view.
+- A logged-in non-Member opening a Project Link becomes a Reviewer with the display name prefilled. A Member of a Version's file previews it on the link read only, as Reviewers see it, never as a Reviewer whose key the browser carries and without counting in the link's activity, with the way into the app view (story 59); Versions whose files they cannot open they review as a Reviewer.
 - The public review route extends `AuthPublicShareController`, so the link's password prompt and expiry are enforced by core before Deliver runs. Deliver stores tokens and password hashes (`IHasher`) for its Project Links (ADRs 0010 and 0011); a Project Link shows only files its Member may reshare.
 - Reviewer sessions are a signed cookie holding the reviewer key; it never expires. The Personal Link re-establishes it on any device.
 

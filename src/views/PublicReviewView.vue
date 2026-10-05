@@ -32,8 +32,8 @@ import { useCommentsStore } from '../store/comments.js'
 const props = defineProps({
 	/** The Version the link opened on; none opens the grid of its Assets */
 	versionId: { type: Number, default: null },
-	/** The link's title and description for that grid, with the Reviewer's name and the ZIP of all, if any */
-	link: { type: Object, default: () => ({ title: '', description: null, reviewer: null, downloadAll: null }) },
+	/** The link's title and description for that grid, the Reviewer's name, the ZIP of all and, for a Member's preview, the way into the app */
+	link: { type: Object, default: () => ({ title: '', description: null, reviewer: null, downloadAll: null, memberUrl: null }) },
 })
 
 const store = useCommentsStore()
@@ -91,9 +91,8 @@ onBeforeUnmount(() => store.stop())
 /** Reloads what the share shows of this Version, for instance once its Proxy is ready */
 async function reload() {
 	context.value = await getPublicContext({ versionId: current.value })
-	if (context.value.me?.type === 'reviewer') {
-		reviewer.value = context.value.me
-	}
+	// A Member's preview of a Version names no Reviewer, even where they review another Version as one
+	reviewer.value = context.value.me?.type === 'reviewer' ? context.value.me : null
 }
 
 /**
@@ -221,6 +220,10 @@ async function claim({ name, email, mail }) {
 			</template>
 
 			<template #notice>
+				<NcNoteCard v-if="context.me?.type === 'member'" type="info" class="deliver-layout__notice">
+					{{ t('deliver', 'A preview of what Reviewers see. You comment and approve in Deliver.') }}
+					<a :href="context.me.url" class="deliver-public__open">{{ t('deliver', 'Open in Deliver') }}</a>
+				</NcNoteCard>
 				<NcNoteCard v-if="error" type="error" class="deliver-layout__notice">
 					{{ error }}
 				</NcNoteCard>
@@ -292,6 +295,12 @@ async function claim({ name, email, mail }) {
 	color: var(--color-text-maxcontrast);
 	white-space: nowrap;
 	text-overflow: ellipsis;
+}
+
+.deliver-public__open {
+	margin-inline-start: var(--default-grid-baseline);
+	font-weight: bold;
+	text-decoration: underline;
 }
 
 .deliver-layout__notice code {

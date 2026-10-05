@@ -69,12 +69,16 @@ class PublicApiController extends PublicShareController {
 			$version = $this->links->version($link, $versionId);
 			$project = $this->projects->settingsOf($version);
 			$stack = $link->assets()[$version->getAssetId()] ?? null;
-			$reviewer = $this->reviewer();
+			// A Member previews the Version read only, never as the Reviewer whose key this browser carries (story 59)
+			$member = $this->member($version);
+			$reviewer = $member ? null : $this->reviewer();
 			if ($reviewer !== null) {
 				$this->reviewers->cameBy($reviewer, $link->token());
 			}
-			$this->links->record($link, LinkActivityMapper::VIEWED, $reviewer, $version);
-			$flags = $this->flags($link, $reviewer);
+			if (!$member) {
+				$this->links->record($link, LinkActivityMapper::VIEWED, $reviewer, $version);
+			}
+			$flags = ($member ? ['canComment' => false] : []) + $this->flags($link, $reviewer);
 			return [
 				'versionId' => $version->getId(),
 				'flags' => $flags,
@@ -89,7 +93,7 @@ class PublicApiController extends PublicShareController {
 					fn (Version $each) => $this->describe($link, $each, $flags['canDownload']),
 					$stack['versions'],
 				),
-				'me' => $this->me(),
+				'me' => $this->me($version, $member, $reviewer),
 			];
 		});
 	}
@@ -114,8 +118,10 @@ class PublicApiController extends PublicShareController {
 					'count' => count($versions),
 					'mimeType' => $link->originalFile($newest)?->getMimetype(),
 					'dueDate' => $asset->getDueDate(),
-					// A frame of the video stands in where Nextcloud renders no still (no ffmpeg)
-					'playUrl' => $this->mayPlayOriginal($newest, $canDownload) ? $original : $this->mediaUrl($newest, 'proxy'),
+					// For scrubbing on hover, and a frame of it where Nextcloud renders no still (no ffmpeg)
+					'playUrl' => $newest->getProxyState() === DerivedMedia::STATE_READY || !$this->mayPlayOriginal($newest, $canDownload)
+						? $this->mediaUrl($newest, 'proxy')
+						: $original,
 					'downloadUrl' => $canDownload ? $original . '?download=1' : null,
 				];
 			}
@@ -157,7 +163,9 @@ class PublicApiController extends PublicShareController {
 				}
 				$names[$name] = true;
 				$zip->addResource($file->fopen('rb'), $name, $file->getSize(), $file->getMTime());
-				$this->links->record($link, LinkActivityMapper::DOWNLOADED, $reviewer, $newest);
+				if (!$this->member($newest)) {
+					$this->links->record($link, LinkActivityMapper::DOWNLOADED, $reviewer, $newest);
+				}
 			}
 			return $zip;
 		} catch (NotFoundException) {
@@ -187,7 +195,9 @@ class PublicApiController extends PublicShareController {
 			}
 			if ($this->request->getParam('download') !== null && $canDownload) {
 				// The download button, not the player, which asks for ranges of the same file (story 124)
-				$this->links->record($link, LinkActivityMapper::DOWNLOADED, $this->reviewer(), $version);
+				if (!$this->member($version)) {
+					$this->links->record($link, LinkActivityMapper::DOWNLOADED, $this->reviewer(), $version);
+				}
 				$response = RangeFileResponse::ofFile($file, null);
 				$response->addHeader('Content-Disposition', 'attachment; filename="' . rawurlencode($file->getName()) . '"');
 				return $response;
@@ -223,6 +233,10 @@ class PublicApiController extends PublicShareController {
 	public function claim(string $name, ?string $email = null, ?bool $mailReplies = null, ?bool $mailComments = null, ?bool $mailVersions = null): Response {
 		return $this->guard(function () use ($name, $email, $mailReplies, $mailComments, $mailVersions) {
 			$link = $this->link();
+			// Who is a Member of everything the link shows reviews it in Deliver itself
+			if ($this->member(...array_column(array_column($link->assets(), 'versions'), 0))) {
+				throw new AccessDeniedException('Members review in Deliver itself');
+			}
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
 			$reviewer = $this->reviewers->claim($link->ownerUid(), $name, $email, $wishes);
 			$this->reviewers->cameBy($reviewer, $link->token());
@@ -340,9 +354,15 @@ class PublicApiController extends PublicShareController {
 		return $canDownload || in_array($version->getProxyState(), [DerivedMedia::STATE_NONE, DerivedMedia::STATE_FAILED], true);
 	}
 
-	/** Who is writing: the Reviewer this browser carries, or someone without a name yet */
-	private function me(): array {
-		$reviewer = $this->reviewer();
+	/** Who is writing: a Member previewing the Version, the Reviewer this browser carries, or someone without a name yet */
+	private function me(Version $version, bool $member, ?Reviewer $reviewer): array {
+		if ($member) {
+			return [
+				'type' => 'member',
+				'name' => $this->userSession->getUser()?->getDisplayName() ?? '',
+				'url' => $this->urls->linkToRoute('deliver.page.index') . 'versions/' . $version->getId(),
+			];
+		}
 		return $reviewer === null
 			// A logged-in visitor gets their display name offered (story 58)
 			? ['type' => 'unnamed', 'name' => $this->userSession->getUser()?->getDisplayName() ?? '']
@@ -360,12 +380,19 @@ class PublicApiController extends PublicShareController {
 	 * @return array<string, mixed>
 	 */
 	private function flags(ReviewLink $link, ?Reviewer $reviewer): array {
-		$flags = $link->flags();
-		return $reviewer === null ? $flags : $reviewer->over($flags);
+		return $reviewer === null ? $link->flags() : $reviewer->over($link->flags());
 	}
 
-	/** A Reviewer comments while the link or their own rights allow it, and never resolves */
-	private function viewer(ReviewLink $link): Viewer {
+	/** The logged-in user can open the file of each of these Versions, and previews them rather than reviewing (story 59) */
+	private function member(Version ...$versions): bool {
+		return $this->links->isMember($this->userSession->getUser()?->getUID(), ...$versions);
+	}
+
+	/** A Reviewer comments while the link or their own rights allow it, and never resolves; a Member's preview only reads */
+	private function viewer(ReviewLink $link, Version $version): Viewer {
+		if ($this->member($version)) {
+			return Viewer::unnamed(false, $link->flags()['allowOlder']);
+		}
 		$reviewer = $this->reviewer();
 		$flags = $this->flags($link, $reviewer);
 		return $reviewer === null
@@ -376,14 +403,16 @@ class PublicApiController extends PublicShareController {
 	private function onVersion(int $versionId, callable $action, int $status = Http::STATUS_OK): Response {
 		return $this->guard(function () use ($versionId, $action) {
 			$link = $this->link();
-			return $action($this->viewer($link), $this->links->version($link, $versionId));
+			$version = $this->links->version($link, $versionId);
+			return $action($this->viewer($link, $version), $version);
 		}, $status);
 	}
 
 	private function onComment(int $id, callable $action, int $status = Http::STATUS_OK): Response {
 		return $this->guard(function () use ($id, $action) {
 			$link = $this->link();
-			return $action($this->viewer($link), $this->links->version($link, $this->comments->versionIdOf($id)));
+			$version = $this->links->version($link, $this->comments->versionIdOf($id));
+			return $action($this->viewer($link, $version), $version);
 		}, $status);
 	}
 }

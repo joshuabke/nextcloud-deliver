@@ -162,9 +162,53 @@ class ReviewLinkTest extends TestCase {
 		self::assertStringContainsString("/s/{$replacement['data']['token']}?r=", $jo['link']);
 	}
 
-	public function testAMemberOpeningTheLinkLandsInTheApp(): void {
-		$page = $this->nc->request('GET', "/apps/deliver/s/{$this->token}/versions/{$this->versionId}");
-		self::assertSame(303, $page['status'], 'a Member never reviews with reduced rights');
+	public function testAMemberPreviewsTheLinkButReviewsInTheApp(): void {
+		$mara = $this->reviewer();
+		$key = $mara->call('POST', '/api/reviewer', ['name' => 'Mara'])['data']['key'];
+		$theirs = $this->comment($mara, ['inFrame' => 2, 'body' => 'Mara wrote this']);
+
+		// The Member tries the Personal Link they are about to send
+		$page = $this->nc->request('GET', "/apps/deliver/s/{$this->token}/versions/{$this->versionId}?r=$key");
+		self::assertSame(200, $page['status'], 'the page shows what Reviewers see');
+		preg_match('/id="initial-state-deliver-link" value="([^"]+)"/', $page['body'], $state);
+		self::assertNull(json_decode(base64_decode($state[1]), true)['reviewer'], 'not as the Reviewer whose link it is');
+
+		$cookie = 'Cookie: ' . rawurlencode('deliver_reviewer_' . $this->token) . '=' . rawurlencode($key);
+		$api = fn (string $method, string $path, array $json = []) => $this->nc->request($method, "/apps/deliver/s/{$this->token}$path", $json === [] ? null : json_encode($json), ['Content-Type: application/json', 'Accept: application/json', $cookie]);
+		$context = json_decode($api('GET', "/api/context?versionId={$this->versionId}")['body'], true);
+		self::assertSame(['member', false], [$context['me']['type'], $context['flags']['canComment']], 'read only, as a Member and not as a Reviewer');
+		self::assertStringEndsWith("/apps/deliver/versions/{$this->versionId}", $context['me']['url'], 'with the way into the app');
+		self::assertSame(403, $api('POST', "/api/versions/{$this->versionId}/comments", ['inFrame' => 1, 'body' => 'from the preview'])['status']);
+		self::assertSame(403, $api('PUT', "/api/comments/{$theirs['id']}", ['body' => 'not Mara'])['status'], 'nor touches the Reviewer\'s Comments');
+		self::assertSame(403, $api('DELETE', "/api/comments/{$theirs['id']}")['status']);
+		self::assertSame(['seenUntil' => 0], json_decode($api('POST', "/api/versions/{$this->versionId}/seen")['body'], true), 'nor moves their Unseen mark');
+		self::assertSame(403, $api('POST', '/api/reviewer', ['name' => 'Me'])['status'], 'a Member never becomes a Reviewer of their own link');
+		self::assertSame([], $this->nc->ocs('GET', "/links/{$this->linkId}/activity")['data'], 'a preview is no activity, and no visit of the Reviewer');
+	}
+
+	public function testMembershipFollowsEachVersionsFile(): void {
+		$this->nc->put("{$this->root}/teaser.mp4", 'not really a video');
+		$assets = array_column($this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'], null, 'name');
+		$teaser = $assets['teaser']['versions'][0]['id'];
+		$uid = 'deliver-colleague-' . bin2hex(random_bytes(4));
+		$password = 'Deliver-' . bin2hex(random_bytes(8));
+		$this->nc->ocsForm('POST', '/ocs/v2.php/cloud/users', ['userid' => $uid, 'password' => $password]);
+		$colleague = $this->nc->withUser($uid, $password);
+		try {
+			// They can open the teaser, but not the cut they are asked to review
+			$this->nc->ocsForm('POST', '/ocs/v2.php/apps/files_sharing/api/v1/shares', ['path' => "/{$this->root}/teaser.mp4", 'shareType' => 0, 'shareWith' => $uid, 'permissions' => 1]);
+			$api = fn (string $method, string $path, array $json = []) => json_decode($colleague->request($method, "/apps/deliver/s/{$this->token}$path", $json === [] ? null : json_encode($json), ['Content-Type: application/json', 'Accept: application/json'])['body'], true);
+
+			self::assertSame('member', $api('GET', "/api/context?versionId=$teaser")['me']['type'], 'a preview of the file they can open');
+			$cut = $api('GET', "/api/context?versionId={$this->versionId}");
+			self::assertSame(['unnamed', true], [$cut['me']['type'], $cut['flags']['canComment']], 'and a Reviewer of the one they cannot');
+			$key = $api('POST', '/api/reviewer', ['name' => 'Colleague'])['key'] ?? null;
+			self::assertNotNull($key, 'who can open only some of the link names themselves');
+			self::assertSame('Colleague', $api('POST', "/api/versions/{$this->versionId}/comments", ['inFrame' => 4, 'body' => 'from outside', 'r' => $key])['author']['name']);
+			self::assertSame(403, $colleague->request('POST', "/apps/deliver/s/{$this->token}/api/versions/$teaser/comments", json_encode(['inFrame' => 4, 'body' => 'from the preview', 'r' => $key]), ['Content-Type: application/json'])['status'], 'and comments on their own file in Deliver');
+		} finally {
+			$this->nc->ocsForm('DELETE', "/ocs/v2.php/cloud/users/$uid");
+		}
 	}
 
 	public function testAMemberEditsAReviewerAndRenewsTheirLink(): void {

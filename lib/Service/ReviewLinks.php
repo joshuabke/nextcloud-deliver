@@ -64,6 +64,24 @@ class ReviewLinks {
 		return $link->version($this->versions->findByFile($fileId) ?? throw new NotFoundException('This file is not enabled for review'));
 	}
 
+	/**
+	 * Whether a logged-in user is a Member of each of these Versions: they can
+	 * open its file in Files, as rights follow each file (ADR 0009). They
+	 * preview it as Reviewers see it but review it in the app (story 59).
+	 */
+	public function isMember(?string $uid, Version ...$versions): bool {
+		if ($uid === null || $versions === []) {
+			return false;
+		}
+		$home = $this->root->getUserFolder($uid);
+		foreach ($versions as $version) {
+			if ($home->getFirstNodeById($version->getFileId()) === null) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	/** Remembers what happened on a link (story 124) */
 	public function record(ReviewLink $link, string $kind, ?Reviewer $reviewer, ?Version $version = null): void {
 		$this->activity->record($link->token(), $kind, $reviewer?->getId(), $version?->getId(), $this->time->getTime());
