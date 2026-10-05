@@ -319,7 +319,16 @@ class ProjectService {
 			// Auto Intake holds the file while it lies in the Folder Project's folder
 			'autoIntake' => $project !== null && $project->getAutoIntake() && $this->projects->findAbove($file)?->getId() === $project->getId(),
 			'canWrite' => $this->canWrite($file),
+			// Without ffmpeg the browser that uploaded the audio decodes its Waveform from the file it holds (ADR 0012); a WAV's comes from its PCM here
+			'waveformFromBrowser' => $version->getWaveformState() === DerivedMedia::STATE_NONE
+				&& str_starts_with($file->getMimeType(), 'audio/')
+				&& !self::isWav($version)
+				&& !$this->ffmpeg->available(),
 		];
+	}
+
+	private static function isWav(Version $version): bool {
+		return in_array(strtolower(pathinfo($version->getName(), PATHINFO_EXTENSION)), ['wav', 'bwf'], true);
 	}
 
 	/**
@@ -569,7 +578,7 @@ class ProjectService {
 			// Audio without a picture, once ffprobe has looked; null before
 			'audioOnly' => $version->getPlayable() === null ? null : !$version->getHasVideo() && (bool)$version->getHasAudio(),
 			// A WAV takes its markers as it is; anything else needs ffmpeg to become one
-			'wavExport' => in_array(strtolower(pathinfo($version->getName(), PATHINFO_EXTENSION)), ['wav', 'bwf'], true) || $this->ffmpeg->available(),
+			'wavExport' => self::isWav($version) || $this->ffmpeg->available(),
 			'width' => $version->getWidth(),
 			'height' => $version->getHeight(),
 			// The short side in pixels, as in "1080p"

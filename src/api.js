@@ -2,6 +2,7 @@ import axios from '@nextcloud/axios'
 import { t } from '@nextcloud/l10n'
 import { generateOcsUrl, generateUrl } from '@nextcloud/router'
 import { mediaKind } from './lib/media.js'
+import { decodeWaveform } from './lib/waveform.js'
 
 /** Set on the public review page; Members leave it null and use the OCS API */
 let publicBase = null
@@ -81,6 +82,26 @@ export function attachmentUrl(id) {
 export const resolveComment = (id, resolved) => axios.put(url(`/comments/${id}/resolved`), { resolved }).then(data)
 export const decideVersion = (versionId, status) => axios.put(url(`/versions/${versionId}/approval`), { status }).then(data)
 export const giveWaveform = (versionId, peaks, durationFrames) => axios.post(url(`/versions/${versionId}/waveform`), { peaks, durationFrames }).then(data)
+let decoding = Promise.resolve()
+/**
+ * Where the server has no ffmpeg, the browser that uploaded an audio file
+ * decodes its Waveform from the file it still holds, so nobody downloads it
+ * for that (spec: Media metadata and derived media). Fire and forget: without
+ * it, the first Member to open the Version decodes it.
+ *
+ * @param {Blob} file - what was uploaded
+ * @param {{versionId: number, waveformFromBrowser: boolean}} asset - its Asset, as getAssetForFile or enableFile give it
+ */
+export function handInWaveform(file, asset) {
+	if (!asset.waveformFromBrowser) {
+		return
+	}
+	// One at a time, so a batch of long mixes is not in memory at once; audio counts in milliseconds (ADR 0007), also before the probe ran
+	decoding = decoding
+		.then(() => decodeWaveform(file))
+		.then(({ peaks, seconds }) => giveWaveform(asset.versionId, peaks, Math.max(1, Math.round(seconds * 1000))))
+		.catch(() => {})
+}
 export const markSeen = (versionId, at) => axios.post(url(`/versions/${versionId}/seen`), { at }).then(data)
 
 // Project Links (ADR 0010, 0011): a whole Project or picked Assets; on No Project (id 0) picked Assets of it
@@ -174,6 +195,7 @@ export async function uploadNextVersion(folderUrl, file, assetId, kind) {
 	if (asset.assetId !== assetId) {
 		await stackVersion(asset.versionId, assetId)
 	}
+	handInWaveform(file, asset)
 	return asset.versionId
 }
 
