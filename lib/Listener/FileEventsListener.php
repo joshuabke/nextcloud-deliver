@@ -7,22 +7,26 @@ namespace OCA\Deliver\Listener;
 use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\Version;
 use OCA\Deliver\Db\VersionMapper;
+use OCA\Deliver\Service\DerivedMedia;
 use OCA\Deliver\Service\Reviewable;
 use OCA\Deliver\Service\StackService;
 use OCA\Files_Trashbin\Events\MoveToTrashEvent;
 use OCA\Files_Trashbin\Events\NodeRestoredEvent;
+use OCA\Files_Versions\Events\VersionRestoredEvent;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
 use OCP\Files\Events\Node\NodeCreatedEvent;
 use OCP\Files\Events\Node\NodeDeletedEvent;
 use OCP\Files\Events\Node\NodeRenamedEvent;
+use OCP\Files\Events\Node\NodeWrittenEvent;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\Node;
 
 /**
  * Keeps Deliver in step with Files (ADR 0002): a new media file in a Folder
- * Project with Auto Intake becomes an Asset, a file in the trash is Missing,
+ * Project with Auto Intake becomes an Asset, a file written again in place is
+ * read again, a file in the trash is Missing,
  * a file deleted for good takes its review data along, and a rename or a move
  * changes only the name: the Version keeps its Project wherever its file goes
  * (ADR 0009).
@@ -38,16 +42,27 @@ class FileEventsListener implements IEventListener {
 	 */
 	private static array $goingToTrash = [];
 
+	/**
+	 * A new file fires NodeWrittenEvent right after NodeCreatedEvent, in the same
+	 * request; only a write in a later request is the file written again.
+	 *
+	 * @var array<int, true>
+	 */
+	private static array $created = [];
+
 	public function __construct(
 		private ProjectMapper $projects,
 		private VersionMapper $versions,
 		private StackService $stacks,
+		private DerivedMedia $media,
 	) {
 	}
 
 	public function handle(Event $event): void {
 		match (true) {
-			$event instanceof NodeCreatedEvent => $this->arrived($event->getNode()),
+			$event instanceof NodeCreatedEvent => $this->created($event->getNode()),
+			$event instanceof NodeWrittenEvent => $this->written($event->getNode()),
+			$event instanceof VersionRestoredEvent => $this->rewritten($event->getVersion()->getSourceFile()->getId()),
 			$event instanceof NodeRenamedEvent => $this->renamed($event->getSource(), $event->getTarget()),
 			$event instanceof MoveToTrashEvent => $this->trashed($event->getNode()),
 			$event instanceof NodeRestoredEvent => $this->restored($event->getTarget()),
@@ -64,6 +79,25 @@ class FileEventsListener implements IEventListener {
 		$project = $this->projects->findAbove($node);
 		if ($project?->getAutoIntake() === true) {
 			$this->stacks->intake($project, $node);
+		}
+	}
+
+	private function created(Node $node): void {
+		self::$created[$node->getId()] = true;
+		$this->arrived($node);
+	}
+
+	private function written(Node $node): void {
+		if ($node instanceof File && Reviewable::file($node) && !isset(self::$created[$node->getId()])) {
+			$this->rewritten($node->getId());
+		}
+	}
+
+	/** Written again in place, also by restoring an older file version: same file id, Version and Comments, new content (spec: Delivering again) */
+	private function rewritten(int $fileId): void {
+		$version = $this->versions->findByFile($fileId);
+		if ($version !== null) {
+			$this->media->reread($version);
 		}
 	}
 

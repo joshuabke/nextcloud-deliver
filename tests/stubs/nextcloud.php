@@ -33,3 +33,16 @@ namespace OCA\Files_Trashbin\Events {
 	class NodeRestoredEvent extends \OCP\Files\Events\Node\AbstractNodesEvent {
 	}
 }
+
+namespace OCA\Files_Versions\Versions {
+	interface IVersion {
+		public function getSourceFile(): \OCP\Files\FileInfo;
+	}
+}
+
+namespace OCA\Files_Versions\Events {
+	class VersionRestoredEvent extends \OCP\EventDispatcher\Event {
+		public function getVersion(): \OCA\Files_Versions\Versions\IVersion {
+		}
+	}
+}

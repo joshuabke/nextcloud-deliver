@@ -101,6 +101,27 @@ class DerivedMedia {
 		$this->queue($versionId);
 	}
 
+	/**
+	 * A file written again in place is read again as on intake: what the probe
+	 * said and all its derived media go, also a Waveform handed in for the old
+	 * content (spec: Delivering again)
+	 */
+	public function reread(Version $version): void {
+		$version->setFpsNum(null);
+		$version->setFpsDen(null);
+		$version->setDropFrame(false);
+		$version->setStartFrame(null);
+		$version->setDurationFrames(null);
+		$version->setWidth(null);
+		$version->setHeight(null);
+		$version->setHasVideo(false);
+		$version->setHasAudio(false);
+		$version->setPlayable(null);
+		$this->versions->update($version);
+		$this->forget($version->getId());
+		$this->queue($version->getId());
+	}
+
 	private function enqueue(int $versionId, string $kind): void {
 		if ($this->jobs->findPending($versionId, $kind) !== null) {
 			return;
@@ -140,9 +161,13 @@ class DerivedMedia {
 				Job::KIND_WAVEFORM => $this->runWaveform($version, $path),
 				default => throw new \RuntimeException('Unknown job kind ' . $job->getKind()),
 			};
+			$this->guard();
 			$this->mark($version->getId(), $job->getKind(), self::STATE_READY);
 			$this->jobs->delete($job);
 		} catch (\Throwable $e) {
+			if ($this->withdrawn($job)) {
+				return;
+			}
 			$error = $this->ffmpeg->tail($e->getMessage());
 			// Into Nextcloud's log too, where an admin without a shell looks first
 			$this->logger->warning('Deliver could not make the {kind} of Version {version}', ['kind' => $job->getKind(), 'version' => $version->getId(), 'exception' => $e]);
@@ -156,6 +181,22 @@ class DerivedMedia {
 		}
 	}
 
+	/**
+	 * Whether the job was taken back while it ran: writing its file again
+	 * (reread) or regenerating deletes the Version's jobs, and what
+	 * a job found in the old content must not land over what came since
+	 */
+	private function withdrawn(Job $job): bool {
+		return $this->jobs->find($job->getId()) === null;
+	}
+
+	/** @throws \RuntimeException before the running job writes anything, when it has been withdrawn */
+	private function guard(): void {
+		if ($this->running !== null && $this->withdrawn($this->running['job'])) {
+			throw new \RuntimeException('Withdrawn while running');
+		}
+	}
+
 	private function runProbe(Version $version, string $path): void {
 		$probed = $this->probe->apply($version, $path);
 		if ($probed === null) {
@@ -165,6 +206,7 @@ class DerivedMedia {
 		}
 		$playable = $this->browserPlays($probed);
 		$version->setPlayable($playable);
+		$this->guard();
 		$this->versions->update($version);
 		// Read without ffprobe: there is no ffmpeg either, so nothing to queue that could only fail.
 		// A WAV's Waveform is in its PCM; other audio gets one from the browser (acceptWaveform).
@@ -200,6 +242,7 @@ class DerivedMedia {
 		$version->setHasVideo(false);
 		$version->setHasAudio(false);
 		$version->setPlayable(true);
+		$this->guard();
 		$this->versions->update($version);
 	}
 
@@ -464,6 +507,7 @@ class DerivedMedia {
 
 	/** @param string|resource $content */
 	private function put(Version $version, string $kind, $content): void {
+		$this->guard();
 		$folder = $this->folder($version->getId());
 		try {
 			$file = $folder->getFile(self::FILES[$kind]);
