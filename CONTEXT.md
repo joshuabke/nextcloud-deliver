@@ -153,12 +153,8 @@ A file generated from a Version's Comments for import into an editing applicatio
 _Avoid_: Download, report
 
 **Delivery**:
-One run of an editing application's Deliver action that puts new Versions or Takes into a Project, together with their Sidecar. Several works can go out in one Delivery.
+One run of an editing application's Deliver action that puts new Versions or Takes into a Project. Several works can go out in one Delivery.
 _Avoid_: Publish, release, upload (and never Export, which is Comments going the other way)
-
-**Sidecar**:
-A `deliver.json` file in a Project folder, written by the delivering tool, that supplies start timecodes and Waveforms for the files beside it and marks the folder as a Take Folder when it holds Takes. Lets Deliver work fully without ffmpeg.
-_Avoid_: Manifest, metadata file
 
 ## German
 
@@ -179,7 +175,7 @@ The German translation (`l10n/de` with "du", `l10n/de_DE` with "Sie") uses these
 | Proxy, Thumbnail Strip, Waveform | Proxy, Vorschauleiste, Wellenform |
 | Missing | Fehlt |
 | Export | Export |
-| Delivery, Sidecar | Delivery, Sidecar |
+| Delivery | Delivery |
 | Take, Take Folder, Session Time | Take, Take-Ordner, Session-Zeit (never „Aufnahme“, which is Auto Intake) |
 | Drawing | Zeichnung |
 | Reaction | Reaktion |

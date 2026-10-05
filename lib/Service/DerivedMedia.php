@@ -299,8 +299,11 @@ class DerivedMedia {
 
 	/**
 	 * A Waveform and duration the browser worked out by decoding the file,
-	 * where the server has no ffmpeg to do it. Only taken when there is no
-	 * Waveform and nothing on its way: a browser never overrides the server.
+	 * where the server has no ffmpeg to do it, or the delivering tool had
+	 * anyway (ADR 0012). Only taken when there is no Waveform and nothing on
+	 * its way: neither ever overrides the server, while a Waveform the server
+	 * makes later (ffmpeg's, a WAV's PCM) replaces theirs. The duration counts
+	 * Frames of the Version, for audio milliseconds also before the probe.
 	 *
 	 * @param list<mixed> $peaks
 	 * @throws InvalidRequestException peaks or duration out of shape
@@ -315,7 +318,8 @@ class DerivedMedia {
 				throw new InvalidRequestException('Peaks run from 0 to 1');
 			}
 		}
-		if (!$version->getHasAudio() || $version->getWaveformState() !== self::STATE_NONE) {
+		// Also before the probe ran (playable is still unknown then), so a delivering tool can hand in its peaks with the upload
+		if (!$version->getHasAudio() && $version->getPlayable() !== null || $version->getWaveformState() !== self::STATE_NONE) {
 			throw new ProjectConflictException('This Version has its Waveform from the server');
 		}
 		$this->put($version, 'waveform', json_encode(['peaks' => array_map(static fn ($peak) => round((float)$peak, 3), $peaks)], JSON_THROW_ON_ERROR));

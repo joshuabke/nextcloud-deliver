@@ -12,7 +12,7 @@ First release in the App Store, as a beta: try it on real projects, but keep you
 - Due Dates with reminders, Unseen Comments, notifications and mail, and live updates without reloading.
 - Export of the Comments as EDL, FCP7 XML, FCPXML or CSV, as markers for the editing application.
 - Audio counts to the millisecond: shown as `m:ss.mmm`, switchable to timecode or frames at the Project's frame rate.
-- Proxies, Thumbnail Strips and Waveforms when ffmpeg is installed; without it, browser-native files play as they are, MOV, MP4 and Broadcast WAV keep their frame rate and start timecode, WebM and MKV their frame rate, and audio still gets its Waveform.
+- Proxies, Thumbnail Strips and Waveforms when ffmpeg is installed; without it, browser-native files play as they are, MOV, MP4 and Broadcast WAV keep their frame rate and start timecode, an MP3 the start its delivering tool wrote into its ID3 tag, WebM and MKV their frame rate, and audio still gets its Waveform.
 - Scrub through a video by moving the mouse over its still, in Deliver and on a link's landing page; without ffmpeg on the server a frame of the video stands in for the still.
 - Works on phones: the Review view, drawing with a finger and the Project list are made for small screens.
 - Troubleshooting without a shell: setup checks on the admin overview, failed media jobs in the Nextcloud log and retried from Deliver's settings, and a support report to attach to an issue.

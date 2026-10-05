@@ -8,8 +8,9 @@ namespace OCA\Deliver\Service;
  * What Frames rest on, read without ffprobe (ADR 0003): the frame rate, the
  * start timecode and the duration of a MOV or MP4 from its boxes, and the
  * time reference of a Broadcast WAV, the frame rate, size and duration of a
- * WebM or MKV. MP3, AAC, FLAC and Ogg are only known as audio, which counts
- * in milliseconds and needs nothing more; the browser knows their duration.
+ * WebM or MKV, the sample rate of an MP3 and the TXXX frames of its ID3 tag.
+ * MP3, AAC, FLAC and Ogg are otherwise only known as audio, which counts in
+ * milliseconds and needs nothing more; the browser knows their duration.
  * The answer has ffprobe's shape, so Probe treats both alike. Other
  * containers (MXF, AVI) stay unread and take the Project's frame rate. Only headers are read: the media data is skipped by seeking,
  * so a file of many gigabytes costs a few reads.
@@ -30,6 +31,11 @@ class ContainerProbe {
 	];
 	/** Frame rates a Matroska frame duration in whole nanoseconds stands for */
 	private const RATES = [[24000, 1001], [30000, 1001], [60000, 1001], [24, 1], [25, 1], [30, 1], [48, 1], [50, 1], [60, 1], [100, 1], [120, 1]];
+
+	/** Sample rates of MPEG 2.5, (reserved), 2 and 1 audio by the index in a frame header */
+	private const MPEG_RATES = [[11025, 12000, 8000], [], [22050, 24000, 16000], [44100, 48000, 32000]];
+	/** A TXXX frame larger than this is not read: a time reference takes a few dozen bytes, even in UTF-16 */
+	private const TXXX_MAX = 4096;
 
 	/** @var resource */
 	private $file;
@@ -464,29 +470,98 @@ class ContainerProbe {
 	 */
 	private function mpeg(string $head): ?array {
 		$offset = 0;
+		$tags = [];
 		if (str_starts_with($head, 'ID3')) {
 			// The tag's size is syncsafe: seven bits a byte, plus ten for a footer
-			$size = 0;
-			for ($i = 6; $i < 10; $i++) {
-				$size = ($size << 7) | (ord($head[$i]) & 0x7F);
-			}
+			$size = $this->syncsafe(6);
 			$offset = 10 + $size + ((ord($head[5]) & 0x10) === 0 ? 0 : 10);
+			$tags = $this->id3(ord($head[3]), ord($head[5]), 10 + $size);
 		}
-		[$sync, $bits] = array_map('ord', str_split($this->at($offset, 2)));
+		[$sync, $bits, $rate] = array_map('ord', str_split($this->at($offset, 3)));
 		if ($sync !== 0xFF) {
 			return null;
 		}
-		return match (true) {
-			($bits & 0xF6) === 0xF0 => $this->audio('aac', 'aac'),
-			($bits & 0xE6) === 0xE2 => $this->audio('mp3', 'mp3'),
-			default => null,
-		};
+		if (($bits & 0xF6) === 0xF0) {
+			return $this->audio('aac', 'aac', $tags);
+		}
+		if (($bits & 0xE6) !== 0xE2) {
+			return null;
+		}
+		$mp3 = $this->audio('mp3', 'mp3', $tags);
+		// The first frame's header: MPEG 1, 2 or 2.5 in bits 4 and 3, the sample rate's index in bits 3 and 2 of the next byte
+		$sampleRate = self::MPEG_RATES[($bits >> 3) & 3][($rate >> 2) & 3] ?? 0;
+		if ($sampleRate > 0) {
+			$mp3['streams'][0]['sample_rate'] = (string)$sampleRate;
+		}
+		return $mp3;
 	}
 
-	/** @return array<string, mixed> audio of a known codec, and nothing else known */
-	private function audio(string $format, string $codec): array {
+	/**
+	 * The user-defined text frames (TXXX) of an ID3v2.3 or v2.4 tag, by their
+	 * description, as ffprobe names them; the delivering tool puts the start
+	 * there (ADR 0012). Other frames, cover art among them, are skipped by
+	 * seeking.
+	 *
+	 * @return array<string, string>
+	 */
+	private function id3(int $major, int $flags, int $end): array {
+		if ($major !== 3 && $major !== 4 || ($flags & 0x80) !== 0) {
+			// ponytail: an unsynchronised tag is not read and its start stays 0; read it once a delivering tool writes one
+			return [];
+		}
+		$pos = 10;
+		if (($flags & 0x40) !== 0) {
+			// An extended header: v2.3 counts its size without the four size bytes, v2.4 with them
+			$pos += $major === 3 ? 4 + $this->u32(10) : $this->syncsafe(10);
+		}
+		$tags = [];
+		while ($pos + 10 <= $end) {
+			$id = $this->at($pos, 4);
+			$size = $major === 3 ? $this->u32($pos + 4) : $this->syncsafe($pos + 4);
+			if (!preg_match('/^[A-Z0-9]{4}$/', $id)) {
+				break;
+			}
+			// Compressed, encrypted or otherwise transformed frames say so in the second flag byte
+			if ($id === 'TXXX' && $size > 1 && $size <= self::TXXX_MAX && ord($this->at($pos + 9, 1)) === 0) {
+				$frame = $this->at($pos + 10, $size);
+				$encoding = match (ord($frame[0])) {
+					0 => 'ISO-8859-1',
+					1 => 'UTF-16',
+					2 => 'UTF-16BE',
+					3 => 'UTF-8',
+					default => null,
+				};
+				$text = $encoding === null ? '' : (string)mb_convert_encoding(substr($frame, 1), 'UTF-8', $encoding);
+				// Description and value end in a null; in UTF-16 each starts with a byte order mark
+				[$description, $value] = array_map(
+					static fn (string $part) => rtrim((string)preg_replace('/^\x{FEFF}/u', '', $part), "\0"),
+					explode("\0", $text, 2) + ['', ''],
+				);
+				if ($description !== '') {
+					$tags[$description] ??= $value;
+				}
+			}
+			$pos += 10 + $size;
+		}
+		return $tags;
+	}
+
+	/** Seven bits a byte, as ID3v2 counts sizes */
+	private function syncsafe(int $offset): int {
+		$size = 0;
+		foreach (str_split($this->at($offset, 4)) as $byte) {
+			$size = ($size << 7) | (ord($byte) & 0x7F);
+		}
+		return $size;
+	}
+
+	/**
+	 * @param array<string, string> $tags
+	 * @return array<string, mixed> audio of a known codec, and nothing else known
+	 */
+	private function audio(string $format, string $codec, array $tags = []): array {
 		return [
-			'format' => ['format_name' => $format, 'tags' => []],
+			'format' => ['format_name' => $format, 'tags' => $tags],
 			'streams' => [['codec_type' => 'audio', 'codec_name' => $codec]],
 		];
 	}

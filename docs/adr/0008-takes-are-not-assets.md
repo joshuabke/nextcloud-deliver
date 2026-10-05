@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: accepted; the mark of a Take Folder in its Sidecar is superseded by [0012](0012-start-is-in-the-file.md)
 ---
 
 # Takes are not Assets: one file each, no Versions, only in the Take comparison

@@ -81,13 +81,14 @@ class Probe {
 		}
 
 		$timecode = $probed['format']['tags']['timecode'] ?? $video['tags']['timecode'] ?? null;
-		// A Broadcast WAV knows its place in the session as samples since midnight
-		$timeReference = $probed['format']['tags']['time_reference'] ?? null;
+		// A Broadcast WAV knows its place in the session as samples since midnight,
+		// an MP3 from the delivering tool alike in an ID3 TXXX frame (ADR 0012)
+		$timeReference = $probed['format']['tags']['time_reference'] ?? $probed['format']['tags']['DELIVER_TIME_REFERENCE'] ?? null;
 		$sampleRate = (int)($audio['sample_rate'] ?? 0);
 		if (is_string($timecode) && $rate !== null) {
 			$version->setStartFrame(Timecode::toFrames($timecode, $fps[0], $fps[1]));
 			$version->setDropFrame(str_contains($timecode, ';'));
-		} elseif (is_numeric($timeReference) && $sampleRate > 0 && $rate !== null) {
+		} elseif (is_string($timeReference) && preg_match('/^\d{1,15}$/', $timeReference) && $sampleRate > 0 && $rate !== null) {
 			$version->setStartFrame((int)round((int)$timeReference / $sampleRate * $rate));
 		}
 		return $probed;
