@@ -204,6 +204,7 @@ class StartInTheFileTest extends TestCase {
 	}
 
 	public function testAWavIsNotDecodedInTheBrowser(): void {
+		$this->fixture = sys_get_temp_dir() . '/deliver-tagged-' . bin2hex(random_bytes(4)) . '.wav';
 		exec('ffmpeg -v error -y -f lavfi -i sine=duration=1 -f wav ' . escapeshellarg($this->fixture) . ' 2>&1', $output, $code);
 		self::assertSame(0, $code, implode("\n", $output));
 		$this->nc->ocs('PUT', '/admin/settings', ['ffmpegPath' => '/nonexistent/ffmpeg', 'ffprobePath' => '/nonexistent/ffprobe']);

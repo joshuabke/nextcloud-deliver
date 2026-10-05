@@ -56,9 +56,9 @@ class Notifier implements INotifier {
 			$notification->setParsedMessage($p['body']);
 		}
 		// An automatic stack is kept or undone where Version Stacks are managed: in the Project view
-		$notification->setLink($this->urls->linkToRouteAbsolute('deliver.page.index') . ($notification->getSubject() === NotificationService::AUTO_STACK
-			? 'projects/' . $p['projectId']
-			: 'versions/' . $p['versionId']));
+		$notification->setLink($notification->getSubject() === NotificationService::AUTO_STACK
+			? $this->urls->linkToRouteAbsolute('deliver.page.indexproject', ['id' => $p['projectId']])
+			: $this->urls->linkToRouteAbsolute('deliver.page.indexversion', ['id' => $p['versionId']]));
 		$notification->setIcon($this->urls->getAbsoluteURL($this->urls->imagePath(Application::APP_ID, 'app-dark.svg')));
 		return $notification;
 	}

@@ -1,8 +1,8 @@
 # Änderungen
 
-## 0.9.7 – unveröffentlicht
+## 0.8.0 – 2026-10-05
 
-Erste Veröffentlichung im App Store, als Beta: Probier sie an echten Projekten aus, aber behalte eigene Backups und rechne mit Ecken und Kanten. Rückmeldungen gehen in die GitHub-Issues.
+Erste Veröffentlichung im App Store, als Vorabversion: Probier sie an echten Projekten aus, aber behalte eigene Backups und rechne mit Ecken und Kanten. Rückmeldungen gehen in die GitHub-Issues.
 
 - Eine Video-, Audio- oder Bilddatei in der Dateien-Seitenleiste zum Review freigeben, in ein Projekt nach Wahl oder in keins, oder einen ganzen Ordner zum Projekt machen, das jede Mediendatei darin aufnimmt. Projekte sammeln Dateien von überall, und wer eine Datei öffnen kann, sieht ihr Review. Dateien bleibt die Quelle der Wahrheit: Nichts wird kopiert oder verschoben, und eine überschriebene Datei behält ihre Kommentare und wird neu eingelesen.
 - Kommentare auf einem Frame oder Bereich, mit Antworten, Zeichnungen, Erwähnungen, Reaktionen und Anhängen, und Erledigt, sobald sie umgesetzt sind.

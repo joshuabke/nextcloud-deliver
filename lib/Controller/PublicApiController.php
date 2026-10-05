@@ -360,7 +360,7 @@ class PublicApiController extends PublicShareController {
 			return [
 				'type' => 'member',
 				'name' => $this->userSession->getUser()?->getDisplayName() ?? '',
-				'url' => $this->urls->linkToRoute('deliver.page.index') . 'versions/' . $version->getId(),
+				'url' => $this->urls->linkToRoute('deliver.page.indexversion', ['id' => $version->getId()]),
 			];
 		}
 		return $reviewer === null

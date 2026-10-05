@@ -2,7 +2,7 @@
 
 **Frame-accurate video and audio review, right where your files already are.**
 
-> **Beta.** The 0.9 releases are the beta: use Deliver on real projects, but keep your own backups and expect rough edges. 1.0 follows once the beta has settled.
+> **Pre-release.** The 0.x releases come before 1.0: use Deliver on real projects, but keep your own backups and expect rough edges. 1.0 follows once they have settled.
 
 Deliver turns Nextcloud into a review tool for cuts, mixes and stills, in the spirit of Frame.io, but on your own server. Your team and your clients comment on exact Frames, draw on the picture, compare Versions and sign them off. The feedback goes back into the editing application as markers. Nothing is uploaded anywhere else and nothing is copied: Nextcloud Files stays the source of truth.
 

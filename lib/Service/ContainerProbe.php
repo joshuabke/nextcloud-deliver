@@ -530,6 +530,9 @@ class ContainerProbe {
 	 */
 	private function vorbisComment(int $start, int $end): array {
 		$pos = $start + 4 + $this->u32le($start);
+		if ($pos + 4 > $end) {
+			return [];
+		}
 		$count = $this->u32le($pos);
 		$pos += 4;
 		$tags = [];
