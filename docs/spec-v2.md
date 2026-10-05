@@ -162,9 +162,9 @@ The phone version follows the Frame.io iOS app, in the mobile browser: Deliver i
 
 ### Milestone 1.1: Takes
 
-Classical recordings are made in Takes: many passes over the same passages, partly over the whole work, partly over a few bars. The producer and the musicians choose between them by listening to the same place in several Takes, one after the other. Today that means a copy of the recording session for everyone. With 1.1 the recording session delivers its Takes into a Take Folder (reaper-deliver does it in one click, ADRs 0005 and 0008), and anyone the folder is shared with compares them in the browser.
+Classical recordings are made in Takes: many passes over the same passages, partly over the whole work, partly over a few bars. The producer and the musicians choose between them by listening to the same place in several Takes, one after the other. Today that means a copy of the recording session for everyone. With 1.1 the recording session delivers its Takes into a Take Folder (reaper-deliver does it in one click, ADRs 0008 and 0012), and anyone the folder is shared with compares them in the browser.
 
-110. As a Member, I want a folder whose Sidecar says it holds Takes to be a Take Folder, so that a Delivery sets it up without a visit to the browser.
+110. As a Member, I want a Delivery to mark the folder it fills with Takes as a Take Folder, so that it is set up without a visit to the browser.
 111. As a Member or Reviewer, I want a Take Folder to appear as one entry in the Project view and on a Project Link, opening the Take comparison, so that thirty Takes do not bury the Mixes.
 112. As a Member or Reviewer, I want the Takes of a Take Folder stacked as lanes on one timeline of Session Time, each with its Waveform and Take name, in the order of the recording session's lanes, so that I see at a glance which Takes cover the place I care about.
 113. As a Member or Reviewer, I want a click to set the play position and select the Take under the pointer, so that position and Take are one gesture.
@@ -223,35 +223,19 @@ File identity is always the Nextcloud file id, so renames and moves are free and
 
 ### Media metadata and derived media
 
-- Probe order: a Sidecar entry for the file when there is one (ADR 0005); then ffprobe when present; otherwise Deliver's own container reader, which takes the frame rate, duration and start timecode from a MOV or MP4 and the time reference from a Broadcast WAV; otherwise the Project default fps and start 0. Audio-only Versions always count in milliseconds. Members can override fps and start timecode per Version, which re-anchors nothing (frames stay frames) but changes display and export.
+- Probe order: ffprobe when present; otherwise Deliver's own container reader, which takes the frame rate, duration and start timecode from a MOV or MP4, the time reference from a Broadcast WAV or an MP3 (ADR 0012), as ffprobe does; otherwise the Project default fps and start 0. Audio-only Versions always count in milliseconds. Members can override fps and start timecode per Version, which re-anchors nothing (frames stay frames) but changes display and export.
 - Proxy: one H.264/AAC MP4 at the source frame rate (VFR conformed to average), capped at the configured resolution measured on the short side (1080p is 1920×1080 and 1080×1920 alike), CRF around 20, one-second keyframe interval, faststart. Sources browsers play (H.264/AAC MP4, WebM) always play as the original by default, at any size; they get a Proxy only when they exceed the cap, as a lighter choice the player can switch to at the same Frame. For every other source the Proxy is the only playable rendition.
 - Thumbnail Strip: WebP sprite plus JSON index, roughly one frame per second, capped by the admin setting.
-- Waveform: peaks JSON computed from raw PCM via ffmpeg, no extra binaries. Generated for every Version with audio. Without ffmpeg, a WAV's peaks are read from its PCM on the server, and other audio is decoded once by the first Member's browser, which hands peaks and duration to the server; it never overrides a Waveform the server made.
+- Waveform: peaks JSON computed from raw PCM via ffmpeg, no extra binaries. Generated for every Version with audio. Without ffmpeg, a WAV's peaks are read from its PCM on the server. The delivering tool hands in the peaks it has right after the upload, and other audio is decoded once by the first Member's browser, which hands peaks and duration to the server (`POST /versions/{id}/waveform`, also before the probe ran, the duration then in milliseconds as for all audio). Neither overrides a Waveform the server made, and one the server makes later replaces theirs (ADR 0012).
 - Storage in `appdata_deliver/<version id>/`. Served through a range-capable streaming endpoint for both Members and Reviewers.
 - Jobs run in Nextcloud's background job system, one ffmpeg at a time by default, with the optional `occ deliver:worker` loop and `occ deliver:regenerate`.
 - Admin settings: ffmpeg path, ffprobe path, max parallel jobs, max resolution, thumbnail cap, hardware encoder with device path (probed on save), extra ffmpeg args, plus a read-only status panel.
 
-### Takes and Sidecar
+### Takes
 
-- Sidecar: `deliver.json` in the folder it describes, written by the delivering tool after the files and before they are enabled. Format:
-  ```json
-  {
-    "deliver": 1,
-    "takes": true,
-    "files": {
-      "RP12.mp3": {
-        "start": 252.35,
-        "duration": 183.21,
-        "lane": 3,
-        "waveform": { "rate": 50, "peaks": [0.012, 0.431, 0.998] }
-      }
-    }
-  }
-  ```
-  `start` is the Session Time of the first sample in seconds and becomes the start Frame in milliseconds; `duration` in seconds; `lane` orders Takes and is ignored elsewhere; `takes` is present only on a Take Folder's Sidecar; unknown keys are ignored. A Sidecar entry is the probe result for its file (audio only, no video) and is re-read when the Sidecar changes. Limits, since anyone with write access writes it: a Sidecar of at most 5 MiB, `rate` at most 100, and no more peaks than `duration` × `rate`; a Sidecar or entry over them is ignored and the file is probed instead.
-- Waveform: the peaks JSON gains an optional `rate` (peaks per second). Without it, the 2000 buckets across the duration as before; a Sidecar Waveform is stored as is, so zoomed Take lanes stay sharp.
+- Start in the file (ADR 0012): the delivering tool writes each MP3's Session Time into its ID3v2 tag (v2.3 or v2.4), as a TXXX frame with the description `DELIVER_TIME_REFERENCE` and the value the first sample's position in samples since midnight at the file's own sample rate, as decimal digits (ISO-8859-1, UTF-8 or UTF-16 with a byte order mark). It is read like a Broadcast WAV's `time_reference` and becomes the start Frame in milliseconds. Anything but 1 to 15 digits, or a frame over 4 KiB, is ignored and the start stays 0.
 - Take alignment rests on start Frames, which for audio are milliseconds, so Takes line up to the millisecond whatever the Project's frame rate. Playback position itself is continuous.
-- Delivering again: a file written again in place keeps its file id, Version and Comments, and Deliver re-reads it (Sidecar first) and rebuilds its derived media. Replacing the file of a Version that has Comments is the exception and needs an explicit confirmation: Deliver's own upload asks, and a delivering tool asks before it overwrites, after reading the Version's Comments through the OCS API; without the confirmation it delivers a new Version instead, or for a Take skips it (ADR 0008). Writes from the Files app or a sync client cannot be asked about and are taken as they come.
+- Delivering again: a file written again in place keeps its file id, Version and Comments, and Deliver re-reads it and rebuilds its derived media. Replacing the file of a Version that has Comments is the exception and needs an explicit confirmation: Deliver's own upload asks, and a delivering tool asks before it overwrites, after reading the Version's Comments through the OCS API; without the confirmation it delivers a new Version instead, or for a Take skips it (ADR 0008). Writes from the Files app or a sync client cannot be asked about and are taken as they come.
 - Take comparison: a view of its own over the Takes of one Take Folder, opened from the Project view, the Asset menu and a link's landing page, where a Take Folder is one entry. One audio element plays the selected Take; switching only happens while stopped. Comments are ordinary Comments on each Take's one Version (ADR 0008), anchored to a Frame; Ranges are not offered here.
 
 ### Permissions
