@@ -82,8 +82,10 @@ class Probe {
 
 		$timecode = $probed['format']['tags']['timecode'] ?? $video['tags']['timecode'] ?? null;
 		// A Broadcast WAV knows its place in the session as samples since midnight,
-		// an MP3 from the delivering tool alike in an ID3 TXXX frame (ADR 0012)
-		$timeReference = $probed['format']['tags']['time_reference'] ?? $probed['format']['tags']['DELIVER_TIME_REFERENCE'] ?? null;
+		// an MP3, FLAC or M4A from the delivering tool alike in its tag (ADR 0012).
+		// ffprobe names a tag as written, and Vorbis comment keys are case-insensitive
+		$tags = array_change_key_case((array)($probed['format']['tags'] ?? []), CASE_LOWER);
+		$timeReference = $tags['time_reference'] ?? $tags['deliver_time_reference'] ?? null;
 		$sampleRate = (int)($audio['sample_rate'] ?? 0);
 		if (is_string($timecode) && $rate !== null) {
 			$version->setStartFrame(Timecode::toFrames($timecode, $fps[0], $fps[1]));

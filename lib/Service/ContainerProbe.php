@@ -8,9 +8,11 @@ namespace OCA\Deliver\Service;
  * What Frames rest on, read without ffprobe (ADR 0003): the frame rate, the
  * start timecode and the duration of a MOV or MP4 from its boxes, and the
  * time reference of a Broadcast WAV, the frame rate, size and duration of a
- * WebM or MKV, the sample rate of an MP3 and the TXXX frames of its ID3 tag.
- * MP3, AAC, FLAC and Ogg are otherwise only known as audio, which counts in
- * milliseconds and needs nothing more; the browser knows their duration.
+ * WebM or MKV, the sample rate of an MP3 and the TXXX frames of its ID3 tag,
+ * the sample rate, duration and Vorbis comments of a FLAC and the iTunes
+ * freeform tags of an M4A. MP3, AAC and Ogg are otherwise only known as audio,
+ * which counts in milliseconds and needs nothing more; the browser knows
+ * their duration.
  * The answer has ffprobe's shape, so Probe treats both alike. Other
  * containers (MXF, AVI) stay unread and take the Project's frame rate. Only headers are read: the media data is skipped by seeking,
  * so a file of many gigabytes costs a few reads.
@@ -34,8 +36,8 @@ class ContainerProbe {
 
 	/** Sample rates of MPEG 2.5, (reserved), 2 and 1 audio by the index in a frame header */
 	private const MPEG_RATES = [[11025, 12000, 8000], [], [22050, 24000, 16000], [44100, 48000, 32000]];
-	/** A TXXX frame larger than this is not read: a time reference takes a few dozen bytes, even in UTF-16 */
-	private const TXXX_MAX = 4096;
+	/** A tag larger than this is not read: a time reference takes a few dozen bytes, even in UTF-16 */
+	private const TAG_MAX = 4096;
 
 	/** @var resource */
 	private $file;
@@ -59,7 +61,7 @@ class ContainerProbe {
 				return $this->matroska();
 			}
 			if (str_starts_with($head, 'fLaC')) {
-				return $this->audio('flac', 'flac');
+				return $this->flac();
 			}
 			if (str_starts_with($head, 'OggS')) {
 				return $this->ogg();
@@ -77,7 +79,7 @@ class ContainerProbe {
 			return null;
 		}
 		$streams = [];
-		$tags = [];
+		$tags = $this->freeform($moov);
 		$seconds = 0.0;
 		foreach ($this->boxes($moov[0], $moov[1]) as [$type, $start, $end]) {
 			if ($type !== 'trak') {
@@ -98,6 +100,34 @@ class ContainerProbe {
 			'format' => ['format_name' => 'mov,mp4,m4a,3gp,3g2,mj2', 'duration' => (string)$seconds, 'tags' => $tags],
 			'streams' => $streams,
 		];
+	}
+
+	/**
+	 * The iTunes freeform tags (`----`) under moov/udta/meta/ilst by their name,
+	 * as ffprobe names them; the delivering tool puts the start there (ADR 0012).
+	 *
+	 * @param array{0: int, 1: int} $moov
+	 * @return array<string, string>
+	 */
+	private function freeform(array $moov): array {
+		$udta = $this->child($moov[0], $moov[1], 'udta');
+		$meta = $udta === null ? null : $this->child($udta[0], $udta[1], 'meta');
+		// meta is a full box: version and flags come before its children
+		$ilst = $meta === null ? null : $this->child($meta[0] + 4, $meta[1], 'ilst');
+		$tags = [];
+		foreach ($ilst === null ? [] : $this->boxes($ilst[0], $ilst[1]) as [$type, $start, $end]) {
+			$name = $type === '----' && $end - $start <= self::TAG_MAX ? $this->child($start, $end, 'name') : null;
+			$data = $name === null ? null : $this->child($start, $end, 'data');
+			if ($name === null || $data === null) {
+				continue;
+			}
+			// name has version and flags before the text, data its type and locale
+			$key = $this->at($name[0] + 4, $name[1] - $name[0] - 4);
+			if ($key !== '') {
+				$tags[$key] ??= $this->at($data[0] + 8, $data[1] - $data[0] - 8);
+			}
+		}
+		return $tags;
 	}
 
 	/** @return array{seconds: float, stream: ?array<string, mixed>, timecode: ?string}|null */
@@ -143,7 +173,14 @@ class ContainerProbe {
 			}
 			$track['stream'] = $stream;
 		} elseif ($handler === 'soun' && $entry !== null) {
-			$track['stream'] = ['codec_type' => 'audio', 'codec_name' => self::CODECS[$format] ?? strtolower($format)];
+			// A version 0 or 1 sample entry holds the rate as 16.16 fixed point, 0 above 65535 Hz;
+			// the media's timescale is the sample rate as muxers write it
+			$rate = $this->u16($entry[0] + 8 + 16) < 2 ? $this->u16($entry[0] + 8 + 32) : 0;
+			$track['stream'] = [
+				'codec_type' => 'audio',
+				'codec_name' => self::CODECS[$format] ?? strtolower($format),
+				'sample_rate' => (string)($rate ?: $timescale),
+			];
 		}
 		return $track;
 	}
@@ -447,6 +484,69 @@ class ContainerProbe {
 	}
 
 	/**
+	 * A FLAC's STREAMINFO block holds its sample rate and length in samples,
+	 * so the duration is exact; its VORBIS_COMMENT block holds the tags, the
+	 * delivering tool's start among them (ADR 0012). Pictures and the audio
+	 * are skipped by seeking.
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function flac(): array {
+		$size = $this->size();
+		$tags = [];
+		$rate = 0;
+		$samples = 0;
+		$last = false;
+		for ($pos = 4; !$last && $pos + 4 <= $size; $pos += 4 + ($header & 0xFFFFFF)) {
+			// The last-block flag, seven bits of type and 24 of length
+			$header = $this->u32($pos);
+			$last = ($header & 0x80000000) !== 0;
+			$type = ($header >> 24) & 0x7F;
+			if ($type === 0) {
+				// Past the block and frame sizes: 20 bits of sample rate, 3 of channels, 5 of bit depth, 36 of samples
+				$bits = $this->u64($pos + 4 + 10);
+				$rate = ($bits >> 44) & 0xFFFFF;
+				$samples = $bits & 0xFFFFFFFFF;
+			} elseif ($type === 4) {
+				$tags = $this->vorbisComment($pos + 4, $pos + 4 + ($header & 0xFFFFFF));
+			}
+		}
+		$flac = $this->audio('flac', 'flac', $tags);
+		if ($rate > 0) {
+			$flac['streams'][0]['sample_rate'] = (string)$rate;
+			if ($samples > 0) {
+				$flac['format']['duration'] = (string)($samples / $rate);
+			}
+		}
+		return $flac;
+	}
+
+	/**
+	 * A Vorbis comment block: the vendor string, then `KEY=value` comments,
+	 * each after its length, all lengths little-endian. Keys stay as written,
+	 * as ffprobe names them.
+	 *
+	 * @return array<string, string>
+	 */
+	private function vorbisComment(int $start, int $end): array {
+		$pos = $start + 4 + $this->u32le($start);
+		$count = $this->u32le($pos);
+		$pos += 4;
+		$tags = [];
+		for ($i = 0; $i < $count && $pos + 4 <= $end; $i++) {
+			$length = $this->u32le($pos);
+			if ($length <= self::TAG_MAX && $pos + 4 + $length <= $end) {
+				[$key, $value] = explode('=', $this->at($pos + 4, $length), 2) + ['', ''];
+				if ($key !== '') {
+					$tags[$key] ??= $value;
+				}
+			}
+			$pos += 4 + $length;
+		}
+		return $tags;
+	}
+
+	/**
 	 * The first packet of an Ogg stream names its codec; Theora and the like
 	 * are video, which this does not read.
 	 *
@@ -522,7 +622,7 @@ class ContainerProbe {
 				break;
 			}
 			// Compressed, encrypted or otherwise transformed frames say so in the second flag byte
-			if ($id === 'TXXX' && $size > 1 && $size <= self::TXXX_MAX && ord($this->at($pos + 9, 1)) === 0) {
+			if ($id === 'TXXX' && $size > 1 && $size <= self::TAG_MAX && ord($this->at($pos + 9, 1)) === 0) {
 				$frame = $this->at($pos + 10, $size);
 				$encoding = match (ord($frame[0])) {
 					0 => 'ISO-8859-1',
