@@ -66,19 +66,17 @@ class ReviewerService {
 	public function update(Reviewer $reviewer, string $name, ?string $email, array $mail, ?array $rights = null): Reviewer {
 		$reviewer->setName(self::name($name));
 		if ($rights !== null) {
-			if (array_key_exists('canComment', $rights)) {
-				$reviewer->setCanComment($rights['canComment'] !== null ? (bool)$rights['canComment'] : null);
-			}
-			if (array_key_exists('allowOlder', $rights)) {
-				$reviewer->setAllowOlder($rights['allowOlder'] !== null ? (bool)$rights['allowOlder'] : null);
-			}
-			if (array_key_exists('watermark', $rights)) {
-				$reviewer->setWatermark($rights['watermark'] !== null ? (bool)$rights['watermark'] : null);
-			}
+			$reviewer->setCanComment(self::right($rights, 'canComment'));
+			$reviewer->setAllowOlder(self::right($rights, 'allowOlder'));
+			$reviewer->setWatermark(self::right($rights, 'watermark'));
 		}
 		return $this->updateSettings($reviewer, $email, $mail);
 	}
 
+	/** @param array<string, mixed> $rights */
+	private static function right(array $rights, string $key): ?bool {
+		return isset($rights[$key]) ? (bool)$rights[$key] : null;
+	}
 
 	/** A new key: the old Personal Links stop working, the Reviewer keeps their Comments */
 	public function renewKey(Reviewer $reviewer): Reviewer {
