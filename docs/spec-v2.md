@@ -213,6 +213,8 @@ Files is the source of truth (ADR 0002). Deliver's tables hold only review state
 
 File identity is always the Nextcloud file id, so renames and moves are free and never change a Version's Project. A move to trash sets the Version to Missing and notifies; permanent deletion purges Version and Comments. A Folder Project whose folder is deleted becomes a plain Project. Attachments live in app data under the Comment.
 
+Nextcloud hands a deleted account's user id to the next account created under it, so a deleted account leaves nothing tied to its id: a Folder Project it made passes to whoever owns the folder, any other Project it made is removed as by its maker, its Project Links go and its Reviewers are removed, and its Comments, Approvals and Reactions stay, by a Deleted user that nobody can edit. A removed Reviewer stays removed.
+
 ### Discovery and stacking
 
 - A file listener plus a periodic scan job keep Assets in sync. While Auto Intake is on, every new video or audio file in the folder that no Project holds becomes an Asset with Version 1 unless the filename convention matches; otherwise files become Assets only when a Member enables them, and the listener merely follows moves, renames and deletions of the files already enabled. The scan checks every Version's file by id, wherever it lies.

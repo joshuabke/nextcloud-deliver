@@ -59,6 +59,7 @@ OC.L10N.register(
 		"Delete": "Löschen",
 		"Delete link": "Link löschen",
 		"Delete this link?": "Diesen Link löschen?",
+		"Deleted user": "Gelöschter Benutzer",
 		"Deliver": "Deliver",
 		"Deliver is preparing a version of this file that the browser can play.": "Deliver bereitet eine Fassung dieser Datei vor, die der Browser abspielen kann.",
 		"Deliver is preparing a version of this file that the browser can play: {percent} %": "Deliver bereitet eine Fassung dieser Datei vor, die der Browser abspielen kann: {percent} %",

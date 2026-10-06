@@ -27,6 +27,14 @@ class ProjectLinkMapper extends Mapper {
 		return $this->findEntities($qb);
 	}
 
+	/** @return ProjectLink[] every link a Member made */
+	public function findByOwner(string $ownerUid): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->eq('owner_uid', $qb->createNamedParameter($ownerUid)));
+		return $this->findEntities($qb);
+	}
+
 	/** @return ProjectLink[] a Member's links on a Project, or to Assets of No Project for null, oldest first */
 	public function findByProject(?int $projectId, string $ownerUid): array {
 		$qb = $this->db->getQueryBuilder();
