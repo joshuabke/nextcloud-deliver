@@ -6,6 +6,7 @@ namespace OCA\Deliver\AppInfo;
 
 use OCA\Deliver\Listener\FileEventsListener;
 use OCA\Deliver\Listener\LoadSidebarListener;
+use OCA\Deliver\Listener\UserDeletedListener;
 use OCA\Deliver\Notification\Notifier;
 use OCA\Deliver\SetupCheck\BackgroundJobsCheck;
 use OCA\Deliver\SetupCheck\MediaJobsCheck;
@@ -21,6 +22,7 @@ use OCP\Files\Events\Node\NodeCreatedEvent;
 use OCP\Files\Events\Node\NodeDeletedEvent;
 use OCP\Files\Events\Node\NodeRenamedEvent;
 use OCP\Files\Events\Node\NodeWrittenEvent;
+use OCP\User\Events\UserDeletedEvent;
 
 class Application extends App implements IBootstrap {
 	public const APP_ID = 'deliver';
@@ -35,6 +37,7 @@ class Application extends App implements IBootstrap {
 		$context->registerSetupCheck(BackgroundJobsCheck::class);
 		$context->registerSetupCheck(MediaJobsCheck::class);
 		$context->registerEventListener(LoadSidebar::class, LoadSidebarListener::class);
+		$context->registerEventListener(UserDeletedEvent::class, UserDeletedListener::class);
 		// Files is the source of truth, so Deliver follows its events (ADR 0002)
 		foreach ([NodeCreatedEvent::class, NodeWrittenEvent::class, VersionRestoredEvent::class, NodeRenamedEvent::class, NodeDeletedEvent::class, MoveToTrashEvent::class, NodeRestoredEvent::class] as $event) {
 			$context->registerEventListener($event, FileEventsListener::class);

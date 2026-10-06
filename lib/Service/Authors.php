@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Deliver\Service;
 
 use OCA\Deliver\Db\ReviewerMapper;
+use OCP\IL10N;
 use OCP\IUserManager;
 
 /** Who wrote or decided something, in the shape the client shows: type, id, name */
@@ -12,6 +13,7 @@ class Authors {
 	public function __construct(
 		private ReviewerMapper $reviewers,
 		private IUserManager $users,
+		private IL10N $l,
 	) {
 	}
 
@@ -35,7 +37,10 @@ class Authors {
 		if ($reviewerId !== null) {
 			return ['type' => 'reviewer', 'id' => $reviewerId, 'name' => $this->reviewers->find($reviewerId)?->getName() ?? ''];
 		}
-		$uid = (string)$uid;
+		if ($uid === null) {
+			// What a deleted account left, its user id handed back (UserDeletedListener)
+			return ['type' => 'deleted', 'id' => '', 'name' => $this->l->t('Deleted user')];
+		}
 		return ['type' => 'user', 'id' => $uid, 'name' => $this->users->getDisplayName($uid) ?? $uid];
 	}
 }

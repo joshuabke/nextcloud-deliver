@@ -1,5 +1,9 @@
 # Änderungen
 
+## 0.8.1
+
+- Wird ein Nextcloud-Konto gelöscht, erbt ein später unter derselben Benutzer-ID angelegtes Konto nicht mehr dessen Projekte, Links und Reviewer. Ein Ordnerprojekt geht an den Eigentümer des Ordners, andere Projekte werden entfernt und ihre Assets bleiben Ohne Projekt erhalten; Kommentare und Abnahmen des Kontos bleiben erhalten und stehen dann unter „Gelöschter Benutzer“.
+
 ## 0.8.0 – 2026-10-05
 
 Erste Veröffentlichung im App Store, als Vorabversion: Probier sie an echten Projekten aus, aber behalte eigene Backups und rechne mit Ecken und Kanten. Rückmeldungen gehen in die GitHub-Issues.

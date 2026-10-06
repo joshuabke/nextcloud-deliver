@@ -57,7 +57,8 @@ class ReviewerApiController extends OCSController {
 	/** @throws AccessDeniedException the Reviewer is another Member's (ADR 0009) */
 	private function own(int $id): Reviewer {
 		$reviewer = $this->reviewers->find($id);
-		if ($reviewer->getOwnerUid() !== (string)$this->userId) {
+		// A removed Reviewer stays removed: their Personal Links do not come back
+		if ($reviewer->getOwnerUid() !== (string)$this->userId || $reviewer->getSecretKey() === null) {
 			throw new AccessDeniedException('Only the Member a Reviewer belongs to changes them');
 		}
 		return $reviewer;
