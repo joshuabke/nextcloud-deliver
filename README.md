@@ -29,13 +29,26 @@
 
 ## Screenshots
 
-| The Review view | A Project |
-| --- | --- |
-| [![A Comment on a Range with a Drawing, Replies and Reactions](docs/screenshots/review.png)](docs/screenshots/review.png) | [![A Project with its Assets as cards: filters, Approvals, Due Dates](docs/screenshots/project.png)](docs/screenshots/project.png) |
-| **Compare under a wipe** | **A client on a Project Link** |
-| [![Compare view: the flat v1 against the graded v2](docs/screenshots/compare.png)](docs/screenshots/compare.png) | [![A Reviewer's page with a Watermark and the Approval "Changes requested"](docs/screenshots/reviewer.png)](docs/screenshots/reviewer.png) |
-| **The Projects** | **On a phone** |
-| [![The Projects as tiles](docs/screenshots/projects.png)](docs/screenshots/projects.png) | [<img src="docs/screenshots/phone.png" alt="The Review view on a phone" width="260">](docs/screenshots/phone.png) |
+<table>
+<tr>
+<th>The Review view</th>
+<th>Compare under a wipe</th>
+<th>A client on a Project Link</th>
+</tr>
+<tr>
+<td><a href="docs/screenshots/review.png"><img src="docs/screenshots/review.png" alt="A Comment on a Range with a Drawing, Replies and Reactions" width="100%"></a></td>
+<td><a href="docs/screenshots/compare.png"><img src="docs/screenshots/compare.png" alt="Compare view: the flat v1 against the graded v2" width="100%"></a></td>
+<td><a href="docs/screenshots/reviewer.png"><img src="docs/screenshots/reviewer.png" alt="A Reviewer's page with a Watermark and the Approval Changes requested" width="100%"></a></td>
+</tr>
+<tr>
+<th colspan="2">The Projects and a Project</th>
+<th>On a phone</th>
+</tr>
+<tr>
+<td colspan="2"><a href="docs/screenshots/projects.png"><img src="docs/screenshots/projects.png" alt="The Projects as tiles" width="100%"></a><br><a href="docs/screenshots/project.png"><img src="docs/screenshots/project.png" alt="A Project with its Assets as cards: filters, Approvals, Due Dates" width="100%"></a></td>
+<td><a href="docs/screenshots/phone.png"><img src="docs/screenshots/phone.png" alt="The Review view on a phone" width="100%"></a></td>
+</tr>
+</table>
 
 ## Installation
 
