@@ -1,6 +1,7 @@
 import axios from '@nextcloud/axios'
 import { getLanguage, t } from '@nextcloud/l10n'
 import { generateOcsUrl, generateUrl } from '@nextcloud/router'
+import { baseLanguage } from './lib/language.js'
 import { mediaKind } from './lib/media.js'
 import { decodeWaveform } from './lib/waveform.js'
 
@@ -143,7 +144,7 @@ const mailFields = (mail) => ({ mailReplies: mail.replies, mailComments: mail.co
  * @param {{replies: boolean, comments: boolean, versions: boolean}} mail - what to mail
  * @return {Promise<object>} the Reviewer, with their Personal Link, mailed in the page's language
  */
-export const claimReviewer = (name, email, mail) => axios.post(url('/reviewer'), { name, email, ...mailFields(mail), language: getLanguage() }).then(data)
+export const claimReviewer = (name, email, mail) => axios.post(url('/reviewer'), { name, email, ...mailFields(mail), language: baseLanguage(getLanguage()) }).then(data)
 /**
  * @param {string|null} name - their new name, or null to keep it
  * @param {string|null} email - the address, or null for none
@@ -151,7 +152,7 @@ export const claimReviewer = (name, email, mail) => axios.post(url('/reviewer'),
  * @param {string} language - the one to mail them in, the page's unless they pick another
  * @return {Promise<object>} the Reviewer as stored
  */
-export const updateReviewer = (name, email, mail, language = getLanguage()) => axios.put(url('/reviewer'), { name, email, ...mailFields(mail), language }).then(data)
+export const updateReviewer = (name, email, mail, language = baseLanguage(getLanguage())) => axios.put(url('/reviewer'), { name, email, ...mailFields(mail), language }).then(data)
 /** Ends the Reviewer's session: this browser forgets who they are */
 export const forgetReviewer = () => axios.delete(url('/reviewer'))
 /** Every file behind the link that is an Asset: [{ fileId, versionId, assetId }], Versions of one Asset share its newest versionId */

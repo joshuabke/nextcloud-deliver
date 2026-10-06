@@ -58,7 +58,7 @@ class PublicController extends AuthPublicShareController {
 	private function page(?int $versionId): TemplateResponse {
 		// The language a Reviewer chose on this browser goes into the address, before anything is recorded
 		$language = $this->request->getCookie(self::LANGUAGE_COOKIE);
-		if (in_array($language, ['de', 'en'], true) && $this->request->getParam('forceLanguage') === null) {
+		if (in_array($language, ReviewerService::LANGUAGES, true) && $this->request->getParam('forceLanguage') === null) {
 			$uri = $this->request->getRequestUri();
 			$response = new TemplateResponse(Application::APP_ID, 'public', [], TemplateResponse::RENDER_AS_BLANK);
 			$response->setStatus(Http::STATUS_SEE_OTHER);

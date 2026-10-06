@@ -249,7 +249,10 @@ class PublicApiController extends PublicShareController {
 			}
 			// The same name and address make one the same Reviewer again; otherwise only the Members' names are taken
 			$reviewer = $this->links->returning($link, $name, $email);
-			if ($reviewer === null) {
+			if ($reviewer !== null) {
+				// Their mails follow the page they are back on
+				$reviewer = $this->reviewers->updateSettings($reviewer, $reviewer->getEmail(), [], null, $language);
+			} else {
 				$this->links->assertNameFree($link, $name, reviewersToo: false);
 				$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
 				$reviewer = $this->reviewers->claim($link->ownerUid(), $name, $email, $wishes, $language);
@@ -278,14 +281,16 @@ class PublicApiController extends PublicShareController {
 			if ($name !== null) {
 				$this->links->assertRenameFree($reviewer, $name, reviewersToo: false);
 			}
-			$before = $reviewer->getEmail();
-			if ($email !== null && $email !== $before) {
-				// A new address is mailed, so it counts against the same limit as naming oneself
+			$this->links->assertNoTwin($this->link(), $reviewer, $name ?? (string)$reviewer->getName(), $email);
+			$before = mb_strtolower((string)$reviewer->getEmail());
+			$changed = $email !== null && mb_strtolower(trim($email)) !== $before;
+			if ($changed) {
+				// A new address is mailed, so it has a limit of its own, as naming oneself does
 				$this->limiter->registerAnonRequest('deliver-reviewer-address', 10, 3600, $this->request->getRemoteAddress());
 			}
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
 			$reviewer = $this->reviewers->updateSettings($reviewer, $email, $wishes, $name, $language);
-			$mailed = $reviewer->getEmail() !== $before && $this->mail->welcome($reviewer, $this->link()->personalLink($reviewer), $language);
+			$mailed = $changed && $this->mail->welcome($reviewer, $this->link()->personalLink($reviewer), $language);
 			return $this->reviewers->serialize($reviewer) + ['mailed' => $mailed];
 		});
 	}

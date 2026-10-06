@@ -204,16 +204,29 @@ class ReviewLinks {
 	 * with both makes one that Reviewer again, as on Frame.io.
 	 */
 	public function returning(ReviewLink $link, string $name, ?string $email): ?Reviewer {
-		$email = mb_strtolower(trim((string)$email));
+		$email = trim((string)$email);
 		if ($email === '') {
 			return null;
 		}
-		foreach ($this->reviewerMapper->findByOwners([$link->ownerUid()]) as $reviewer) {
-			if (self::normal((string)$reviewer->getName()) === self::normal($name) && mb_strtolower((string)$reviewer->getEmail()) === $email) {
+		foreach ($this->reviewerMapper->findByAddress($link->ownerUid(), $email) as $reviewer) {
+			if (self::normal((string)$reviewer->getName()) === self::normal($name)) {
 				return $reviewer;
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * Refuses a Reviewer's new name and address when another Reviewer of the
+	 * Member has both: naming oneself with them could only lead to one.
+	 *
+	 * @throws ProjectConflictException
+	 */
+	public function assertNoTwin(ReviewLink $link, Reviewer $reviewer, string $name, ?string $email): void {
+		$twin = $this->returning($link, $name, $email);
+		if ($twin !== null && $twin->getId() !== $reviewer->getId()) {
+			throw new ProjectConflictException($this->l->t('Someone in this review is already called "%s".', [trim($name)]));
+		}
 	}
 
 	/** A name as it is stored (ReviewerService), without case */

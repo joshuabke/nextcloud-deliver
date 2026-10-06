@@ -15,6 +15,12 @@ export function withLanguage(href, language) {
 }
 
 /**
+ * @param {string} tag - a language as Nextcloud names it: de, de_DE, en-GB
+ * @return {string} the language alone, as Deliver offers it to Reviewers
+ */
+export const baseLanguage = (tag) => tag.split(/[-_]/)[0]
+
+/**
  * Shows the page in another language, now and on later visits.
  *
  * @param {string} language - de or en

@@ -188,7 +188,7 @@ class ReviewerMail {
 		}
 		$template->addBodyButton($l->t('Open the review'), $link);
 		$template->addBodyText($why);
-		$template->addFooter();
+		$template->addFooter('', $l->getLanguageCode());
 		try {
 			$message = $this->mailer->createMessage();
 			$message->setTo([(string)$reviewer->getEmail() => $reviewer->getName()]);

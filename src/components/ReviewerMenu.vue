@@ -17,7 +17,7 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import PersonAvatar from './PersonAvatar.vue'
 import { errorMessage, forgetReviewer, updateReviewer } from '../api.js'
 import { confirmRemoval } from '../confirm.js'
-import { chooseLanguage } from '../lib/language.js'
+import { baseLanguage, chooseLanguage } from '../lib/language.js'
 
 // The Reviewer's own menu, as on Frame.io: their name and address, what to mail, the language, and the end of the session
 const props = defineProps({
@@ -37,7 +37,7 @@ const LANGUAGES = [
 	{ id: 'de', label: 'Deutsch' },
 	{ id: 'en', label: 'English' },
 ]
-const language = getLanguage().split(/[-_]/)[0]
+const language = baseLanguage(getLanguage())
 
 // Each field follows what is stored, without touching what is typed into the other
 const name = ref('')
@@ -72,7 +72,7 @@ async function save(change) {
 		}
 	} catch (e) {
 		name.value = props.reviewer.name
-		showError(errorMessage(e))
+		showError(e?.response?.status === 409 ? t('deliver', 'Someone in this review is already called "{name}".', { name: change.name ?? props.reviewer.name }) : errorMessage(e))
 	}
 }
 
@@ -97,7 +97,7 @@ async function end() {
 	const confirmed = await confirmRemoval(
 		t('deliver', 'End the session?'),
 		props.reviewer.email
-			? t('deliver', 'Your Personal Link makes you "{name}" again; Deliver mailed it to {email}.', { name: props.reviewer.name, email: props.reviewer.email })
+			? t('deliver', 'To be "{name}" again, give that name and {email} next time, or open your Personal Link.', { name: props.reviewer.name, email: props.reviewer.email })
 			: t('deliver', 'Only your Personal Link makes you "{name}" again. Without it, you will review under a new name.', { name: props.reviewer.name }),
 		t('deliver', 'End session'),
 	)
