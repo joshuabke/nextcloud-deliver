@@ -32,26 +32,17 @@
   - Landing page: download one by one or as a ZIP
   - Personal Links with rights of their own and an optional Watermark
   - Who opened, watched and downloaded what
-- **Back into the edit**
+- **Back into the edit** export comments as markers for:
   - Video: DaVinci Resolve (EDL), Premiere Pro (FCP7 XML), Final Cut Pro (FCPXML), CSV
   - Audio: WAV markers, MIDI, REAPER regions, Ableton Live Set
 - **Media**
-  - Browser-native files play as they are
-  - Frame rate and start timecode from MOV, MP4 and Broadcast WAV; the start of MP3, FLAC and M4A from their tags
-  - Waveforms for audio
-  - Scrub through a video by hovering over its still
-- **Everywhere**
-  - Live updates without reloading
-  - A Review view made for phones
-  - English and German
-- **No shell needed**
-  - Setup checks on the admin overview
-  - Failed media jobs in the Nextcloud log, retried from Deliver's settings
-  - A support report to attach to an issue
+  - supported files: mp4/mov h.264, WAV, flac, mp3, aac.
+  - Waveform generation via clientbrowser, wav is processed on nextcloud
+  - Scrub through a video by hovering over its still, frame accurate video thumbnails
+- **Fully mobile ready**
 - **With ffmpeg on the server**
-  - Proxies for formats a browser will not play
-  - Thumbnail Strips for the timeline
-  - Frame rate and timecode from any container, MXF and AVI included
+  - automatic generation of proxys, thumbnails and waveforms from all ffmpeg supported inputs
+  - Frame rate and timecode MXF and AVI included
   - Hardware encoding: VAAPI, NVENC, VideoToolbox
 
 ## Screenshots
