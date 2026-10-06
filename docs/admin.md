@@ -27,15 +27,6 @@ For VAAPI in Docker, pass `/dev/dri` into the container **and** put the web serv
 
 An hourly scan compares every Project with its folder, next to the file listener: it catches deletions from the trash, which fire no event Deliver can hear, and purges Projects whose folder is gone for good.
 
-## Hosted Nextcloud
-
-Deliver runs without ffmpeg and without a shell, so a managed Nextcloud can carry it, as far as its provider lets App Store apps in. What has been seen so far; additions are welcome as issues or pull requests.
-
-| Provider | Nextcloud | Deliver in the app list | ffmpeg | Shell / `occ` | Checked |
-| --- | --- | --- | --- | --- | --- |
-| Hetzner Storage Share | 33.0.9 | no: Deliver 0.8.0 is not listed, nor are other apps published recently | no | no | 2026-10 |
-| Own server ([deploy/](../deploy/README.md)) | 33, 34 | yes | yes, with hardware encoding | yes | 2026-10 |
-
 ## Live updates
 
 The Review view asks for changes every five seconds (thirty in a hidden tab). Where Nextcloud runs the [notify_push](https://github.com/nextcloud/notify_push) app, every new or changed Comment, Reaction or Approval is pushed to the Project's Members as well, and their open Review views update at once. Reviewers on a Project Link have no account to push to and keep polling.

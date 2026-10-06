@@ -1,6 +1,7 @@
 /**
- * The App Store screenshots (docs/screenshots/), taken from the dev instance
- * with footage from Tears of Steel, (CC) Blender Foundation | mango.blender.org.
+ * The App Store screenshots and the README's slideshow (docs/screenshots/),
+ * taken from the dev instance with footage from Tears of Steel,
+ * (CC) Blender Foundation | mango.blender.org.
  *
  * node dev/screenshots.mjs
  *
@@ -266,10 +267,20 @@ async function shoot({ project, flat, graded, personal, token }) {
 	await browser.close()
 }
 
+/** The README's slideshow: every shot for three seconds on one 1440×900 canvas, looping */
+function slideshow() {
+	const shots = ['review', 'project', 'compare', 'reviewer', 'phone', 'projects']
+	const fit = shots.map((_, i) => `[${i}]scale=1440:900:force_original_aspect_ratio=decrease,pad=1440:900:(ow-iw)/2:(oh-ih)/2:color=0x171717,setsar=1,fps=1[v${i}]`)
+	const filter = fit.join(';') + ';' + shots.map((_, i) => `[v${i}]`).join('') + `concat=n=${shots.length}:v=1[out]`
+	const inputs = shots.flatMap((shot) => ['-loop', '1', '-t', '3', '-i', join(OUT, shot + '.png')])
+	execFileSync('ffmpeg', ['-v', 'error', '-y', ...inputs, '-filter_complex', filter, '-map', '[out]', '-c:v', 'libwebp_anim', '-quality', '80', '-loop', '0', join(OUT, 'slideshow.webp')])
+}
+
 media()
 previews()
 await users()
 const seeded = await seed()
 worker()
 await shoot(seeded)
+slideshow()
 process.stdout.write(`Screenshots in ${OUT}\n`)
