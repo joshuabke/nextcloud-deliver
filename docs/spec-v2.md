@@ -79,7 +79,7 @@ Deliver becomes a proper Nextcloud app, rebuilt from scratch, in which media fil
 50. As a Member, I want a link's download setting to keep the original away from Reviewers while commenting still works, so that I control what leaves the house.
 51. As a Member, I want to decide per link whether Reviewers may comment at all and whether they may comment on older Versions, and to set its password and expiry, copy it or delete it right where it is listed in Deliver, so that a link can be handed out read-only.
 52. As a Member, I want revoking or replacing a Project Link to leave every Comment untouched, so that links stay disposable.
-53. As a Member with write access, I want to invite a Reviewer by name and optional email and get a Personal Link for them, so that the person is identified from the first click.
+53. As a Member with write access, I want to invite a Reviewer by a name nobody in the review has yet and an optional email, get a Personal Link for them and, if I like, mail it to them under a message of my own, so that the person is identified from the first click.
 54. As a Reviewer opening a Project Link without a Personal Link, I want to enter my name once, a name nobody in the review has yet, and get my Personal Link by mail when I give an address, or shown to bookmark when I give none, so that I keep my identity on any device forever and nobody passes for someone else.
 55. As a Reviewer, I want my Personal Link to survive a replaced Project Link as long as a Member re-issues it, so that my comment history stays mine.
 56. As a Reviewer, I want to be recognised again on the same browser without the Personal Link, so that daily use is frictionless.
