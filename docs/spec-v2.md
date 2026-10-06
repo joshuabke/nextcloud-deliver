@@ -83,6 +83,7 @@ Deliver becomes a proper Nextcloud app, rebuilt from scratch, in which media fil
 54. As a Reviewer opening a Project Link without a Personal Link, I want to enter my name once, a name nobody in the review has yet, and get my Personal Link by mail when I give an address, or shown to bookmark when I give none, so that I keep my identity on any device forever and nobody passes for someone else.
 55. As a Reviewer, I want my Personal Link to survive a replaced Project Link as long as a Member re-issues it, so that my comment history stays mine.
 56. As a Reviewer, I want to be recognised again on the same browser without the Personal Link, so that daily use is frictionless.
+128. As a Reviewer, I want a menu under my avatar at the top of the review to change my name, address and what is mailed to me, to switch between German and English, and to end my session so that the next person names themselves anew, so that a shared computer or a typo never sticks.
 57. As a Reviewer, I want to touch only my own Comments and never resolve anything, so that the editor stays in control.
 58. As a Nextcloud user who is not a Member, I want a Project Link to treat me as a Reviewer with my display name prefilled, so that colleagues without access to the files can still comment.
 59. As a Member, I want a Project Link to show me what Reviewers see, read only, with a way into the normal app view, so that I can check a link before I send it and never work with reduced rights by accident.

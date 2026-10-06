@@ -106,6 +106,23 @@ class ReviewLinkTest extends TestCase {
 		self::assertSame(200, $this->nc->ocs('PUT', "/reviewers/$jo", ['name' => 'JO'])['status'], 'their own name stays theirs');
 	}
 
+	public function testAReviewerRenamesThemselvesAndEndsTheirSession(): void {
+		$other = $this->reviewer();
+		$other->call('POST', '/api/reviewer', ['name' => 'Mara']);
+		$asReviewer = $this->reviewer();
+		$key = $asReviewer->call('POST', '/api/reviewer', ['name' => 'Kim', 'email' => 'kim@example.test'])['data']['key'];
+
+		$renamed = $asReviewer->call('PUT', '/api/reviewer', ['name' => 'Kim Kunde', 'email' => 'kim@example.test']);
+		self::assertSame([200, 'Kim Kunde', 'kim@example.test'], [$renamed['status'], $renamed['data']['name'], $renamed['data']['email']]);
+		self::assertSame(409, $asReviewer->call('PUT', '/api/reviewer', ['name' => 'mara', 'email' => 'kim@example.test'])['status'], 'not to a name someone has');
+		self::assertSame('Kim Kunde', $asReviewer->call('PUT', '/api/reviewer', ['email' => 'kim@example.test'])['data']['name'], 'no name keeps it');
+
+		self::assertSame(200, $asReviewer->call('DELETE', '/api/reviewer')['status']);
+		$me = fn (string $query = '') => $asReviewer->call('GET', '/api/context?versionId=' . $this->versionId . $query)['data']['me'];
+		self::assertSame('unnamed', $me()['type'], 'this browser forgot them');
+		self::assertSame(['reviewer', 'Kim Kunde'], [$me("&r=$key")['type'], $me("&r=$key")['name']], 'their Personal Link still works');
+	}
+
 	public function testANameIsTakenThroughAnotherMembersLinkToo(): void {
 		$uid = 'deliver-colleague-' . bin2hex(random_bytes(4));
 		$password = 'Deliver-' . bin2hex(random_bytes(8));

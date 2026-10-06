@@ -1,5 +1,4 @@
 <script setup>
-import accountIcon from '@mdi/svg/svg/account-circle-outline.svg?raw'
 import backIcon from '@mdi/svg/svg/arrow-left.svg?raw'
 import previousIcon from '@mdi/svg/svg/chevron-left.svg?raw'
 import nextIcon from '@mdi/svg/svg/chevron-right.svg?raw'
@@ -21,7 +20,7 @@ import CommentPanel from '../components/CommentPanel.vue'
 import DueDate from '../components/DueDate.vue'
 import ImageViewer from '../components/ImageViewer.vue'
 import LinkLanding from '../components/LinkLanding.vue'
-import ReviewerMailSettings from '../components/ReviewerMailSettings.vue'
+import ReviewerMenu from '../components/ReviewerMenu.vue'
 import ReviewLayout from '../components/ReviewLayout.vue'
 import VersionPicker from '../components/VersionPicker.vue'
 import VideoPlayer from '../components/VideoPlayer.vue'
@@ -33,7 +32,7 @@ import { useCommentsStore } from '../store/comments.js'
 const props = defineProps({
 	/** The Version the link opened on; none opens the grid of its Assets */
 	versionId: { type: Number, default: null },
-	/** The link's title and description for that grid, the Reviewer's name, the ZIP of all and, for a Member's preview, the way into the app */
+	/** The link's title and description for that grid, the Reviewer this browser knows, the ZIP of all and, for a Member's preview, the way into the app */
 	link: { type: Object, default: () => ({ title: '', description: null, reviewer: null, downloadAll: null, memberUrl: null }) },
 })
 
@@ -44,7 +43,7 @@ const context = ref(null)
 const error = ref(null)
 const personalLink = ref(null)
 /** The Reviewer with name, address and mail wishes; the Comment answers only carry who they are */
-const reviewer = ref(null)
+const reviewer = ref(props.link.reviewer)
 const reviewerName = computed(() => reviewer.value?.name ?? '')
 const current = ref(props.versionId)
 /** The newest Version of every Asset the link shows, to step through; null while loading */
@@ -88,6 +87,13 @@ listPublicAssets().then((entries) => {
 })
 
 onBeforeUnmount(() => store.stop())
+
+// The Comments carry the name the Reviewer just gave themselves
+watch(reviewerName, (now, before) => {
+	if (before && now !== before && current.value !== null) {
+		store.reload()
+	}
+})
 
 /** Reloads what the share shows of this Version, for instance once its Proxy is ready */
 async function reload() {
@@ -144,8 +150,11 @@ async function claim({ name, email, mail }) {
 			v-else-if="current === null && newest"
 			:link="link"
 			:assets="newest"
-			:me="reviewerName || link.reviewer || ''"
-			@open="current = $event" />
+			@open="current = $event">
+			<template #me>
+				<ReviewerMenu v-if="!link.memberUrl" v-model:reviewer="reviewer" />
+			</template>
+		</LinkLanding>
 		<NcEmptyContent v-else-if="!context" :name="t('deliver', 'Loading…')">
 			<template #icon>
 				<NcLoadingIcon />
@@ -163,6 +172,7 @@ async function claim({ name, email, mail }) {
 						<NcIconSvgWrapper :svg="backIcon" />
 					</template>
 				</NcButton>
+				<ReviewerMenu v-if="context.me?.type !== 'member'" v-model:reviewer="reviewer" />
 				<div class="deliver-public__crumbs">
 					<h2 class="deliver-layout__title">
 						{{ context.asset?.name }}
@@ -175,13 +185,6 @@ async function claim({ name, email, mail }) {
 				<AssetStepper :index="assetIndex" :count="assetCount" @step="step" />
 			</template>
 			<template #end>
-				<span
-					v-if="reviewerName && !isMobile"
-					class="deliver-public__me"
-					:title="t('deliver', 'Reviewing as {name}', { name: reviewerName })">
-					<NcIconSvgWrapper :svg="accountIcon" :size="20" />
-					{{ reviewerName }}
-				</span>
 				<ApprovalControl />
 				<VersionPicker :versions="context.versions" :current="current" @select="current = $event" />
 				<NcButton
@@ -272,11 +275,7 @@ async function claim({ name, email, mail }) {
 					@jump="jump"
 					@posted="posted"
 					@typing="hold"
-					@cleared="release">
-					<template #tools>
-						<ReviewerMailSettings v-if="reviewer" v-model:reviewer="reviewer" />
-					</template>
-				</CommentPanel>
+					@cleared="release" />
 			</template>
 		</ReviewLayout>
 	</div>
@@ -290,18 +289,6 @@ async function claim({ name, email, mail }) {
 	align-items: flex-start;
 	min-width: 0;
 	padding-inline-start: var(--default-grid-baseline);
-}
-
-.deliver-public__me {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	max-width: 200px;
-	padding-inline: 8px;
-	overflow: hidden;
-	color: var(--color-text-maxcontrast);
-	white-space: nowrap;
-	text-overflow: ellipsis;
 }
 
 .deliver-public__open {

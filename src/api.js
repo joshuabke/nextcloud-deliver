@@ -14,6 +14,11 @@ let publicBase = null
  */
 export function usePublicApi(token) {
 	publicBase = generateUrl('/apps/deliver/s/{token}/api', { token })
+	// The language the Reviewer chose answers too: error messages, and the mail with their Personal Link
+	const language = new URLSearchParams(window.location.search).get('forceLanguage')
+	if (language) {
+		axios.interceptors.request.use((config) => ({ ...config, params: { forceLanguage: language, ...config.params } }))
+	}
 }
 
 const url = (path) => publicBase === null ? generateOcsUrl('apps/deliver/api/v1' + path) : publicBase + path
@@ -145,11 +150,14 @@ const mailFields = (mail) => ({ mailReplies: mail.replies, mailComments: mail.co
  */
 export const claimReviewer = (name, email, mail) => axios.post(url('/reviewer'), { name, email, ...mailFields(mail) }).then(data)
 /**
+ * @param {string|null} name - their new name, or null to keep it
  * @param {string|null} email - the address, or null for none
  * @param {{replies: boolean, comments: boolean, versions: boolean}} mail - what to mail
  * @return {Promise<object>} the Reviewer as stored
  */
-export const updateReviewer = (email, mail) => axios.put(url('/reviewer'), { email, ...mailFields(mail) }).then(data)
+export const updateReviewer = (name, email, mail) => axios.put(url('/reviewer'), { name, email, ...mailFields(mail) }).then(data)
+/** Ends the Reviewer's session: this browser forgets who they are */
+export const forgetReviewer = () => axios.delete(url('/reviewer'))
 /** Every file behind the link that is an Asset: [{ fileId, versionId, assetId }], Versions of one Asset share its newest versionId */
 export const listPublicAssets = () => axios.get(url('/assets')).then(data)
 

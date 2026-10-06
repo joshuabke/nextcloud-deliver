@@ -85,7 +85,7 @@ class PublicController extends AuthPublicShareController {
 		$this->initialState->provideInitialState('link', [
 			'title' => $link->title(),
 			'description' => $link->description(),
-			'reviewer' => $reviewer?->getName(),
+			'reviewer' => $reviewer === null ? null : $this->reviewers->serialize($reviewer),
 			'downloadAll' => $flags['canDownload'] ? $this->urls->linkToRoute('deliver.PublicApi.download', ['token' => $this->getToken()]) : null,
 			// The landing of a Member's preview leads into the app; in the player, the context of each Version does (story 59)
 			'memberUrl' => $member && $version === null ? $this->urls->linkToRoute('deliver.page.index') : null,

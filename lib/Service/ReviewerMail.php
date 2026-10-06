@@ -161,7 +161,7 @@ class ReviewerMail {
 		}
 		$l = $this->l10n->get(Application::APP_ID);
 		$this->mail($reviewer, $link, $kind, ['version' => $version->getId()], $subject, $paragraphs,
-			$l->t('You get these mails because you asked for them in the review. The envelope next to the Comments changes that.'), $heading);
+			$l->t('You get these mails because you asked for them in the review. The menu under your name there changes that.'), $heading);
 	}
 
 	/**

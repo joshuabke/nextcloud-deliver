@@ -260,15 +260,30 @@ class PublicApiController extends PublicShareController {
 		});
 	}
 
-	/** A Reviewer changes their address or what they want mailed */
+	/** A Reviewer changes their name, address or what they want mailed; null keeps the name */
 	#[PublicPage]
 	#[NoCSRFRequired]
-	public function settings(?string $email = null, ?bool $mailReplies = null, ?bool $mailComments = null, ?bool $mailVersions = null): Response {
-		return $this->guard(function () use ($email, $mailReplies, $mailComments, $mailVersions) {
+	public function settings(?string $name = null, ?string $email = null, ?bool $mailReplies = null, ?bool $mailComments = null, ?bool $mailVersions = null): Response {
+		return $this->guard(function () use ($name, $email, $mailReplies, $mailComments, $mailVersions) {
 			$reviewer = $this->reviewer() ?? throw new AccessDeniedException('Give a name first');
+			if ($name !== null) {
+				$this->links->assertRenameFree($reviewer, $name);
+			}
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
-			return $this->reviewers->serialize($this->reviewers->updateSettings($reviewer, $email, $wishes));
+			return $this->reviewers->serialize($this->reviewers->updateSettings($reviewer, $email, $wishes, $name));
 		});
+	}
+
+	/**
+	 * The Reviewer ends their session: this browser forgets them, and the
+	 * next visitor names themselves anew. Their Personal Link still works.
+	 */
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function forget(): Response {
+		$response = new JSONResponse([]);
+		$response->invalidateCookie(self::cookieName($this->getToken()));
+		return $response;
 	}
 
 	#[PublicPage]

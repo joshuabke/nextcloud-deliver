@@ -44,12 +44,16 @@ class ReviewerService {
 	}
 
 	/**
-	 * A Reviewer changes their address or what they want mailed.
+	 * A Reviewer changes their name, address or what they want mailed.
 	 *
 	 * @param array{replies?: ?bool, comments?: ?bool, versions?: ?bool} $mail
-	 * @throws InvalidRequestException the email is not one
+	 * @param ?string $name null keeps it
+	 * @throws InvalidRequestException the name is empty or the email is not one
 	 */
-	public function updateSettings(Reviewer $reviewer, ?string $email, array $mail): Reviewer {
+	public function updateSettings(Reviewer $reviewer, ?string $email, array $mail, ?string $name = null): Reviewer {
+		if ($name !== null) {
+			$reviewer->setName(self::name($name));
+		}
 		$reviewer->setEmail(self::email($email));
 		self::wish($reviewer, $mail);
 		return $this->reviewers->update($reviewer);
