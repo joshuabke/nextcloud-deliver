@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace OCA\Deliver\Controller;
 
 use OCA\Deliver\Service\ProjectLinkService;
+use OCA\Deliver\Service\ReviewerMail;
+use OCA\Deliver\Service\ReviewerService;
 use OCA\Deliver\Service\ReviewLink;
 use OCA\Deliver\Service\ReviewLinks;
 use OCP\AppFramework\Http;
@@ -12,6 +14,7 @@ use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Response;
 use OCP\AppFramework\OCSController;
 use OCP\IRequest;
+use OCP\IUserSession;
 
 /** A Member's Project Links (ADR 0010, 0011), their Reviewers and activity */
 class ProjectLinkApiController extends OCSController {
@@ -24,6 +27,9 @@ class ProjectLinkApiController extends OCSController {
 		IRequest $request,
 		private ProjectLinkService $projectLinks,
 		private ReviewLinks $links,
+		private ReviewerService $reviewers,
+		private ReviewerMail $mail,
+		private IUserSession $userSession,
 		private ?string $userId,
 	) {
 		parent::__construct($appName, $request);
@@ -71,9 +77,17 @@ class ProjectLinkApiController extends OCSController {
 		return $this->guard(fn () => $this->links->reviewersOf($this->projectLinks->ownLink((string)$this->userId, $id)));
 	}
 
+	/** A Member invites a Reviewer and, when asked, mails them their Personal Link with a message of their own */
 	#[NoAdminRequired]
-	public function invite(int $id, string $name, ?string $email = null): Response {
-		return $this->guard(fn () => $this->links->invite($this->projectLinks->ownLink((string)$this->userId, $id), $name, $email), Http::STATUS_CREATED);
+	public function invite(int $id, string $name, ?string $email = null, bool $sendMail = false, ?string $message = null): Response {
+		return $this->guard(function () use ($id, $name, $email, $sendMail, $message) {
+			$link = $this->projectLinks->ownLink((string)$this->userId, $id);
+			$reviewer = $this->links->invite($link, $name, $email);
+			$personalLink = $link->personalLink($reviewer);
+			$member = $this->userSession->getUser();
+			$mailed = $sendMail && $member !== null && $this->mail->invited($reviewer, $personalLink, $member, $message);
+			return $this->reviewers->serialize($reviewer) + ['link' => $personalLink, 'mailed' => $mailed];
+		}, Http::STATUS_CREATED);
 	}
 
 	#[NoAdminRequired]

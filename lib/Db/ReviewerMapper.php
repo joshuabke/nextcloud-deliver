@@ -75,6 +75,31 @@ class ReviewerMapper extends Mapper {
 		return $byLink;
 	}
 
+	/**
+	 * @param list<string> $tokens
+	 * @return list<string> the names of the Reviewers who came by these links, removed ones and the one excepted left out
+	 */
+	public function namesByLinks(array $tokens, ?int $exceptId): array {
+		if ($tokens === []) {
+			return [];
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->selectDistinct('r.name')->from($this->getTableName(), 'r')
+			->innerJoin('r', 'deliver_reviewer_links', 'l', $qb->expr()->eq('l.reviewer_id', 'r.id'))
+			->where($qb->expr()->in('l.token', $qb->createNamedParameter($tokens, IQueryBuilder::PARAM_STR_ARRAY)))
+			->andWhere($qb->expr()->isNotNull('r.secret_key'));
+		if ($exceptId !== null) {
+			$qb->andWhere($qb->expr()->neq('r.id', $qb->createNamedParameter($exceptId, IQueryBuilder::PARAM_INT)));
+		}
+		$result = $qb->executeQuery();
+		$names = [];
+		while (($name = $result->fetchOne()) !== false) {
+			$names[] = (string)$name;
+		}
+		$result->closeCursor();
+		return $names;
+	}
+
 	/** @param list<int> $reviewerIds */
 	public function deleteLinks(array $reviewerIds): void {
 		if ($reviewerIds === []) {

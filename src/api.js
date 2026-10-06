@@ -112,7 +112,7 @@ export const createProjectLink = (projectId, assetIds = null) => axios.post(url(
  * What a link's settings, Reviewers and activity go through
  *
  * @param {{id: number}} link - a Project Link
- * @return {{update: (fields: object) => Promise<object>, remove: () => Promise<void>, reviewers: () => Promise<object[]>, invite: (name: string, email: ?string) => Promise<object>, activity: () => Promise<object[]>}}
+ * @return {{update: (fields: object) => Promise<object>, remove: () => Promise<void>, reviewers: () => Promise<object[]>, invite: (name: string, email: ?string, letter: ?{message: string}) => Promise<object>, activity: () => Promise<object[]>}}
  */
 export function linkApi(link) {
 	const base = `/links/${link.id}`
@@ -120,7 +120,7 @@ export function linkApi(link) {
 		update: (fields) => axios.put(url(base), fields).then(data),
 		remove: () => axios.delete(url(base)).then(data),
 		reviewers: () => axios.get(url(`${base}/reviewers`)).then(data),
-		invite: (name, email) => axios.post(url(`${base}/reviewers`), { name, email }).then(data),
+		invite: (name, email, letter) => axios.post(url(`${base}/reviewers`), { name, email, sendMail: Boolean(letter), message: letter?.message || null }).then(data),
 		activity: () => axios.get(url(`${base}/activity`)).then(data),
 	}
 }

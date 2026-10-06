@@ -4,6 +4,7 @@ import backIcon from '@mdi/svg/svg/arrow-left.svg?raw'
 import previousIcon from '@mdi/svg/svg/chevron-left.svg?raw'
 import nextIcon from '@mdi/svg/svg/chevron-right.svg?raw'
 import downloadIcon from '@mdi/svg/svg/download.svg?raw'
+import { showSuccess } from '@nextcloud/dialogs'
 import { getLanguage, t } from '@nextcloud/l10n'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
@@ -115,11 +116,17 @@ async function claim({ name, email, mail }) {
 	error.value = null
 	try {
 		const claimed = await claimReviewer(name, email || null, mail)
-		personalLink.value = claimed.link
+		// A mailed link needs no notice to bookmark it, only word of where it went
+		personalLink.value = claimed.mailed ? null : claimed.link
+		if (claimed.mailed) {
+			showSuccess(t('deliver', 'Your Personal Link is on its way to {email}', { email: claimed.email }))
+		}
 		reviewer.value = claimed
 		await store.reload()
 	} catch (e) {
-		error.value = errorMessage(e)
+		error.value = e?.response?.status === 409
+			? t('deliver', 'Someone in this review is already called "{name}". Pick another name, or open your Personal Link if it is you.', { name })
+			: errorMessage(e)
 	}
 }
 </script>

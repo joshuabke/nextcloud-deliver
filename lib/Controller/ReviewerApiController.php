@@ -7,6 +7,7 @@ namespace OCA\Deliver\Controller;
 use OCA\Deliver\Db\Reviewer;
 use OCA\Deliver\Service\AccessDeniedException;
 use OCA\Deliver\Service\ReviewerService;
+use OCA\Deliver\Service\ReviewLinks;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Response;
 use OCP\AppFramework\OCSController;
@@ -20,6 +21,7 @@ class ReviewerApiController extends OCSController {
 		string $appName,
 		IRequest $request,
 		private ReviewerService $reviewers,
+		private ReviewLinks $links,
 		private ?string $userId,
 	) {
 		parent::__construct($appName, $request);
@@ -37,8 +39,10 @@ class ReviewerApiController extends OCSController {
 		?array $rights = null,
 	): Response {
 		return $this->guard(function () use ($id, $name, $email, $mailReplies, $mailComments, $mailVersions, $rights) {
+			$reviewer = $this->own($id);
+			$this->links->assertRenameFree($reviewer, $name);
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
-			return $this->reviewers->serialize($this->reviewers->update($this->own($id), $name, $email, $wishes, $rights));
+			return $this->reviewers->serialize($this->reviewers->update($reviewer, $name, $email, $wishes, $rights));
 		});
 	}
 

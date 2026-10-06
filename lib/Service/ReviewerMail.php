@@ -10,6 +10,7 @@ use OCA\Deliver\Db\Reviewer;
 use OCA\Deliver\Db\ReviewerMapper;
 use OCA\Deliver\Db\Version;
 use OCP\IConfig;
+use OCP\IUser;
 use OCP\L10N\IFactory;
 use OCP\Mail\IMailer;
 use Psr\Log\LoggerInterface;
@@ -20,6 +21,9 @@ use Psr\Log\LoggerInterface;
  * default), every new Comment, new Versions.
  */
 class ReviewerMail {
+	/** What a Member's own message to an invited Reviewer may hold */
+	private const MAX_MESSAGE = 5000;
+
 	public function __construct(
 		private IMailer $mailer,
 		private IConfig $config,
@@ -96,17 +100,59 @@ class ReviewerMail {
 	}
 
 	/**
-	 * One mail to one Reviewer, with a button straight into the Review view.
-	 * Only where they gave an address, the instance mails, and a review link
-	 * still shows the Version. A failure is logged, never thrown.
+	 * Mails a Reviewer who just named themselves with an address their
+	 * Personal Link (story 54).
+	 *
+	 * @return bool whether it went out
+	 */
+	public function welcome(Reviewer $reviewer, string $personalLink): bool {
+		if (!$this->canMail($reviewer)) {
+			return false;
+		}
+		$l = $this->l10n->get(Application::APP_ID);
+		return $this->mail($reviewer, $personalLink, 'deliver.ReviewerWelcome', ['reviewer' => $reviewer->getId()],
+			$l->t('Your Personal Link to the review'),
+			[$l->t('With this link you are "%s" again in the review, on any device. Keep it to yourself: whoever opens it comments as you.', [(string)$reviewer->getName()])],
+			$l->t('You get this mail because you gave this address in the review.'),
+		);
+	}
+
+	/**
+	 * Mails an invited Reviewer their Personal Link, under the Member's own
+	 * message when they wrote one (story 53).
+	 *
+	 * @return bool whether it went out
+	 */
+	public function invited(Reviewer $reviewer, string $personalLink, IUser $inviter, ?string $message): bool {
+		if (!$this->canMail($reviewer)) {
+			return false;
+		}
+		$l = $this->l10n->get(Application::APP_ID);
+		$own = array_values(array_filter(array_map(trim(...), preg_split('/\R/', mb_substr((string)$message, 0, self::MAX_MESSAGE)) ?: []), static fn (string $line) => $line !== ''));
+		return $this->mail($reviewer, $personalLink, 'deliver.ReviewerInvite', ['reviewer' => $reviewer->getId()],
+			$l->t('%s invites you to a review', [$inviter->getDisplayName()]),
+			[...$own, $l->t('With this link you are "%s" in the review, on any device. Keep it to yourself: whoever opens it comments as you.', [(string)$reviewer->getName()])],
+			$l->t('You get this mail because %s invited you to the review with this address.', [$inviter->getDisplayName()]),
+			// An answer goes to the Member who wrote
+			replyTo: $inviter->getEMailAddress(),
+		);
+	}
+
+	private function canMail(Reviewer $reviewer): bool {
+		return $reviewer->getEmail() !== null && self::configured($this->config);
+	}
+
+	/**
+	 * One mail to one Reviewer about a Version, with a button straight into
+	 * the Review view. Only where they gave an address, the instance mails,
+	 * and a review link still shows the Version.
 	 * ponytail: sent in the request, one by one; move to a job if Projects get many Reviewers
 	 *
 	 * @param list<string> $paragraphs
 	 * @param ?string $heading over the text, when it says more than the subject
 	 */
 	private function send(Reviewer $reviewer, Version $version, string $kind, string $subject, array $paragraphs, ?string $heading = null): void {
-		$email = $reviewer->getEmail();
-		if ($email === null || !self::configured($this->config)) {
+		if (!$this->canMail($reviewer)) {
 			return;
 		}
 		$link = $this->links->reviewLinkFor($version, $reviewer);
@@ -114,7 +160,20 @@ class ReviewerMail {
 			return;
 		}
 		$l = $this->l10n->get(Application::APP_ID);
-		$template = $this->mailer->createEMailTemplate($kind, ['version' => $version->getId()]);
+		$this->mail($reviewer, $link, $kind, ['version' => $version->getId()], $subject, $paragraphs,
+			$l->t('You get these mails because you asked for them in the review. The envelope next to the Comments changes that.'), $heading);
+	}
+
+	/**
+	 * The mail itself, with a button to the link. A failure is logged, never thrown.
+	 *
+	 * @param array<string, mixed> $data
+	 * @param list<string> $paragraphs
+	 * @return bool whether it went out
+	 */
+	private function mail(Reviewer $reviewer, string $link, string $kind, array $data, string $subject, array $paragraphs, string $why, ?string $heading = null, ?string $replyTo = null): bool {
+		$l = $this->l10n->get(Application::APP_ID);
+		$template = $this->mailer->createEMailTemplate($kind, $data);
 		$template->setSubject($subject);
 		$template->addHeader();
 		$template->addHeading($heading ?? $subject);
@@ -122,15 +181,19 @@ class ReviewerMail {
 			$template->addBodyText($paragraph);
 		}
 		$template->addBodyButton($l->t('Open the review'), $link);
-		$template->addBodyText($l->t('You get these mails because you asked for them in the review. The envelope next to the Comments changes that.'));
+		$template->addBodyText($why);
 		$template->addFooter();
 		try {
 			$message = $this->mailer->createMessage();
-			$message->setTo([$email => $reviewer->getName()]);
+			$message->setTo([(string)$reviewer->getEmail() => $reviewer->getName()]);
+			if ($replyTo !== null && $replyTo !== '') {
+				$message->setReplyTo([$replyTo]);
+			}
 			$message->useTemplate($template);
-			$this->mailer->send($message);
+			return $this->mailer->send($message) === [];
 		} catch (\Throwable $e) {
 			$this->logger->warning('Deliver could not mail a Reviewer', ['exception' => $e]);
+			return false;
 		}
 	}
 }

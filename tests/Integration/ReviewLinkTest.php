@@ -86,6 +86,42 @@ class ReviewLinkTest extends TestCase {
 		self::assertSame(404, $asReviewer->raw('/attachments/999999999')['status']);
 	}
 
+	public function testANameSomeoneInTheReviewHasIsTaken(): void {
+		$claim = fn (string $name) => $this->reviewer()->call('POST', '/api/reviewer', ['name' => $name])['status'];
+		$owner = $this->nc->ocsForm('GET', '/ocs/v2.php/cloud/user')['data']['display-name'];
+		self::assertSame(409, $claim($owner), 'not the name of the Member who shares it');
+		self::assertSame(201, $claim('Mara'));
+		self::assertSame(409, $claim(' mara '), 'nor that of another Reviewer, whatever the case');
+
+		$elsewhere = $this->nc->ocs('POST', "/projects/{$this->projectId}/links")['data'];
+		self::assertSame(409, (new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $elsewhere['token']))->call('POST', '/api/reviewer', ['name' => 'Mara'])['status'], 'through another link of the Project too');
+
+		// The same gate when the Member invites or renames
+		$invite = fn (string $name) => $this->nc->ocs('POST', "/links/{$elsewhere['id']}/reviewers", ['name' => $name]);
+		$refused = $invite('MARA');
+		self::assertSame(409, $refused['status']);
+		self::assertSame('Someone in this review is already called "MARA".', $refused['data']['message']);
+		$jo = $invite('Jo')['data']['id'];
+		self::assertSame(409, $this->nc->ocs('PUT', "/reviewers/$jo", ['name' => 'Mara'])['status']);
+		self::assertSame(200, $this->nc->ocs('PUT', "/reviewers/$jo", ['name' => 'JO'])['status'], 'their own name stays theirs');
+	}
+
+	public function testANameIsTakenThroughAnotherMembersLinkToo(): void {
+		$uid = 'deliver-colleague-' . bin2hex(random_bytes(4));
+		$password = 'Deliver-' . bin2hex(random_bytes(8));
+		$this->nc->ocsForm('POST', '/ocs/v2.php/cloud/users', ['userid' => $uid, 'password' => $password]);
+		try {
+			$this->nc->ocsForm('POST', '/ocs/v2.php/apps/files_sharing/api/v1/shares', ['path' => "/{$this->root}", 'shareType' => 0, 'shareWith' => $uid, 'permissions' => 31]);
+			$theirs = $this->nc->withUser($uid, $password)->ocs('POST', "/projects/{$this->projectId}/links")['data']['token'];
+			self::assertSame(201, $this->reviewer()->call('POST', '/api/reviewer', ['name' => 'Mara'])['status']);
+			$visitor = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $theirs);
+			self::assertSame(409, $visitor->call('POST', '/api/reviewer', ['name' => 'Mara'])['status'], 'one review, whichever Member shared it');
+			self::assertSame(409, $visitor->call('POST', '/api/reviewer', ['name' => $uid])['status'], 'nor the name of a Member the files are shared with');
+		} finally {
+			$this->nc->ocsForm('DELETE', "/ocs/v2.php/cloud/users/$uid");
+		}
+	}
+
 	public function testReviewerNamesThemselvesBeforeCommenting(): void {
 		$asReviewer = $this->reviewer();
 

@@ -136,15 +136,47 @@ class NotificationTest extends TestCase {
 		self::assertSame(['replies' => true, 'comments' => true, 'versions' => false], $claimed['data']['mail']);
 
 		$this->nc->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 1, 'body' => 'grade is final']);
-		self::assertSame(["{$this->owner} commented on cut.mp4"], $this->subjectsTo($email), 'every Comment, as asked');
+		self::assertSame(["{$this->owner} commented on cut.mp4", 'Your Personal Link to the review'], $this->subjectsTo($email), 'every Comment, as asked');
 
 		$changed = $reviewer->call('PUT', '/api/reviewer', ['email' => $email, 'mailComments' => false, 'mailVersions' => true]);
 		self::assertSame(['replies' => true, 'comments' => false, 'versions' => true], $changed['data']['mail']);
 		$this->nc->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 2, 'body' => 'one more']);
 		$this->nc->put("{$this->root}/cut_v2.mp4", 'not really a video');
 		$this->nc->ocs('GET', "/projects/{$this->projectId}");
-		self::assertSame(['Version 2 of cut_v2.mp4 is ready for review', "{$this->owner} commented on cut.mp4"], $this->subjectsTo($email));
+		self::assertSame(['Version 2 of cut_v2.mp4 is ready for review', "{$this->owner} commented on cut.mp4", 'Your Personal Link to the review'], $this->subjectsTo($email));
 		self::assertSame(403, (new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $link['token']))->call('PUT', '/api/reviewer', ['mailVersions' => false])['status'], 'only as the Reviewer');
+	}
+
+	public function testAReviewerWithAnEmailGetsTheirPersonalLinkByMail(): void {
+		$token = $this->nc->ocs('POST', "/projects/{$this->projectId}/links")['data']['token'];
+		$email = 'reviewer-' . bin2hex(random_bytes(4)) . '@example.test';
+		$claimed = (new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $token))->call('POST', '/api/reviewer', ['name' => 'Mara', 'email' => $email]);
+		self::assertTrue($claimed['data']['mailed']);
+
+		$found = json_decode((string)file_get_contents('http://mail:8025/api/v1/search?query=' . rawurlencode("to:$email")), true);
+		self::assertSame(['Your Personal Link to the review'], array_column($found['messages'] ?? [], 'Subject'));
+		$mail = json_decode((string)file_get_contents('http://mail:8025/api/v1/message/' . $found['messages'][0]['ID']), true);
+		self::assertStringContainsString($claimed['data']['link'], $mail['Text']);
+
+		$withoutAddress = (new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $token))->call('POST', '/api/reviewer', ['name' => 'Kim']);
+		self::assertFalse($withoutAddress['data']['mailed'], 'the link is shown to bookmark instead');
+	}
+
+	public function testAMemberMailsAnInvitedReviewerTheirPersonalLink(): void {
+		$linkId = $this->nc->ocs('POST', "/projects/{$this->projectId}/links")['data']['id'];
+		$quiet = 'reviewer-' . bin2hex(random_bytes(4)) . '@example.test';
+		$invited = $this->nc->ocs('POST', "/links/$linkId/reviewers", ['name' => 'Jo', 'email' => $quiet]);
+		self::assertFalse($invited['data']['mailed']);
+		self::assertSame([], $this->subjectsTo($quiet), 'only when the Member asks');
+
+		$email = 'reviewer-' . bin2hex(random_bytes(4)) . '@example.test';
+		$invited = $this->nc->ocs('POST', "/links/$linkId/reviewers", ['name' => 'Kim', 'email' => $email, 'sendMail' => true, 'message' => "Hi Kim,\n\nthe first cut is up."]);
+		self::assertTrue($invited['data']['mailed']);
+		$found = json_decode((string)file_get_contents('http://mail:8025/api/v1/search?query=' . rawurlencode("to:$email")), true);
+		self::assertSame(["{$this->owner} invites you to a review"], array_column($found['messages'] ?? [], 'Subject'));
+		$mail = json_decode((string)file_get_contents('http://mail:8025/api/v1/message/' . $found['messages'][0]['ID']), true);
+		self::assertStringContainsString('the first cut is up.', $mail['Text']);
+		self::assertStringContainsString($invited['data']['link'], $mail['Text']);
 	}
 
 	/** @return list<string> subjects of the mails to one address, newest first */
@@ -175,7 +207,7 @@ class NotificationTest extends TestCase {
 
 		$this->nc->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 3, 'body' => 'yes, final', 'parentId' => $question['data']['id']]);
 		$found = json_decode((string)file_get_contents('http://mail:8025/api/v1/search?query=' . rawurlencode("to:$email")), true);
-		self::assertSame(1, $found['messages_count'] ?? 0, 'one mail, to the Reviewer');
+		self::assertSame(2, $found['messages_count'] ?? 0, 'the Personal Link, then the Reply');
 		$mail = json_decode((string)file_get_contents('http://mail:8025/api/v1/message/' . $found['messages'][0]['ID']), true);
 		// In the language of whoever replied
 		self::assertSame("{$this->owner} replied to your Comment", $mail['Subject']);

@@ -51,6 +51,11 @@ class ReviewLink {
 		return $this->link->getToken();
 	}
 
+	/** Its Project; null for a single file in No Project */
+	public function projectId(): ?int {
+		return $this->link->getProjectId();
+	}
+
 	/** The Member whose Reviewers come by it */
 	public function ownerUid(): string {
 		return $this->link->getOwnerUid();
