@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.8.2 – unreleased
+## 0.8.2 – 2026-10-06
 
 - A Reviewer who names themselves on a link with an email address gets their Personal Link by mail right away, instead of a notice to bookmark it.
 - Inviting a Reviewer can mail them their Personal Link, under a message of your own; answers go to your address.
