@@ -389,6 +389,7 @@ OC.L10N.register(
 		"opened the link": "hat den Link geöffnet",
 		"watched": "hat angesehen:",
 		"Your Personal Link is on its way to {email}": "Ihr Persönlicher Link ist unterwegs an {email}",
+		"Your Personal Link makes you \"{name}\" again; Deliver mailed it to {email}.": "Ihr Persönlicher Link macht Sie wieder zu „{name}“; Deliver hat ihn an {email} geschickt.",
 		"Your Personal Link to the review": "Ihr Persönlicher Link zum Review",
 		"{asset} is due today": "{asset} ist heute fällig",
 		"{asset} is due tomorrow": "{asset} ist morgen fällig",

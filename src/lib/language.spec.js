@@ -1,20 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { languageRedirect, withLanguage } from './language.js'
+import { addressOf, withLanguage } from './language.js'
 
-describe('the language a Reviewer chose', () => {
+describe('the review page address', () => {
 	const page = 'https://cloud.example/apps/deliver/s/abc?r=key'
 
-	it('goes into the address, next to the Personal Link', () => {
+	it('takes the language next to the Personal Link', () => {
 		expect(withLanguage(page, 'en')).toBe('https://cloud.example/apps/deliver/s/abc?r=key&forceLanguage=en')
+		expect(withLanguage(page + '&forceLanguage=de', 'en')).toBe('https://cloud.example/apps/deliver/s/abc?r=key&forceLanguage=en')
 	})
 
-	it('brings a later visit to it', () => {
-		expect(languageRedirect(page, 'en', 'de')).toBe('https://cloud.example/apps/deliver/s/abc?r=key&forceLanguage=en')
-	})
-
-	it('stays where the page already speaks it, or was asked for one', () => {
-		expect(languageRedirect(page, null, 'de')).toBeNull()
-		expect(languageRedirect(page, 'de', 'de_DE')).toBeNull()
-		expect(languageRedirect(page + '&forceLanguage=de', 'en', 'de')).toBeNull()
+	it('names the Version in the player, or none for the grid', () => {
+		expect(addressOf(page, 12)).toBe('https://cloud.example/apps/deliver/s/abc/versions/12?r=key')
+		expect(addressOf('https://cloud.example/apps/deliver/s/abc/versions/12?forceLanguage=en', 13)).toBe('https://cloud.example/apps/deliver/s/abc/versions/13?forceLanguage=en')
+		expect(addressOf('https://cloud.example/apps/deliver/s/abc/versions/12', null)).toBe('https://cloud.example/apps/deliver/s/abc')
 	})
 })

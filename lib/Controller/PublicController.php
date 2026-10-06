@@ -11,6 +11,7 @@ use OCA\Deliver\Service\ReviewerService;
 use OCA\Deliver\Service\ReviewLink;
 use OCA\Deliver\Service\ReviewLinks;
 use OCP\AppFramework\AuthPublicShareController;
+use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\TemplateResponse;
@@ -25,6 +26,9 @@ use OCP\Util;
 /** The review page behind a Project Link (ADR 0011) */
 class PublicController extends AuthPublicShareController {
 	use ReviewLinkToken;
+
+	/** Set by the page itself when a Reviewer picks German or English (src/lib/language.js) */
+	private const LANGUAGE_COOKIE = 'deliver_language';
 
 	public function __construct(
 		string $appName,
@@ -52,6 +56,15 @@ class PublicController extends AuthPublicShareController {
 	}
 
 	private function page(?int $versionId): TemplateResponse {
+		// The language a Reviewer chose on this browser goes into the address, before anything is recorded
+		$language = $this->request->getCookie(self::LANGUAGE_COOKIE);
+		if (in_array($language, ['de', 'en'], true) && $this->request->getParam('forceLanguage') === null) {
+			$uri = $this->request->getRequestUri();
+			$response = new TemplateResponse(Application::APP_ID, 'public', [], TemplateResponse::RENDER_AS_BLANK);
+			$response->setStatus(Http::STATUS_SEE_OTHER);
+			$response->addHeader('Location', $uri . (str_contains($uri, '?') ? '&' : '?') . 'forceLanguage=' . $language);
+			return $response;
+		}
 		$link = $this->link();
 		try {
 			$version = $versionId === null ? $this->onlyVersion($link) : $this->links->version($link, $versionId);
@@ -85,7 +98,8 @@ class PublicController extends AuthPublicShareController {
 		$this->initialState->provideInitialState('link', [
 			'title' => $link->title(),
 			'description' => $link->description(),
-			'reviewer' => $reviewer === null ? null : $this->reviewers->serialize($reviewer),
+			// What the Reviewer's menu shows, not their key
+			'reviewer' => $reviewer === null ? null : ['name' => $reviewer->getName(), 'email' => $reviewer->getEmail(), 'mail' => $reviewer->mailWishes()],
 			'downloadAll' => $flags['canDownload'] ? $this->urls->linkToRoute('deliver.PublicApi.download', ['token' => $this->getToken()]) : null,
 			// The landing of a Member's preview leads into the app; in the player, the context of each Version does (story 59)
 			'memberUrl' => $member && $version === null ? $this->urls->linkToRoute('deliver.page.index') : null,

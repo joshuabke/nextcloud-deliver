@@ -107,8 +107,8 @@ The only review link (ADR 0010, 0011): Deliver makes it for a Project and it sho
 _Avoid_: Project share, collection link, Share Link (a Nextcloud link made in Files shows files and is never a review surface)
 
 **Personal Link**:
-A Project Link URL carrying a Reviewer's own key, so that whoever opens it is that Reviewer, forever, on any device. Issued by a Member as an invitation or shown to a Reviewer after they name themselves.
-_Avoid_: Invite link, magic link, session
+A Project Link URL carrying a Reviewer's own key, so that whoever opens it is that Reviewer, forever, on any device. Issued by a Member as an invitation, or mailed or shown to a Reviewer after they name themselves.
+_Avoid_: Invite link, magic link, session (a browser remembering a Reviewer is their session, which they end from their menu; the Personal Link outlives it)
 
 **Unseen**:
 A Comment or Reply the current person has not yet had on screen since it was written. Tracked per person per Version.

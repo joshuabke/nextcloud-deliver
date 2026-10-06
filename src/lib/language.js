@@ -1,8 +1,7 @@
 // A Reviewer picks German or English on the review page. Nextcloud takes a
-// forceLanguage parameter on any request, so the choice lives in the page
-// address, and this browser remembers it for the next visit.
-
-const KEY = 'deliver-language'
+// forceLanguage parameter on any request, so the choice goes into the page
+// address; a cookie lets the server put it there on the next visit
+// (PublicController).
 
 /**
  * @param {string} href - a page address
@@ -16,29 +15,25 @@ export function withLanguage(href, language) {
 }
 
 /**
- * Where to go for the language chosen on an earlier visit.
- *
- * @param {string} href - the page address
- * @param {string|null} chosen - the language chosen earlier, if any
- * @param {string} current - the language the page came in
- * @return {string|null} the address in the chosen language, or null to stay
- */
-export function languageRedirect(href, chosen, current) {
-	if (!chosen || current.split(/[-_]/)[0] === chosen || new URL(href).searchParams.has('forceLanguage')) {
-		return null
-	}
-	return withLanguage(href, chosen)
-}
-
-/** @return {string|null} the language chosen on this browser */
-export const chosenLanguage = () => window.localStorage.getItem(KEY)
-
-/**
  * Shows the page in another language, now and on later visits.
  *
  * @param {string} language - de or en
  */
 export function chooseLanguage(language) {
-	window.localStorage.setItem(KEY, language)
+	document.cookie = `deliver_language=${language}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`
 	window.location.replace(withLanguage(window.location.href, language))
+}
+
+/**
+ * The page address for what the review shows, so a reload or a new language keeps it.
+ *
+ * @param {string} href - the page address now
+ * @param {number|null} versionId - the Version in the player, or null for the grid of a link's Assets
+ * @return {string} the address of that Version, query kept
+ */
+export function addressOf(href, versionId) {
+	const url = new URL(href)
+	const link = url.pathname.replace(/\/versions\/\d+\/?$/, '')
+	url.pathname = versionId === null ? link : `${link}/versions/${versionId}`
+	return url.toString()
 }

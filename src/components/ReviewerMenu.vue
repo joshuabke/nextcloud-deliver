@@ -39,11 +39,14 @@ const LANGUAGES = [
 ]
 const language = getLanguage().split(/[-_]/)[0]
 
+// Each field follows what is stored, without touching what is typed into the other
 const name = ref('')
 const email = ref('')
-watch(() => props.reviewer, (reviewer) => {
-	name.value = reviewer?.name ?? ''
-	email.value = reviewer?.email ?? ''
+watch(() => props.reviewer?.name, (value) => {
+	name.value = value ?? ''
+}, { immediate: true })
+watch(() => props.reviewer?.email, (value) => {
+	email.value = value ?? ''
 }, { immediate: true })
 
 /**
@@ -62,6 +65,8 @@ async function save(change) {
 		emit('update:reviewer', { ...props.reviewer, name: stored.name, email: stored.email, mail: stored.mail })
 		if ('name' in change) {
 			showSuccess(t('deliver', 'You are now "{name}"', { name: stored.name }))
+		} else if (stored.mailed) {
+			showSuccess(t('deliver', 'Your Personal Link is on its way to {email}', { email: stored.email }))
 		} else if ('email' in change) {
 			showSuccess(stored.email ? t('deliver', 'Mails go to {email}', { email: stored.email }) : t('deliver', 'No more mails'))
 		}
@@ -73,12 +78,14 @@ async function save(change) {
 
 /** This browser forgets the Reviewer; whoever comes next names themselves anew */
 async function end() {
-	// Without an address, nothing brings the Personal Link back
-	if (!props.reviewer.email && !await confirmRemoval(
+	const confirmed = await confirmRemoval(
 		t('deliver', 'End the session?'),
-		t('deliver', 'Only your Personal Link makes you "{name}" again. Without it, you will review under a new name.', { name: props.reviewer.name }),
+		props.reviewer.email
+			? t('deliver', 'Your Personal Link makes you "{name}" again; Deliver mailed it to {email}.', { name: props.reviewer.name, email: props.reviewer.email })
+			: t('deliver', 'Only your Personal Link makes you "{name}" again. Without it, you will review under a new name.', { name: props.reviewer.name }),
 		t('deliver', 'End session'),
-	)) {
+	)
+	if (!confirmed) {
 		return
 	}
 	try {

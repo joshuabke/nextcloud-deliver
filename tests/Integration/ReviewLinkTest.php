@@ -117,9 +117,14 @@ class ReviewLinkTest extends TestCase {
 		self::assertSame(409, $asReviewer->call('PUT', '/api/reviewer', ['name' => 'mara', 'email' => 'kim@example.test'])['status'], 'not to a name someone has');
 		self::assertSame('Kim Kunde', $asReviewer->call('PUT', '/api/reviewer', ['email' => 'kim@example.test'])['data']['name'], 'no name keeps it');
 
+		// This browser knows them through a second link of the Project too
+		$second = $this->nc->ocs('POST', "/projects/{$this->projectId}/links")['data']['token'];
+		self::assertSame(200, $asReviewer->through($second)->raw("?r=$key")['status']);
+		self::assertSame('reviewer', $asReviewer->through($second)->call('GET', '/api/context?versionId=' . $this->versionId)['data']['me']['type']);
 		self::assertSame(200, $asReviewer->call('DELETE', '/api/reviewer')['status']);
 		$me = fn (string $query = '') => $asReviewer->call('GET', '/api/context?versionId=' . $this->versionId . $query)['data']['me'];
 		self::assertSame('unnamed', $me()['type'], 'this browser forgot them');
+		self::assertSame('unnamed', $asReviewer->through($second)->call('GET', '/api/context?versionId=' . $this->versionId)['data']['me']['type'], 'through every link');
 		self::assertSame(['reviewer', 'Kim Kunde'], [$me("&r=$key")['type'], $me("&r=$key")['name']], 'their Personal Link still works');
 	}
 

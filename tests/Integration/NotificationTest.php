@@ -158,8 +158,13 @@ class NotificationTest extends TestCase {
 		$mail = json_decode((string)file_get_contents('http://mail:8025/api/v1/message/' . $found['messages'][0]['ID']), true);
 		self::assertStringContainsString($claimed['data']['link'], $mail['Text']);
 
-		$withoutAddress = (new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $token))->call('POST', '/api/reviewer', ['name' => 'Kim']);
-		self::assertFalse($withoutAddress['data']['mailed'], 'the link is shown to bookmark instead');
+		$later = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $token);
+		self::assertFalse($later->call('POST', '/api/reviewer', ['name' => 'Kim'])['data']['mailed'], 'the link is shown to bookmark instead');
+		// An address given later gets it too, in the language the page shows
+		$address = 'reviewer-' . bin2hex(random_bytes(4)) . '@example.test';
+		self::assertTrue($later->call('PUT', '/api/reviewer', ['email' => $address, 'language' => 'de'])['data']['mailed']);
+		self::assertSame(['Dein Persönlicher Link zum Review'], $this->subjectsTo($address));
+		self::assertFalse($later->call('PUT', '/api/reviewer', ['email' => $address, 'mailVersions' => true])['data']['mailed'], 'once per address');
 	}
 
 	public function testAMemberMailsAnInvitedReviewerTheirPersonalLink(): void {

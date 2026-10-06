@@ -27,6 +27,7 @@ import VideoPlayer from '../components/VideoPlayer.vue'
 import { claimReviewer, errorMessage, getPublicContext, listPublicAssets } from '../api.js'
 import { usePanelOpen } from '../composables/panel.js'
 import { useReview } from '../composables/review.js'
+import { addressOf } from '../lib/language.js'
 import { useCommentsStore } from '../store/comments.js'
 
 const props = defineProps({
@@ -66,6 +67,8 @@ const { player, panel, mode, clock, anchor, pin, hold, release, jump, posted, dr
 })
 
 watch(current, async (versionId) => {
+	// The address names what is open, so a reload or another language keeps it
+	window.history.replaceState(window.history.state, '', addressOf(window.location.href, versionId))
 	if (versionId === null) {
 		store.stop()
 		context.value = null

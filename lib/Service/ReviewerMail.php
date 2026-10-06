@@ -10,6 +10,7 @@ use OCA\Deliver\Db\Reviewer;
 use OCA\Deliver\Db\ReviewerMapper;
 use OCA\Deliver\Db\Version;
 use OCP\IConfig;
+use OCP\IL10N;
 use OCP\IUser;
 use OCP\L10N\IFactory;
 use OCP\Mail\IMailer;
@@ -103,14 +104,15 @@ class ReviewerMail {
 	 * Mails a Reviewer who just named themselves with an address their
 	 * Personal Link (story 54).
 	 *
+	 * @param ?string $language the one the Reviewer picked on the page, if they did
 	 * @return bool whether it went out
 	 */
-	public function welcome(Reviewer $reviewer, string $personalLink): bool {
+	public function welcome(Reviewer $reviewer, string $personalLink, ?string $language = null): bool {
 		if (!$this->canMail($reviewer)) {
 			return false;
 		}
-		$l = $this->l10n->get(Application::APP_ID);
-		return $this->mail($reviewer, $personalLink, 'deliver.ReviewerWelcome', ['reviewer' => $reviewer->getId()],
+		$l = $this->l10n->get(Application::APP_ID, in_array($language, ['de', 'en'], true) ? $language : null);
+		return $this->mail($l, $reviewer, $personalLink, 'deliver.ReviewerWelcome', ['reviewer' => $reviewer->getId()],
 			$l->t('Your Personal Link to the review'),
 			[$l->t('With this link you are "%s" again in the review, on any device. Keep it to yourself: whoever opens it comments as you.', [(string)$reviewer->getName()])],
 			$l->t('You get this mail because you gave this address in the review.'),
@@ -129,7 +131,7 @@ class ReviewerMail {
 		}
 		$l = $this->l10n->get(Application::APP_ID);
 		$own = array_values(array_filter(array_map(trim(...), preg_split('/\R/', mb_substr((string)$message, 0, self::MAX_MESSAGE)) ?: []), static fn (string $line) => $line !== ''));
-		return $this->mail($reviewer, $personalLink, 'deliver.ReviewerInvite', ['reviewer' => $reviewer->getId()],
+		return $this->mail($l, $reviewer, $personalLink, 'deliver.ReviewerInvite', ['reviewer' => $reviewer->getId()],
 			$l->t('%s invites you to a review', [$inviter->getDisplayName()]),
 			[...$own, $l->t('With this link you are "%s" in the review, on any device. Keep it to yourself: whoever opens it comments as you.', [(string)$reviewer->getName()])],
 			$l->t('You get this mail because %s invited you to the review with this address.', [$inviter->getDisplayName()]),
@@ -160,7 +162,7 @@ class ReviewerMail {
 			return;
 		}
 		$l = $this->l10n->get(Application::APP_ID);
-		$this->mail($reviewer, $link, $kind, ['version' => $version->getId()], $subject, $paragraphs,
+		$this->mail($l, $reviewer, $link, $kind, ['version' => $version->getId()], $subject, $paragraphs,
 			$l->t('You get these mails because you asked for them in the review. The menu under your name there changes that.'), $heading);
 	}
 
@@ -171,8 +173,7 @@ class ReviewerMail {
 	 * @param list<string> $paragraphs
 	 * @return bool whether it went out
 	 */
-	private function mail(Reviewer $reviewer, string $link, string $kind, array $data, string $subject, array $paragraphs, string $why, ?string $heading = null, ?string $replyTo = null): bool {
-		$l = $this->l10n->get(Application::APP_ID);
+	private function mail(IL10N $l, Reviewer $reviewer, string $link, string $kind, array $data, string $subject, array $paragraphs, string $why, ?string $heading = null, ?string $replyTo = null): bool {
 		$template = $this->mailer->createEMailTemplate($kind, $data);
 		$template->setSubject($subject);
 		$template->addHeader();

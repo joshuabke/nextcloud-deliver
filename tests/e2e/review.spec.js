@@ -432,7 +432,7 @@ test.describe('Review view', () => {
 		await reviewer.getByText('New Versions').click()
 		await reviewer.getByRole('button', { name: 'Start reviewing' }).click()
 		await expect(reviewer.locator('.deliver-comments__gate')).toHaveCount(0)
-		await reviewer.getByRole('button', { name: 'Mail settings' }).click()
+		await reviewer.getByRole('button', { name: 'Reviewing as Mara' }).click()
 		await expect(reviewer.getByRole('checkbox', { name: 'New Versions' })).toBeChecked()
 		await reviewer.keyboard.press('Escape')
 		await reviewer.locator('#deliver-comment-body').fill('from the client')
