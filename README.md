@@ -64,8 +64,8 @@ Deliver runs without ffmpeg and without a shell, so a managed Nextcloud can carr
 
 | Provider | Nextcloud | Deliver in the app list | ffmpeg | Shell / `occ` | Checked |
 | --- | --- | --- | --- | --- | --- |
-| Hetzner Storage Share | 33.0.9 | no: Deliver 0.8.0 is not listed, nor are other apps published recently | no | no | 2026-10 |
-| Own server ([deploy/](deploy/README.md)) | 33, 34 | yes | yes, with hardware encoding | yes | 2026-10 |
+| Hetzner Storage Share | 33.0.9 | ❌ | ❌ | ❌ | 2026-10 |
+| Own server ([deploy/](deploy/README.md)) | 33, 34 | ✅ | ✅ | ✅ | 2026-10 |
 
 ## Documentation
 
