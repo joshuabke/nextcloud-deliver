@@ -1,6 +1,6 @@
 # Änderungen
 
-## 0.8.2 – unveröffentlicht
+## 0.8.2 – 2026-10-06
 
 - Wer sich auf einem Link mit E-Mail-Adresse einträgt, bekommt den Persönlichen Link sofort per Mail statt eines Hinweises, ihn als Lesezeichen zu speichern.
 - Beim Einladen eines Reviewers lässt sich der Persönliche Link per Mail schicken, mit einer eigenen Nachricht; Antworten gehen an die eigene Adresse.

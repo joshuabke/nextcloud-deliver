@@ -53,7 +53,7 @@ Screenshots: footage from Tears of Steel, (CC) Blender Foundation | mango.blende
   - Hardware-Kodierung: VAAPI, NVENC, VideoToolbox
 
 Screenshots: Filmmaterial aus Tears of Steel, (CC) Blender Foundation | mango.blender.org.]]></description>
-	<version>0.8.1</version>
+	<version>0.8.2</version>
 	<licence>agpl</licence>
 	<author mail="joshua@boeke.dev">Joshua Böke</author>
 	<namespace>Deliver</namespace>
