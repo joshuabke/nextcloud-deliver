@@ -8,41 +8,23 @@
 
 ## What it does
 
-- **Review in place**
-  - Enable a video, audio or image file from the Files sidebar
-  - Or turn a whole folder into a Project that takes in every media file
-  - Projects collect files from anywhere: nothing is copied or moved
-  - Whoever can open a file in Files sees its review
-- **Comments on the Frame**
-  - On a Frame or a Range
-  - Drawings with pen, arrow or box
-  - Replies, Reactions, Mentions, Attachments
-  - Resolve when done
-- **Versions**
-  - `…_v2` stacks onto `…_v1` by itself
-  - Compare side by side or under a wipe, in sync
-  - A file written again in place keeps its Comments
-- **Sign-off**
-  - Approve or request changes
-  - Due Dates with reminders
-  - Filter by Unseen, Changes requested, Approved, Due
-- **Clients without accounts**
-  - Project Links for a Project, picked Assets or a single file
-  - Password, expiry, pause
-  - Landing page: download one by one or as a ZIP
-  - Personal Links with rights of their own and an optional Watermark
-  - Who opened, watched and downloaded what
+- **Review in place** from the Files sidebar, or a whole folder as a Project. Nothing is copied or moved.
+- **Comments on the Frame** or a Range, with Drawings, Replies, Reactions, Mentions and Attachments
+- **Versions** stack by name (`…_v1`, `…_v2`) and compare side by side or under a wipe
+- **Sign-off** with Approvals, Due Dates and reminders
+- **Clients without accounts** on Project Links: password, expiry, Watermark, downloads, and who watched what
 - **Back into the edit** export comments as markers for:
   - Video: DaVinci Resolve (EDL), Premiere Pro (FCP7 XML), Final Cut Pro (FCPXML), CSV
   - Audio: WAV markers, MIDI, REAPER regions, Ableton Live Set
-- **Media**
-  - supported files: mp4/mov h.264, WAV, flac, mp3, aac.
-  - Waveform generation via clientbrowser, wav is processed on nextcloud
-  - Scrub through a video by hovering over its still, frame accurate video thumbnails
+- **Supported files**
+  - Video: MP4 and MOV (H.264), WebM
+  - Audio: WAV, FLAC, MP3, AAC, Ogg
+  - Images: JPEG, PNG, WebP, GIF, AVIF
+  - Everything else (ProRes, H.265, MXF, AVI …) needs ffmpeg
+- **Waveforms, thumbnails and scrubbing** by hovering over a video
 - **Fully mobile ready**
 - **With ffmpeg on the server**
-  - automatic generation of proxys, thumbnails and waveforms from all ffmpeg supported inputs
-  - Frame rate and timecode MXF and AVI included
+  - Proxies, thumbnails and waveforms for every format ffmpeg reads
   - Hardware encoding: VAAPI, NVENC, VideoToolbox
 
 ## Screenshots
