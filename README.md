@@ -48,7 +48,7 @@
 
 ## Installation
 
-Install **Deliver** from the Nextcloud App Store: *Apps → Multimedia → Deliver*. It needs Nextcloud 33 or 34 and PHP 8.2 or newer. How it fares on hosted Nextcloud is [below](#hosted-nextcloud).
+Install **Deliver** from the Nextcloud App Store: *Apps → Multimedia → Deliver*. It needs Nextcloud 33 to 35 and PHP 8.2 or newer. How it fares on hosted Nextcloud is [below](#hosted-nextcloud).
 
 Everything else is optional:
 
@@ -65,7 +65,7 @@ Deliver runs without ffmpeg and without a shell, so a managed Nextcloud can carr
 | Provider | Nextcloud | Deliver in the app list | ffmpeg | Shell / `occ` | Checked |
 | --- | --- | --- | --- | --- | --- |
 | Hetzner Storage Share | 33.0.9 | ❌ | ❌ | ❌ | 2026-10 |
-| Own server ([deploy/](deploy/README.md)) | 33, 34 | ✅ | ✅ | ✅ | 2026-10 |
+| Own server ([deploy/](deploy/README.md)) | 33–35 | ✅ | ✅ | ✅ | 2026-10 |
 
 ## Documentation
 

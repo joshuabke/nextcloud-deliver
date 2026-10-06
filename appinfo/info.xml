@@ -68,7 +68,7 @@ Screenshots: Filmmaterial aus Tears of Steel, (CC) Blender Foundation | mango.bl
 	<screenshot>https://raw.githubusercontent.com/joshuabke/nextcloud-deliver/main/docs/screenshots/phone.png</screenshot>
 	<dependencies>
 		<php min-version="8.2"/>
-		<nextcloud min-version="33" max-version="34"/>
+		<nextcloud min-version="33" max-version="35"/>
 	</dependencies>
 	<!-- The schema fixes the order: background jobs, commands, settings, navigations -->
 	<background-jobs>
