@@ -1,8 +1,9 @@
 # Changelog
 
-## 0.8.1
+## 0.8.1 – 2026-10-06
 
 - Deleting a Nextcloud account no longer leaves its Projects, links and Reviewers to the next account created under the same user id. A Folder Project passes to whoever owns the folder, other Projects are removed with their Assets kept in No Project, and the account's Comments and Approvals stay, under "Deleted user".
+- The App Store page lists what Deliver does, in English and German.
 
 ## 0.8.0 – 2026-10-05
 
