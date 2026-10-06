@@ -20,6 +20,7 @@ use OCA\Deliver\Service\ReviewLinks;
 use OCA\Deliver\Service\StackService;
 use OCA\Deliver\Service\Viewer;
 use OCP\AppFramework\Http;
+use OCP\AppFramework\Http\Attribute\AnonRateLimit;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\FileDisplayResponse;
@@ -229,9 +230,14 @@ class PublicApiController extends PublicShareController {
 		}
 	}
 
-	/** A Reviewer names themselves once; the answer carries their Personal Link (story 54) */
+	/**
+	 * A Reviewer names themselves once; the answer carries their Personal
+	 * Link, mailed to the address they give (story 54). Rate limited, so
+	 * that a visitor cannot make the instance mail strangers in bulk.
+	 */
 	#[PublicPage]
 	#[NoCSRFRequired]
+	#[AnonRateLimit(limit: 10, period: 3600)]
 	public function claim(string $name, ?string $email = null, ?bool $mailReplies = null, ?bool $mailComments = null, ?bool $mailVersions = null): Response {
 		return $this->guard(function () use ($name, $email, $mailReplies, $mailComments, $mailVersions) {
 			$link = $this->link();

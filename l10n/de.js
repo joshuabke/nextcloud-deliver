@@ -384,6 +384,7 @@ OC.L10N.register(
 		"not found: no Proxies, Thumbnail Strips or Waveforms": "nicht gefunden: keine Proxies, Vorschauleisten oder Wellenformen",
 		"opened the link": "hat den Link geöffnet",
 		"watched": "hat angesehen:",
+		"Your Personal Link is on its way to {email}": "Dein Persönlicher Link ist unterwegs an {email}",
 		"Your Personal Link to the review": "Dein Persönlicher Link zum Review",
 		"{asset} is due today": "{asset} ist heute fällig",
 		"{asset} is due tomorrow": "{asset} ist morgen fällig",

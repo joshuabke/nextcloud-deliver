@@ -16,6 +16,8 @@ up:
 	# resetting is itself a no-op once the protection is off.
 	$(OCC) security:bruteforce:reset 127.0.0.1
 	$(OCC) config:system:set auth.bruteforce.protection.enabled --value false --type boolean
+	# They also name many Reviewers from one address, past the rate limit of a link
+	$(OCC) config:system:set ratelimit.protection.enabled --value false --type boolean
 	# Mail goes to the Mailpit container, never out
 	$(OCC) config:system:set mail_smtpmode --value smtp
 	$(OCC) config:system:set mail_smtphost --value mail

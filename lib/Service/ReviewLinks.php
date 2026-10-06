@@ -155,38 +155,50 @@ class ReviewLinks {
 	 * @throws ProjectConflictException
 	 */
 	public function assertRenameFree(Reviewer $reviewer, string $name): void {
-		if (mb_strtolower(trim($name)) === mb_strtolower(trim((string)$reviewer->getName()))) {
+		if (self::normal($name) === self::normal((string)$reviewer->getName())) {
 			return;
 		}
+		$reviews = [];
 		foreach (array_keys($this->reviewerMapper->reviewersByLink([$reviewer->getId()])) as $token) {
 			try {
-				$this->assertNameFree($this->byToken($token), $name, $reviewer);
+				$link = $this->byToken($token);
 			} catch (NotFoundException) {
+				continue;
 			}
+			// One check per Project: its links share one review
+			$reviews[$link->projectId() ?? $token] ??= $link;
+		}
+		foreach ($reviews as $link) {
+			$this->assertNameFree($link, $name, $reviewer);
 		}
 	}
 
 	/**
 	 * Refuses a name someone in the review already goes by: a Member of what
-	 * the link shows, or a Reviewer who came by a link of its Project, other
-	 * than the one named (story 54). Case and surrounding spaces do not count.
+	 * the link shows, or a Reviewer who came by any Member's link of its
+	 * Project (of this link alone, for a file in No Project), other than the
+	 * one named (story 54). Case and surrounding spaces do not count.
+	 * ponytail: checked before the insert, not locked; two claims of one name in the same instant both pass
 	 *
 	 * @throws ProjectConflictException
 	 */
 	public function assertNameFree(ReviewLink $link, string $name, ?Reviewer $except = null): void {
 		$fileIds = array_map(static fn (Version $version) => $version->getFileId(), array_merge([], ...array_column($link->assets(), 'versions')));
 		$uids = array_unique(array_merge([$link->ownerUid()], ...array_map($this->members->of(...), array_unique($fileIds))));
-		$names = array_map(fn (string $uid) => $this->users->getDisplayName($uid) ?? $uid, $uids);
-		$tokens = array_map(static fn (ProjectLink $each) => $each->getToken(), $this->projectLinks->findByProject($link->projectId(), $link->ownerUid()));
-		foreach ($this->reviewersBy($link->ownerUid(), $tokens, [])['reviewers'] as $reviewer) {
-			if ($reviewer['id'] !== $except?->getId()) {
-				$names[] = (string)$reviewer['name'];
-			}
-		}
-		$normal = static fn (string $each) => mb_strtolower(trim($each));
-		if (in_array($normal($name), array_map($normal, $names), true)) {
+		$tokens = $link->projectId() === null ? [$link->token()]
+			: array_map(static fn (ProjectLink $each) => $each->getToken(), $this->projectLinks->findAllOf($link->projectId()));
+		$names = [
+			...array_map(fn (string $uid) => $this->users->getDisplayName($uid) ?? $uid, $uids),
+			...$this->reviewerMapper->namesByLinks($tokens, $except?->getId()),
+		];
+		if (in_array(self::normal($name), array_map(self::normal(...), $names), true)) {
 			throw new ProjectConflictException($this->l->t('Someone in this review is already called "%s".', [trim($name)]));
 		}
+	}
+
+	/** A name as it is stored (ReviewerService), without case */
+	private static function normal(string $name): string {
+		return mb_strtolower(mb_substr(trim($name), 0, 255));
 	}
 
 	/**
