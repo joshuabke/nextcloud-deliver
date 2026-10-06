@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.2 – unreleased
+
+- A Reviewer who names themselves on a link with an email address gets their Personal Link by mail right away, instead of a notice to bookmark it.
+- Inviting a Reviewer can mail them their Personal Link, under a message of your own; answers go to your address.
+- Names in a review are unique: naming oneself, inviting and renaming refuse a name that a Member of the shared files or another Reviewer of the Project already has.
+- Naming oneself on a link is rate limited, so that a link cannot be used to send mail to strangers in bulk.
+
 ## 0.8.1 – 2026-10-06
 
 - Nextcloud 35 is supported.

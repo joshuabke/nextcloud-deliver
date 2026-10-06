@@ -1,5 +1,12 @@
 # Änderungen
 
+## 0.8.2 – unveröffentlicht
+
+- Wer sich auf einem Link mit E-Mail-Adresse einträgt, bekommt den Persönlichen Link sofort per Mail statt eines Hinweises, ihn als Lesezeichen zu speichern.
+- Beim Einladen eines Reviewers lässt sich der Persönliche Link per Mail schicken, mit einer eigenen Nachricht; Antworten gehen an die eigene Adresse.
+- Namen im Review sind eindeutig: Eintragen, Einladen und Umbenennen lehnen einen Namen ab, den schon ein Member der geteilten Dateien oder ein anderer Reviewer des Projekts trägt.
+- Das Eintragen auf einem Link ist begrenzt, damit sich über einen Link nicht massenhaft Mails an Fremde verschicken lassen.
+
 ## 0.8.1 – 2026-10-06
 
 - Nextcloud 35 wird unterstützt.
