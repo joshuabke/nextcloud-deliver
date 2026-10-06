@@ -99,7 +99,7 @@ class PublicController extends AuthPublicShareController {
 			'title' => $link->title(),
 			'description' => $link->description(),
 			// What the Reviewer's menu shows, not their key
-			'reviewer' => $reviewer === null ? null : ['name' => $reviewer->getName(), 'email' => $reviewer->getEmail(), 'mail' => $reviewer->mailWishes()],
+			'reviewer' => $reviewer === null ? null : ['id' => $reviewer->getId(), 'name' => $reviewer->getName(), 'email' => $reviewer->getEmail(), 'mail' => $reviewer->mailWishes()],
 			'downloadAll' => $flags['canDownload'] ? $this->urls->linkToRoute('deliver.PublicApi.download', ['token' => $this->getToken()]) : null,
 			// The landing of a Member's preview leads into the app; in the player, the context of each Version does (story 59)
 			'memberUrl' => $member && $version === null ? $this->urls->linkToRoute('deliver.page.index') : null,

@@ -16,6 +16,8 @@ use OCP\Security\ISecureRandom;
  */
 class ReviewerService {
 	private const KEY_LENGTH = 32;
+	/** The languages Deliver ships, which a Reviewer can pick */
+	public const LANGUAGES = ['de', 'en'];
 
 	public function __construct(
 		private ReviewerMapper $reviewers,
@@ -31,7 +33,7 @@ class ReviewerService {
 	 * @param array{replies?: ?bool, comments?: ?bool, versions?: ?bool} $mail what they want mailed
 	 * @throws InvalidRequestException the name is empty or the email is not one
 	 */
-	public function claim(string $ownerUid, string $name, ?string $email, array $mail = []): Reviewer {
+	public function claim(string $ownerUid, string $name, ?string $email, array $mail = [], ?string $language = null): Reviewer {
 		$email = self::email($email);
 		$reviewer = new Reviewer();
 		$reviewer->setOwnerUid($ownerUid);
@@ -39,6 +41,7 @@ class ReviewerService {
 		$reviewer->setEmail($email);
 		$reviewer->setSecretKey($this->random->generate(self::KEY_LENGTH, ISecureRandom::CHAR_ALPHANUMERIC));
 		$reviewer->setCreatedAt($this->time->getTime());
+		$reviewer->setLanguage(in_array($language, self::LANGUAGES, true) ? $language : null);
 		self::wish($reviewer, $mail);
 		return $this->reviewers->insert($reviewer);
 	}
@@ -50,9 +53,12 @@ class ReviewerService {
 	 * @param ?string $name null keeps it
 	 * @throws InvalidRequestException the name is empty or the email is not one
 	 */
-	public function updateSettings(Reviewer $reviewer, ?string $email, array $mail, ?string $name = null): Reviewer {
+	public function updateSettings(Reviewer $reviewer, ?string $email, array $mail, ?string $name = null, ?string $language = null): Reviewer {
 		if ($name !== null) {
 			$reviewer->setName(self::name($name));
+		}
+		if (in_array($language, self::LANGUAGES, true)) {
+			$reviewer->setLanguage($language);
 		}
 		$reviewer->setEmail(self::email($email));
 		self::wish($reviewer, $mail);

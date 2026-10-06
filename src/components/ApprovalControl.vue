@@ -7,8 +7,8 @@ import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
-import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import PersonAvatar from './PersonAvatar.vue'
 import { errorMessage } from '../api.js'
 import { useCommentsStore } from '../store/comments.js'
 
@@ -45,14 +45,7 @@ async function decide(status) {
 				:key="approval.author.type + approval.author.id"
 				:class="`deliver-approval__person--${approval.status}`"
 				:title="approval.author.name + ': ' + LABELS[approval.status]">
-				<NcAvatar
-					:user="approval.author.type === 'user' ? approval.author.id : undefined"
-					:displayName="approval.author.name"
-					:isNoUser="approval.author.type !== 'user'"
-					:size="24"
-					hideStatus
-					disableMenu
-					disableTooltip />
+				<PersonAvatar :author="approval.author" :size="24" />
 			</li>
 		</ul>
 		<NcActions

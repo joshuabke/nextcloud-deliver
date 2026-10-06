@@ -206,7 +206,7 @@ class NotificationTest extends TestCase {
 		self::assertTrue($link['data']['canMail'], 'the dev instance mails into Mailpit');
 		$email = 'reviewer-' . bin2hex(random_bytes(4)) . '@example.test';
 		$reviewer = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $link['data']['token']);
-		$reviewer->call('POST', '/api/reviewer', ['name' => 'Mara', 'email' => $email]);
+		$reviewer->call('POST', '/api/reviewer', ['name' => 'Mara', 'email' => $email, 'language' => 'de']);
 		$question = $reviewer->call('POST', "/api/versions/{$this->versionId}/comments", ['inFrame' => 3, 'body' => 'final grade?']);
 		self::assertSame(201, $question['status'], json_encode($question['data']));
 
@@ -214,8 +214,8 @@ class NotificationTest extends TestCase {
 		$found = json_decode((string)file_get_contents('http://mail:8025/api/v1/search?query=' . rawurlencode("to:$email")), true);
 		self::assertSame(2, $found['messages_count'] ?? 0, 'the Personal Link, then the Reply');
 		$mail = json_decode((string)file_get_contents('http://mail:8025/api/v1/message/' . $found['messages'][0]['ID']), true);
-		// In the language of whoever replied
-		self::assertSame("{$this->owner} replied to your Comment", $mail['Subject']);
+		// In the language the Reviewer reviews in, not that of whoever replied
+		self::assertSame("{$this->owner} hat auf deinen Kommentar geantwortet", $mail['Subject']);
 		self::assertStringContainsString('yes, final', $mail['Text']);
 		// On the instance's own address, whichever address the reply came through
 		$base = rtrim((string)shell_exec('php /var/www/html/occ config:system:get overwrite.cli.url'));

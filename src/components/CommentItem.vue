@@ -12,11 +12,11 @@ import { n, t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
-import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDateTime from '@nextcloud/vue/components/NcDateTime'
 import NcEmojiPicker from '@nextcloud/vue/components/NcEmojiPicker'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import PersonAvatar from './PersonAvatar.vue'
 import { attachmentUrl } from '../api.js'
 import { useBusy } from '../composables/busy.js'
 import { linkify } from '../lib/links.js'
@@ -110,14 +110,11 @@ function saveReply() {
 			'deliver-comment--unseen': unseen,
 			'deliver-comment--selected': selected,
 		}">
-		<NcAvatar
+		<PersonAvatar
 			class="deliver-comment__avatar"
-			:user="comment.author.type === 'user' ? comment.author.id : undefined"
-			:displayName="comment.author.name"
-			:isNoUser="comment.author.type !== 'user'"
+			:author="comment.author"
 			:size="isReply ? 28 : 32"
-			hideStatus
-			disableMenu />
+			tooltip />
 		<div class="deliver-comment__content">
 			<div class="deliver-comment__head">
 				<span class="deliver-comment__author">{{ comment.author.name }}</span>

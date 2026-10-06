@@ -31,6 +31,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setAllowOlder(?bool $allowOlder)
  * @method ?bool getWatermark()
  * @method void setWatermark(?bool $watermark)
+ * @method ?string getLanguage()
+ * @method void setLanguage(?string $language)
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
  */
@@ -45,6 +47,8 @@ class Reviewer extends Entity {
 	protected ?bool $mailReplies = null;
 	protected ?bool $mailComments = null;
 	protected ?bool $mailVersions = null;
+	/** de or en, for the mails to them; null leaves it to the request that sends one */
+	protected ?string $language = null;
 	/** Their own rights; null leaves it to the Project Link they come by */
 	protected ?bool $canComment = null;
 	protected ?bool $allowOlder = null;

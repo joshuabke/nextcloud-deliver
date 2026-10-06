@@ -150,11 +150,12 @@ class ReviewLinks {
 
 	/**
 	 * Refuses a Reviewer's new name that someone already has in a review the
-	 * Reviewer came by; the name they have stays theirs.
+	 * Reviewer came by; the name they have stays theirs. Renaming themselves,
+	 * a Reviewer only keeps clear of the Members' names, as on naming oneself.
 	 *
 	 * @throws ProjectConflictException
 	 */
-	public function assertRenameFree(Reviewer $reviewer, string $name): void {
+	public function assertRenameFree(Reviewer $reviewer, string $name, bool $reviewersToo = true): void {
 		if (self::normal($name) === self::normal((string)$reviewer->getName())) {
 			return;
 		}
@@ -169,31 +170,50 @@ class ReviewLinks {
 			$reviews[$link->projectId() ?? $token] ??= $link;
 		}
 		foreach ($reviews as $link) {
-			$this->assertNameFree($link, $name, $reviewer);
+			$this->assertNameFree($link, $name, $reviewer, $reviewersToo);
 		}
 	}
 
 	/**
 	 * Refuses a name someone in the review already goes by: a Member of what
-	 * the link shows, or a Reviewer who came by any Member's link of its
-	 * Project (of this link alone, for a file in No Project), other than the
-	 * one named (story 54). Case and surrounding spaces do not count.
+	 * the link shows and, unless left out, a Reviewer who came by any Member's
+	 * link of its Project (of this link alone, for a file in No Project),
+	 * other than the one named (stories 53, 54). Case and surrounding spaces
+	 * do not count.
 	 * ponytail: checked before the insert, not locked; two claims of one name in the same instant both pass
 	 *
+	 * @param bool $reviewersToo false where Reviewers may share a name, told apart by their colour (naming oneself, as on Frame.io)
 	 * @throws ProjectConflictException
 	 */
-	public function assertNameFree(ReviewLink $link, string $name, ?Reviewer $except = null): void {
+	public function assertNameFree(ReviewLink $link, string $name, ?Reviewer $except = null, bool $reviewersToo = true): void {
 		$fileIds = array_map(static fn (Version $version) => $version->getFileId(), array_merge([], ...array_column($link->assets(), 'versions')));
 		$uids = array_unique(array_merge([$link->ownerUid()], ...array_map($this->members->of(...), array_unique($fileIds))));
-		$tokens = $link->projectId() === null ? [$link->token()]
-			: array_map(static fn (ProjectLink $each) => $each->getToken(), $this->projectLinks->findAllOf($link->projectId()));
+		$tokens = !$reviewersToo ? [] : ($link->projectId() === null ? [$link->token()]
+			: array_map(static fn (ProjectLink $each) => $each->getToken(), $this->projectLinks->findAllOf($link->projectId())));
 		$names = [
 			...array_map(fn (string $uid) => $this->users->getDisplayName($uid) ?? $uid, $uids),
-			...$this->reviewerMapper->namesByLinks($tokens, $except?->getId()),
+			...($reviewersToo ? $this->reviewerMapper->namesByLinks($tokens, $except?->getId()) : []),
 		];
 		if (in_array(self::normal($name), array_map(self::normal(...), $names), true)) {
 			throw new ProjectConflictException($this->l->t('Someone in this review is already called "%s".', [trim($name)]));
 		}
+	}
+
+	/**
+	 * The Member's Reviewer who goes by this name and address: naming oneself
+	 * with both makes one that Reviewer again, as on Frame.io.
+	 */
+	public function returning(ReviewLink $link, string $name, ?string $email): ?Reviewer {
+		$email = mb_strtolower(trim((string)$email));
+		if ($email === '') {
+			return null;
+		}
+		foreach ($this->reviewerMapper->findByOwners([$link->ownerUid()]) as $reviewer) {
+			if (self::normal((string)$reviewer->getName()) === self::normal($name) && mb_strtolower((string)$reviewer->getEmail()) === $email) {
+				return $reviewer;
+			}
+		}
+		return null;
 	}
 
 	/** A name as it is stored (ReviewerService), without case */

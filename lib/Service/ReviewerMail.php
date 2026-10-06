@@ -61,7 +61,7 @@ class ReviewerMail {
 		if ($reviewer === null || $reply->getReviewerId() === $reviewer->getId() || !$reviewer->mailWishes()['replies']) {
 			return;
 		}
-		$l = $this->l10n->get(Application::APP_ID);
+		$l = $this->in($reviewer);
 		$this->send($reviewer, $version, 'deliver.ReviewerReply',
 			$l->t('%s replied to your Comment', [$author]),
 			[$l->t('Your Comment:') . ' ' . $parent->getBody(), $author . ': ' . $reply->getBody()],
@@ -74,8 +74,8 @@ class ReviewerMail {
 	 * but not to its author, nor to the one a Reply already reached.
 	 */
 	public function commented(Comment $comment, ?Comment $parent, Version $version, string $author): void {
-		$l = $this->l10n->get(Application::APP_ID);
 		foreach ($this->reviewersOf($version) as $reviewer) {
+			$l = $this->in($reviewer);
 			$repliedTo = $parent !== null && $parent->getReviewerId() === $reviewer->getId() && $reviewer->mailWishes()['replies'];
 			if ($reviewer->getId() === $comment->getReviewerId() || $repliedTo || !$reviewer->mailWishes()['comments']) {
 				continue;
@@ -89,9 +89,9 @@ class ReviewerMail {
 
 	/** Mails a new Version to the Reviewers who want to hear of them */
 	public function versionArrived(Version $version): void {
-		$l = $this->l10n->get(Application::APP_ID);
 		foreach ($this->reviewersOf($version) as $reviewer) {
 			if ($reviewer->mailWishes()['versions']) {
+				$l = $this->in($reviewer);
 				$this->send($reviewer, $version, 'deliver.ReviewerVersion',
 					$l->t('Version %s of %s is ready for review', [(string)$version->getNumber(), $version->getName()]),
 					[],
@@ -111,7 +111,7 @@ class ReviewerMail {
 		if (!$this->canMail($reviewer)) {
 			return false;
 		}
-		$l = $this->l10n->get(Application::APP_ID, in_array($language, ['de', 'en'], true) ? $language : null);
+		$l = $this->l10n->get(Application::APP_ID, in_array($language, ReviewerService::LANGUAGES, true) ? $language : $reviewer->getLanguage());
 		return $this->mail($l, $reviewer, $personalLink, 'deliver.ReviewerWelcome', ['reviewer' => $reviewer->getId()],
 			$l->t('Your Personal Link to the review'),
 			[$l->t('With this link you are "%s" again in the review, on any device. Keep it to yourself: whoever opens it comments as you.', [(string)$reviewer->getName()])],
@@ -140,6 +140,11 @@ class ReviewerMail {
 		);
 	}
 
+	/** Deliver's texts in the Reviewer's language, or that of the request when they have none */
+	private function in(Reviewer $reviewer): IL10N {
+		return $this->l10n->get(Application::APP_ID, $reviewer->getLanguage());
+	}
+
 	private function canMail(Reviewer $reviewer): bool {
 		return $reviewer->getEmail() !== null && self::configured($this->config);
 	}
@@ -161,7 +166,7 @@ class ReviewerMail {
 		if ($link === null) {
 			return;
 		}
-		$l = $this->l10n->get(Application::APP_ID);
+		$l = $this->in($reviewer);
 		$this->mail($l, $reviewer, $link, $kind, ['version' => $version->getId()], $subject, $paragraphs,
 			$l->t('You get these mails because you asked for them in the review. The menu under your name there changes that.'), $heading);
 	}

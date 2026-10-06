@@ -133,9 +133,7 @@ async function claim({ name, email, mail }) {
 		reviewer.value = claimed
 		await store.reload()
 	} catch (e) {
-		error.value = e?.response?.status === 409
-			? t('deliver', 'Someone in this review is already called "{name}". Pick another name, or open your Personal Link if it is you.', { name })
-			: errorMessage(e)
+		error.value = errorMessage(e)
 	}
 }
 </script>

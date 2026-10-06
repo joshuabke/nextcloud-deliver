@@ -269,7 +269,6 @@ OC.L10N.register(
 		"Show time as": "Zeit anzeigen als",
 		"Side by side": "Nebeneinander",
 		"Someone in this review is already called \"%s\".": "Im Review heißt schon jemand „%s“.",
-		"Someone in this review is already called \"{name}\". Pick another name, or open your Personal Link if it is you.": "Im Review heißt schon jemand „{name}“. Wähle einen anderen Namen, oder öffne deinen Persönlichen Link, wenn du das bist.",
 		"Sort by": "Sortieren nach",
 		"Sound of V{number}": "Ton von V{number}",
 		"Sound of V{number}; click for the other side": "Ton von V{number}; klick für die andere Seite",

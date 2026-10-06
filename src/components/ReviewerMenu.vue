@@ -13,8 +13,8 @@ import NcActionRadio from '@nextcloud/vue/components/NcActionRadio'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcActionText from '@nextcloud/vue/components/NcActionText'
-import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import PersonAvatar from './PersonAvatar.vue'
 import { errorMessage, forgetReviewer, updateReviewer } from '../api.js'
 import { confirmRemoval } from '../confirm.js'
 import { chooseLanguage } from '../lib/language.js'
@@ -76,6 +76,22 @@ async function save(change) {
 	}
 }
 
+/**
+ * The page in another language, and the mails to the Reviewer too
+ *
+ * @param {string} picked - de or en
+ */
+async function pick(picked) {
+	if (props.reviewer) {
+		try {
+			await updateReviewer(null, props.reviewer.email, props.reviewer.mail, picked)
+		} catch (e) {
+			showError(errorMessage(e))
+		}
+	}
+	chooseLanguage(picked)
+}
+
 /** This browser forgets the Reviewer; whoever comes next names themselves anew */
 async function end() {
 	const confirmed = await confirmRemoval(
@@ -107,13 +123,7 @@ async function end() {
 		:aria-label="reviewer ? t('deliver', 'Reviewing as {name}', { name: reviewer.name }) : t('deliver', 'Language')"
 		:title="reviewer ? t('deliver', 'Reviewing as {name}', { name: reviewer.name }) : t('deliver', 'Language')">
 		<template #icon>
-			<NcAvatar
-				v-if="reviewer"
-				:displayName="reviewer.name"
-				:size="32"
-				isNoUser
-				disableMenu
-				disableTooltip />
+			<PersonAvatar v-if="reviewer" :author="{ type: 'reviewer', id: reviewer.id, name: reviewer.name }" :size="32" />
 			<NcIconSvgWrapper v-else :svg="accountIcon" />
 		</template>
 		<template v-if="reviewer">
@@ -156,7 +166,7 @@ async function end() {
 			:value="each.id"
 			:modelValue="language"
 			name="deliver-language"
-			@update:modelValue="chooseLanguage(each.id)">
+			@update:modelValue="pick(each.id)">
 			{{ each.label }}
 		</NcActionRadio>
 		<template v-if="reviewer">

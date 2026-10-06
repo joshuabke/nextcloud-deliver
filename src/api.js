@@ -148,9 +148,10 @@ export const claimReviewer = (name, email, mail) => axios.post(url('/reviewer'),
  * @param {string|null} name - their new name, or null to keep it
  * @param {string|null} email - the address, or null for none
  * @param {{replies: boolean, comments: boolean, versions: boolean}} mail - what to mail
+ * @param {string} language - the one to mail them in, the page's unless they pick another
  * @return {Promise<object>} the Reviewer as stored
  */
-export const updateReviewer = (name, email, mail) => axios.put(url('/reviewer'), { name, email, ...mailFields(mail), language: getLanguage() }).then(data)
+export const updateReviewer = (name, email, mail, language = getLanguage()) => axios.put(url('/reviewer'), { name, email, ...mailFields(mail), language }).then(data)
 /** Ends the Reviewer's session: this browser forgets who they are */
 export const forgetReviewer = () => axios.delete(url('/reviewer'))
 /** Every file behind the link that is an Asset: [{ fileId, versionId, assetId }], Versions of one Asset share its newest versionId */

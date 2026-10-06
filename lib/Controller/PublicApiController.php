@@ -247,9 +247,13 @@ class PublicApiController extends PublicShareController {
 			if ($this->member(...array_column(array_column($link->assets(), 'versions'), 0))) {
 				throw new AccessDeniedException('Members review in Deliver itself');
 			}
-			$this->links->assertNameFree($link, $name);
-			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
-			$reviewer = $this->reviewers->claim($link->ownerUid(), $name, $email, $wishes);
+			// The same name and address make one the same Reviewer again; otherwise only the Members' names are taken
+			$reviewer = $this->links->returning($link, $name, $email);
+			if ($reviewer === null) {
+				$this->links->assertNameFree($link, $name, reviewersToo: false);
+				$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
+				$reviewer = $this->reviewers->claim($link->ownerUid(), $name, $email, $wishes, $language);
+			}
 			$this->reviewers->cameBy($reviewer, $link->token());
 			$mailed = $this->mail->welcome($reviewer, $link->personalLink($reviewer), $language);
 			// A JSONResponse, because a DataResponse loses its cookies on the way out
@@ -272,7 +276,7 @@ class PublicApiController extends PublicShareController {
 		return $this->guard(function () use ($name, $email, $mailReplies, $mailComments, $mailVersions, $language) {
 			$reviewer = $this->reviewer() ?? throw new AccessDeniedException('Give a name first');
 			if ($name !== null) {
-				$this->links->assertRenameFree($reviewer, $name);
+				$this->links->assertRenameFree($reviewer, $name, reviewersToo: false);
 			}
 			$before = $reviewer->getEmail();
 			if ($email !== null && $email !== $before) {
@@ -280,7 +284,7 @@ class PublicApiController extends PublicShareController {
 				$this->limiter->registerAnonRequest('deliver-reviewer-address', 10, 3600, $this->request->getRemoteAddress());
 			}
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
-			$reviewer = $this->reviewers->updateSettings($reviewer, $email, $wishes, $name);
+			$reviewer = $this->reviewers->updateSettings($reviewer, $email, $wishes, $name, $language);
 			$mailed = $reviewer->getEmail() !== $before && $this->mail->welcome($reviewer, $this->link()->personalLink($reviewer), $language);
 			return $this->reviewers->serialize($reviewer) + ['mailed' => $mailed];
 		});

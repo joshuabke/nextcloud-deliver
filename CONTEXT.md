@@ -99,7 +99,7 @@ A Nextcloud user who can open a Version's file through Files permissions; read a
 _Avoid_: Owner (except for the file's actual owner), collaborator, team
 
 **Reviewer**:
-Anyone who reaches a Version through a Project Link instead of Files permissions, identified by a self-given name (prefilled from their account if they happen to be logged in). Reviewers only ever touch their own Comments.
+Anyone who reaches a Version through a Project Link instead of Files permissions, identified by a self-given name (prefilled from their account if they happen to be logged in); naming oneself with the name and address of an existing Reviewer makes one that Reviewer again. Two Reviewers may share a name and are told apart by the colour of their avatar. Reviewers only ever touch their own Comments.
 _Avoid_: Guest, anonymous user, client, external user
 
 **Project Link**:
