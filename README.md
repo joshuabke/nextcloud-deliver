@@ -31,22 +31,18 @@
 
 <table>
 <tr>
-<th>The Review view</th>
-<th>Compare under a wipe</th>
-<th>A client on a Project Link</th>
+<td width="50%"><b>The Review view</b><br><a href="docs/screenshots/review.png"><img src="docs/screenshots/review.png" alt="A Comment on a Range with a Drawing, Replies and Reactions" width="100%"></a></td>
+<td width="50%"><b>Compare under a wipe</b><br><a href="docs/screenshots/compare.png"><img src="docs/screenshots/compare.png" alt="Compare view: the flat v1 against the graded v2" width="100%"></a></td>
 </tr>
 <tr>
-<td><a href="docs/screenshots/review.png"><img src="docs/screenshots/review.png" alt="A Comment on a Range with a Drawing, Replies and Reactions" width="100%"></a></td>
-<td><a href="docs/screenshots/compare.png"><img src="docs/screenshots/compare.png" alt="Compare view: the flat v1 against the graded v2" width="100%"></a></td>
-<td><a href="docs/screenshots/reviewer.png"><img src="docs/screenshots/reviewer.png" alt="A Reviewer's page with a Watermark and the Approval Changes requested" width="100%"></a></td>
+<td width="50%"><b>A client on a Project Link</b><br><a href="docs/screenshots/reviewer.png"><img src="docs/screenshots/reviewer.png" alt="A Reviewer's page with a Watermark and the Approval Changes requested" width="100%"></a></td>
+<td width="50%" rowspan="3" valign="top"><b>On a phone</b><br><a href="docs/screenshots/phone.png"><img src="docs/screenshots/phone.png" alt="The Review view on a phone" width="100%"></a></td>
 </tr>
 <tr>
-<th colspan="2">The Projects and a Project</th>
-<th>On a phone</th>
+<td width="50%"><b>The Projects</b><br><a href="docs/screenshots/projects.png"><img src="docs/screenshots/projects.png" alt="The Projects as tiles" width="100%"></a></td>
 </tr>
 <tr>
-<td colspan="2"><a href="docs/screenshots/projects.png"><img src="docs/screenshots/projects.png" alt="The Projects as tiles" width="100%"></a><br><a href="docs/screenshots/project.png"><img src="docs/screenshots/project.png" alt="A Project with its Assets as cards: filters, Approvals, Due Dates" width="100%"></a></td>
-<td><a href="docs/screenshots/phone.png"><img src="docs/screenshots/phone.png" alt="The Review view on a phone" width="100%"></a></td>
+<td width="50%"><b>A Project</b><br><a href="docs/screenshots/project.png"><img src="docs/screenshots/project.png" alt="A Project with its Assets as cards: filters, Approvals, Due Dates" width="100%"></a></td>
 </tr>
 </table>
 
