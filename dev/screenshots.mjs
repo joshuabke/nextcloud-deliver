@@ -1,12 +1,16 @@
 /**
- * The App Store screenshots (docs/screenshots/), taken from the dev instance
- * with footage from Tears of Steel, (CC) Blender Foundation | mango.blender.org.
+ * The App Store screenshots and the README's slideshow (docs/screenshots/),
+ * taken from the dev instance with footage from Tears of Steel,
+ * (CC) Blender Foundation | mango.blender.org.
  *
  * node dev/screenshots.mjs
  *
  * Needs `make up`, ffmpeg, and the headless browser the e2e tests use
  * (DELIVER_CDP, DELIVER_BROWSER_URL as there). Recreates the users sarah and
- * leo on every run, so their files and Projects start clean.
+ * leo on every run, so their files and Projects start clean, and enables the
+ * Movie preview provider for the stills on the tiles. Their old Projects stay
+ * until the hourly scan purges them, so between runs reset the instance
+ * (`make down`, delete docker/, `make up`).
  *
  * chromedp/headless-shell carries only DejaVu, and no emoji: copy Noto Sans,
  * Noto Sans Mono and Noto Color Emoji (github.com/google/fonts, ofl/) into
@@ -180,9 +184,20 @@ async function seed() {
 	return { project, flat, graded, personal: personal.pathname + personal.search, token }
 }
 
+/** @param {...string} args - for occ in the dev instance */
+function occ(...args) {
+	execFileSync('docker', ['compose', 'exec', '-T', '-u', 'www-data', 'nextcloud', 'php', 'occ', ...args], { stdio: 'inherit' })
+}
+
+/** Stills of videos on Project tiles and cards: Nextcloud's Movie preview provider, beside the image ones it replaces */
+function previews() {
+	const providers = ['PNG', 'JPEG', 'GIF', 'Movie']
+	providers.forEach((provider, i) => occ('config:system:set', 'enabledPreviewProviders', String(i), '--value', `OC\\Preview\\${provider}`))
+}
+
 /** Derived media for everything just uploaded, before the browser looks */
 function worker() {
-	execFileSync('docker', ['compose', 'exec', '-T', '-u', 'www-data', 'nextcloud', 'php', 'occ', 'deliver:worker', '--once'], { stdio: 'inherit' })
+	occ('deliver:worker', '--once')
 }
 
 /**
@@ -252,9 +267,20 @@ async function shoot({ project, flat, graded, personal, token }) {
 	await browser.close()
 }
 
+/** The README's slideshow: every shot for three seconds on one 1440×900 canvas, looping */
+function slideshow() {
+	const shots = ['review', 'project', 'compare', 'reviewer', 'phone', 'projects']
+	const fit = shots.map((_, i) => `[${i}]scale=1440:900:force_original_aspect_ratio=decrease,pad=1440:900:(ow-iw)/2:(oh-ih)/2:color=0x171717,setsar=1,fps=1[v${i}]`)
+	const filter = fit.join(';') + ';' + shots.map((_, i) => `[v${i}]`).join('') + `concat=n=${shots.length}:v=1[out]`
+	const inputs = shots.flatMap((shot) => ['-loop', '1', '-t', '3', '-i', join(OUT, shot + '.png')])
+	execFileSync('ffmpeg', ['-v', 'error', '-y', ...inputs, '-filter_complex', filter, '-map', '[out]', '-c:v', 'libwebp_anim', '-quality', '80', '-loop', '0', join(OUT, 'slideshow.webp')])
+}
+
 media()
+previews()
 await users()
 const seeded = await seed()
 worker()
 await shoot(seeded)
+slideshow()
 process.stdout.write(`Screenshots in ${OUT}\n`)

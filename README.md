@@ -4,38 +4,68 @@
 
 > **Pre-release.** The 0.x releases come before 1.0: use Deliver on real projects, but keep your own backups and expect rough edges. 1.0 follows once they have settled.
 
-Deliver turns Nextcloud into a review tool for cuts, mixes and stills, in the spirit of Frame.io, but on your own server. Your team and your clients comment on exact Frames, draw on the picture, compare Versions and sign them off. The feedback goes back into the editing application as markers. Nothing is uploaded anywhere else and nothing is copied: Nextcloud Files stays the source of truth.
-
-![The Review view: a Comment on a Range with a Drawing, Replies and Reactions](docs/screenshots/review.png)
+[![Deliver in a slideshow: the Review view, a Project, Compare, a client's link with Watermark, a phone, the Projects](docs/screenshots/slideshow.webp)](#screenshots)
 
 ## What it does
 
-- **Review in place.** Enable a video, audio or image file from the Files sidebar, or let a whole folder take in everything new. Projects collect files from anywhere without moving them, and whoever can open a file in Files sees its review.
-- **Comments on the Frame.** Anchor a Comment to a Frame or a Range, draw on the picture with pen, arrow or box, reply, react, mention a colleague, attach a reference, and resolve it once it is done.
-- **Versions that stack.** A new cut named `…_v2` next to `…_v1` lands on top of it by itself. Compare two Versions side by side or under a wipe, playing in sync.
-- **Sign-off.** Approve a Version or request changes, set Due Dates with reminders, and see at a glance what is unseen, approved or due.
-- **Clients without accounts.** Review runs on Project Links: one link for a whole Project or the Assets you pick, with password, expiry, pause and a landing page. Every Reviewer gets a Personal Link, rights of their own and, if you like, a Watermark with their name over the picture.
-- **Back into the edit.** Export the Comments as markers for DaVinci Resolve (EDL), Premiere Pro (FCP7 XML), Final Cut Pro (FCPXML) or as CSV; for audio as WAV markers, MIDI, REAPER regions or into an Ableton Live Set.
-- **Heavy media, light browser.** With ffmpeg on the server, Deliver makes Proxies for formats a browser will not play, Thumbnail Strips for the timeline and Waveforms, with hardware encoding if you have it. Without ffmpeg, browser-native files play as they are.
-- **Everywhere.** Live updates without reloading, a Review view made for phones, English and German.
+- **Review in place** from the Files sidebar, or a whole folder as a Project. Nothing is copied or moved.
+- **Comments on the Frame** or a Range, with Drawings, Replies, Reactions, Mentions and Attachments
+- **Versions** stack by name (`…_v1`, `…_v2`) and compare side by side or under a wipe
+- **Sign-off** with Approvals, Due Dates and reminders
+- **Clients without accounts** on Project Links: password, expiry, Watermark, downloads, and who watched what
+- **Back into the edit** export comments as markers for:
+  - Video: DaVinci Resolve (EDL), Premiere Pro (FCP7 XML), Final Cut Pro (FCPXML), CSV
+  - Audio: WAV markers, MIDI, REAPER regions, Ableton Live Set
+- **Supported files**
+  - Video: MP4 and MOV (H.264), WebM
+  - Audio: WAV, FLAC, MP3, AAC, Ogg
+  - Images: JPEG, PNG, WebP, GIF, AVIF
+  - Everything else (ProRes, H.265, MXF, AVI …) needs ffmpeg
+- **Waveforms, thumbnails and scrubbing** by hovering over a video
+- **Fully mobile ready**
+- **With ffmpeg on the server**
+  - Proxies, thumbnails and waveforms for every format ffmpeg reads
+  - Hardware encoding: VAAPI, NVENC, VideoToolbox
 
-| Compare two Versions under a wipe | A client on a Project Link, with Watermark |
-| --- | --- |
-| ![Compare view: the flat v1 against the graded v2](docs/screenshots/compare.png) | ![A Reviewer's page with a Watermark and the Approval "Changes requested"](docs/screenshots/reviewer.png) |
-| **A Project: filters, Approvals, Due Dates** | **On a phone** |
-| ![A Project with its Assets as cards](docs/screenshots/project.png) | <img src="docs/screenshots/phone.png" alt="The Review view on a phone" width="260"> |
+## Screenshots
+
+<table>
+<tr>
+<td width="50%"><b>The Review view</b><br><a href="docs/screenshots/review.png"><img src="docs/screenshots/review.png" alt="A Comment on a Range with a Drawing, Replies and Reactions" width="100%"></a></td>
+<td width="50%"><b>Compare under a wipe</b><br><a href="docs/screenshots/compare.png"><img src="docs/screenshots/compare.png" alt="Compare view: the flat v1 against the graded v2" width="100%"></a></td>
+</tr>
+<tr>
+<td width="50%"><b>A client on a Project Link</b><br><a href="docs/screenshots/reviewer.png"><img src="docs/screenshots/reviewer.png" alt="A Reviewer's page with a Watermark and the Approval Changes requested" width="100%"></a></td>
+<td width="50%" rowspan="3" valign="top"><b>On a phone</b><br><a href="docs/screenshots/phone.png"><img src="docs/screenshots/phone.png" alt="The Review view on a phone" width="100%"></a></td>
+</tr>
+<tr>
+<td width="50%"><b>The Projects</b><br><a href="docs/screenshots/projects.png"><img src="docs/screenshots/projects.png" alt="The Projects as tiles" width="100%"></a></td>
+</tr>
+<tr>
+<td width="50%"><b>A Project</b><br><a href="docs/screenshots/project.png"><img src="docs/screenshots/project.png" alt="A Project with its Assets as cards: filters, Approvals, Due Dates" width="100%"></a></td>
+</tr>
+</table>
 
 ## Installation
 
-Install **Deliver** from the Nextcloud App Store: *Apps → Multimedia → Deliver*. It needs Nextcloud 33 or newer and PHP 8.2 or newer.
+Install **Deliver** from the Nextcloud App Store: *Apps → Multimedia → Deliver*. It needs Nextcloud 33 or 34 and PHP 8.2 or newer. How it fares on hosted Nextcloud is [below](#hosted-nextcloud).
 
 Everything else is optional:
 
-- **ffmpeg and ffprobe** on the server for Proxies, Thumbnail Strips and Waveforms, and for hardware encoding. Shared hosting without them works for browser-native files.
+- **ffmpeg and ffprobe** on the server, for Proxies, Thumbnail Strips and hardware encoding (*With ffmpeg on the server* above). Shared hosting without them works for browser-native files.
 - **The Movie preview provider**, so that lists show a still of each video instead of an icon.
 - **[notify_push](https://github.com/nextcloud/notify_push)**, so that new Comments reach open Review views at once instead of within seconds.
 
 The details are in [docs/admin.md](docs/admin.md); a Compose setup for a server of your own is in [deploy/](deploy/README.md).
+
+## Hosted Nextcloud
+
+Deliver runs without ffmpeg and without a shell, so a managed Nextcloud can carry it, as far as its provider lets App Store apps in. What has been seen so far; additions are welcome as issues or pull requests.
+
+| Provider | Nextcloud | Deliver in the app list | ffmpeg | Shell / `occ` | Checked |
+| --- | --- | --- | --- | --- | --- |
+| Hetzner Storage Share | 33.0.9 | ❌ | ❌ | ❌ | 2026-10 |
+| Own server ([deploy/](deploy/README.md)) | 33, 34 | ✅ | ✅ | ✅ | 2026-10 |
 
 ## Documentation
 

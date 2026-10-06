@@ -4,7 +4,7 @@ For admins: what Deliver needs, what it does in the background, and how to tune 
 
 ## Requirements
 
-- Nextcloud 33 or newer (the Files sidebar tab API this app uses shipped with 33)
+- Nextcloud 33 or 34 (the Files sidebar tab API this app uses shipped with 33)
 - PHP 8.2 or newer
 - ffmpeg/ffprobe are optional and only needed for derived media (Proxies, Thumbnail Strips, Waveforms)
 - For the still that identifies an Asset in a list, Nextcloud's own Movie preview provider has to be enabled by an admin (`occ config:system:set enabledPreviewProviders N --value 'OC\Preview\Movie'`); without it the list falls back to an icon
