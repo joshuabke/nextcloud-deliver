@@ -6,7 +6,10 @@
  *
  * Needs `make up`, ffmpeg, and the headless browser the e2e tests use
  * (DELIVER_CDP, DELIVER_BROWSER_URL as there). Recreates the users sarah and
- * leo on every run, so their files and Projects start clean.
+ * leo on every run, so their files and Projects start clean, and enables the
+ * Movie preview provider for the stills on the tiles. Their old Projects stay
+ * until the hourly scan purges them, so between runs reset the instance
+ * (`make down`, delete docker/, `make up`).
  *
  * chromedp/headless-shell carries only DejaVu, and no emoji: copy Noto Sans,
  * Noto Sans Mono and Noto Color Emoji (github.com/google/fonts, ofl/) into
@@ -180,9 +183,20 @@ async function seed() {
 	return { project, flat, graded, personal: personal.pathname + personal.search, token }
 }
 
+/** @param {...string} args - for occ in the dev instance */
+function occ(...args) {
+	execFileSync('docker', ['compose', 'exec', '-T', '-u', 'www-data', 'nextcloud', 'php', 'occ', ...args], { stdio: 'inherit' })
+}
+
+/** Stills of videos on Project tiles and cards: Nextcloud's Movie preview provider, beside the image ones it replaces */
+function previews() {
+	const providers = ['PNG', 'JPEG', 'GIF', 'Movie']
+	providers.forEach((provider, i) => occ('config:system:set', 'enabledPreviewProviders', String(i), '--value', `OC\\Preview\\${provider}`))
+}
+
 /** Derived media for everything just uploaded, before the browser looks */
 function worker() {
-	execFileSync('docker', ['compose', 'exec', '-T', '-u', 'www-data', 'nextcloud', 'php', 'occ', 'deliver:worker', '--once'], { stdio: 'inherit' })
+	occ('deliver:worker', '--once')
 }
 
 /**
@@ -253,6 +267,7 @@ async function shoot({ project, flat, graded, personal, token }) {
 }
 
 media()
+previews()
 await users()
 const seeded = await seed()
 worker()

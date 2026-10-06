@@ -4,7 +4,7 @@ For admins: what Deliver needs, what it does in the background, and how to tune 
 
 ## Requirements
 
-- Nextcloud 33 or newer (the Files sidebar tab API this app uses shipped with 33)
+- Nextcloud 33 or 34 (the Files sidebar tab API this app uses shipped with 33)
 - PHP 8.2 or newer
 - ffmpeg/ffprobe are optional and only needed for derived media (Proxies, Thumbnail Strips, Waveforms)
 - For the still that identifies an Asset in a list, Nextcloud's own Movie preview provider has to be enabled by an admin (`occ config:system:set enabledPreviewProviders N --value 'OC\Preview\Movie'`); without it the list falls back to an icon
@@ -26,6 +26,15 @@ Admins configure the pipeline under *Administration → Deliver*: the paths to f
 For VAAPI in Docker, pass `/dev/dri` into the container **and** put the web server's user into the group that owns `/dev/dri/renderD128`: `group_add` in compose only reaches the container's first process, and Apache drops it when it switches to `www-data`. `deploy/Dockerfile` does this with the build argument `RENDER_GID`.
 
 An hourly scan compares every Project with its folder, next to the file listener: it catches deletions from the trash, which fire no event Deliver can hear, and purges Projects whose folder is gone for good.
+
+## Hosted Nextcloud
+
+Deliver runs without ffmpeg and without a shell, so a managed Nextcloud can carry it, as far as its provider lets App Store apps in. What has been seen so far; additions are welcome as issues or pull requests.
+
+| Provider | Nextcloud | Deliver in the app list | ffmpeg | Shell / `occ` | Checked |
+| --- | --- | --- | --- | --- | --- |
+| Hetzner Storage Share | 33.0.9 | no: Deliver 0.8.0 is not listed, nor are other apps published recently | no | no | 2026-10 |
+| Own server ([deploy/](../deploy/README.md)) | 33, 34 | yes | yes, with hardware encoding | yes | 2026-10 |
 
 ## Live updates
 
