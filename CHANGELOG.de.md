@@ -5,7 +5,7 @@
 - Nextcloud 35 wird unterstützt.
 - Wird ein Nextcloud-Konto gelöscht, erbt ein später unter derselben Benutzer-ID angelegtes Konto nicht mehr dessen Projekte, Links und Reviewer. Ein Ordnerprojekt geht an den Eigentümer des Ordners, andere Projekte werden entfernt und ihre Assets bleiben Ohne Projekt erhalten; Kommentare und Abnahmen des Kontos bleiben erhalten und stehen dann unter „Gelöschter Benutzer“.
 - Die App-Store-Seite zählt auf, was Deliver kann, auf Englisch und Deutsch.
-- Neue Screenshots und eine README mit den Funktionen auf einen Blick, einer Screenshot-Galerie und welche Nextcloud-Anbieter Deliver anbieten.
+- Neue Screenshots und eine README mit den Funktionen auf einen Blick, einer Screenshot-Galerie und einer Übersicht, wie Deliver bei Nextcloud-Anbietern läuft.
 
 ## 0.8.0 – 2026-10-05
 
