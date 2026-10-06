@@ -5,22 +5,52 @@
 	<name>Deliver</name>
 	<summary>Frame-accurate video review inside Nextcloud Files</summary>
 	<summary lang="de">Framegenaues Video-Review direkt in Nextcloud Dateien</summary>
-	<description><![CDATA[Frame-accurate video review where the files already are.
+	<description><![CDATA[Frame-accurate video and audio review, right where your files already are.
 
-**Pre-release:** Deliver is new. Try it on real projects, but keep your own backups and expect rough edges; please report what you find on GitHub.
+**Pre-release:** the 0.x releases come before 1.0. Use Deliver on real projects, but keep your own backups and expect rough edges; please report what you find on GitHub.
 
-Enable a video or audio file for review from the Files sidebar and it becomes an Asset, in a Project or in No Project; a whole folder can become a Project on Auto Intake so that everything in it counts. Members — whoever Files lets open the file — and Reviewers, who arrive through a Project Link for a whole Project or the Assets you pick, leave Comments anchored to frames or ranges. Iterations of a cut stack up as Versions, and the feedback goes back into the editing application as markers.
-
-Deliver never copies your media: Files stays the source of truth, and Projects collect files from wherever they lie.
+- **Review in place** from the Files sidebar, or a whole folder as a Project. Nothing is copied or moved.
+- **Comments on the Frame** or a Range, with Drawings, Replies, Reactions, Mentions and Attachments
+- **Versions** stack by name (`…_v1`, `…_v2`) and compare side by side or under a wipe
+- **Sign-off** with Approvals, Due Dates and reminders
+- **Clients without accounts** on Project Links: password, expiry, Watermark, downloads, and who watched what
+- **Back into the edit:** export comments as markers for
+  - Video: DaVinci Resolve (EDL), Premiere Pro (FCP7 XML), Final Cut Pro (FCPXML), CSV
+  - Audio: WAV markers, MIDI, REAPER regions, Ableton Live Set
+- **Supported files**
+  - Video: MP4 and MOV (H.264), WebM
+  - Audio: WAV, FLAC, MP3, AAC, Ogg
+  - Images: JPEG, PNG, WebP, GIF, AVIF
+  - Everything else (ProRes, H.265, MXF, AVI …) needs ffmpeg
+- **Waveforms, thumbnails and scrubbing** by hovering over a video
+- **Fully mobile ready**
+- **With ffmpeg on the server**
+  - Proxies, thumbnails and waveforms for every format ffmpeg reads
+  - Hardware encoding: VAAPI, NVENC, VideoToolbox
 
 Screenshots: footage from Tears of Steel, (CC) Blender Foundation | mango.blender.org.]]></description>
-	<description lang="de"><![CDATA[Framegenaues Video-Review dort, wo die Dateien schon liegen.
+	<description lang="de"><![CDATA[Framegenaues Video- und Audio-Review, genau dort, wo deine Dateien schon liegen.
 
-**Vorabversion:** Deliver ist neu. Probier es an echten Projekten aus, aber behalte eigene Backups und rechne mit Ecken und Kanten; melde bitte, was dir auffällt, auf GitHub.
+**Vorabversion:** Die 0.x-Versionen kommen vor 1.0. Nutze Deliver an echten Projekten, aber behalte eigene Backups und rechne mit Ecken und Kanten; melde bitte, was dir auffällt, auf GitHub.
 
-Gib eine Video- oder Audiodatei in der Dateien-Seitenleiste zum Review frei, und sie wird zum Asset, in einem Projekt oder Ohne Projekt; ein ganzer Ordner lässt sich zum Projekt mit Automatischer Aufnahme machen, sodass alles darin zählt. Mitglieder – alle, die Dateien die Datei öffnen lässt – und Reviewer, die über einen Projekt-Link für ein ganzes Projekt oder ausgewählte Assets kommen, hinterlassen Kommentare auf Frames oder Bereichen. Neue Schnittfassungen stapeln sich als Versionen, und das Feedback geht als Marker zurück in den Schnitt.
-
-Deliver kopiert deine Medien nie: Dateien bleibt die Quelle der Wahrheit, und Projekte sammeln Dateien, wo auch immer sie liegen.
+- **Review an Ort und Stelle** aus der Dateien-Seitenleiste, oder ein ganzer Ordner als Projekt. Nichts wird kopiert oder verschoben.
+- **Kommentare auf dem Frame** oder einem Bereich, mit Zeichnungen, Antworten, Reaktionen, Erwähnungen und Anhängen
+- **Versionen** stapeln sich nach Namen (`…_v1`, `…_v2`) und lassen sich nebeneinander oder per Wischen vergleichen
+- **Abnahme** mit Fälligkeitsdaten und Erinnerungen
+- **Kunden ohne Konto** über Projekt-Links: Passwort, Ablaufdatum, Wasserzeichen, Downloads und wer was angesehen hat
+- **Zurück in den Schnitt:** Kommentare als Marker exportieren für
+  - Video: DaVinci Resolve (EDL), Premiere Pro (FCP7 XML), Final Cut Pro (FCPXML), CSV
+  - Audio: WAV-Marker, MIDI, REAPER-Regionen, Ableton Live Set
+- **Unterstützte Dateien**
+  - Video: MP4 und MOV (H.264), WebM
+  - Audio: WAV, FLAC, MP3, AAC, Ogg
+  - Bilder: JPEG, PNG, WebP, GIF, AVIF
+  - Alles andere (ProRes, H.265, MXF, AVI …) braucht ffmpeg
+- **Wellenformen, Vorschaubilder und Scrubbing** beim Überfahren eines Videos
+- **Voll mobiltauglich**
+- **Mit ffmpeg auf dem Server**
+  - Proxys, Vorschaubilder und Wellenformen für jedes Format, das ffmpeg liest
+  - Hardware-Kodierung: VAAPI, NVENC, VideoToolbox
 
 Screenshots: Filmmaterial aus Tears of Steel, (CC) Blender Foundation | mango.blender.org.]]></description>
 	<version>0.8.0</version>
