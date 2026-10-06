@@ -80,7 +80,7 @@ Deliver becomes a proper Nextcloud app, rebuilt from scratch, in which media fil
 51. As a Member, I want to decide per link whether Reviewers may comment at all and whether they may comment on older Versions, and to set its password and expiry, copy it or delete it right where it is listed in Deliver, so that a link can be handed out read-only.
 52. As a Member, I want revoking or replacing a Project Link to leave every Comment untouched, so that links stay disposable.
 53. As a Member with write access, I want to invite a Reviewer by name and optional email and get a Personal Link for them, so that the person is identified from the first click.
-54. As a Reviewer opening a Project Link without a Personal Link, I want to enter my name once and be shown my Personal Link to bookmark, so that I keep my identity on any device forever.
+54. As a Reviewer opening a Project Link without a Personal Link, I want to enter my name once, a name nobody in the review has yet, and get my Personal Link by mail when I give an address, or shown to bookmark when I give none, so that I keep my identity on any device forever and nobody passes for someone else.
 55. As a Reviewer, I want my Personal Link to survive a replaced Project Link as long as a Member re-issues it, so that my comment history stays mine.
 56. As a Reviewer, I want to be recognised again on the same browser without the Personal Link, so that daily use is frictionless.
 57. As a Reviewer, I want to touch only my own Comments and never resolve anything, so that the editor stays in control.
@@ -283,7 +283,7 @@ One versioned REST surface under the app, used by the app page, the Files sideba
 
 ### Notifications
 
-Nextcloud notification app for Members: new Comment, new Reply, new Version, auto-stack, Missing. Respect per-Project mute. Email to Reviewers with an email only on Replies to their Comments; when the instance has no mail configured a link's settings say so and nothing is sent.
+Nextcloud notification app for Members: new Comment, new Reply, new Version, auto-stack, Missing. Respect per-Project mute. Email to Reviewers with an email: their Personal Link once they name themselves, then what they asked for (Replies to their Comments by default, every Comment, new Versions); when the instance has no mail configured a link's settings say so and nothing is sent.
 
 ## Testing Decisions
 

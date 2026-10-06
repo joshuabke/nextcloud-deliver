@@ -17,7 +17,9 @@ use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
 use OCP\IConfig;
+use OCP\IL10N;
 use OCP\IURLGenerator;
+use OCP\IUserManager;
 use OCP\Security\IHasher;
 
 /**
@@ -38,6 +40,9 @@ class ReviewLinks {
 		private IURLGenerator $urls,
 		private ITimeFactory $time,
 		private IConfig $config,
+		private Members $members,
+		private IUserManager $users,
+		private IL10N $l,
 	) {
 	}
 
@@ -131,14 +136,57 @@ class ReviewLinks {
 	}
 
 	/**
-	 * A new Reviewer, invited by a Member, with their Personal Link (story 53).
+	 * A new Reviewer, invited by a Member, for their Personal Link (story 53).
 	 *
 	 * @throws InvalidRequestException the name is empty or the email is not one
+	 * @throws ProjectConflictException someone in the review has the name
 	 */
-	public function invite(ReviewLink $link, string $name, ?string $email): array {
+	public function invite(ReviewLink $link, string $name, ?string $email): Reviewer {
+		$this->assertNameFree($link, $name);
 		$reviewer = $this->reviewers->claim($link->ownerUid(), $name, $email);
 		$this->reviewers->cameBy($reviewer, $link->token());
-		return $this->reviewers->serialize($reviewer) + ['link' => $link->personalLink($reviewer)];
+		return $reviewer;
+	}
+
+	/**
+	 * Refuses a Reviewer's new name that someone already has in a review the
+	 * Reviewer came by; the name they have stays theirs.
+	 *
+	 * @throws ProjectConflictException
+	 */
+	public function assertRenameFree(Reviewer $reviewer, string $name): void {
+		if (mb_strtolower(trim($name)) === mb_strtolower(trim((string)$reviewer->getName()))) {
+			return;
+		}
+		foreach (array_keys($this->reviewerMapper->reviewersByLink([$reviewer->getId()])) as $token) {
+			try {
+				$this->assertNameFree($this->byToken($token), $name, $reviewer);
+			} catch (NotFoundException) {
+			}
+		}
+	}
+
+	/**
+	 * Refuses a name someone in the review already goes by: a Member of what
+	 * the link shows, or a Reviewer who came by a link of its Project, other
+	 * than the one named (story 54). Case and surrounding spaces do not count.
+	 *
+	 * @throws ProjectConflictException
+	 */
+	public function assertNameFree(ReviewLink $link, string $name, ?Reviewer $except = null): void {
+		$fileIds = array_map(static fn (Version $version) => $version->getFileId(), array_merge([], ...array_column($link->assets(), 'versions')));
+		$uids = array_unique(array_merge([$link->ownerUid()], ...array_map($this->members->of(...), array_unique($fileIds))));
+		$names = array_map(fn (string $uid) => $this->users->getDisplayName($uid) ?? $uid, $uids);
+		$tokens = array_map(static fn (ProjectLink $each) => $each->getToken(), $this->projectLinks->findByProject($link->projectId(), $link->ownerUid()));
+		foreach ($this->reviewersBy($link->ownerUid(), $tokens, [])['reviewers'] as $reviewer) {
+			if ($reviewer['id'] !== $except?->getId()) {
+				$names[] = (string)$reviewer['name'];
+			}
+		}
+		$normal = static fn (string $each) => mb_strtolower(trim($each));
+		if (in_array($normal($name), array_map($normal, $names), true)) {
+			throw new ProjectConflictException($this->l->t('Someone in this review is already called "%s".', [trim($name)]));
+		}
 	}
 
 	/**

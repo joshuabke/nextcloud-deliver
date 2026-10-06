@@ -13,6 +13,7 @@ use OCA\Deliver\Service\ApprovalService;
 use OCA\Deliver\Service\CommentService;
 use OCA\Deliver\Service\DerivedMedia;
 use OCA\Deliver\Service\ProjectService;
+use OCA\Deliver\Service\ReviewerMail;
 use OCA\Deliver\Service\ReviewerService;
 use OCA\Deliver\Service\ReviewLink;
 use OCA\Deliver\Service\ReviewLinks;
@@ -56,6 +57,7 @@ class PublicApiController extends PublicShareController {
 		private IUserSession $userSession,
 		private ApprovalService $approvals,
 		private IPreview $previews,
+		private ReviewerMail $mail,
 	) {
 		parent::__construct($appName, $request, $session);
 	}
@@ -237,12 +239,14 @@ class PublicApiController extends PublicShareController {
 			if ($this->member(...array_column(array_column($link->assets(), 'versions'), 0))) {
 				throw new AccessDeniedException('Members review in Deliver itself');
 			}
+			$this->links->assertNameFree($link, $name);
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
 			$reviewer = $this->reviewers->claim($link->ownerUid(), $name, $email, $wishes);
 			$this->reviewers->cameBy($reviewer, $link->token());
+			$mailed = $this->mail->welcome($reviewer, $link->personalLink($reviewer));
 			// A JSONResponse, because a DataResponse loses its cookies on the way out
 			$response = new JSONResponse(
-				$this->reviewers->serialize($reviewer) + ['link' => $link->personalLink($reviewer)],
+				$this->reviewers->serialize($reviewer) + ['link' => $link->personalLink($reviewer), 'mailed' => $mailed],
 				Http::STATUS_CREATED,
 			);
 			$this->rememberReviewer($response, $reviewer->getSecretKey());

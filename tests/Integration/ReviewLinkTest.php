@@ -86,6 +86,26 @@ class ReviewLinkTest extends TestCase {
 		self::assertSame(404, $asReviewer->raw('/attachments/999999999')['status']);
 	}
 
+	public function testANameSomeoneInTheReviewHasIsTaken(): void {
+		$claim = fn (string $name) => $this->reviewer()->call('POST', '/api/reviewer', ['name' => $name])['status'];
+		$owner = $this->nc->ocsForm('GET', '/ocs/v2.php/cloud/user')['data']['display-name'];
+		self::assertSame(409, $claim($owner), 'not the name of the Member who shares it');
+		self::assertSame(201, $claim('Mara'));
+		self::assertSame(409, $claim(' mara '), 'nor that of another Reviewer, whatever the case');
+
+		$elsewhere = $this->nc->ocs('POST', "/projects/{$this->projectId}/links")['data'];
+		self::assertSame(409, (new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $elsewhere['token']))->call('POST', '/api/reviewer', ['name' => 'Mara'])['status'], 'through another link of the Project too');
+
+		// The same gate when the Member invites or renames
+		$invite = fn (string $name) => $this->nc->ocs('POST', "/links/{$elsewhere['id']}/reviewers", ['name' => $name]);
+		$refused = $invite('MARA');
+		self::assertSame(409, $refused['status']);
+		self::assertSame('Someone in this review is already called "MARA".', $refused['data']['message']);
+		$jo = $invite('Jo')['data']['id'];
+		self::assertSame(409, $this->nc->ocs('PUT', "/reviewers/$jo", ['name' => 'Mara'])['status']);
+		self::assertSame(200, $this->nc->ocs('PUT', "/reviewers/$jo", ['name' => 'JO'])['status'], 'their own name stays theirs');
+	}
+
 	public function testReviewerNamesThemselvesBeforeCommenting(): void {
 		$asReviewer = $this->reviewer();
 

@@ -3,6 +3,7 @@ import removeIcon from '@mdi/svg/svg/account-remove-outline.svg?raw'
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import copyIcon from '@mdi/svg/svg/content-copy.svg?raw'
 import deleteIcon from '@mdi/svg/svg/trash-can-outline.svg?raw'
+import { showError, showSuccess } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
 import { ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -31,6 +32,9 @@ const reviewers = ref(null)
 const inviting = ref(false)
 const name = ref('')
 const email = ref('')
+/** Whether the invited Reviewer gets their Personal Link by mail, under the Member's own message */
+const sendMail = ref(false)
+const message = ref('')
 /** A password or expiry being given to a link that has none yet */
 const settingPassword = ref(false)
 const settingExpiry = ref(false)
@@ -118,13 +122,21 @@ function startInvite() {
 
 defineExpose({ startInvite, inviting })
 
-/** Invites a Reviewer by name and gets their Personal Link (story 53) */
+/** Invites a Reviewer by name and gets their Personal Link, mailed to them when asked (story 53) */
 function invite() {
 	return run(async () => {
-		const reviewer = await linkApi(props.share).invite(name.value, email.value || null)
+		const letter = sendMail.value && email.value.trim() ? { message: message.value } : null
+		const reviewer = await linkApi(props.share).invite(name.value, email.value || null, letter)
 		reviewers.value = [...(reviewers.value ?? []), reviewer]
+		if (letter && reviewer.mailed) {
+			showSuccess(t('deliver', 'Personal Link mailed to {email}', { email: reviewer.email }))
+		} else if (letter) {
+			showError(t('deliver', 'The mail could not be sent. Copy the Personal Link instead.'))
+		}
 		name.value = ''
 		email.value = ''
+		sendMail.value = false
+		message.value = ''
 		inviting.value = false
 	})
 }
@@ -281,11 +293,23 @@ function invite() {
 				</p>
 
 				<form v-if="inviting" class="deliver-link__invite" @submit.prevent="invite">
-					<NcTextField v-model="name" :label="t('deliver', 'Name')" />
-					<NcTextField v-model="email" type="email" :label="t('deliver', 'Email for replies (optional)')" />
-					<NcButton type="submit" variant="primary" :disabled="busy || !name.trim()">
-						{{ t('deliver', 'Invite') }}
-					</NcButton>
+					<div class="deliver-link__invite-row">
+						<NcTextField v-model="name" :label="t('deliver', 'Name')" />
+						<NcTextField v-model="email" type="email" :label="t('deliver', 'Email (optional)')" />
+						<NcButton type="submit" variant="primary" :disabled="busy || !name.trim()">
+							{{ t('deliver', 'Invite') }}
+						</NcButton>
+					</div>
+					<template v-if="email.trim() && share.canMail">
+						<NcCheckboxRadioSwitch v-model="sendMail">
+							{{ t('deliver', 'Mail them their Personal Link') }}
+						</NcCheckboxRadioSwitch>
+						<NcTextArea
+							v-if="sendMail"
+							v-model="message"
+							:label="t('deliver', 'Your message (optional)')"
+							resize="vertical" />
+					</template>
 				</form>
 				<NcButton
 					v-else-if="!inDialog"
@@ -368,12 +392,18 @@ function invite() {
 
 .deliver-link__invite {
 	display: flex;
-	align-items: flex-end;
-	gap: calc(2 * var(--default-grid-baseline));
+	flex-direction: column;
+	gap: var(--default-grid-baseline);
 	margin-top: calc(2 * var(--default-grid-baseline));
 }
 
-.deliver-link__invite > :last-child {
+.deliver-link__invite-row {
+	display: flex;
+	align-items: flex-end;
+	gap: calc(2 * var(--default-grid-baseline));
+}
+
+.deliver-link__invite-row > :last-child {
 	flex: none;
 }
 

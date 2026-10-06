@@ -115,11 +115,14 @@ async function claim({ name, email, mail }) {
 	error.value = null
 	try {
 		const claimed = await claimReviewer(name, email || null, mail)
-		personalLink.value = claimed.link
+		// A mailed link needs no notice to bookmark it
+		personalLink.value = claimed.mailed ? null : claimed.link
 		reviewer.value = claimed
 		await store.reload()
 	} catch (e) {
-		error.value = errorMessage(e)
+		error.value = e?.response?.status === 409
+			? t('deliver', 'Someone in this review is already called "{name}". Pick another name, or open your Personal Link if it is you.', { name })
+			: errorMessage(e)
 	}
 }
 </script>
