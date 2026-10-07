@@ -60,12 +60,26 @@ The details are in [docs/admin.md](docs/admin.md); a Compose setup for a server 
 
 ## Hosted Nextcloud
 
-Deliver runs without ffmpeg and without a shell, so a managed Nextcloud can carry it, as far as its provider lets App Store apps in. What has been seen so far; additions are welcome as issues or pull requests.
+Deliver runs without ffmpeg and without a shell, so a managed Nextcloud can carry it, as far as its provider lets App Store apps in: any of them (open), only those it approves (whitelist), or none. Hetzner and the own server were tried; the other rows come from the providers' documentation. Additions are welcome as issues or pull requests.
 
-| Provider | Nextcloud | Deliver in the app list | ffmpeg | Shell / `occ` | Checked |
+| Provider | App Store | Deliver in the app list | ffmpeg | Shell / `occ` | Checked |
 | --- | --- | --- | --- | --- | --- |
-| Hetzner Storage Share | 33.0.9 | ❌ | ❌ | ❌ | 2026-10 |
-| Own server ([deploy/](deploy/README.md)) | 33–35 | ✅ | ✅ | ✅ | 2026-10 |
+| Hetzner Storage Share | open | ✅ | ❌ (on the roadmap) | ❌ | 2026-10 |
+| IONOS Managed Nextcloud | whitelist | ❌ | ❌ | ❓ | 2026-10 |
+| hosting.de Managed Nextcloud | none | ❌ | ❌ | ❓ | 2026-10 |
+| The Good Cloud (Business, 25+ users) | open | ❓ | ❓ | ❓ | 2026-10 |
+| The Good Cloud (Family, Business) | whitelist | ❓ | ❓ | ❓ | 2026-10 |
+| Woelkli (own instance) | open | ❓ | ❓ | ❓ | 2026-10 |
+| Zaclys (Stratus, Alto, Cirrus) | open | ❓ | ❓ | ❓ | 2026-10 |
+| Webo (Admin) | open | ❓ | ❓ | ❓ | 2026-10 |
+| Cloud68 | open | ❓ | ❓ | ❓ | 2026-10 |
+| Stackhero | open | ❓ | ❓ | ❓ | 2026-10 |
+| wolkesicher.de | open | ❓ | ❓ | ❓ | 2026-10 |
+| Tab.digital | ❓ | ❓ | ❓ | ❓ | 2026-10 |
+| Murena Workspace | none | ❌ | ❓ | ❌ | 2026-10 |
+| Framaspace | none | ❌ | ❓ | ❌ | 2026-10 |
+| MagentaCLOUD | none | ❌ | ❓ | ❌ | 2026-10 |
+| Own server ([deploy/](deploy/README.md)) | open | ✅ | ✅ | ✅ | 2026-10 |
 
 ## Documentation
 
