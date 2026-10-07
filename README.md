@@ -62,27 +62,29 @@ The details are in [docs/admin.md](docs/admin.md); a Compose setup for a server 
 
 Deliver runs without ffmpeg and without a shell, so a managed Nextcloud can run it. 
 Here is a table of providers and when the info was verified. 
-Everything marked with a ❓ has yet to be confirmed and is just assumed from theor documentation.
+Everything marked with a ❓ has yet to be confirmed and is just assumed from their documentation.
 Additions or corrections are welcome as issues or pull requests!
 
-| Provider | App Store | Deliver in the app list | ffmpeg | Shell / `occ` | verified |
-| --- | --- | --- | --- | --- | --- |
-| Hetzner Storage Share | open | ✅ | ❌ (on the roadmap) | ❌ | 2026-10 |
-| IONOS Managed Nextcloud | whitelist | ❌ | ❌ | ❓ | - |
-| hosting.de Managed Nextcloud | none | ❌ | ❌ | ❓ | - |
-| The Good Cloud (Business, 25+ users) | open | ❓ | ❓ | ❓ | 2026-10 |
-| The Good Cloud (Family, Business) | whitelist | ❓ | ❓ | ❓ | 2026-10 |
-| Woelkli (own instance) | open | ❓ | ❓ | ❓ | 2026-10 |
-| Zaclys (Stratus, Alto, Cirrus) | open | ❓ | ❓ | ❓ | 2026-10 |
-| Webo (Admin) | open | ❓ | ❓ | ❓ | 2026-10 |
-| Cloud68 | open | ❓ | ❓ | ❓ | 2026-10 |
-| Stackhero | open | ❓ | ❓ | ❓ | 2026-10 |
-| wolkesicher.de | open | ❓ | ❓ | ❓ | 2026-10 |
-| Tab.digital | ❓ | ❓ | ❓ | ❓ | 2026-10 |
-| Murena Workspace | none | ❌ | ❓ | ❌ | 2026-10 |
-| Framaspace | none | ❌ | ❓ | ❌ | 2026-10 |
-| MagentaCLOUD | none | ❌ | ❓ | ❌ | 2026-10 |
-| Own server ([deploy/](deploy/README.md)) | open | ✅ | ✅ | ✅ | 2026-10 |
+| Provider | Deliver in the app list | ffmpeg | Shell / `occ` | Verified |
+| --- | --- | --- | --- | --- |
+| Hetzner Storage Share | ✅ | ❌ (on the roadmap) | ❌ | 2026-10 |
+| IONOS Managed Nextcloud | ❌ | ❌ | ❓ | - |
+| hosting.de Managed Nextcloud | ❌ | ❌ | ❓ | - |
+| The Good Cloud (Business, 25+ users) | ❓ | ❓ | ❓ | - |
+| The Good Cloud (Family, Business) | 🟡* | ❓ | ❓ | - |
+| Woelkli (own instance) | ❓ | ❓ | ❓ | - |
+| Zaclys (Stratus, Alto, Cirrus) | ❓ | ❓ | ❓ | - |
+| Webo (Admin) | ❓ | ❓ | ❓ | - |
+| Cloud68 | ❓ | ❓ | ❓ | - |
+| Stackhero | ❓ | ❓ | ❓ | - |
+| wolkesicher.de | ❓ | ❓ | ❓ | - |
+| Tab.digital | ❓ | ❓ | ❓ | - |
+| Murena Workspace | ❌ | ❓ | ❌ | - |
+| Framaspace | ❌ | ❓ | ❌ | - |
+| MagentaCLOUD | ❌ | ❓ | ❌ | - |
+| Own server ([deploy/](deploy/README.md)) | ✅ | ✅ | ✅ | 2026-10 |
+
+\* The provider allows only apps it has approved; ask it to add Deliver.
 
 ## Documentation
 
