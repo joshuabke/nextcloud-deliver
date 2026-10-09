@@ -195,13 +195,13 @@ class ReviewLinks {
 			...($reviewersToo ? $this->reviewerMapper->namesByLinks($tokens, $except?->getId()) : []),
 		];
 		if (in_array(self::normal($name), array_map(self::normal(...), $names), true)) {
-			throw new ProjectConflictException($this->l->t('Someone in this review is already called "%s".', [trim($name)]));
+			throw $this->nameTaken($name);
 		}
 	}
 
 	/**
 	 * The Member's Reviewer who goes by this name and address: naming oneself
-	 * with both makes one that Reviewer again, as on Frame.io.
+	 * with both mails them their Personal Link, as on Frame.io.
 	 */
 	public function returning(ReviewLink $link, string $name, ?string $email): ?Reviewer {
 		$email = trim((string)$email);
@@ -225,8 +225,13 @@ class ReviewLinks {
 	public function assertNoTwin(ReviewLink $link, Reviewer $reviewer, string $name, ?string $email): void {
 		$twin = $this->returning($link, $name, $email);
 		if ($twin !== null && $twin->getId() !== $reviewer->getId()) {
-			throw new ProjectConflictException($this->l->t('Someone in this review is already called "%s".', [trim($name)]));
+			throw $this->nameTaken($name);
 		}
+	}
+
+	/** The refusal of a name someone in the review already goes by */
+	public function nameTaken(string $name): ProjectConflictException {
+		return new ProjectConflictException($this->l->t('Someone in this review is already called "%s".', [trim($name)]));
 	}
 
 	/** A name as it is stored (ReviewerService), without case */

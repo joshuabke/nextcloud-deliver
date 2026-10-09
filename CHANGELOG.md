@@ -3,7 +3,7 @@
 ## 0.8.3 – unreleased
 
 - Reviewers have their own menu under an avatar at the top of the review, as on Frame.io: change their name and address, choose what is mailed to them, switch between German and English, and end their session so the next person names themselves anew.
-- Naming oneself with the name and address of an existing Reviewer makes one that Reviewer again. Two Reviewers may share a name; their avatars differ in colour. A Member's name stays taken, and invited or renamed Reviewers still need a name of their own.
+- Naming oneself with the name and address of an existing Reviewer mails that Reviewer their Personal Link, so they are back in the review from their mailbox. Two Reviewers may share a name; their avatars differ in colour. A Member's name stays taken, and invited or renamed Reviewers still need a name of their own.
 - Mails to a Reviewer come in the language they review in.
 - A new address given later gets the Personal Link by mail too.
 

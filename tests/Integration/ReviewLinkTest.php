@@ -94,9 +94,11 @@ class ReviewLinkTest extends TestCase {
 		$owner = $this->nc->ocsForm('GET', '/ocs/v2.php/cloud/user')['data']['display-name'];
 		self::assertSame(409, $claim($owner)['status'], 'not the name of the Member who shares it');
 
-		// As on Frame.io: the same name and address make one that Reviewer again, another address makes another Reviewer of the same name
+		// As on Frame.io: the same name and address lead back to that Reviewer, through their mailbox only; another address makes another Reviewer of the same name
 		$first = $claim('Mara', $mara)['data'];
-		self::assertSame($first['id'], $claim(' mara ', strtoupper($mara))['data']['id']);
+		$again = $claim(' mara ', strtoupper($mara));
+		self::assertSame([202, true], [$again['status'], $again['data']['mailed']]);
+		self::assertArrayNotHasKey('key', $again['data'], 'name and address are no secret, so they never hand out the key');
 		$otherBrowser = $this->reviewer();
 		$other = $otherBrowser->call('POST', '/api/reviewer', ['name' => 'Mara', 'email' => "other-$run@example.test"]);
 		self::assertSame(201, $other['status']);

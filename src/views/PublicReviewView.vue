@@ -125,6 +125,11 @@ async function claim({ name, email, mail }) {
 	error.value = null
 	try {
 		const claimed = await claimReviewer(name, email || null, mail)
+		// An existing Reviewer is back only through the Personal Link in their mailbox
+		if (claimed.returning) {
+			showSuccess(t('deliver', 'Your Personal Link is on its way to {email}', { email: claimed.email }))
+			return
+		}
 		// A mailed link needs no notice to bookmark it, only word of where it went
 		personalLink.value = claimed.mailed ? null : claimed.link
 		if (claimed.mailed) {

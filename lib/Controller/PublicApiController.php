@@ -247,16 +247,18 @@ class PublicApiController extends PublicShareController {
 			if ($this->member(...array_column(array_column($link->assets(), 'versions'), 0))) {
 				throw new AccessDeniedException('Members review in Deliver itself');
 			}
-			// The same name and address make one the same Reviewer again; otherwise only the Members' names are taken
-			$reviewer = $this->links->returning($link, $name, $email);
-			if ($reviewer !== null) {
-				// Their mails follow the page they are back on
-				$reviewer = $this->reviewers->updateSettings($reviewer, $reviewer->getEmail(), [], null, $language);
-			} else {
-				$this->links->assertNameFree($link, $name, reviewersToo: false);
-				$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
-				$reviewer = $this->reviewers->claim($link->ownerUid(), $name, $email, $wishes, $language);
+			// The same name and address lead back to that Reviewer, but only through their mailbox:
+			// name and address are no secret, and the key carries the Reviewer's own rights on every link of the Member
+			$returning = $this->links->returning($link, $name, $email);
+			if ($returning !== null) {
+				if (!$this->mail->welcome($returning, $link->personalLink($returning), $language)) {
+					throw $this->links->nameTaken($name);
+				}
+				return new JSONResponse(['returning' => true, 'mailed' => true, 'email' => $returning->getEmail()], Http::STATUS_ACCEPTED);
 			}
+			$this->links->assertNameFree($link, $name, reviewersToo: false);
+			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
+			$reviewer = $this->reviewers->claim($link->ownerUid(), $name, $email, $wishes, $language);
 			$this->reviewers->cameBy($reviewer, $link->token());
 			$mailed = $this->mail->welcome($reviewer, $link->personalLink($reviewer), $language);
 			// A JSONResponse, because a DataResponse loses its cookies on the way out
