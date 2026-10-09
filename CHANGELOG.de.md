@@ -1,6 +1,6 @@
 # Änderungen
 
-## 0.8.3 – unveröffentlicht
+## 0.8.3 – 2026-10-09
 
 - Reviewer haben ein eigenes Menü unter ihrem Avatar oben im Review, wie bei Frame.io: Name und Adresse ändern, wählen, was gemailt wird, zwischen Deutsch und Englisch wechseln und die Sitzung beenden, damit sich die nächste Person neu einträgt.
 - Wer sich mit Name und Adresse eines bestehenden Reviewers einträgt, bekommt dessen Persönlichen Link an diese Adresse gemailt und ist über das Postfach wieder im Review. Zwei Reviewer dürfen gleich heißen; ihre Avatare unterscheiden sich in der Farbe. Der Name eines Members bleibt vergeben, und eingeladene oder umbenannte Reviewer brauchen weiterhin einen eigenen Namen.
