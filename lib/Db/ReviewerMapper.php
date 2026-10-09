@@ -75,6 +75,17 @@ class ReviewerMapper extends Mapper {
 		return $byLink;
 	}
 
+	/** @return Reviewer[] the Member's Reviewers with this address, whatever its case; removed ones left out */
+	public function findByAddress(string $ownerUid, string $email): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->eq('owner_uid', $qb->createNamedParameter($ownerUid)))
+			->andWhere($qb->expr()->eq($qb->func()->lower('email'), $qb->createNamedParameter(mb_strtolower($email))))
+			->andWhere($qb->expr()->isNotNull('secret_key'))
+			->orderBy('created_at');
+		return $this->findEntities($qb);
+	}
+
 	/**
 	 * @param list<string> $tokens
 	 * @return list<string> the names of the Reviewers who came by these links, removed ones and the one excepted left out

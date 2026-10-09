@@ -10,6 +10,8 @@ namespace OCA\Deliver\Tests\Integration;
  */
 class PublicClient {
 	private string $jar;
+	/** Whether the cookie jar is this client's to delete; the same browser on another link shares it */
+	private bool $ownsJar = true;
 
 	public function __construct(
 		private string $baseUrl,
@@ -19,7 +21,17 @@ class PublicClient {
 	}
 
 	public function __destruct() {
-		@unlink($this->jar);
+		if ($this->ownsJar) {
+			@unlink($this->jar);
+		}
+	}
+
+	/** The same browser on another link */
+	public function through(string $token): self {
+		$other = clone $this;
+		$other->token = $token;
+		$other->ownsJar = false;
+		return $other;
 	}
 
 	/** A fresh browser: same link, nothing remembered */

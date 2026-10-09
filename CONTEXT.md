@@ -99,7 +99,7 @@ A Nextcloud user who can open a Version's file through Files permissions; read a
 _Avoid_: Owner (except for the file's actual owner), collaborator, team
 
 **Reviewer**:
-Anyone who reaches a Version through a Project Link instead of Files permissions, identified by a self-given name (prefilled from their account if they happen to be logged in). Reviewers only ever touch their own Comments.
+Anyone who reaches a Version through a Project Link instead of Files permissions, identified by a self-given name (prefilled from their account if they happen to be logged in); naming oneself with the name and address of an existing Reviewer mails that Reviewer their Personal Link. Two Reviewers may share a name and are told apart by the colour of their avatar. Reviewers only ever touch their own Comments.
 _Avoid_: Guest, anonymous user, client, external user
 
 **Project Link**:
@@ -107,8 +107,8 @@ The only review link (ADR 0010, 0011): Deliver makes it for a Project and it sho
 _Avoid_: Project share, collection link, Share Link (a Nextcloud link made in Files shows files and is never a review surface)
 
 **Personal Link**:
-A Project Link URL carrying a Reviewer's own key, so that whoever opens it is that Reviewer, forever, on any device. Issued by a Member as an invitation or shown to a Reviewer after they name themselves.
-_Avoid_: Invite link, magic link, session
+A Project Link URL carrying a Reviewer's own key, so that whoever opens it is that Reviewer, forever, on any device. Issued by a Member as an invitation, or mailed or shown to a Reviewer after they name themselves.
+_Avoid_: Invite link, magic link, session (a browser remembering a Reviewer is their session, which they end from their menu; the Personal Link outlives it)
 
 **Unseen**:
 A Comment or Reply the current person has not yet had on screen since it was written. Tracked per person per Version.

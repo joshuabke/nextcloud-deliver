@@ -25,6 +25,7 @@ return [
 		['name' => 'PublicApi#preview', 'url' => '/s/{token}/preview', 'verb' => 'GET'],
 		['name' => 'PublicApi#settings', 'url' => '/s/{token}/api/reviewer', 'verb' => 'PUT'],
 		['name' => 'PublicApi#claim', 'url' => '/s/{token}/api/reviewer', 'verb' => 'POST'],
+		['name' => 'PublicApi#forget', 'url' => '/s/{token}/api/reviewer', 'verb' => 'DELETE'],
 		['name' => 'PublicApi#index', 'url' => '/s/{token}/api/versions/{versionId}/comments', 'verb' => 'GET'],
 		['name' => 'PublicApi#create', 'url' => '/s/{token}/api/versions/{versionId}/comments', 'verb' => 'POST'],
 		['name' => 'PublicApi#changes', 'url' => '/s/{token}/api/versions/{versionId}/changes', 'verb' => 'GET'],

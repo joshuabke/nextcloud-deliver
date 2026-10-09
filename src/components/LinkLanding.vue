@@ -1,5 +1,4 @@
 <script setup>
-import accountIcon from '@mdi/svg/svg/account-circle-outline.svg?raw'
 import downloadIcon from '@mdi/svg/svg/download.svg?raw'
 import audioIcon from '@mdi/svg/svg/music-note-outline.svg?raw'
 import videoIcon from '@mdi/svg/svg/play-box-outline.svg?raw'
@@ -16,8 +15,6 @@ const props = defineProps({
 	link: { type: Object, required: true },
 	/** The newest Version of every Asset behind the link */
 	assets: { type: Array, required: true },
-	/** The Reviewer's name once they have one */
-	me: { type: String, default: '' },
 })
 
 const emit = defineEmits(['open'])
@@ -71,10 +68,8 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 						@click="assets.forEach((asset) => selected.add(asset.assetId))">
 						{{ t('deliver', 'Select all') }}
 					</NcButton>
-					<span v-if="me" class="deliver-landing__me">
-						<NcIconSvgWrapper :svg="accountIcon" :size="20" />
-						{{ t('deliver', 'Reviewing as {name}', { name: me }) }}
-					</span>
+					<!-- The Reviewer's own menu -->
+					<slot name="me" />
 					<template v-if="selected.size > 0">
 						<NcButton variant="tertiary" @click="selected.clear()">
 							{{ n('deliver', 'Deselect %n', 'Deselect %n', selected.size) }}
@@ -220,18 +215,6 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 	flex-wrap: wrap;
 	align-items: center;
 	gap: calc(2 * var(--default-grid-baseline));
-}
-
-.deliver-landing__me {
-	display: inline-flex;
-	align-items: center;
-	gap: var(--default-grid-baseline);
-	height: var(--default-clickable-area);
-	padding: 0 12px 0 8px;
-	border: 1px solid var(--landing-border);
-	border-radius: var(--border-radius-element);
-	background: var(--landing-surface);
-	color: var(--color-text-maxcontrast);
 }
 
 .deliver-landing__grid {

@@ -34,6 +34,7 @@ use OCP\IRequest;
 use OCP\ISession;
 use OCP\IURLGenerator;
 use OCP\IUserSession;
+use OCP\Security\RateLimiting\ILimiter;
 
 /**
  * The API behind a Project Link. Token, password and expiry are checked by
@@ -59,6 +60,7 @@ class PublicApiController extends PublicShareController {
 		private ApprovalService $approvals,
 		private IPreview $previews,
 		private ReviewerMail $mail,
+		private ILimiter $limiter,
 	) {
 		parent::__construct($appName, $request, $session);
 	}
@@ -238,18 +240,27 @@ class PublicApiController extends PublicShareController {
 	#[PublicPage]
 	#[NoCSRFRequired]
 	#[AnonRateLimit(limit: 10, period: 3600)]
-	public function claim(string $name, ?string $email = null, ?bool $mailReplies = null, ?bool $mailComments = null, ?bool $mailVersions = null): Response {
-		return $this->guard(function () use ($name, $email, $mailReplies, $mailComments, $mailVersions) {
+	public function claim(string $name, ?string $email = null, ?bool $mailReplies = null, ?bool $mailComments = null, ?bool $mailVersions = null, ?string $language = null): Response {
+		return $this->guard(function () use ($name, $email, $mailReplies, $mailComments, $mailVersions, $language) {
 			$link = $this->link();
 			// Who is a Member of everything the link shows reviews it in Deliver itself
 			if ($this->member(...array_column(array_column($link->assets(), 'versions'), 0))) {
 				throw new AccessDeniedException('Members review in Deliver itself');
 			}
-			$this->links->assertNameFree($link, $name);
+			// The same name and address lead back to that Reviewer, but only through their mailbox:
+			// name and address are no secret, and the key carries the Reviewer's own rights on every link of the Member
+			$returning = $this->links->returning($link, $name, $email);
+			if ($returning !== null) {
+				if (!$this->mail->welcome($returning, $link->personalLink($returning), $language)) {
+					throw $this->links->nameTaken($name);
+				}
+				return new JSONResponse(['returning' => true, 'mailed' => true, 'email' => $returning->getEmail()], Http::STATUS_ACCEPTED);
+			}
+			$this->links->assertNameFree($link, $name, reviewersToo: false);
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
-			$reviewer = $this->reviewers->claim($link->ownerUid(), $name, $email, $wishes);
+			$reviewer = $this->reviewers->claim($link->ownerUid(), $name, $email, $wishes, $language);
 			$this->reviewers->cameBy($reviewer, $link->token());
-			$mailed = $this->mail->welcome($reviewer, $link->personalLink($reviewer));
+			$mailed = $this->mail->welcome($reviewer, $link->personalLink($reviewer), $language);
 			// A JSONResponse, because a DataResponse loses its cookies on the way out
 			$response = new JSONResponse(
 				$this->reviewers->serialize($reviewer) + ['link' => $link->personalLink($reviewer), 'mailed' => $mailed],
@@ -260,15 +271,48 @@ class PublicApiController extends PublicShareController {
 		});
 	}
 
-	/** A Reviewer changes their address or what they want mailed */
+	/**
+	 * A Reviewer changes their name, address or what they want mailed; null
+	 * keeps the name. A new address gets the Personal Link, as on naming oneself.
+	 */
 	#[PublicPage]
 	#[NoCSRFRequired]
-	public function settings(?string $email = null, ?bool $mailReplies = null, ?bool $mailComments = null, ?bool $mailVersions = null): Response {
-		return $this->guard(function () use ($email, $mailReplies, $mailComments, $mailVersions) {
+	public function settings(?string $name = null, ?string $email = null, ?bool $mailReplies = null, ?bool $mailComments = null, ?bool $mailVersions = null, ?string $language = null): Response {
+		return $this->guard(function () use ($name, $email, $mailReplies, $mailComments, $mailVersions, $language) {
 			$reviewer = $this->reviewer() ?? throw new AccessDeniedException('Give a name first');
+			if ($name !== null) {
+				$this->links->assertRenameFree($reviewer, $name, reviewersToo: false);
+			}
+			$this->links->assertNoTwin($this->link(), $reviewer, $name ?? (string)$reviewer->getName(), $email);
+			$before = mb_strtolower((string)$reviewer->getEmail());
+			$changed = $email !== null && mb_strtolower(trim($email)) !== $before;
+			if ($changed) {
+				// A new address is mailed, so it has a limit of its own, as naming oneself does
+				$this->limiter->registerAnonRequest('deliver-reviewer-address', 10, 3600, $this->request->getRemoteAddress());
+			}
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
-			return $this->reviewers->serialize($this->reviewers->updateSettings($reviewer, $email, $wishes));
+			$reviewer = $this->reviewers->updateSettings($reviewer, $email, $wishes, $name, $language);
+			$mailed = $changed && $this->mail->welcome($reviewer, $this->link()->personalLink($reviewer), $language);
+			return $this->reviewers->serialize($reviewer) + ['mailed' => $mailed];
 		});
+	}
+
+	/**
+	 * The Reviewer ends their session: this browser forgets every Reviewer it
+	 * knows through any link, so the next person names themselves anew. Their
+	 * Personal Links still work.
+	 */
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function forget(): Response {
+		$response = new JSONResponse([]);
+		/** @psalm-suppress NoInterfaceProperties Nextcloud's request hands out its cookies */
+		foreach (array_keys((array)$this->request->cookies) as $name) {
+			if (str_starts_with((string)$name, self::cookieName(''))) {
+				$response->invalidateCookie((string)$name);
+			}
+		}
+		return $response;
 	}
 
 	#[PublicPage]

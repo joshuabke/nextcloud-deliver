@@ -18,12 +18,12 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
-import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDateTime from '@nextcloud/vue/components/NcDateTime'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DrawingLayer from './DrawingLayer.vue'
 import DrawToolbar from './DrawToolbar.vue'
+import PersonAvatar from './PersonAvatar.vue'
 import { useFullscreen } from '../composables/fullscreen.js'
 import { useGestures } from '../composables/gestures.js'
 import { COLORS, drawingsAt } from '../lib/drawing.js'
@@ -900,14 +900,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 					@focus="peekAt(each, $event)"
 					@blur="peek?.tapped || (peek = null)"
 					@click="openMarker(each, $event)">
-					<NcAvatar
-						:user="each.author.type === 'user' ? each.author.id : undefined"
-						:displayName="each.author.name"
-						:isNoUser="each.author.type !== 'user'"
-						:size="20"
-						hideStatus
-						disableMenu
-						disableTooltip />
+					<PersonAvatar :author="each.author" :size="20" />
 				</button>
 				<div
 					v-if="peek"
@@ -915,14 +908,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 					:class="{ 'deliver-player__peek--tapped': peek.tapped }"
 					:style="{ left: peek.left + 'px' }"
 					@click="peek = null">
-					<NcAvatar
-						:user="peek.comment.author.type === 'user' ? peek.comment.author.id : undefined"
-						:displayName="peek.comment.author.name"
-						:isNoUser="peek.comment.author.type !== 'user'"
-						:size="32"
-						hideStatus
-						disableMenu
-						disableTooltip />
+					<PersonAvatar :author="peek.comment.author" :size="32" />
 					<div class="deliver-player__peek-content">
 						<div class="deliver-player__peek-head">
 							<strong>{{ peek.comment.author.name }}</strong>
