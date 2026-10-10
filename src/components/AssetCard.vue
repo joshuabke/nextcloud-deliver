@@ -9,10 +9,13 @@ import { n, t } from '@nextcloud/l10n'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcDateTime from '@nextcloud/vue/components/NcDateTime'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DueDate from './DueDate.vue'
 import MediaStill from './MediaStill.vue'
 import { useLongPress } from '../composables/longpress.js'
+import { isStill } from '../lib/media.js'
+import { runtime } from '../lib/timecode.js'
 
 const props = defineProps({
 	/** An Asset with its Version Stack, newest first */
@@ -25,7 +28,7 @@ const props = defineProps({
 
 const emit = defineEmits(['stack', 'menu', 'versions'])
 
-/** A phone has no right click: a button opens the menu, and so does a long press (story 109) */
+/** The menu opens from a button on every screen, by a right click, and by a long press on a phone (stories 109 and 129) */
 const isMobile = useIsMobile()
 const { press, fromButton } = useLongPress((where) => emit('menu', where))
 
@@ -43,6 +46,8 @@ const decision = computed(() => {
 	}
 	return approved > 0 ? { kind: 'approved', icon: approvedIcon, text: n('deliver', 'Approved by %n', 'Approved by %n', approved) } : null
 })
+/** Bottom right of the still, unless a status takes the place (story 130) */
+const length = computed(() => isStill(newest.value) ? null : runtime(newest.value.durationFrames, newest.value.fps))
 const status = computed(() => {
 	if (newest.value.state === 'missing') {
 		return { text: t('deliver', 'Missing'), kind: 'warning' }
@@ -60,7 +65,7 @@ const status = computed(() => {
 </script>
 
 <template>
-	<li class="deliver-card" v-on="press">
+	<li class="deliver-card deliver-card__menu-host" v-on="press">
 		<RouterLink class="deliver-card__link" :to="`/versions/${newest.id}`">
 			<div class="deliver-card__still">
 				<NcIconSvgWrapper :svg="audio ? audioIcon : assetIcon" :size="40" />
@@ -89,17 +94,17 @@ const status = computed(() => {
 					<NcIconSvgWrapper :svg="decision.icon" :size="14" />
 				</span>
 				<span v-if="status" class="deliver-card__status" :class="`deliver-card__status--${status.kind}`">{{ status.text }}</span>
+				<span v-else-if="length" class="deliver-card__status">{{ length }}</span>
 			</div>
-			<div class="deliver-card__name" :title="asset.name">
+			<div class="deliver-card__name" :title="newest.name">
 				{{ asset.name }}
 			</div>
 			<div class="deliver-card__meta">
-				{{ newest.name }}
+				<NcDateTime :timestamp="newest.createdAt * 1000" />
 			</div>
 			<DueDate v-if="asset.dueDate" class="deliver-card__due" :modelValue="asset.dueDate" />
 		</RouterLink>
 		<NcButton
-			v-if="isMobile"
 			class="deliver-card__more"
 			variant="tertiary"
 			:aria-label="t('deliver', 'Actions for {name}', { name: asset.name })"
@@ -133,19 +138,10 @@ const status = computed(() => {
 <style scoped>
 .deliver-card {
 	position: relative;
-	/* The menu button places itself by the card's width, under the 16:9 still */
-	container-type: inline-size;
 	display: flex;
 	flex-direction: column;
 	gap: calc(2 * var(--default-grid-baseline));
 	min-width: 0;
-}
-
-/* Beside the name, outside the link: below the still, which is 16:9 of the card less its padding */
-.deliver-card__more {
-	position: absolute !important;
-	top: calc(8px + (100cqw - 16px) * 9 / 16 + 6px);
-	inset-inline-end: 0;
 }
 
 .deliver-card__version,
@@ -193,12 +189,12 @@ const status = computed(() => {
 
 .deliver-card__comments {
 	bottom: 6px;
-	inset-inline-end: 6px;
+	inset-inline-start: 6px;
 }
 
 .deliver-card__status {
 	bottom: 6px;
-	inset-inline-start: 6px;
+	inset-inline-end: 6px;
 }
 
 .deliver-card__status--warning {

@@ -35,6 +35,12 @@
 	object-fit: contain;
 }
 
+.deliver-card__name,
+.deliver-card__meta {
+	/* Room for the menu button beside them */
+	padding-inline-end: var(--default-clickable-area);
+}
+
 .deliver-card__name {
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -50,4 +56,17 @@
 .deliver-card__due {
 	align-self: flex-start;
 	margin-top: 4px;
+}
+
+/* The menu button places itself by the card's width, under the 16:9 still */
+.deliver-card__menu-host {
+	position: relative;
+	container-type: inline-size;
+}
+
+/* Beside the name and the line below it, outside the link so the card stays one link */
+.deliver-card__more {
+	position: absolute !important;
+	top: calc(8px + (100cqw - 16px) * 9 / 16 + 6px);
+	inset-inline-end: 0;
 }

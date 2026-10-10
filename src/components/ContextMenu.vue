@@ -6,7 +6,7 @@ const props = defineProps({
 	/** Where the right click was, in viewport pixels */
 	x: { type: Number, required: true },
 	y: { type: Number, required: true },
-	/** [{ label, icon, action or href, danger }] */
+	/** [{ label, icon, action or href (download: a filename to save it under), danger }] */
 	items: { type: Array, required: true },
 })
 
@@ -87,6 +87,7 @@ function close() {
 				<!-- Links for every entry: Nextcloud styles every button of its own, which shifts the icons -->
 				<a
 					:href="item.href ?? '#'"
+					:download="item.download"
 					role="menuitem"
 					class="deliver-context-menu__item"
 					:class="{ 'deliver-context-menu__item--danger': item.danger }"

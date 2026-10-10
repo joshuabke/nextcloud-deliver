@@ -909,6 +909,12 @@ class ProjectService {
 					'state' => $version->getState(),
 					'name' => $version->getName(),
 					'mimeType' => $file?->getMimeType(),
+					// To download and rename it through WebDAV; null while Missing
+					'url' => $file === null ? null : $this->davUrl($uid, $file),
+					'createdAt' => $version->getCreatedAt(),
+					// The card's runtime, once probed
+					'durationFrames' => $version->getDurationFrames(),
+					'fps' => ['num' => $version->getFpsNum(), 'den' => $version->getFpsDen()],
 					'autoStacked' => (bool)$version->getAutoStacked(),
 					'comments' => $commentCounts[$version->getId()] ?? 0,
 					'unseen' => $unseen[$version->getId()] ?? 0,

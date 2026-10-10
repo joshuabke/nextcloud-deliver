@@ -64,8 +64,8 @@ function openMenu(event, project) {
 		x: event.clientX,
 		y: event.clientY,
 		items: [
-			{ label: t('deliver', 'Open'), icon: openIcon, action: () => router.push(`/projects/${project.id}`) },
 			!project.none && { label: t('deliver', 'Project settings'), icon: settingsIcon, action: () => { settings.value = project } },
+			{ label: t('deliver', 'Open'), icon: openIcon, action: () => router.push(`/projects/${project.id}`) },
 			project.muted
 				? { label: t('deliver', 'Notify me again'), icon: unmuteIcon, action: () => save(project, { muted: false }) }
 				: { label: t('deliver', 'Mute notifications'), icon: muteIcon, action: () => save(project, { muted: true }) },
@@ -174,7 +174,6 @@ async function create() {
 				v-for="project in projects"
 				:key="project.id"
 				:project="project"
-				@settings="settings = project"
 				@contextmenu.prevent="openMenu($event, project)"
 				@menu="openMenu($event, project)" />
 			<li>

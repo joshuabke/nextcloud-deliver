@@ -181,6 +181,21 @@ export async function uploadVersion(folderUrl, file) {
 }
 
 /**
+ * Renames a file in its folder through Nextcloud's own WebDAV (story 131);
+ * Deliver follows the rename. It never replaces a file of the same name.
+ *
+ * @param {string} url - WebDAV URL of the file
+ * @param {string} name - its new name
+ */
+export function renameFile(url, name) {
+	return axios.request({
+		method: 'MOVE',
+		url,
+		headers: { Destination: url.slice(0, url.lastIndexOf('/') + 1) + encodeURIComponent(name), Overwrite: 'F' },
+	})
+}
+
+/**
  * Uploads a file next to the newest Version and stacks it on top as the next
  * Version (story 17).
  *
