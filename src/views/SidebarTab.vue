@@ -130,9 +130,9 @@ function toggle(checked) {
 		if (checked) {
 			asset.value = await enableFile(props.node.fileid)
 		} else if (await confirmRemoval(
-			t('deliver', 'Take this file out of Deliver?'),
+			asset.value.projectId ? t('deliver', 'Remove this file from the Project?') : t('deliver', 'Remove this file from Deliver?'),
 			t('deliver', 'Its Comments and Versions are deleted. The file itself stays untouched.'),
-			t('deliver', 'Take out'),
+			t('deliver', 'Remove'),
 		)) {
 			await disableAsset(asset.value.assetId)
 			asset.value = null
