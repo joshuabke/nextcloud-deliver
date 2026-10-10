@@ -232,7 +232,7 @@ function openMenu(event, asset) {
 				icon: filesIcon,
 				href: generateUrl('/apps/files/files/{fileId}', { fileId: newest.fileId }) + '?' + new URLSearchParams({ dir, opendetails: 'true' }),
 			},
-			asset.canWrite && { label: t('deliver', 'Take out of Deliver'), icon: removeIcon, danger: true, action: () => takeOut(asset) },
+			asset.canWrite && { label: project.value.none ? t('deliver', 'Remove from Deliver') : t('deliver', 'Remove from Project'), icon: removeIcon, danger: true, action: () => remove(asset) },
 		].filter(Boolean),
 	}
 }
@@ -283,15 +283,15 @@ async function setDue(dueDate) {
 }
 
 /**
- * Takes the Asset out of Deliver with its Comments and Versions; the files stay (story 4)
+ * Removes the Asset with its Comments and Versions; the files stay, and Auto Intake leaves them out (stories 4 and 132)
  *
- * @param {object} asset - the Asset to take out
+ * @param {object} asset - the Asset to remove
  */
-async function takeOut(asset) {
+async function remove(asset) {
 	const confirmed = await confirmRemoval(
-		t('deliver', 'Take this Asset out of Deliver?'),
+		project.value.none ? t('deliver', 'Remove this Asset from Deliver?') : t('deliver', 'Remove this Asset from the Project?'),
 		t('deliver', 'Its Comments and Versions are deleted. The files themselves stay untouched.'),
-		t('deliver', 'Take out'),
+		t('deliver', 'Remove'),
 	)
 	if (!confirmed) {
 		return

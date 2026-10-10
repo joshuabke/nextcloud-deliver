@@ -124,6 +124,38 @@ class ProjectApiTest extends TestCase {
 		self::assertSame([], array_intersect(['cut', 'intro'], $this->unassigned($this->nc)), 'taken out of Deliver');
 	}
 
+	public function testAFileRemovedFromAFolderProjectStaysOutOfAutoIntake(): void {
+		$this->nc->put("{$this->root}/cut.mp4", 'not really a video');
+		$this->nc->put("{$this->root}/other.mp4", 'not really a video');
+		$this->nc->put("{$this->root}/trailer_v1.mp4", 'not really a video');
+		$this->nc->put("{$this->root}/trailer_v2.mp4", 'not really a video');
+		$projectId = $this->createProject($this->nc, $this->nc->fileId($this->root))['id'];
+		$shown = fn () => $this->nc->ocs('GET', "/projects/$projectId")['data'];
+		$ids = array_column($shown()['assets'], 'id', 'name');
+		self::assertSame(['cut', 'other', 'trailer'], array_keys($ids));
+
+		// Removing a stacked Asset keeps every one of its files out, not just the newest
+		self::assertSame(200, $this->nc->ocs('DELETE', "/assets/{$ids['cut']}")['status']);
+		self::assertSame(200, $this->nc->ocs('DELETE', "/assets/{$ids['trailer']}")['status']);
+		self::assertSame(['other'], array_column($shown()['assets'], 'name'), 'Auto Intake does not take them back (#45)');
+		self::assertSame(['cut.mp4', 'trailer_v1.mp4', 'trailer_v2.mp4'], array_column($shown()['notEnabled'], 'name'), 'listed as not up for review although Auto Intake is on');
+
+		// The mark follows the file, and new files still arrive on their own
+		$this->nc->move("{$this->root}/cut.mp4", "{$this->root}/renamed.mp4");
+		$this->nc->put("{$this->root}/renamed.mp4", 'overwritten');
+		$this->nc->put("{$this->root}/new.mp4", 'not really a video');
+		self::assertSame(200, $this->nc->ocs('PUT', "/projects/$projectId", ['autoIntake' => false])['status']);
+		self::assertSame(200, $this->nc->ocs('PUT', "/projects/$projectId", ['autoIntake' => true])['status']);
+		self::assertSame(['new', 'other'], array_column($shown()['assets'], 'name'));
+		self::assertSame(['renamed.mp4', 'trailer_v1.mp4', 'trailer_v2.mp4'], array_column($shown()['notEnabled'], 'name'));
+
+		// Added for review again, it is an Asset like any other
+		$added = $this->nc->ocs('POST', '/assets', ['fileId' => $this->nc->fileId("{$this->root}/renamed.mp4")]);
+		self::assertSame([201, $projectId], [$added['status'], $added['data']['projectId']], json_encode($added['data']));
+		self::assertSame(['new', 'other', 'renamed'], array_column($shown()['assets'], 'name'));
+		self::assertSame(['trailer_v1.mp4', 'trailer_v2.mp4'], array_column($shown()['notEnabled'], 'name'));
+	}
+
 	public function testAFolderProjectWithoutAutoIntakeTakesFilesOneByOne(): void {
 		$this->nc->mkdir("{$this->root}/scenes");
 		$this->nc->put("{$this->root}/cut.mp4", 'not really a video');

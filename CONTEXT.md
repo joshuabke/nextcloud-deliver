@@ -19,7 +19,7 @@ Where the Assets that belong to no Project wait, listed for the Member who enabl
 _Avoid_: Inbox, unsorted, loose files
 
 **Auto Intake**:
-A Folder Project setting that makes every media file in the folder an Asset, including files that arrive later, unless another Project already holds it. On when a folder becomes a Project.
+A Folder Project setting that makes every media file in the folder an Asset, including files that arrive later, unless another Project already holds it or a Member removed it from this Project. On when a folder becomes a Project.
 _Avoid_: Watch mode, auto scan, sync
 
 **Asset**:
