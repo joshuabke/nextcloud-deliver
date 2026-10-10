@@ -92,7 +92,7 @@ test.describe('Review view', () => {
 	test('uploads into the Project, then filters and finds its Assets', async () => {
 		await page.goto(`/apps/deliver/projects/${projectId}`)
 		await page.locator('input[type=file][multiple]').setInputFiles({ name: 'second.webm', mimeType: 'video/webm', buffer: readFileSync(CLIP) })
-		const second = page.locator('.deliver-card', { hasText: 'second.webm' })
+		const second = card(page, 'second')
 		await expect(second).toBeVisible()
 		// Auto Intake would take the file anyway; the upload itself must not fail
 		await expect(page.locator('.deliver-project .notecard')).toHaveCount(0)
@@ -123,7 +123,7 @@ test.describe('Review view', () => {
 				view.dispatchEvent(new DragEvent(type, { dataTransfer: files, bubbles: true, cancelable: true }))
 			}
 		}, [...readFileSync(CLIP)])
-		await expect(page.locator('.deliver-card', { hasText: 'third.webm' })).toBeVisible()
+		await expect(card(page, 'third')).toBeVisible()
 		await expect(page.locator('.deliver-project .notecard')).toContainText('Only video, audio and image files')
 		await expect(page.locator('.deliver-card', { hasText: 'notes' })).toHaveCount(0)
 
@@ -143,6 +143,42 @@ test.describe('Review view', () => {
 		await second.click({ button: 'right' })
 		await expect(page.getByRole('menuitem', { name: 'Change the Due Date' })).toBeVisible()
 		await page.keyboard.press('Escape')
+	})
+
+	test('renames, removes and stacks from the menus of the cards', async () => {
+		await page.goto(`/apps/deliver/projects/${projectId}`)
+		// The menu has a button on every screen, beside the name
+		const second = card(page, 'second')
+		await second.getByRole('button', { name: 'Actions for second' }).click()
+		await expect(page.getByRole('menuitem', { name: 'Download' })).toHaveAttribute('href', /\/second\.webm$/)
+		await page.getByRole('menuitem', { name: 'Rename…' }).click()
+		const rename = page.getByRole('dialog', { name: 'Rename file' })
+		await expect(rename).toContainText('actively being worked on')
+		await rename.getByLabel('Name').fill('renamed.webm')
+		await rename.getByRole('button', { name: 'Rename' }).click()
+		const renamed = card(page, 'renamed')
+		await expect(renamed).toBeVisible()
+
+		// Removed from a Folder Project with Auto Intake, a file waits as not up for review (#45)
+		await card(page, 'third').click({ button: 'right' })
+		await page.getByRole('menuitem', { name: 'Remove from Project' }).click()
+		await page.getByRole('dialog').getByRole('button', { name: 'Remove' }).click()
+		const third = page.locator('.deliver-not-up', { hasText: 'third.webm' })
+		await expect(third).toBeVisible()
+		await page.reload()
+		await expect(third).toBeVisible()
+
+		// and joins an Asset from its own menu
+		await third.getByRole('button', { name: 'Actions for third.webm' }).click()
+		await page.getByRole('menuitem', { name: 'Add as a new Version of…' }).click()
+		const stacking = page.getByRole('dialog', { name: 'Add third.webm as a new Version' })
+		await stacking.locator('.v-select').click()
+		await page.getByRole('option', { name: 'renamed' }).click()
+		await stacking.getByRole('button', { name: 'Add', exact: true }).click()
+		// The Asset is named after its newest Version's file
+		await expect(card(page, 'third').locator('.deliver-card__version')).toHaveText('V2')
+		await expect(renamed).toHaveCount(0)
+		await expect(third).toHaveCount(0)
 	})
 
 	test('comments on a Frame and on a Range, resolves and replies', async () => {
@@ -469,6 +505,15 @@ async function testUser(playwright) {
  * @param {string} dav - WebDAV path of the folder
  * @return {Promise<number>} the Nextcloud file id
  */
+/**
+ * @param {import('@playwright/test').Page} page - the Project view
+ * @param {string} name - an Asset's name; "8 seconds ago" below it would match "second" by text alone
+ * @return {import('@playwright/test').Locator} its card
+ */
+function card(page, name) {
+	return page.locator('.deliver-card').filter({ has: page.locator('.deliver-card__name', { hasText: new RegExp(`^\\s*${name}\\s*$`) }) })
+}
+
 async function fileId(api, dav) {
 	const response = await api.fetch(dav, {
 		method: 'PROPFIND',

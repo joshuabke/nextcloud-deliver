@@ -4,8 +4,9 @@ import dueIcon from '@mdi/svg/svg/calendar-clock.svg?raw'
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import compareIcon from '@mdi/svg/svg/compare.svg?raw'
 import removeIcon from '@mdi/svg/svg/delete-outline.svg?raw'
+import downloadIcon from '@mdi/svg/svg/download.svg?raw'
 import notUpIcon from '@mdi/svg/svg/eye-off-outline.svg?raw'
-import videoIcon from '@mdi/svg/svg/filmstrip.svg?raw'
+import addIcon from '@mdi/svg/svg/eye-plus-outline.svg?raw'
 import filesIcon from '@mdi/svg/svg/folder-eye-outline.svg?raw'
 import moveIcon from '@mdi/svg/svg/folder-move-outline.svg?raw'
 import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
@@ -13,8 +14,8 @@ import stackIcon from '@mdi/svg/svg/layers-outline.svg?raw'
 import newVersionIcon from '@mdi/svg/svg/layers-plus.svg?raw'
 import searchIcon from '@mdi/svg/svg/magnify.svg?raw'
 import openIcon from '@mdi/svg/svg/open-in-app.svg?raw'
+import renameIcon from '@mdi/svg/svg/rename-outline.svg?raw'
 import uploadIcon from '@mdi/svg/svg/tray-arrow-up.svg?raw'
-import audioIcon from '@mdi/svg/svg/waveform.svg?raw'
 import { t } from '@nextcloud/l10n'
 import { generateRemoteUrl, generateUrl } from '@nextcloud/router'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
@@ -32,14 +33,16 @@ import AssetCard from '../components/AssetCard.vue'
 import ContextMenu from '../components/ContextMenu.vue'
 import DueDateDialog from '../components/DueDateDialog.vue'
 import FilterBar from '../components/FilterBar.vue'
+import NotUpForReviewCard from '../components/NotUpForReviewCard.vue'
 import ProjectSettingsDialog from '../components/ProjectSettingsDialog.vue'
+import RenameDialog from '../components/RenameDialog.vue'
 import VersionStack from '../components/VersionStack.vue'
-import { assignAsset, disableAsset, enableFile, errorMessage, handInWaveform, stackVersion, updateAsset, uploadNextVersion, uploadVersion } from '../api.js'
+import { assignAsset, disableAsset, enableFile, errorMessage, handInWaveform, renameFile, stackVersion, updateAsset, uploadNextVersion, uploadVersion } from '../api.js'
 import { useQuery } from '../composables/query.js'
 import { confirmRemoval } from '../confirm.js'
 import { FILTER_LABELS, FILTERS, found, passes, SORT_OPTIONS, sortAssets, SORTS } from '../lib/filters.js'
 import { groupByFolder, inFolder, projectDavPath, projectDir } from '../lib/folders.js'
-import { acceptFor, stackKind } from '../lib/media.js'
+import { acceptFor, mediaKind, stackKind } from '../lib/media.js'
 import { stackSuggestions } from '../lib/suggestions.js'
 import { useProjectsStore } from '../store/projects.js'
 
@@ -57,7 +60,7 @@ const searchOpen = ref(false)
 const uploading = ref(false)
 const fileInput = ref(null)
 const versionInput = ref(null)
-/** The right-click menu: where, and for which Asset */
+/** The right-click menu: where, and its entries */
 const menu = ref(null)
 /** The Asset whose Due Date is being set */
 const dueFor = ref(null)
@@ -119,7 +122,7 @@ const shown = computed(() => inView.value.filter((asset) => passes(asset, filter
 // Sorted within each folder, the folders themselves by path
 const groups = computed(() => groupByFolder(sortAssets(shown.value, sort.value)))
 /** Media files in the folder on screen that are no Assets, greyed out under them to add one by one; they have no state to filter by */
-const loose = computed(() => filter.value !== 'all'
+const notUpForReview = computed(() => filter.value !== 'all'
 	? []
 	: (project.value?.notEnabled ?? []).filter((file) => inFolder(file, folder.value) && file.name.toLocaleLowerCase().includes(query.value.trim().toLocaleLowerCase())))
 /** File ids being added, so a second click waits */
@@ -158,6 +161,84 @@ async function assign() {
 	} catch (e) {
 		error.value = errorMessage(e)
 	}
+}
+
+/** The file being renamed, as { name, url }, while its dialog is open */
+const renaming = ref(null)
+/** The file not up for review being added to an Asset, while its dialog is open */
+const stackingFile = ref(null)
+const stackTarget = ref(null)
+/** The Assets it can join: the same kind of media, and stacks this Member may change (story 131) */
+const stackOptions = computed(() => (project.value?.assets ?? [])
+	.filter((asset) => asset.canWrite && stackKind(asset.versions) === mediaKind(stackingFile.value?.mimeType))
+	.map((asset) => ({ id: asset.id, label: asset.name })))
+
+/**
+ * @param {string} url - WebDAV URL of the file
+ * @param {string} name - its name
+ * @param {boolean} canWrite - whether this Member may rename it
+ * @return {object[]} Download and, with write access, Rename (story 131)
+ */
+function fileItems(url, name, canWrite) {
+	return [
+		{ label: t('deliver', 'Download'), icon: downloadIcon, href: url, download: name },
+		canWrite && { label: t('deliver', 'Rename…'), icon: renameIcon, action: () => { renaming.value = { name, url } } },
+	]
+}
+
+/**
+ * @param {string} name - the new name of the file in renaming
+ */
+async function rename(name) {
+	try {
+		await renameFile(renaming.value.url, name)
+	} catch (e) {
+		error.value = errorMessage(e)
+	}
+	await store.fetch(props.id).catch(() => {})
+}
+
+/**
+ * @param {MouseEvent} event - the right click
+ * @param {object} file - a media file in the folder that is no Asset
+ */
+function openFileMenu(event, file) {
+	const canWrite = project.value.canWrite
+	const dir = projectDir(project.value.path) + (file.path ? '/' + file.path : '')
+	menu.value = {
+		x: event.clientX,
+		y: event.clientY,
+		items: [
+			canWrite && { label: t('deliver', 'Add for review'), icon: addIcon, action: () => add(file) },
+			canWrite && { label: t('deliver', 'Add as a new Version of…'), icon: newVersionIcon, action: () => openStacking(file) },
+			...fileItems(davFolder(file.path) + '/' + encodeURIComponent(file.name), file.name, canWrite),
+			{ label: t('deliver', 'Show in Files'), icon: filesIcon, href: generateUrl('/apps/files/files/{fileId}', { fileId: file.fileId }) + '?' + new URLSearchParams({ dir, opendetails: 'true' }) },
+		].filter(Boolean),
+	}
+}
+
+/**
+ * @param {object} file - the file not up for review to add to an Asset
+ */
+function openStacking(file) {
+	stackTarget.value = null
+	stackingFile.value = file
+}
+
+/** Adds the file for review and stacks it on top of the Asset picked */
+async function addAsVersion() {
+	const file = stackingFile.value
+	stackingFile.value = null
+	adding.value.add(file.fileId)
+	try {
+		const enabled = await enableFile(file.fileId, project.value.id)
+		await stackVersion(enabled.versionId, stackTarget.value.id)
+	} catch (e) {
+		error.value = errorMessage(e)
+	} finally {
+		adding.value.delete(file.fileId)
+	}
+	await store.fetch(props.id).catch(() => {})
 }
 
 /**
@@ -227,6 +308,7 @@ function openMenu(event, asset) {
 			asset.canWrite && { label: asset.dueDate ? t('deliver', 'Change the Due Date') : t('deliver', 'Set a Due Date'), icon: dueIcon, action: () => { dueFor.value = asset } },
 			asset.canWrite && !isMobile.value && { label: t('deliver', 'Manage Versions'), icon: stackIcon, action: () => { managing.value = asset.id } },
 			asset.canWrite && { label: t('deliver', 'Move to Project…'), icon: moveIcon, action: () => openAssign(asset) },
+			...(newest.url ? fileItems(newest.url, newest.name, asset.canWrite) : []),
 			{
 				label: t('deliver', 'Show in Files'),
 				icon: filesIcon,
@@ -454,33 +536,22 @@ function dropped(event) {
 						@menu="openMenu($event, asset)" />
 				</ul>
 			</section>
-			<section v-if="loose.length" class="deliver-project__group">
-				<h3 class="deliver-project__folder deliver-project__loose-head">
+			<section v-if="notUpForReview.length" class="deliver-project__group">
+				<h3 class="deliver-project__folder deliver-project__not-up-head">
 					<NcIconSvgWrapper :svg="notUpIcon" :size="20" />
 					{{ t('deliver', 'Not up for review') }}
 				</h3>
 				<ul class="deliver-project__grid">
-					<li v-for="file in loose" :key="file.fileId" class="deliver-project__loose">
-						<div class="deliver-card__link">
-							<div class="deliver-card__still">
-								<NcIconSvgWrapper :svg="file.mimeType.startsWith('audio/') ? audioIcon : videoIcon" :size="40" />
-							</div>
-							<div class="deliver-card__name" :title="file.name">
-								{{ file.name }}
-							</div>
-							<div class="deliver-card__meta">
-								{{ file.path ? file.path : project.name }}
-							</div>
-						</div>
-						<NcButton
-							v-if="project.canWrite"
-							class="deliver-project__add"
-							variant="secondary"
-							:disabled="adding.has(file.fileId)"
-							@click="add(file)">
-							{{ t('deliver', 'Add for review') }}
-						</NcButton>
-					</li>
+					<NotUpForReviewCard
+						v-for="file in notUpForReview"
+						:key="file.fileId"
+						:file="file"
+						:where="file.path ? file.path : project.name"
+						:canAdd="project.canWrite"
+						:adding="adding.has(file.fileId)"
+						@add="add(file)"
+						@contextmenu.prevent="openFileMenu($event, file)"
+						@menu="openFileMenu($event, file)" />
 				</ul>
 			</section>
 			<input
@@ -525,6 +596,30 @@ function dropped(event) {
 					</NcButton>
 				</template>
 			</NcDialog>
+			<NcDialog
+				v-if="stackingFile"
+				:name="t('deliver', 'Add {file} as a new Version', { file: stackingFile.name })"
+				size="small"
+				@closing="stackingFile = null">
+				<p class="deliver-project__hint">
+					{{ t('deliver', 'It goes on top of the Asset\'s Version Stack.') }}
+				</p>
+				<NcSelect
+					v-model="stackTarget"
+					:inputLabel="t('deliver', 'Asset')"
+					:options="stackOptions"
+					:clearable="false" />
+				<template #actions>
+					<NcButton variant="primary" :disabled="!stackTarget" @click="addAsVersion">
+						{{ t('deliver', 'Add') }}
+					</NcButton>
+				</template>
+			</NcDialog>
+			<RenameDialog
+				v-if="renaming"
+				:name="renaming.name"
+				@rename="rename"
+				@close="renaming = null" />
 			<DueDateDialog
 				v-if="dueFor"
 				:modelValue="dueFor.dueDate"
@@ -623,27 +718,8 @@ function dropped(event) {
 	color: var(--color-text-maxcontrast);
 }
 
-.deliver-project__loose-head {
+.deliver-project__not-up-head {
 	color: var(--color-text-maxcontrast);
-}
-
-/* Greyed out until the pointer is on one: it is there in Files, not in review */
-.deliver-project__loose {
-	display: flex;
-	flex-direction: column;
-	min-width: 0;
-	opacity: 0.5;
-	transition: opacity 0.15s;
-}
-
-.deliver-project__loose:hover,
-.deliver-project__loose:focus-within {
-	opacity: 1;
-}
-
-.deliver-project__add {
-	align-self: flex-start;
-	margin-inline-start: calc(2 * var(--default-grid-baseline));
 }
 </style>
 

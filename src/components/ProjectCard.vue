@@ -1,13 +1,11 @@
 <script setup>
 import changesIcon from '@mdi/svg/svg/alert-circle-outline.svg?raw'
-import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import commentIcon from '@mdi/svg/svg/comment-outline.svg?raw'
 import moreIcon from '@mdi/svg/svg/dots-horizontal.svg?raw'
 import folderProjectIcon from '@mdi/svg/svg/folder-play-outline.svg?raw'
 import noProjectIcon from '@mdi/svg/svg/inbox-outline.svg?raw'
 import projectIcon from '@mdi/svg/svg/play-box-multiple-outline.svg?raw'
 import { n, t } from '@nextcloud/l10n'
-import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDateTime from '@nextcloud/vue/components/NcDateTime'
@@ -21,10 +19,9 @@ const props = defineProps({
 	project: { type: Object, required: true },
 })
 
-const emit = defineEmits(['settings', 'menu'])
+const emit = defineEmits(['menu'])
 
-/** A phone has no hover and no right click: the menu has a button of its own, and a long press opens it too (story 109) */
-const isMobile = useIsMobile()
+/** The menu opens from a button on every screen, by a right click, and by a long press on a phone (stories 109 and 129) */
 const { press, fromButton } = useLongPress((where) => emit('menu', where))
 
 /** Set when the server could not render the still; the icon stands in */
@@ -40,7 +37,7 @@ const badges = computed(() => {
 </script>
 
 <template>
-	<li class="deliver-project-card" v-on="press">
+	<li class="deliver-project-card deliver-card__menu-host" v-on="press">
 		<RouterLink class="deliver-card__link" :to="`/projects/${project.id}`">
 			<div class="deliver-card__still">
 				<img
@@ -72,24 +69,12 @@ const badges = computed(() => {
 			<DueDate v-if="project.activity.nextDue" class="deliver-card__due" :modelValue="project.activity.nextDue" />
 		</RouterLink>
 		<NcButton
-			v-if="isMobile"
-			class="deliver-project-card__settings deliver-project-card__settings--shown"
+			class="deliver-card__more"
 			variant="tertiary"
 			:aria-label="t('deliver', 'Actions for {name}', { name: project.name })"
 			@click="fromButton">
 			<template #icon>
 				<NcIconSvgWrapper :svg="moreIcon" />
-			</template>
-		</NcButton>
-		<NcButton
-			v-else-if="!project.none"
-			class="deliver-project-card__settings"
-			variant="tertiary"
-			:aria-label="t('deliver', 'Settings of {project}', { project: project.name })"
-			:title="t('deliver', 'Project settings')"
-			@click="emit('settings')">
-			<template #icon>
-				<NcIconSvgWrapper :svg="settingsIcon" />
 			</template>
 		</NcButton>
 	</li>
@@ -99,24 +84,7 @@ const badges = computed(() => {
 
 <style scoped>
 .deliver-project-card {
-	position: relative;
 	min-width: 0;
-}
-
-/* Over the picture's corner, outside the link, so the tile stays one link */
-.deliver-project-card__settings {
-	position: absolute !important;
-	top: calc(3 * var(--default-grid-baseline));
-	inset-inline-end: calc(3 * var(--default-grid-baseline));
-	background: rgba(0, 0, 0, 0.6) !important;
-	color: #fff !important;
-	opacity: 0;
-}
-
-.deliver-project-card:hover .deliver-project-card__settings,
-.deliver-project-card__settings:focus-visible,
-.deliver-project-card__settings--shown {
-	opacity: 1;
 }
 
 /* A still of the newest video, filling the tile */

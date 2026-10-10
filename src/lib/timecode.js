@@ -154,3 +154,20 @@ function addDroppedFrames(frame, nominal) {
 	const minutes = rest < dropped ? 0 : Math.floor((rest - dropped) / framesPerMinute)
 	return frame + dropped * (9 * tens + minutes)
 }
+
+/**
+ * A Version's length on its card, as m:ss or h:mm:ss (story 130).
+ *
+ * @param {?number} durationFrames - its length in Frames, null until probed
+ * @param {{num: ?number, den: ?number}} fps - its frame rate, milliseconds for audio
+ * @return {string|null} the runtime, or null while unknown
+ */
+export function runtime(durationFrames, fps) {
+	if (!durationFrames || !fps?.num || !fps?.den) {
+		return null
+	}
+	const seconds = Math.round(durationFrames / fpsValue(fps))
+	const hours = Math.floor(seconds / 3600)
+	const rest = `${pad(seconds / 60 % 60, hours ? 2 : 1)}:${pad(seconds % 60)}`
+	return hours ? `${hours}:${rest}` : rest
+}

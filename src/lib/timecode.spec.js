@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AUDIO_MODES, formatAt, formatRange, frameToTime, MODES, modesFor, smpte, stepOf, timeToFrame } from './timecode.js'
+import { AUDIO_MODES, formatAt, formatRange, frameToTime, MODES, modesFor, runtime, smpte, stepOf, timeToFrame } from './timecode.js'
 
 const PAL = { num: 25, den: 1 }
 const FILM = { num: 24000, den: 1001 }
@@ -79,5 +79,18 @@ describe('audio in milliseconds (ADR 0007)', () => {
 		expect(stepOf(audio)).toBe(40)
 		expect(stepOf({ fps: MS, displayFps: FILM })).toBe(42)
 		expect(stepOf({ fps: PAL })).toBe(1)
+	})
+})
+
+describe('runtime on a card (story 130)', () => {
+	it('reads m:ss below an hour and h:mm:ss from one', () => {
+		expect(runtime(49 * 25, { num: 25, den: 1 })).toBe('0:49')
+		expect(runtime(17982, { num: 24000, den: 1001 })).toBe('12:30')
+		expect(runtime(3725000, { num: 1000, den: 1 })).toBe('1:02:05')
+	})
+
+	it('is unknown until probed', () => {
+		expect(runtime(null, { num: 25, den: 1 })).toBeNull()
+		expect(runtime(100, { num: null, den: null })).toBeNull()
 	})
 })
