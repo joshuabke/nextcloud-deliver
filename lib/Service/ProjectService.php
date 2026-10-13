@@ -180,10 +180,27 @@ class ProjectService {
 		$this->assertNotNested($home, $folder);
 
 		$project = $this->insert($uid, $folderId, $folder->getName(), $autoIntake);
+		$this->takeFromNoProject($project, $folder, $uid);
 		if ($autoIntake) {
 			$this->intakeFolder($project, $folder);
 		}
 		return $this->serialize($project, $folder, $uid);
+	}
+
+	/**
+	 * Assets of No Project with a file in the folder join the Folder Project it
+	 * becomes, so a Project removed and made again gets its Assets back with
+	 * their review data (story 9).
+	 */
+	private function takeFromNoProject(Project $project, Folder $folder, string $uid): void {
+		$fileIds = array_map(static fn (File $file) => $file->getId(), iterator_to_array($this->mediaFiles($folder), false));
+		$assetIds = array_unique(array_map(static fn (Version $version) => $version->getAssetId(), $this->versions->findByFiles($fileIds)));
+		foreach ($assetIds as $assetId) {
+			$asset = $this->assets->find($assetId);
+			if ($asset !== null && $asset->getProjectId() === null) {
+				$this->stacks->assign($asset, $project, $uid);
+			}
+		}
 	}
 
 	/**
@@ -634,13 +651,12 @@ class ProjectService {
 	public function disableAsset(string $uid, int $assetId): void {
 		$asset = $this->assets->find($assetId) ?? throw new NotFoundException('Asset not found');
 		$this->writableAsset($uid, $asset);
-		$projectId = $asset->getProjectId();
-		$folderProject = $projectId !== null && $this->projects->find($projectId)->getFolderId() !== null;
 		foreach ($this->versions->findByAsset($assetId) as $version) {
-			// Removed from a Folder Project, its files in the folder stay out of Auto Intake (story 132)
-			$file = $folderProject ? $this->root->getFirstNodeById($version->getFileId()) : null;
-			if ($file !== null && $this->projects->findAbove($file)?->getId() === $projectId) {
-				$this->removed->mark($projectId, $version->getFileId());
+			// Removed, its files stay out of the Auto Intake of the Folder Project they lie in, whichever Project held them (story 132)
+			$file = $this->root->getFirstNodeById($version->getFileId());
+			$above = $file === null ? null : $this->projects->findAbove($file);
+			if ($above !== null) {
+				$this->removed->mark($above->getId(), $version->getFileId());
 			}
 			$this->stacks->purge($version);
 		}

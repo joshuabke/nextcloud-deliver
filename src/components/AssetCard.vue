@@ -79,11 +79,11 @@ const status = computed(() => {
 					v-if="unseen"
 					class="deliver-card__comments deliver-card__comments--unseen"
 					:title="n('deliver', '%n Unseen Comment', '%n Unseen Comments', unseen)">
-					<NcIconSvgWrapper :svg="commentIcon" :size="14" />
+					<NcIconSvgWrapper :svg="commentIcon" :size="14" inline />
 					{{ unseen }}
 				</span>
 				<span v-else-if="newest.comments" class="deliver-card__comments">
-					<NcIconSvgWrapper :svg="commentIcon" :size="14" />
+					<NcIconSvgWrapper :svg="commentIcon" :size="14" inline />
 					{{ newest.comments }}
 				</span>
 				<span
@@ -91,7 +91,7 @@ const status = computed(() => {
 					class="deliver-card__decision"
 					:class="`deliver-card__decision--${decision.kind}`"
 					:title="decision.text">
-					<NcIconSvgWrapper :svg="decision.icon" :size="14" />
+					<NcIconSvgWrapper :svg="decision.icon" :size="14" inline />
 				</span>
 				<span v-if="status" class="deliver-card__status" :class="`deliver-card__status--${status.kind}`">{{ status.text }}</span>
 				<span v-else-if="length" class="deliver-card__status">{{ length }}</span>
