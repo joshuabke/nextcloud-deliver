@@ -308,6 +308,12 @@ class ProjectApiTest extends TestCase {
 		self::assertSame([], $this->stacks($this->nc, $p2), 'Auto Intake does not take a file another Project holds');
 		$path = array_column($this->nc->ocs('GET', "/projects/$p1")['data']['assets'], 'path', 'name')['cut'];
 		self::assertSame("/{$this->root}/p2", $path, 'outside its folder, the path runs from home');
+
+		// Removed while it lies outside the folder, it is not marked there: back inside, Auto Intake takes it (story 132)
+		$assetId = array_column($this->nc->ocs('GET', "/projects/$p1")['data']['assets'], 'id', 'name')['cut'];
+		self::assertSame(200, $this->nc->ocs('DELETE', "/assets/$assetId")['status']);
+		$this->nc->move("{$this->root}/p2/cut.mp4", "{$this->root}/p1/cut.mp4");
+		self::assertSame(['cut'], array_keys($this->stacks($this->nc, $p1)));
 	}
 
 	public function testProjectMovedIntoAnotherKeepsItsFilesToItself(): void {
