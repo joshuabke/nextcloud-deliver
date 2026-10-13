@@ -620,10 +620,11 @@ class ProjectService {
 		$asset = $this->assets->find($assetId) ?? throw new NotFoundException('Asset not found');
 		$this->writableAsset($uid, $asset);
 		$projectId = $asset->getProjectId();
-		// Removed from a Folder Project, its files stay out of Auto Intake (story 132)
-		$marks = $projectId !== null && $this->projects->find($projectId)->getFolderId() !== null;
+		$folderProject = $projectId !== null && $this->projects->find($projectId)->getFolderId() !== null;
 		foreach ($this->versions->findByAsset($assetId) as $version) {
-			if ($marks) {
+			// Removed from a Folder Project, its files in the folder stay out of Auto Intake (story 132)
+			$file = $folderProject ? $this->root->getFirstNodeById($version->getFileId()) : null;
+			if ($file !== null && $this->projects->findAbove($file)?->getId() === $projectId) {
 				$this->removed->mark($projectId, $version->getFileId());
 			}
 			$this->stacks->purge($version);
@@ -815,13 +816,14 @@ class ProjectService {
 
 	/**
 	 * The media files under a node that no Project holds, by path. With Auto
-	 * Intake on, only those a Member removed, unless the intake itself asks.
+	 * Intake on, only those a Member removed; for the intake itself, all but
+	 * those.
 	 *
 	 * @return list<File>
 	 */
 	private function looseFiles(Project $project, Node $node, bool $forIntake = false): array {
-		$removed = $project->getAutoIntake() && !$forIntake ? array_flip($this->removed->fileIds($project->getId())) : null;
-		if ($removed === []) {
+		$removed = $forIntake || $project->getAutoIntake() ? array_flip($this->removed->fileIds($project->getId())) : null;
+		if ($removed === [] && !$forIntake) {
 			return [];
 		}
 		$files = match (true) {
@@ -833,7 +835,7 @@ class ProjectService {
 			static fn (Version $version) => $version->getFileId(),
 			$this->versions->findByFiles(array_map(static fn (File $file) => $file->getId(), $files)),
 		));
-		$loose = array_values(array_filter($files, static fn (File $file) => !isset($known[$file->getId()]) && ($removed === null || isset($removed[$file->getId()]))));
+		$loose = array_values(array_filter($files, static fn (File $file) => !isset($known[$file->getId()]) && ($removed === null || isset($removed[$file->getId()]) !== $forIntake)));
 		usort($loose, static fn (File $a, File $b) => strcmp($a->getPath(), $b->getPath()));
 		return $loose;
 	}

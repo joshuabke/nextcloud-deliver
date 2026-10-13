@@ -33,7 +33,15 @@ class RemovedMapper {
 	}
 
 	public function isRemoved(int $projectId, int $fileId): bool {
-		return in_array($fileId, $this->fileIds($projectId), true);
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id')->from(self::TABLE)
+			->where($qb->expr()->eq('project_id', $qb->createNamedParameter($projectId)))
+			->andWhere($qb->expr()->eq('file_id', $qb->createNamedParameter($fileId)))
+			->setMaxResults(1);
+		$result = $qb->executeQuery();
+		$found = $result->fetchOne() !== false;
+		$result->closeCursor();
+		return $found;
 	}
 
 	public function mark(int $projectId, int $fileId): void {

@@ -314,7 +314,7 @@ OC.L10N.register(
 		"This Nextcloud sends no email, so Reviewers are not mailed when someone replies to them.": "Diese Nextcloud verschickt keine E-Mails, daher bekommen Reviewer keine Mail, wenn jemand ihnen antwortet.",
 		"This browser cannot play this file. Open it in another browser, such as Chrome or Firefox.": "Dieser Browser kann diese Datei nicht abspielen. Öffne sie in einem anderen Browser, etwa Chrome oder Firefox.",
 		"This file is not enabled for review yet. Switch it on in the Deliver tab of the sidebar.": "Diese Datei ist noch nicht zum Review freigegeben. Schalte sie im Deliver-Tab der Seitenleiste ein.",
-		"This folder is on Auto Intake. Switch it off in the folder to pick files one by one.": "Dieser Ordner ist auf Automatische Aufnahme gestellt. Schalte sie am Ordner aus, um Dateien einzeln zu wählen.",
+		"This folder is on Auto Intake, so the file stays in its Project. Removed, it stays out until it is added for review again.": "Dieser Ordner ist auf Automatische Aufnahme gestellt, die Datei bleibt also in seinem Projekt. Entfernt bleibt sie draußen, bis sie wieder zum Review hinzugefügt wird.",
 		"This link has no password. Anyone it reaches can review.": "Dieser Link hat kein Passwort. Jeder, der ihn bekommt, kann reviewen.",
 		"This link shows no file that is enabled for review.": "Dieser Link zeigt keine Datei, die zum Review freigegeben ist.",
 		"Time display": "Zeitanzeige",
