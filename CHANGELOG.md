@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.4 – 2026-10-13
+
+- Every card has a "…" button beside its name, on every screen, that opens the same menu as a right click or a long press. A Project's settings moved from the gear into that menu.
+- Asset cards show the Version, the Approval, the Comments and the runtime in the corners of their still, Missing or Processing in place of the runtime, when the newest Version arrived below the name, and the filename on hovering the name.
+- Media files in a Folder Project that are not up for review have a menu of their own: add for review, add as a new Version of an Asset of the same kind, download, rename and show in Files. An Asset's menu can download and rename its newest Version's file too. Renaming keeps the extension, so a file never changes its kind.
+- Removing an Asset keeps its files out of Auto Intake, also after a rename, a move inside the folder, an overwrite or switching Auto Intake off and on. They wait under "Not up for review" until someone adds them again. This works from the Files sidebar too, where "Review in Deliver" can now be switched off for a file in a folder on Auto Intake. "Take out of Deliver" is now "Remove from Project", or "Remove from Deliver" in No Project.
+- A Project removed and made again from its folder gets its Assets back from No Project, with their Comments.
+- Confirmations grow with their heading, so the German ones fit.
+- API: `POST /assets` takes an `assetId` and adds the file as that Asset's next Version in one step.
+
 ## 0.8.3 – 2026-10-09
 
 - Reviewers have their own menu under an avatar at the top of the review, as on Frame.io: change their name and address, choose what is mailed to them, switch between German and English, and end their session so the next person names themselves anew.
