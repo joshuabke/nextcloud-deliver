@@ -12,7 +12,7 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | PUT | `/projects/{id}/mute` `{muted}` | Mute or unmute the Project's notifications for oneself; 0 mutes No Project |
 | DELETE | `/projects/{id}` | Remove the Project; its Assets go to No Project, files stay untouched |
 | GET | `/files/{fileId}/asset` | The Asset of a file with its Project, or 404; `waveformFromBrowser` says the browser that uploaded the audio should decode its Waveform and hand it in (no ffmpeg, no Waveform yet, no WAV) |
-| POST | `/assets` `{fileId, projectId}` | Enable one media file for review: into the Project given, 0 for No Project, or without one the Folder Project above it, else No Project |
+| POST | `/assets` `{fileId, projectId, assetId}` | Enable one media file for review: into the Project given, 0 for No Project, or without one the Folder Project above it, else No Project; with `assetId`, as the next Version of that Asset of the same kind of media, a file already in review moving over |
 | PUT | `/assets/{id}/project` `{projectId}` | Put an Asset into another Project, or 0 for No Project; no file moves |
 | DELETE | `/assets/{id}` | Take a file out of Deliver, the file stays |
 | GET | `/versions/{id}/members` | Who can be @mentioned on a Version: whoever can open its file |

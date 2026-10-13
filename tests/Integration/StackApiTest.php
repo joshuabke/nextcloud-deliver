@@ -67,6 +67,26 @@ class StackApiTest extends TestCase {
 		self::assertSame(400, $refused['status'], 'audio never joins a video\'s Version Stack');
 	}
 
+	public function testAFileIsAddedAsTheNextVersionOfAnAssetInOneStep(): void {
+		$this->put('cut.mp4');
+		$this->put('other.mp4');
+		$this->put('song.mp3');
+		$ids = array_column($this->assets(), 'id', 'name');
+		self::assertSame(200, $this->nc->ocs('DELETE', "/assets/{$ids['other']}")['status']);
+
+		// Not up for review, it goes straight onto the Asset, without an Asset of its own in between (story 131)
+		$added = $this->nc->ocs('POST', '/assets', ['fileId' => $this->nc->fileId("{$this->root}/other.mp4"), 'assetId' => $ids['cut']]);
+		self::assertSame([201, $ids['cut']], [$added['status'], $added['data']['assetId']], json_encode($added['data']));
+		self::assertSame([['other.mp4', 2, false], ['cut.mp4', 1, false]], array_map(
+			static fn (array $version) => [$version['name'], $version['number'], $version['autoStacked']],
+			$this->stack('other'),
+		), 'named after its newest Version from now on');
+
+		$refused = $this->nc->ocs('POST', '/assets', ['fileId' => $this->nc->fileId("{$this->root}/song.mp3"), 'assetId' => $ids['cut']]);
+		self::assertSame(400, $refused['status'], 'audio never joins a video\'s Version Stack');
+		self::assertSame(['song.mp3'], array_column($this->stack('song'), 'name'), 'and stays as it was');
+	}
+
 	public function testTheNextCutStacksOnACutWhoseFileIsInTheTrash(): void {
 		$this->put('cut.mp4');
 		$this->nc->delete("{$this->root}/cut.mp4");

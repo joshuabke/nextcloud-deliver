@@ -156,6 +156,28 @@ class ProjectApiTest extends TestCase {
 		self::assertSame(['trailer_v1.mp4', 'trailer_v2.mp4'], array_column($shown()['notEnabled'], 'name'));
 	}
 
+	public function testAProjectMadeAgainGetsItsAssetsBackFromNoProject(): void {
+		$this->nc->put("{$this->root}/cut.mp4", 'not really a video');
+		$this->nc->put("{$this->root}/other.mp4", 'not really a video');
+		$folderId = $this->nc->fileId($this->root);
+		$ids = array_column($this->nc->ocs('GET', '/projects/' . $this->createProject($this->nc, $folderId)['id'])['data']['assets'], 'id', 'name');
+		self::assertSame(200, $this->nc->ocs('DELETE', '/projects/' . array_pop($this->projects)[1])['status']);
+		self::assertContains('cut', $this->unassigned($this->nc), 'the Assets went to No Project (story 9)');
+
+		// Made again, the folder takes them back, review data and all
+		$projectId = $this->createProject($this->nc, $folderId)['id'];
+		self::assertSame($ids, array_column($this->nc->ocs('GET', "/projects/$projectId")['data']['assets'], 'id', 'name'));
+		self::assertNotContains('cut', $this->unassigned($this->nc));
+
+		// A file of No Project in the folder, removed, stays out of its Auto Intake too (story 132)
+		$this->nc->put("{$this->root}/loose.mp4", 'not really a video');
+		$loose = $this->nc->ocs('POST', '/assets', ['fileId' => $this->nc->fileId("{$this->root}/loose.mp4"), 'projectId' => 0]);
+		self::assertSame(200, $this->nc->ocs('DELETE', "/assets/{$loose['data']['assetId']}")['status']);
+		$shown = $this->nc->ocs('GET', "/projects/$projectId")['data'];
+		self::assertSame(['cut', 'other'], array_column($shown['assets'], 'name'));
+		self::assertSame(['loose.mp4'], array_column($shown['notEnabled'], 'name'));
+	}
+
 	public function testAFolderProjectWithoutAutoIntakeTakesFilesOneByOne(): void {
 		$this->nc->mkdir("{$this->root}/scenes");
 		$this->nc->put("{$this->root}/cut.mp4", 'not really a video');
