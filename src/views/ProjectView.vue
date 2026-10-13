@@ -168,10 +168,17 @@ const renaming = ref(null)
 /** The file not up for review being added to an Asset, while its dialog is open */
 const stackingFile = ref(null)
 const stackTarget = ref(null)
-/** The Assets it can join: the same kind of media, and stacks this Member may change (story 131) */
-const stackOptions = computed(() => (project.value?.assets ?? [])
-	.filter((asset) => asset.canWrite && stackKind(asset.versions) === mediaKind(stackingFile.value?.mimeType))
-	.map((asset) => ({ id: asset.id, label: asset.name })))
+const stackOptions = computed(() => stackOptionsFor(stackingFile.value))
+
+/**
+ * @param {?object} file - a file not up for review
+ * @return {object[]} the Assets it can join: the same kind of media, and stacks this Member may change (story 131)
+ */
+function stackOptionsFor(file) {
+	return (project.value?.assets ?? [])
+		.filter((asset) => asset.canWrite && stackKind(asset.versions) === mediaKind(file?.mimeType))
+		.map((asset) => ({ id: asset.id, label: asset.name }))
+}
 
 /**
  * @param {string} url - WebDAV URL of the file
@@ -203,14 +210,14 @@ async function rename(name) {
  * @param {object} file - a media file in the folder that is no Asset
  */
 function openFileMenu(event, file) {
-	const canWrite = project.value.canWrite
+	const canWrite = file.canWrite
 	const dir = projectDir(project.value.path) + (file.path ? '/' + file.path : '')
 	menu.value = {
 		x: event.clientX,
 		y: event.clientY,
 		items: [
 			canWrite && { label: t('deliver', 'Add for review'), icon: addIcon, action: () => add(file) },
-			canWrite && { label: t('deliver', 'Add as a new Version of…'), icon: newVersionIcon, action: () => openStacking(file) },
+			canWrite && stackOptionsFor(file).length > 0 && { label: t('deliver', 'Add as a new Version of…'), icon: newVersionIcon, action: () => openStacking(file) },
 			...fileItems(davFolder(file.path) + '/' + encodeURIComponent(file.name), file.name, canWrite),
 			{ label: t('deliver', 'Show in Files'), icon: filesIcon, href: generateUrl('/apps/files/files/{fileId}', { fileId: file.fileId }) + '?' + new URLSearchParams({ dir, opendetails: 'true' }) },
 		].filter(Boolean),
@@ -231,8 +238,7 @@ async function addAsVersion() {
 	stackingFile.value = null
 	adding.value.add(file.fileId)
 	try {
-		const enabled = await enableFile(file.fileId, project.value.id)
-		await stackVersion(enabled.versionId, stackTarget.value.id)
+		await enableFile(file.fileId, null, stackTarget.value.id)
 	} catch (e) {
 		error.value = errorMessage(e)
 	} finally {
@@ -547,7 +553,7 @@ function dropped(event) {
 						:key="file.fileId"
 						:file="file"
 						:where="file.path ? file.path : project.name"
-						:canAdd="project.canWrite"
+						:canAdd="file.canWrite"
 						:adding="adding.has(file.fileId)"
 						@add="add(file)"
 						@contextmenu.prevent="openFileMenu($event, file)"

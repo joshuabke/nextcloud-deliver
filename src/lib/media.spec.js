@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { acceptFor, isStill, mediaKind, reviewable, stackKind } from './media.js'
+import { acceptFor, extensionOf, isStill, mediaKind, reviewable, stackKind } from './media.js'
 
 describe('media kinds', () => {
 	it('reviews video, audio and the stills browsers show', () => {
@@ -17,5 +17,9 @@ describe('media kinds', () => {
 		expect(isStill({ mimeType: 'image/jpeg' })).toBe(true)
 		expect(isStill({ mimeType: 'video/mp4' })).toBe(false)
 		expect(isStill(null)).toBe(false)
+	})
+
+	it('reads the extension a rename keeps', () => {
+		expect(['cut.MP4', 'cut.v2.mov', 'cut', '.hidden'].map(extensionOf)).toEqual(['.mp4', '.mov', '', ''])
 	})
 })

@@ -1,9 +1,10 @@
 <script setup>
 import { t } from '@nextcloud/l10n'
-import { nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
+import { extensionOf } from '../lib/media.js'
 
 const props = defineProps({
 	/** The file's current name */
@@ -14,6 +15,8 @@ const emit = defineEmits(['rename', 'close'])
 
 const value = ref(props.name)
 const field = ref(null)
+const extension = extensionOf(props.name)
+const keepsExtension = computed(() => extensionOf(value.value.trim()) === extension)
 
 // The name without its extension is selected, as Files does it
 onMounted(async () => {
@@ -24,9 +27,12 @@ onMounted(async () => {
 	input?.setSelectionRange(0, dot > 0 ? dot : props.name.length)
 })
 
-/** Hands the new name on, unless nothing changed */
+/** Hands the new name on, unless nothing changed; a new extension is refused */
 function submit() {
 	const name = value.value.trim()
+	if (!keepsExtension.value) {
+		return
+	}
 	if (name && name !== props.name) {
 		emit('rename', name)
 	}
@@ -40,7 +46,12 @@ function submit() {
 		size="small"
 		@closing="emit('close')">
 		<form id="deliver-rename" @submit.prevent="submit">
-			<NcTextField ref="field" v-model="value" :label="t('deliver', 'Name')" />
+			<NcTextField
+				ref="field"
+				v-model="value"
+				:label="t('deliver', 'Name')"
+				:error="!keepsExtension"
+				:helperText="keepsExtension ? '' : t('deliver', 'Keep the extension {extension}.', { extension })" />
 		</form>
 		<p class="deliver-rename__hint">
 			{{ t('deliver', 'Don\'t rename files that are actively being worked on outside of Deliver.') }}
@@ -50,7 +61,7 @@ function submit() {
 				type="submit"
 				form="deliver-rename"
 				variant="primary"
-				:disabled="!value.trim()">
+				:disabled="!value.trim() || !keepsExtension">
 				{{ t('deliver', 'Rename') }}
 			</NcButton>
 		</template>

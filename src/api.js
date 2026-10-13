@@ -45,9 +45,10 @@ export const getAssetForFile = (fileId) => axios.get(url(`/files/${fileId}/asset
 /**
  * @param {number} fileId - a media file
  * @param {?number} projectId - its Project, 0 for No Project; without one it joins the Folder Project above it, else No Project
+ * @param {?number} assetId - the Asset it becomes the next Version of, instead of an Asset of its own
  * @return {Promise<object>} the Asset as the Files sidebar shows it
  */
-export const enableFile = (fileId, projectId = null) => axios.post(url('/assets'), projectId === null ? { fileId } : { fileId, projectId }).then(data)
+export const enableFile = (fileId, projectId = null, assetId = null) => axios.post(url('/assets'), { fileId, projectId, assetId }).then(data)
 // Puts an Asset into a Project, or into No Project for 0; no file moves
 export const assignAsset = (id, projectId) => axios.put(url(`/assets/${id}/project`), { projectId }).then(data)
 export const updateAsset = (id, fields) => axios.put(url(`/assets/${id}`), fields).then(data)
@@ -211,10 +212,7 @@ export async function uploadNextVersion(folderUrl, file, assetId, kind) {
 	if (kind && theirs && theirs !== kind) {
 		throw new Error(t('deliver', 'A Version Stack holds one kind of media: video, audio or stills.'))
 	}
-	const asset = await enableFile(await uploadVersion(folderUrl, file))
-	if (asset.assetId !== assetId) {
-		await stackVersion(asset.versionId, assetId)
-	}
+	const asset = await enableFile(await uploadVersion(folderUrl, file), null, assetId)
 	handInWaveform(file, asset)
 	return asset.versionId
 }

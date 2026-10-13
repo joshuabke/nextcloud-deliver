@@ -37,3 +37,11 @@ export const acceptFor = (mimeType) => mediaKind(mimeType) ? mediaKind(mimeType)
  * @return {boolean} whether it is a still
  */
 export const isStill = (version) => STILL.test(version?.mimeType ?? '')
+
+/**
+ * Nextcloud reads a file's type from its name, so a rename keeps the extension (story 131)
+ *
+ * @param {string} name - a filename
+ * @return {string} its extension with the dot, lower case; '' for none
+ */
+export const extensionOf = (name) => name.lastIndexOf('.') > 0 ? name.slice(name.lastIndexOf('.')).toLowerCase() : ''

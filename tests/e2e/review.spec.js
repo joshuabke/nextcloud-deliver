@@ -154,6 +154,9 @@ test.describe('Review view', () => {
 		await page.getByRole('menuitem', { name: 'Rename…' }).click()
 		const rename = page.getByRole('dialog', { name: 'Rename file' })
 		await expect(rename).toContainText('actively being worked on')
+		// Nextcloud reads the type from the extension, so it stays
+		await rename.getByLabel('Name').fill('renamed.mov')
+		await expect(rename.getByRole('button', { name: 'Rename' })).toBeDisabled()
 		await rename.getByLabel('Name').fill('renamed.webm')
 		await rename.getByRole('button', { name: 'Rename' }).click()
 		const renamed = card(page, 'renamed')
@@ -501,11 +504,6 @@ async function testUser(playwright) {
 }
 
 /**
- * @param {import('@playwright/test').APIRequestContext} api - request context
- * @param {string} dav - WebDAV path of the folder
- * @return {Promise<number>} the Nextcloud file id
- */
-/**
  * @param {import('@playwright/test').Page} page - the Project view
  * @param {string} name - an Asset's name; "8 seconds ago" below it would match "second" by text alone
  * @return {import('@playwright/test').Locator} its card
@@ -514,6 +512,11 @@ function card(page, name) {
 	return page.locator('.deliver-card').filter({ has: page.locator('.deliver-card__name', { hasText: new RegExp(`^\\s*${name}\\s*$`) }) })
 }
 
+/**
+ * @param {import('@playwright/test').APIRequestContext} api - request context
+ * @param {string} dav - WebDAV path of the folder
+ * @return {Promise<number>} the Nextcloud file id
+ */
 async function fileId(api, dav) {
 	const response = await api.fetch(dav, {
 		method: 'PROPFIND',
