@@ -11,6 +11,7 @@ use OCA\Deliver\Db\CommentMapper;
 use OCA\Deliver\Db\MuteMapper;
 use OCA\Deliver\Db\Project;
 use OCA\Deliver\Db\ProjectMapper;
+use OCA\Deliver\Db\RemovedMapper;
 use OCA\Deliver\Db\Version;
 use OCA\Deliver\Db\VersionMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -43,6 +44,7 @@ class ProjectService {
 		private CommentMapper $comments,
 		private ApprovalMapper $approvals,
 		private MuteMapper $mutes,
+		private RemovedMapper $removed,
 		private StackService $stacks,
 		private DerivedMedia $media,
 		private IRootFolder $root,
@@ -617,7 +619,14 @@ class ProjectService {
 	public function disableAsset(string $uid, int $assetId): void {
 		$asset = $this->assets->find($assetId) ?? throw new NotFoundException('Asset not found');
 		$this->writableAsset($uid, $asset);
+		$projectId = $asset->getProjectId();
+		$folderProject = $projectId !== null && $this->projects->find($projectId)->getFolderId() !== null;
 		foreach ($this->versions->findByAsset($assetId) as $version) {
+			// Removed from a Folder Project, its files in the folder stay out of Auto Intake (story 132)
+			$file = $folderProject ? $this->root->getFirstNodeById($version->getFileId()) : null;
+			if ($file !== null && $this->projects->findAbove($file)?->getId() === $projectId) {
+				$this->removed->mark($projectId, $version->getFileId());
+			}
 			$this->stacks->purge($version);
 		}
 	}
@@ -807,12 +816,14 @@ class ProjectService {
 
 	/**
 	 * The media files under a node that no Project holds, by path. With Auto
-	 * Intake on, none, unless the intake itself asks.
+	 * Intake on, only those a Member removed; for the intake itself, all but
+	 * those.
 	 *
 	 * @return list<File>
 	 */
 	private function looseFiles(Project $project, Node $node, bool $forIntake = false): array {
-		if ($project->getAutoIntake() && !$forIntake) {
+		$removed = $forIntake || $project->getAutoIntake() ? array_flip($this->removed->fileIds($project->getId())) : null;
+		if ($removed === [] && !$forIntake) {
 			return [];
 		}
 		$files = match (true) {
@@ -824,7 +835,7 @@ class ProjectService {
 			static fn (Version $version) => $version->getFileId(),
 			$this->versions->findByFiles(array_map(static fn (File $file) => $file->getId(), $files)),
 		));
-		$loose = array_values(array_filter($files, static fn (File $file) => !isset($known[$file->getId()])));
+		$loose = array_values(array_filter($files, static fn (File $file) => !isset($known[$file->getId()]) && ($removed === null || isset($removed[$file->getId()]) !== $forIntake)));
 		usort($loose, static fn (File $a, File $b) => strcmp($a->getPath(), $b->getPath()));
 		return $loose;
 	}

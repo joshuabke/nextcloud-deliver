@@ -15,6 +15,7 @@ use OCA\Deliver\Db\Project;
 use OCA\Deliver\Db\ProjectLinkMapper;
 use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\ReactionMapper;
+use OCA\Deliver\Db\RemovedMapper;
 use OCA\Deliver\Db\SeenMapper;
 use OCA\Deliver\Db\Version;
 use OCA\Deliver\Db\VersionMapper;
@@ -45,6 +46,7 @@ class StackService {
 		private NotificationService $notifications,
 		private ReviewerMail $reviewerMail,
 		private MuteMapper $mutes,
+		private RemovedMapper $removed,
 		private IRootFolder $root,
 		private ITimeFactory $time,
 		private IDBConnection $db,
@@ -61,11 +63,19 @@ class StackService {
 	 *
 	 * @param ?Project $project null for No Project
 	 * @param ?string $enabledBy the Member who enabled it; null for Auto Intake
+	 * @return ?Version null when Auto Intake leaves out a file a Member removed (story 132)
 	 */
-	public function intake(?Project $project, File $file, ?string $enabledBy = null): Version {
+	public function intake(?Project $project, File $file, ?string $enabledBy = null): ?Version {
 		$known = $this->versions->findByFile($file->getId());
 		if ($known !== null) {
 			return $known;
+		}
+		if ($project !== null && $enabledBy === null && $this->removed->isRemoved($project->getId(), $file->getId())) {
+			return null;
+		}
+		if ($project !== null && $enabledBy !== null) {
+			// Added for review again, Auto Intake may follow it once more
+			$this->removed->lift($project->getId(), $file->getId());
 		}
 		$suggestion = VersionNaming::parse($file->getName());
 		$target = $suggestion === null ? null : $this->onlyCandidate($project, $file, $suggestion['base'], $enabledBy);
@@ -323,6 +333,7 @@ class StackService {
 		$this->assets->release($project->getId(), $uid);
 		$this->versions->release($project->getId());
 		$this->mutes->deleteByProject($project->getId());
+		$this->removed->deleteByProject($project->getId());
 		// Its Project Links go with it (ADR 0010)
 		foreach ($this->projectLinks->findAllOf($project->getId()) as $link) {
 			$this->activity->deleteByToken($link->getToken());

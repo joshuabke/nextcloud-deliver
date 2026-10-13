@@ -41,7 +41,7 @@ const { busy, error, run } = useBusy()
 
 const isFolder = computed(() => props.node?.type === 'folder')
 const canWrite = computed(() => ((props.node?.permissions ?? 0) & Permission.UPDATE) !== 0)
-// Auto Intake decides for every media file in the folder, so single files cannot opt out
+// Auto Intake holds a file in its folder's Project; removing it keeps it out (story 132), moving it elsewhere does not
 const ownedByAutoIntake = computed(() => !isFolder.value && asset.value?.autoIntake === true)
 const NO_PROJECT = { id: 0, label: t('deliver', 'No Project') }
 const projectOptions = computed(() => [
@@ -130,9 +130,9 @@ function toggle(checked) {
 		if (checked) {
 			asset.value = await enableFile(props.node.fileid)
 		} else if (await confirmRemoval(
-			t('deliver', 'Take this file out of Deliver?'),
+			asset.value.projectId ? t('deliver', 'Remove this file from the Project?') : t('deliver', 'Remove this file from Deliver?'),
 			t('deliver', 'Its Comments and Versions are deleted. The file itself stays untouched.'),
-			t('deliver', 'Take out'),
+			t('deliver', 'Remove'),
 		)) {
 			await disableAsset(asset.value.assetId)
 			asset.value = null
@@ -182,12 +182,12 @@ async function remove() {
 			v-else
 			type="switch"
 			:modelValue="asset !== null"
-			:disabled="busy || !canWrite || ownedByAutoIntake"
+			:disabled="busy || !canWrite"
 			@update:modelValue="toggle">
 			{{ t('deliver', 'Review in Deliver') }}
 		</NcCheckboxRadioSwitch>
 		<p v-if="ownedByAutoIntake" class="deliver-tab__hint">
-			{{ t('deliver', 'This folder is on Auto Intake. Switch it off in the folder to pick files one by one.') }}
+			{{ t('deliver', 'This folder is on Auto Intake, so the file stays in its Project. Removed, it stays out until it is added for review again.') }}
 		</p>
 		<p v-else-if="!canWrite" class="deliver-tab__hint">
 			{{ isFolder
