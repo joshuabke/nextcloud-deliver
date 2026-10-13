@@ -128,6 +128,7 @@ class ProjectService {
 				'name' => $file->getName(),
 				'path' => ltrim(substr(dirname($file->getPath()), strlen($folder->getPath())), '/'),
 				'mimeType' => $file->getMimetype(),
+				'canWrite' => self::canWrite($file),
 			], $this->looseFiles($project, $folder)),
 		];
 	}
@@ -179,10 +180,27 @@ class ProjectService {
 		$this->assertNotNested($home, $folder);
 
 		$project = $this->insert($uid, $folderId, $folder->getName(), $autoIntake);
+		$this->takeFromNoProject($project, $folder, $uid);
 		if ($autoIntake) {
 			$this->intakeFolder($project, $folder);
 		}
 		return $this->serialize($project, $folder, $uid);
+	}
+
+	/**
+	 * Assets of No Project with a file in the folder join the Folder Project it
+	 * becomes, so a Project removed and made again gets its Assets back with
+	 * their review data (story 9).
+	 */
+	private function takeFromNoProject(Project $project, Folder $folder, string $uid): void {
+		$fileIds = array_map(static fn (File $file) => $file->getId(), iterator_to_array($this->mediaFiles($folder), false));
+		$assetIds = array_unique(array_map(static fn (Version $version) => $version->getAssetId(), $this->versions->findByFiles($fileIds)));
+		foreach ($assetIds as $assetId) {
+			$asset = $this->assets->find($assetId);
+			if ($asset !== null && $asset->getProjectId() === null) {
+				$this->stacks->assign($asset, $project, $uid);
+			}
+		}
 	}
 
 	/**
@@ -276,18 +294,26 @@ class ProjectService {
 	 * Enables one media file for review (story 1), without its folder ever
 	 * becoming a Project (ADR 0009). It goes to the Project given, to No
 	 * Project for 0, and otherwise to the nearest Folder Project above it,
-	 * else to No Project.
+	 * else to No Project. With an Asset given, it becomes that Asset's next
+	 * Version instead, in one step (stories 17 and 131).
 	 *
-	 * @throws NotFoundException the user cannot reach the file or the Project
-	 * @throws AccessDeniedException the file is read-only for the user
+	 * @throws NotFoundException the user cannot reach the file, the Project or the Asset
+	 * @throws AccessDeniedException the file or the Asset is read-only for the user
 	 * @throws ProjectConflictException it is not a media file
+	 * @throws InvalidRequestException the Asset holds another kind of media
 	 */
-	public function enableFile(string $uid, int $fileId, ?int $projectId = null): array {
+	public function enableFile(string $uid, int $fileId, ?int $projectId = null, ?int $assetId = null): array {
 		$file = $this->root->getUserFolder($uid)->getFirstNodeById($fileId) ?? throw new NotFoundException('File not found');
 		if (!$file instanceof File || !Reviewable::file($file)) {
 			throw new ProjectConflictException('Only a video, audio or picture file can be enabled for review');
 		}
 		$this->assertWritable($file);
+		if ($assetId !== null) {
+			$asset = $this->assets->find($assetId) ?? throw new NotFoundException('Asset not found');
+			$this->assertSameKind($uid, $this->writableAsset($uid, $asset), $file);
+			$this->stacks->intakeOnto($asset, $file, $uid);
+			return $this->assetForFile($uid, $fileId);
+		}
 		$project = match (true) {
 			$projectId === null => $this->projects->findAbove($file),
 			$projectId === self::NONE => null,
@@ -382,11 +408,9 @@ class ProjectService {
 	public function stackVersion(string $uid, int $versionId, int $assetId, ?int $number): array {
 		$version = $this->writableVersion($uid, $versionId);
 		$newest = $this->writableAsset($uid, $this->assets->find($assetId) ?? throw new NotFoundException('Asset not found'));
-		$home = $this->root->getUserFolder($uid);
-		$file = $home->getFirstNodeById($version->getFileId());
-		$other = $home->getFirstNodeById($newest->getFileId());
-		if ($file instanceof File && $other instanceof File && Reviewable::kind($file->getMimetype()) !== Reviewable::kind($other->getMimetype())) {
-			throw new InvalidRequestException('A Version Stack holds one kind of media: video, audio or stills');
+		$file = $this->root->getUserFolder($uid)->getFirstNodeById($version->getFileId());
+		if ($file instanceof File) {
+			$this->assertSameKind($uid, $newest, $file);
 		}
 		return $this->versionPayload($this->stacks->stack($version, $assetId, $number), $uid);
 	}
@@ -440,6 +464,14 @@ class ProjectService {
 			throw new AccessDeniedException('Write permission is required');
 		}
 		return $version;
+	}
+
+	/** @throws InvalidRequestException the file is another kind of media than the Version's */
+	private function assertSameKind(string $uid, Version $version, File $file): void {
+		$other = $this->root->getUserFolder($uid)->getFirstNodeById($version->getFileId());
+		if ($other instanceof File && Reviewable::kind($file->getMimetype()) !== Reviewable::kind($other->getMimetype())) {
+			throw new InvalidRequestException('A Version Stack holds one kind of media: video, audio or stills');
+		}
 	}
 
 	/** @throws AccessDeniedException the Asset's newest file is read-only for this user */
@@ -619,13 +651,12 @@ class ProjectService {
 	public function disableAsset(string $uid, int $assetId): void {
 		$asset = $this->assets->find($assetId) ?? throw new NotFoundException('Asset not found');
 		$this->writableAsset($uid, $asset);
-		$projectId = $asset->getProjectId();
-		$folderProject = $projectId !== null && $this->projects->find($projectId)->getFolderId() !== null;
 		foreach ($this->versions->findByAsset($assetId) as $version) {
-			// Removed from a Folder Project, its files in the folder stay out of Auto Intake (story 132)
-			$file = $folderProject ? $this->root->getFirstNodeById($version->getFileId()) : null;
-			if ($file !== null && $this->projects->findAbove($file)?->getId() === $projectId) {
-				$this->removed->mark($projectId, $version->getFileId());
+			// Removed, its files stay out of the Auto Intake of the Folder Project they lie in, whichever Project held them (story 132)
+			$file = $this->root->getFirstNodeById($version->getFileId());
+			$above = $file === null ? null : $this->projects->findAbove($file);
+			if ($above !== null) {
+				$this->removed->mark($above->getId(), $version->getFileId());
 			}
 			$this->stacks->purge($version);
 		}
@@ -911,6 +942,12 @@ class ProjectService {
 					'state' => $version->getState(),
 					'name' => $version->getName(),
 					'mimeType' => $file?->getMimeType(),
+					// To download and rename the newest one through WebDAV; null while Missing, and for the older ones
+					'url' => $file === null || $version !== $stack[0] ? null : $this->davUrl($uid, $file),
+					'createdAt' => $version->getCreatedAt(),
+					// The card's runtime, once probed
+					'durationFrames' => $version->getDurationFrames(),
+					'fps' => ['num' => $version->getFpsNum(), 'den' => $version->getFpsDen()],
 					'autoStacked' => (bool)$version->getAutoStacked(),
 					'comments' => $commentCounts[$version->getId()] ?? 0,
 					'unseen' => $unseen[$version->getId()] ?? 0,

@@ -1,5 +1,6 @@
-import { DialogBuilder } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
+import { spawnDialog } from '@nextcloud/vue/functions/dialog'
+import ConfirmDialog from './components/ConfirmDialog.vue'
 
 /**
  * Asks before something is deleted.
@@ -10,15 +11,7 @@ import { t } from '@nextcloud/l10n'
  * @return {Promise<boolean>} whether the person confirmed
  */
 export function confirmRemoval(title, text, confirm) {
-	return new Promise((resolve) => {
-		new DialogBuilder(title)
-			.setText(text)
-			.addButton({ label: t('deliver', 'Cancel'), callback: () => resolve(false) })
-			.addButton({ label: confirm, variant: 'error', callback: () => resolve(true) })
-			.build()
-			.show()
-			.then(() => resolve(false))
-	})
+	return spawnDialog(ConfirmDialog, { name: title, message: text, confirm })
 }
 
 /**

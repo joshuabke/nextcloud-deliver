@@ -121,8 +121,8 @@ class ProjectApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
-	public function enableFile(int $fileId, ?int $projectId = null): Response {
-		return $this->guard(fn () => $this->service->enableFile((string)$this->userId, $fileId, $projectId), Http::STATUS_CREATED);
+	public function enableFile(int $fileId, ?int $projectId = null, ?int $assetId = null): Response {
+		return $this->guard(fn () => $this->service->enableFile((string)$this->userId, $fileId, $projectId, $assetId), Http::STATUS_CREATED);
 	}
 
 	#[NoAdminRequired]
