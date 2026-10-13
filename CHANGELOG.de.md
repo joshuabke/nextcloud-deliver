@@ -1,5 +1,15 @@
 # Änderungen
 
+## 0.8.4 – 2026-10-13
+
+- Jede Karte hat neben ihrem Namen einen „…“-Knopf, auf jedem Bildschirm, der dasselbe Menü öffnet wie ein Rechtsklick oder langes Drücken. Die Einstellungen eines Projekts sind vom Zahnrad in dieses Menü gewandert.
+- Asset-Karten zeigen Version, Abnahme, Kommentare und Laufzeit in den Ecken ihres Standbilds, „Fehlt“ oder „Wird verarbeitet“ anstelle der Laufzeit, unter dem Namen, wann die neueste Version kam, und beim Zeigen auf den Namen den Dateinamen.
+- Mediendateien in einem Ordnerprojekt, die nicht im Review sind, haben ein eigenes Menü: zum Review hinzufügen, als neue Version eines Assets derselben Art hinzufügen, herunterladen, umbenennen und in Dateien zeigen. Auch das Menü eines Assets kann die Datei der neuesten Version herunterladen und umbenennen. Beim Umbenennen bleibt die Dateiendung, damit eine Datei nie ihre Art wechselt.
+- Ein entferntes Asset bleibt mit seinen Dateien aus der Automatischen Aufnahme heraus, auch nach Umbenennen, Verschieben im Ordner, Überschreiben oder Aus- und Einschalten der Automatischen Aufnahme. Die Dateien warten unter „Nicht im Review“, bis jemand sie wieder hinzufügt. Das gilt auch in der Seitenleiste von Dateien, wo sich „Review in Deliver“ jetzt auch für eine Datei in einem Ordner mit Automatischer Aufnahme ausschalten lässt. „Aus Deliver herausnehmen“ heißt jetzt „Aus Projekt entfernen“, Ohne Projekt „Aus Deliver entfernen“.
+- Wird ein entferntes Projekt aus seinem Ordner neu angelegt, bekommt es seine Assets samt Kommentaren aus Ohne Projekt zurück.
+- Bestätigungen wachsen mit ihrer Überschrift, damit die deutschen hineinpassen.
+- API: `POST /assets` nimmt eine `assetId` und fügt die Datei in einem Schritt als nächste Version dieses Assets hinzu.
+
 ## 0.8.3 – 2026-10-09
 
 - Reviewer haben ein eigenes Menü unter ihrem Avatar oben im Review, wie bei Frame.io: Name und Adresse ändern, wählen, was gemailt wird, zwischen Deutsch und Englisch wechseln und die Sitzung beenden, damit sich die nächste Person neu einträgt.

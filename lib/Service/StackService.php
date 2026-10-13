@@ -83,6 +83,22 @@ class StackService {
 	}
 
 	/**
+	 * Adds a file to an Asset as its next Version by a Member's choice
+	 * (stories 17 and 131); a file in review already moves over.
+	 */
+	public function intakeOnto(Asset $asset, File $file, string $enabledBy): Version {
+		$known = $this->versions->findByFile($file->getId());
+		if ($known !== null) {
+			return $this->stack($known, $asset->getId(), null);
+		}
+		$projectId = $asset->getProjectId();
+		if ($projectId !== null) {
+			$this->removed->lift($projectId, $file->getId());
+		}
+		return $this->register(null, $file, $this->nextNumber($asset->getId()), $asset, $enabledBy, false);
+	}
+
+	/**
 	 * The Asset in the file's folder and Project with this base name and the
 	 * same kind of media. Null when there is none, or more than one: then a
 	 * Member decides (story 14).
@@ -133,8 +149,8 @@ class StackService {
 	 * is stacked automatically. When a concurrent request registered the same
 	 * file first, that Version wins.
 	 */
-	private function register(?Project $project, File $file, int $number, ?Asset $asset, ?string $enabledBy): Version {
-		$stacked = $asset !== null;
+	private function register(?Project $project, File $file, int $number, ?Asset $asset, ?string $enabledBy, bool $auto = true): Version {
+		$stacked = $asset !== null && $auto;
 		$this->db->beginTransaction();
 		try {
 			if ($asset === null) {
