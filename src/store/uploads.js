@@ -48,7 +48,8 @@ const writeRecords = (records) => localStorage.setItem(RECORDS, JSON.stringify(r
  */
 export function settled(item) {
 	const version = item.version
-	if (!version) {
+	// Until its Version is read for the first time, nothing is known
+	if (!version?.derived) {
 		return false
 	}
 	const running = KINDS.some((kind) => ['queued', 'running'].includes(version.derived?.[kind]?.state))

@@ -196,8 +196,11 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 				@dragover.prevent="dragging = true"
 				@dragleave="dragging = false"
 				@drop.prevent="dropped">
-				<NcIconSvgWrapper :svg="uploadIcon" :size="32" />
-				<span>{{ t('deliver', 'Drop files here to upload them into {where}', { where: store.target.where }) }}</span>
+				<!-- Phones have no dropping, only the button (story 109) -->
+				<template v-if="!isMobile">
+					<NcIconSvgWrapper :svg="uploadIcon" :size="32" />
+					<span>{{ t('deliver', 'Drop files here to upload them into {where}', { where: store.target.where }) }}</span>
+				</template>
 				<NcButton variant="primary" @click="picker.click()">
 					{{ t('deliver', 'Choose files') }}
 				</NcButton>
