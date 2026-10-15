@@ -91,11 +91,16 @@ test.describe('Review view', () => {
 
 	test('uploads into the Project, then filters and finds its Assets', async () => {
 		await page.goto(`/apps/deliver/projects/${projectId}`)
-		await page.locator('input[type=file][multiple]').setInputFiles({ name: 'second.webm', mimeType: 'video/webm', buffer: readFileSync(CLIP) })
+		// The upload button opens the Uploads dialog (story 133)
+		await page.getByRole('button', { name: 'Upload', exact: true }).click()
+		const uploads = page.getByRole('dialog', { name: 'Uploads' })
+		await uploads.locator('input[type=file][multiple]').setInputFiles({ name: 'second.webm', mimeType: 'video/webm', buffer: readFileSync(CLIP) })
+		// Auto Intake would take the file anyway; the upload itself must not fail
+		await expect(uploads.getByText('Open', { exact: true })).toBeVisible()
+		await expect(uploads.locator('.deliver-uploads__status--error')).toHaveCount(0)
+		await page.keyboard.press('Escape')
 		const second = card(page, 'second')
 		await expect(second).toBeVisible()
-		// Auto Intake would take the file anyway; the upload itself must not fail
-		await expect(page.locator('.deliver-project .notecard')).toHaveCount(0)
 
 		await page.getByRole('button', { name: /^Changes requested/ }).click()
 		await expect(page).toHaveURL(/filter=changes/)
@@ -124,8 +129,11 @@ test.describe('Review view', () => {
 			}
 		}, [...readFileSync(CLIP)])
 		await expect(card(page, 'third')).toBeVisible()
-		await expect(page.locator('.deliver-project .notecard')).toContainText('Only video, audio and image files')
 		await expect(page.locator('.deliver-card', { hasText: 'notes' })).toHaveCount(0)
+		// They go with the card in the corner, which opens the dialog again (story 134)
+		await page.locator('.deliver-uploads-card__open').click()
+		await expect(uploads).toContainText('Only video, audio and image files')
+		await page.keyboard.press('Escape')
 
 		// A Version Stack is managed from its card, not in the Review view
 		await second.click({ button: 'right' })
