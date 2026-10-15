@@ -2,7 +2,6 @@ import axios from '@nextcloud/axios'
 import { getLanguage, t } from '@nextcloud/l10n'
 import { generateOcsUrl, generateUrl } from '@nextcloud/router'
 import { baseLanguage } from './lib/language.js'
-import { mediaKind } from './lib/media.js'
 import { decodeWaveform } from './lib/waveform.js'
 
 /** Set on the public review page; Members leave it null and use the OCS API */
@@ -160,28 +159,6 @@ export const forgetReviewer = () => axios.delete(url('/reviewer'))
 export const listPublicAssets = () => axios.get(url('/assets')).then(data)
 
 /**
- * Drop upload: puts the file into a folder through Nextcloud's own WebDAV
- * (spec: Discovery and stacking). It never replaces a file of the same name.
- *
- * @param {string} folderUrl - WebDAV URL of the folder, without a trailing slash
- * @param {File} file - what was dropped
- * @return {Promise<number>} the Nextcloud file id of the upload
- */
-export async function uploadVersion(folderUrl, file) {
-	const target = `${folderUrl}/${encodeURIComponent(file.name)}`
-	// Ask first, so a taken name is refused now rather than after the whole upload
-	const taken = await axios.head(target).then(() => true, () => false)
-	if (taken) {
-		throw Object.assign(new Error('taken'), { response: { status: 412 } })
-	}
-	const response = await axios.put(target, file, {
-		headers: { 'Content-Type': file.type || 'application/octet-stream', 'If-None-Match': '*' },
-	})
-	// OC-FileId carries the instance id after the number, as in 00000123ocabc123
-	return parseInt(response.headers['oc-fileid'], 10)
-}
-
-/**
  * Renames a file in its folder through Nextcloud's own WebDAV (story 131);
  * Deliver follows the rename. It never replaces a file of the same name.
  *
@@ -194,27 +171,6 @@ export function renameFile(url, name) {
 		url,
 		headers: { Destination: url.slice(0, url.lastIndexOf('/') + 1) + encodeURIComponent(name), Overwrite: 'F' },
 	})
-}
-
-/**
- * Uploads a file next to the newest Version and stacks it on top as the next
- * Version (story 17).
- *
- * @param {string} folderUrl - WebDAV URL of the folder, without a trailing slash
- * @param {File} file - the new cut
- * @param {number} assetId - the Asset it belongs to
- * @param {string|null} kind - the kind of media of its Version Stack, from stackKind; null when unknown
- * @return {Promise<number>} the id of the new Version
- */
-export async function uploadNextVersion(folderUrl, file, assetId, kind) {
-	// Checked before the upload: a file of another kind would land in the folder as an Asset of its own
-	const theirs = mediaKind(file.type)
-	if (kind && theirs && theirs !== kind) {
-		throw new Error(t('deliver', 'A Version Stack holds one kind of media: video, audio or stills.'))
-	}
-	const asset = await enableFile(await uploadVersion(folderUrl, file), null, assetId)
-	handInWaveform(file, asset)
-	return asset.versionId
 }
 
 /**

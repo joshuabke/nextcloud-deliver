@@ -1,6 +1,7 @@
 <script setup>
 import NcAppContent from '@nextcloud/vue/components/NcAppContent'
 import NcContent from '@nextcloud/vue/components/NcContent'
+import UploadsPanel from './components/UploadsPanel.vue'
 </script>
 
 <template>
@@ -9,5 +10,6 @@ import NcContent from '@nextcloud/vue/components/NcContent'
 		<NcAppContent>
 			<RouterView />
 		</NcAppContent>
+		<UploadsPanel />
 	</NcContent>
 </template>

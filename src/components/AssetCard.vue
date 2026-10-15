@@ -52,6 +52,9 @@ const status = computed(() => {
 	if (newest.value.state === 'missing') {
 		return { text: t('deliver', 'Missing'), kind: 'warning' }
 	}
+	if (newest.value.processingFailed) {
+		return { text: t('deliver', 'Processing failed'), kind: 'warning' }
+	}
 	if (newest.value.processing) {
 		return {
 			text: newest.value.processing.progress === null

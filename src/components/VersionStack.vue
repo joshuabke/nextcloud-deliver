@@ -6,10 +6,11 @@ import NcActionInput from '@nextcloud/vue/components/NcActionInput'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
-import { regenerateVersion, unstackVersion, updateVersion, uploadNextVersion } from '../api.js'
+import { regenerateVersion, unstackVersion, updateVersion } from '../api.js'
 import { useBusy } from '../composables/busy.js'
 import { stackKind } from '../lib/media.js'
 import { previewUrl } from '../lib/preview.js'
+import { useUploadsStore } from '../store/uploads.js'
 
 const props = defineProps({
 	/** The Version Stack of the Asset, newest first */
@@ -53,19 +54,21 @@ async function renumber(version) {
 	delete numbers.value[version.id]
 }
 
+const uploads = useUploadsStore()
+
 /**
  * Uploads the dropped file next to the newest Version and stacks it as the
- * next one (story 17).
+ * next one (story 17), with the card in the corner (story 134); the
+ * Project's Version Stacks are read again once it is there.
  *
  * @param {DragEvent} event - the drop
  */
-async function drop(event) {
+function drop(event) {
 	dragging.value = false
 	const file = event.dataTransfer?.files?.[0]
-	if (!file) {
-		return
+	if (file) {
+		uploads.add([file], { folderUrl: props.folderUrl, assetId: props.assetId, kind: stackKind(props.versions) })
 	}
-	await run(() => uploadNextVersion(props.folderUrl, file, props.assetId, stackKind(props.versions)))
 }
 </script>
 
