@@ -57,9 +57,13 @@ export function settled(item) {
 
 /**
  * @param {object} item - an upload
- * @return {boolean} whether something of it failed and can be made again
+ * @return {boolean} whether something of it failed and can be made again; a failed probe leaves only its error
  */
-export const processingFailed = (item) => hasFfmpeg && KINDS.some((kind) => item.version?.derived?.[kind]?.state === 'failed')
+export function processingFailed(item) {
+	const version = item.version
+	return KINDS.some((kind) => version?.derived?.[kind]?.state === 'failed')
+		|| (version?.playable === null && Boolean(version.derived?.error))
+}
 
 let nextId = 1
 let polling = null
@@ -257,6 +261,8 @@ export const useUploadsStore = defineStore('uploads', {
 						sleep: (seconds) => new Promise((resolve) => setTimeout(resolve, seconds * 1000)),
 						onPause: (paused) => {
 							item.status = paused ? 'paused' : 'uploading'
+							// Nothing moves while offline, so no time left is known
+							this.speed = 0
 						},
 					},
 				})

@@ -79,7 +79,10 @@ function statusOf(item) {
 	if (!item.version || item.version.playable === undefined) {
 		return t('deliver', 'Uploaded')
 	}
-	if (item.version.playable === null && !item.version.derived?.error) {
+	if (processingFailed(item)) {
+		return t('deliver', 'Processing failed')
+	}
+	if (item.version.playable === null) {
 		return t('deliver', 'Uploaded, waiting for the server to read it. That starts with the next background job.')
 	}
 	return settled(item) ? t('deliver', 'Ready') : t('deliver', 'Uploaded')
@@ -257,7 +260,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 						:value="Math.floor(item.loaded / Math.max(1, item.size) * 100)" />
 					<span
 						class="deliver-uploads__status"
-						:class="{ 'deliver-uploads__status--error': item.status === 'failed' || (item.status === 'interrupted' && item.error) }">
+						:class="{ 'deliver-uploads__status--error': item.status === 'failed' || processingFailed(item) || (item.status === 'interrupted' && item.error) }">
 						{{ item.status === 'interrupted' && item.error ? item.error : statusOf(item) }}
 					</span>
 					<ul v-if="processingOf(item).length" class="deliver-uploads__processing">
