@@ -961,6 +961,12 @@ class ProjectService {
 						[$version->getProxyState(), $version->getThumbsState(), $version->getWaveformState()],
 						[DerivedMedia::STATE_QUEUED, DerivedMedia::STATE_RUNNING],
 					) === [] ? null : ['progress' => $this->progress($version)],
+					// Its card says so, and a Member with write access starts it again (story 140)
+					'processingFailed' => in_array(
+						DerivedMedia::STATE_FAILED,
+						[$version->getProxyState(), $version->getThumbsState(), $version->getWaveformState()],
+						true,
+					),
 				];
 			}
 			$result[] = [

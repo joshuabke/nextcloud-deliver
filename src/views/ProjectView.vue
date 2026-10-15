@@ -14,12 +14,13 @@ import stackIcon from '@mdi/svg/svg/layers-outline.svg?raw'
 import newVersionIcon from '@mdi/svg/svg/layers-plus.svg?raw'
 import searchIcon from '@mdi/svg/svg/magnify.svg?raw'
 import openIcon from '@mdi/svg/svg/open-in-app.svg?raw'
+import retryIcon from '@mdi/svg/svg/refresh.svg?raw'
 import renameIcon from '@mdi/svg/svg/rename-outline.svg?raw'
 import uploadIcon from '@mdi/svg/svg/tray-arrow-up.svg?raw'
 import { t } from '@nextcloud/l10n'
 import { generateRemoteUrl, generateUrl } from '@nextcloud/router'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
@@ -37,7 +38,7 @@ import NotUpForReviewCard from '../components/NotUpForReviewCard.vue'
 import ProjectSettingsDialog from '../components/ProjectSettingsDialog.vue'
 import RenameDialog from '../components/RenameDialog.vue'
 import VersionStack from '../components/VersionStack.vue'
-import { assignAsset, disableAsset, enableFile, errorMessage, handInWaveform, renameFile, stackVersion, updateAsset, uploadNextVersion, uploadVersion } from '../api.js'
+import { assignAsset, disableAsset, enableFile, errorMessage, regenerateVersion, renameFile, stackVersion, updateAsset } from '../api.js'
 import { useQuery } from '../composables/query.js'
 import { confirmRemoval } from '../confirm.js'
 import { FILTER_LABELS, FILTERS, found, passes, SORT_OPTIONS, sortAssets, SORTS } from '../lib/filters.js'
@@ -45,6 +46,7 @@ import { groupByFolder, inFolder, projectDavPath, projectDir } from '../lib/fold
 import { acceptFor, mediaKind, stackKind } from '../lib/media.js'
 import { stackSuggestions } from '../lib/suggestions.js'
 import { useProjectsStore } from '../store/projects.js'
+import { useUploadsStore } from '../store/uploads.js'
 
 const props = defineProps({
 	id: { type: Number, required: true },
@@ -57,8 +59,7 @@ const settingsOpen = ref(false)
 /** On a phone the header keeps icons; the search opens as a row of its own (story 109) */
 const isMobile = useIsMobile()
 const searchOpen = ref(false)
-const uploading = ref(false)
-const fileInput = ref(null)
+const uploads = useUploadsStore()
 const versionInput = ref(null)
 /** The right-click menu: where, and its entries */
 const menu = ref(null)
@@ -266,27 +267,17 @@ async function add(file) {
 const dragDepth = ref(0)
 
 /**
- * Uploads files into the folder on screen and makes each an Asset right
- * away, with or without Auto Intake (story 99). Only media files go.
- *
- * @param {File[]} files - picked or dropped
+ * The Uploads dialog uploads into the folder on screen, and each file
+ * becomes an Asset right away, with or without Auto Intake (story 99)
  */
-async function upload(files) {
-	const media = files.filter((file) => /^(video|audio|image)\//.test(file.type))
-	error.value = media.length < files.length ? t('deliver', 'Only video, audio and image files are uploaded.') : null
-	const folderUrl = davFolder(folder.value)
-	uploading.value = true
-	try {
-		for (const file of media) {
-			handInWaveform(file, await enableFile(await uploadVersion(folderUrl, file), project.value.id))
-		}
-	} catch (e) {
-		error.value = errorMessage(e)
-	} finally {
-		uploading.value = false
-		await store.fetch(props.id).catch(() => {})
-	}
-}
+watchEffect(() => {
+	uploads.target = project.value && canUpload.value
+		? { folderUrl: davFolder(folder.value), projectId: project.value.id, where: folder.value ? folder.value.replace(/^\//, '') : project.value.name }
+		: null
+})
+onBeforeUnmount(() => {
+	uploads.target = null
+})
 
 /**
  * @param {string} path - a folder of the Project, '' for the Project folder, or from the Member's home with a leading slash
@@ -311,6 +302,7 @@ function openMenu(event, asset) {
 			{ label: t('deliver', 'Open'), icon: openIcon, action: () => router.push(`/versions/${newest.id}`) },
 			previous && { label: t('deliver', 'Compare with the Version before'), icon: compareIcon, action: () => router.push(`/compare/${previous.id}/${newest.id}`) },
 			asset.canWrite && { label: t('deliver', 'Upload a new Version'), icon: newVersionIcon, action: () => pickVersion(asset) },
+			asset.canWrite && newest.processingFailed && { label: t('deliver', 'Process again'), icon: retryIcon, action: () => processAgain(newest) },
 			asset.canWrite && { label: asset.dueDate ? t('deliver', 'Change the Due Date') : t('deliver', 'Set a Due Date'), icon: dueIcon, action: () => { dueFor.value = asset } },
 			asset.canWrite && !isMobile.value && { label: t('deliver', 'Manage Versions'), icon: stackIcon, action: () => { managing.value = asset.id } },
 			asset.canWrite && { label: t('deliver', 'Move to Project…'), icon: moveIcon, action: () => openAssign(asset) },
@@ -340,22 +332,26 @@ function pickVersion(asset) {
  *
  * @param {Event} event - the file input's change event
  */
-async function uploadStacked(event) {
+function uploadStacked(event) {
 	const file = event.target.files?.[0]
 	event.target.value = ''
-	if (!file || !stackOn.value) {
-		return
+	if (file && stackOn.value) {
+		uploads.add([file], { folderUrl: davFolder(stackOn.value.path), projectId: project.value.id, assetId: stackOn.value.id, kind: stackKind(stackOn.value.versions) })
 	}
-	uploading.value = true
-	error.value = null
+}
+
+/**
+ * Makes the derived media of a Version again after they failed (story 140)
+ *
+ * @param {object} version - the newest Version of an Asset
+ */
+async function processAgain(version) {
 	try {
-		await uploadNextVersion(davFolder(stackOn.value.path), file, stackOn.value.id, stackKind(stackOn.value.versions))
+		await regenerateVersion(version.id)
 	} catch (e) {
 		error.value = errorMessage(e)
-	} finally {
-		uploading.value = false
-		await store.fetch(props.id).catch(() => {})
 	}
+	await store.fetch(props.id).catch(() => {})
 }
 
 /**
@@ -393,21 +389,14 @@ async function remove(asset) {
 }
 
 /**
- * @param {Event} event - the file input's change event
- */
-function picked(event) {
-	const files = [...(event.target.files ?? [])]
-	event.target.value = ''
-	upload(files)
-}
-
-/**
+ * A drop uploads at once, with the card in the corner (story 134)
+ *
  * @param {DragEvent} event - the drop
  */
 function dropped(event) {
 	dragDepth.value = 0
-	if (canUpload.value && !uploading.value) {
-		upload([...(event.dataTransfer?.files ?? [])])
+	if (uploads.target) {
+		uploads.add([...(event.dataTransfer?.files ?? [])], uploads.target)
 	}
 }
 </script>
@@ -471,24 +460,15 @@ function dropped(event) {
 				<NcButton
 					v-if="canUpload"
 					:variant="isMobile ? 'tertiary' : 'secondary'"
-					:disabled="uploading"
 					:aria-label="t('deliver', 'Upload')"
-					@click="fileInput.click()">
+					@click="uploads.expanded = true">
 					<template #icon>
-						<NcLoadingIcon v-if="uploading" />
-						<NcIconSvgWrapper v-else :svg="uploadIcon" />
+						<NcIconSvgWrapper :svg="uploadIcon" />
 					</template>
 					<template v-if="!isMobile">
 						{{ t('deliver', 'Upload') }}
 					</template>
 				</NcButton>
-				<input
-					ref="fileInput"
-					type="file"
-					accept="video/*,audio/*,image/*"
-					multiple
-					hidden
-					@change="picked">
 				<NcButton
 					v-if="!project.none"
 					variant="tertiary"
