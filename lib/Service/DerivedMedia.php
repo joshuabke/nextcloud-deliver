@@ -555,8 +555,7 @@ class DerivedMedia {
 	}
 
 	public function maxHeight(): int {
-		// below 720p nobody reviews professionally, also when occ set it lower
-		return max(720, $this->config->getValueInt(Application::APP_ID, 'max_height', 1080));
+		return max(PipelineSettings::MIN_HEIGHT, $this->config->getValueInt(Application::APP_ID, 'max_height', 1080));
 	}
 
 	/** Only to space the thumbnails; an unknown length counts as a minute */

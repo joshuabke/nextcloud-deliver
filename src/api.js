@@ -85,6 +85,27 @@ export const decideVersion = (versionId, status) => axios.put(url(`/versions/${v
 export const giveWaveform = (versionId, peaks, durationFrames) => axios.post(url(`/versions/${versionId}/waveform`), { peaks, durationFrames }).then(data)
 let decoding = Promise.resolve()
 /**
+ * Decodes a file's Waveform after the ones before it, one at a time, so a
+ * batch of long mixes is not in memory at once.
+ *
+ * @param {Blob} file - an audio file
+ * @param {(percent: number) => void} onProgress - how far it is
+ * @return {Promise<{peaks: number[], seconds: number}>} its Waveform
+ */
+export function decodeInTurn(file, onProgress) {
+	const turn = decoding.then(() => decodeWaveform(file, onProgress))
+	decoding = turn.catch(() => {})
+	return turn
+}
+
+/**
+ * @param {number} versionId - an audio Version
+ * @param {{peaks: number[], seconds: number}} decoded - its Waveform; audio counts in milliseconds (ADR 0007), also before the probe ran
+ * @return {Promise<object>} the server's answer
+ */
+export const giveAudioWaveform = (versionId, { peaks, seconds }) => giveWaveform(versionId, peaks, Math.max(1, Math.round(seconds * 1000)))
+
+/**
  * Where the server has no ffmpeg, the browser that uploaded an audio file
  * decodes its Waveform from the file it still holds, so nobody downloads it
  * for that (spec: Media metadata and derived media). Fire and forget: without
@@ -94,14 +115,9 @@ let decoding = Promise.resolve()
  * @param {{versionId: number, waveformFromBrowser: boolean}} asset - its Asset, as getAssetForFile or enableFile give it
  */
 export function handInWaveform(file, asset) {
-	if (!asset.waveformFromBrowser) {
-		return
+	if (asset.waveformFromBrowser) {
+		decodeInTurn(file).then((decoded) => giveAudioWaveform(asset.versionId, decoded)).catch(() => {})
 	}
-	// One at a time, so a batch of long mixes is not in memory at once; audio counts in milliseconds (ADR 0007), also before the probe ran
-	decoding = decoding
-		.then(() => decodeWaveform(file))
-		.then(({ peaks, seconds }) => giveWaveform(asset.versionId, peaks, Math.max(1, Math.round(seconds * 1000))))
-		.catch(() => {})
 }
 export const markSeen = (versionId, at) => axios.post(url(`/versions/${versionId}/seen`), { at }).then(data)
 

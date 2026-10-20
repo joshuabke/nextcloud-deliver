@@ -11,7 +11,8 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcProgressBar from '@nextcloud/vue/components/NcProgressBar'
-import { hasFfmpeg, KINDS, processingFailed, settled, useUploadsStore } from '../store/uploads.js'
+import { processingFailed, processingOf, settled, statusOf, timeLeft } from '../lib/uploadStatus.js'
+import { hasFfmpeg, useUploadsStore } from '../store/uploads.js'
 
 const store = useUploadsStore()
 const isMobile = useIsMobile()
@@ -23,28 +24,6 @@ const dragging = ref(false)
 
 /** Where to read what a server without ffmpeg can do about it (story 138) */
 const FFMPEG_HELP = 'https://github.com/joshuabke/nextcloud-deliver/blob/main/docs/admin.md#derived-media'
-const KIND_LABELS = {
-	waveform: t('deliver', 'Waveform'),
-	proxy: t('deliver', 'Proxy'),
-	thumbs: t('deliver', 'Thumbnail Strip'),
-}
-
-/**
- * @param {number|null} seconds - time still needed
- * @return {string} it, as people say it
- */
-function timeLeft(seconds) {
-	if (seconds === null || !Number.isFinite(seconds)) {
-		return ''
-	}
-	if (seconds < 60) {
-		return t('deliver', 'less than a minute left')
-	}
-	const minutes = Math.ceil(seconds / 60)
-	return minutes < 60
-		? n('deliver', '%n minute left', '%n minutes left', minutes)
-		: t('deliver', '{hours} h {minutes} min left', { hours: Math.floor(minutes / 60), minutes: minutes % 60 })
-}
 
 /** One line for the card and the dialog: how far the queue is */
 const summary = computed(() => {
@@ -63,64 +42,6 @@ const summary = computed(() => {
 	}
 	return t('deliver', 'All done')
 })
-
-/**
- * @param {object} item - an upload
- * @return {string} what it is doing
- */
-function statusOf(item) {
-	switch (item.status) {
-		case 'waiting': return t('deliver', 'Waiting')
-		case 'uploading': return `${Math.floor(item.loaded / Math.max(1, item.size) * 100)} %`
-		case 'paused': return t('deliver', 'Paused until the network is back')
-		case 'interrupted': return t('deliver', 'Interrupted. Pick the file again to go on where it stopped.')
-		case 'failed': return item.error
-	}
-	if (!item.version || item.version.playable === undefined) {
-		return t('deliver', 'Uploaded')
-	}
-	if (processingFailed(item)) {
-		return t('deliver', 'Processing failed')
-	}
-	if (item.version.playable === null) {
-		return t('deliver', 'Uploaded, waiting for the server to read it. That starts with the next background job.')
-	}
-	return settled(item) ? t('deliver', 'Ready') : t('deliver', 'Uploaded')
-}
-
-/**
- * @param {object} item - a finished upload
- * @return {Array<{kind: string, label: string, text: string}>} its derived media and how far each is (story 136)
- */
-function processingOf(item) {
-	const lines = []
-	// The Waveform this browser makes, also while the file still uploads (story 137)
-	if (item.waveform && item.version?.derived?.waveform?.state !== 'ready') {
-		lines.push({
-			kind: 'browser',
-			label: t('deliver', 'Waveform, in this browser'),
-			text: { running: `${item.waveform.progress} %`, ready: t('deliver', 'Done'), failed: t('deliver', 'Failed') }[item.waveform.state],
-		})
-	}
-	const derived = item.version?.derived
-	for (const kind of derived ? KINDS : []) {
-		const state = derived[kind]?.state
-		if (state === 'none' || state === undefined || (kind === 'waveform' && lines.length && state !== 'ready')) {
-			continue
-		}
-		lines.push({
-			kind,
-			label: KIND_LABELS[kind],
-			text: {
-				queued: t('deliver', 'Waiting, starts with the next background job'),
-				running: derived.progress === null ? t('deliver', 'Running') : `${derived.progress} %`,
-				ready: t('deliver', 'Done'),
-				failed: t('deliver', 'Failed'),
-			}[state],
-		})
-	}
-	return lines
-}
 
 /**
  * @param {File[]} files - picked or dropped in the dialog
@@ -248,7 +169,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 							{{ t('deliver', 'Open') }}
 						</NcButton>
 						<NcButton
-							v-if="item.status !== 'done'"
+							v-if="item.status !== 'done' && item.status !== 'finishing'"
 							variant="tertiary"
 							:aria-label="t('deliver', 'Cancel the upload of {name}', { name: item.name })"
 							:title="t('deliver', 'Cancel')"
@@ -259,7 +180,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 						</NcButton>
 					</div>
 					<NcProgressBar
-						v-if="item.status === 'uploading' || item.status === 'paused'"
+						v-if="['uploading', 'finishing', 'paused'].includes(item.status)"
 						:value="Math.floor(item.loaded / Math.max(1, item.size) * 100)" />
 					<span
 						class="deliver-uploads__status"

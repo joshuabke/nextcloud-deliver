@@ -230,6 +230,9 @@ class DerivedMediaTest extends TestCase {
 
 	public function testALargeOriginalStaysTheDefaultAndGetsALighterProxy(): void {
 		self::assertSame(400, $this->nc->ocs('PUT', '/admin/settings', ['maxHeight' => 719])['status'], 'no Proxy below 720p');
+		[$code, $output] = $this->shell('php /var/www/html/occ config:app:set deliver max_height --value=480 --type=integer');
+		self::assertSame(0, $code, $output);
+		self::assertSame(720, $this->nc->ocs('GET', '/admin/settings')['data']['settings']['maxHeight'], 'a lower height from before counts as 720, so the form still saves');
 		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['maxHeight' => 720])['status']);
 		// Portrait H.264 at 900x1600: browsers play it, but its short side is above the limit
 		[$code, $output] = $this->shell(sprintf(

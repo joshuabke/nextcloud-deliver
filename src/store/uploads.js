@@ -4,18 +4,18 @@ import { loadState } from '@nextcloud/initial-state'
 import { t } from '@nextcloud/l10n'
 import { generateRemoteUrl } from '@nextcloud/router'
 import { defineStore } from 'pinia'
-import { enableFile, errorMessage, getVersion, giveWaveform, regenerateVersion } from '../api.js'
+import { decodeInTurn, enableFile, errorMessage, getVersion, giveAudioWaveform, regenerateVersion } from '../api.js'
 import { mediaKind } from '../lib/media.js'
-import { sameFile, uploadFile } from '../lib/upload.js'
-import { decodeWaveform } from '../lib/waveform.js'
+import { current, HEARTBEAT, sameFile, sentElsewhere, uploadFile } from '../lib/upload.js'
+import { settled } from '../lib/uploadStatus.js'
 import { useProjectsStore } from './projects.js'
 
 /** Unfinished chunked uploads, to go on with after a reload (story 135) */
 const RECORDS = 'deliver.uploads'
 /** Whether the server has ffmpeg (story 138); without it the uploading browser decodes the Waveform */
 export const hasFfmpeg = loadState('deliver', 'ffmpeg', true)
-/** Derived media kinds in the order they are listed */
-export const KINDS = ['waveform', 'proxy', 'thumbs']
+/** Statuses of an upload that is still going on */
+const ACTIVE = ['waiting', 'uploading', 'finishing', 'paused']
 
 /**
  * The server's largest chunk (files.chunked_upload.max_size), at least the
@@ -30,9 +30,7 @@ function chunkSizeFor(size) {
 	return max > 0 ? Math.max(max, 5 * 1024 * 1024, Math.ceil(size / 10000)) : 0
 }
 
-/**
- *
- */
+/** @return {object[]} the unfinished uploads of every tab */
 function readRecords() {
 	try {
 		return JSON.parse(localStorage.getItem(RECORDS)) ?? []
@@ -42,30 +40,6 @@ function readRecords() {
 }
 const writeRecords = (records) => localStorage.setItem(RECORDS, JSON.stringify(records))
 
-/**
- * @param {object} item - an upload
- * @return {boolean} whether its derived media are all made or failed, so nothing is left to watch
- */
-export function settled(item) {
-	const version = item.version
-	// Until its Version is read for the first time, nothing is known
-	if (!version?.derived) {
-		return false
-	}
-	const running = KINDS.some((kind) => ['queued', 'running'].includes(version.derived?.[kind]?.state))
-	return !running && (version.playable !== null || Boolean(version.derived?.error))
-}
-
-/**
- * @param {object} item - an upload
- * @return {boolean} whether something of it failed and can be made again; a failed probe leaves only its error
- */
-export function processingFailed(item) {
-	const version = item.version
-	return KINDS.some((kind) => version?.derived?.[kind]?.state === 'failed')
-		|| (version?.playable === null && Boolean(version.derived?.error))
-}
-
 let nextId = 1
 let polling = null
 
@@ -74,22 +48,30 @@ let polling = null
  * (stories 133–140). The dialog and its card in the corner show it.
  */
 export const useUploadsStore = defineStore('uploads', {
-	state: () => ({
-		items: readRecords().map((record) => ({ ...record, status: 'interrupted', loaded: 0, error: null, version: null, waveform: null, file: null })),
-		/** Whether the dialog is open; closed, the card sits in the corner while there are uploads */
-		expanded: false,
-		/** The folder of the view on screen that the dialog uploads into: { folderUrl, projectId, where }, or null */
-		target: null,
-		/** Bytes per second, smoothed */
-		speed: 0,
-		running: false,
-	}),
+	state: () => {
+		const now = Date.now()
+		// Older than a day, the server no longer has the chunks
+		const records = readRecords().filter((record) => current(record, now))
+		writeRecords(records)
+		return {
+			items: records
+				.filter((record) => !sentElsewhere(record, now))
+				.map((record) => ({ ...record, status: 'interrupted', loaded: 0, error: null, version: null, waveform: null, file: null })),
+			/** Whether the dialog is open; closed, the card sits in the corner while there are uploads */
+			expanded: false,
+			/** The folder of the view on screen that the dialog uploads into: { folderUrl, projectId, where }, or null */
+			target: null,
+			/** Bytes per second, smoothed */
+			speed: 0,
+			running: false,
+		}
+	},
 	getters: {
 		/**
 		 * @param {object} state - the store's
 		 * @return {object[]} uploads still sending or waiting to
 		 */
-		active: (state) => state.items.filter((item) => ['waiting', 'uploading', 'paused'].includes(item.status)),
+		active: (state) => state.items.filter((item) => ACTIVE.includes(item.status)),
 		/** Bytes still to send for the whole queue, and how many of all of them are sent */
 		totals() {
 			const total = this.active.reduce((sum, item) => sum + item.size, 0)
@@ -134,6 +116,7 @@ export const useUploadsStore = defineStore('uploads', {
 					projectId,
 					assetId,
 					folder: null,
+					fileId: null,
 					status: 'waiting',
 					loaded: 0,
 					error: null,
@@ -174,11 +157,16 @@ export const useUploadsStore = defineStore('uploads', {
 			this.pump()
 		},
 		/**
-		 * Stops an upload and throws away what the server has of it
+		 * Stops an upload and throws away what the server has of it. Once every
+		 * byte is sent, the server makes the file whatever the browser does, so
+		 * there is nothing to stop any more.
 		 *
 		 * @param {object} item - the upload
 		 */
 		cancel(item) {
+			if (item.status === 'finishing') {
+				return
+			}
 			item.controller?.abort()
 			if (item.folder) {
 				axios.delete(item.folder).catch(() => {})
@@ -192,7 +180,7 @@ export const useUploadsStore = defineStore('uploads', {
 		},
 		/** Closes the card; what is left to go on with comes back after a reload */
 		close() {
-			this.items = this.items.filter((item) => item.status === 'waiting' || item.status === 'uploading' || item.status === 'paused')
+			this.items = this.items.filter((item) => ACTIVE.includes(item.status))
 			this.expanded = false
 		},
 		/**
@@ -223,19 +211,28 @@ export const useUploadsStore = defineStore('uploads', {
 		 * @param {object} item - the upload to send now
 		 */
 		async send(item) {
-			item.status = 'uploading'
+			item.status = item.fileId ? 'finishing' : 'uploading'
 			item.controller = new AbortController()
 			const signal = item.controller.signal
 			// Without ffmpeg the browser makes the Waveform while the file goes up (story 137); a WAV's is read on the server
 			if (!hasFfmpeg && item.type.startsWith('audio/') && !/\.(wav|bwf)$/i.test(item.name) && !item.decoding) {
 				item.waveform = { progress: 0, state: 'running' }
-				item.decoding = decodeWaveform(item.file, (progress) => {
+				item.decoding = decodeInTurn(item.file, (progress) => {
 					item.waveform.progress = progress
 				}).catch(() => null)
 			}
-			let last = { at: performance.now(), loaded: item.loaded }
+			// Other tabs see that this one sends it, also while a chunk or the final join takes long
+			const beat = setInterval(() => item.folder && this.remember(item), HEARTBEAT)
+			const leave = () => item.folder && this.remember(item, true)
+			window.addEventListener('pagehide', leave)
+			if (item.folder) {
+				this.remember(item)
+			}
+			// Bytes that were on the server before are not speed: the first report only sets the start
+			let last = null
 			try {
-				const fileId = await uploadFile({
+				// A file that arrived before is not sent again, only enabled (story 133)
+				item.fileId ??= await uploadFile({
 					request: axios.request,
 					file: item.file,
 					target: item.target,
@@ -248,12 +245,17 @@ export const useUploadsStore = defineStore('uploads', {
 					},
 					onProgress: (loaded) => {
 						const now = performance.now()
-						if (now - last.at > 500) {
+						if (last === null) {
+							last = { at: now, loaded }
+						} else if (now - last.at > 500) {
 							const sample = (loaded - last.loaded) / ((now - last.at) / 1000)
 							this.speed = this.speed ? this.speed * 0.8 + sample * 0.2 : sample
 							last = { at: now, loaded }
 						}
 						item.loaded = loaded
+						if (loaded === item.size && item.status === 'uploading') {
+							item.status = 'finishing'
+						}
 					},
 					env: {
 						signal,
@@ -261,15 +263,16 @@ export const useUploadsStore = defineStore('uploads', {
 						untilOnline: () => new Promise((resolve) => window.addEventListener('online', resolve, { once: true })),
 						sleep: (seconds) => new Promise((resolve) => setTimeout(resolve, seconds * 1000)),
 						onPause: (paused) => {
-							item.status = paused ? 'paused' : 'uploading'
+							item.status = paused ? 'paused' : item.loaded === item.size ? 'finishing' : 'uploading'
 							// Nothing moves while offline, so no time left is known
 							this.speed = 0
 						},
 					},
 				})
-				const asset = await enableFile(fileId, item.projectId, item.assetId)
 				this.forget(item)
-				Object.assign(item, { status: 'done', loaded: item.size, folder: null })
+				item.folder = null
+				const asset = await enableFile(item.fileId, item.projectId, item.assetId)
+				Object.assign(item, { status: 'done', loaded: item.size })
 				this.handIn(item, asset)
 				this.refreshProjects(item)
 				item.onDone?.(asset.versionId)
@@ -281,6 +284,8 @@ export const useUploadsStore = defineStore('uploads', {
 					Object.assign(item, { status: 'failed', error: errorMessage(error) })
 				}
 			} finally {
+				clearInterval(beat)
+				window.removeEventListener('pagehide', leave)
 				if (this.active.length === 0) {
 					this.speed = 0
 				}
@@ -306,8 +311,7 @@ export const useUploadsStore = defineStore('uploads', {
 				return
 			}
 			try {
-				// Audio counts in milliseconds (ADR 0007), also before the probe ran
-				await giveWaveform(asset.versionId, decoded.peaks, Math.max(1, Math.round(decoded.seconds * 1000)))
+				await giveAudioWaveform(asset.versionId, decoded)
 				item.waveform = { progress: 100, state: 'ready' }
 			} catch {
 				item.waveform.state = 'failed'
@@ -329,15 +333,13 @@ export const useUploadsStore = defineStore('uploads', {
 			if (polling) {
 				return
 			}
+			const unsettled = () => this.items.filter((item) => item.status === 'done' && item.version && !settled(item))
 			const round = async () => {
-				const open = this.items.filter((item) => item.status === 'done' && item.version && !settled(item))
+				const open = unsettled()
 				await Promise.all(open.map((item) => this.refresh(item)))
-				if (open.some((item) => !settled(item))) {
-					polling = setTimeout(round, 5000)
-				} else {
-					polling = null
-					open.forEach((item) => this.refreshProjects(item))
-				}
+				open.filter(settled).forEach((item) => this.refreshProjects(item))
+				// Read again: an upload that finished during this round found the timer still set and is only seen here
+				polling = unsettled().length ? setTimeout(round, 5000) : null
 			}
 			polling = setTimeout(round, 5000)
 		},
@@ -354,10 +356,11 @@ export const useUploadsStore = defineStore('uploads', {
 		},
 		/**
 		 * @param {object} item - an upload with an upload folder on the server
+		 * @param {boolean} left - whether this tab goes away, so another may go on with it at once
 		 */
-		remember(item) {
+		remember(item, left = false) {
 			const { id, name, size, lastModified, type, target, projectId, assetId, folder } = item
-			writeRecords([...readRecords().filter((record) => record.target !== target), { id, name, size, lastModified, type, target, projectId, assetId, folder }])
+			writeRecords([...readRecords().filter((record) => record.target !== target), { id, name, size, lastModified, type, target, projectId, assetId, folder, seen: Date.now(), left }])
 		},
 		/**
 		 * @param {object} item - an upload that needs no going on with any more

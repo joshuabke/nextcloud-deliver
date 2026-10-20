@@ -468,6 +468,7 @@ OC.L10N.register(
 		"MP4 and MOV with H.264, and WebM, play as they are.": "MP4 und MOV mit H.264 sowie WebM spielen, wie sie sind.",
 		"Other audio ffmpeg reads plays as a Proxy.": "Anderes Audio, das ffmpeg liest, spielt als Proxy.",
 		"Other audio needs ffmpeg.": "Anderes Audio braucht ffmpeg.",
+		"Finishing on the server": "Wird auf dem Server fertiggestellt",
 		"Paused until the network is back": "Pausiert, bis das Netz wieder da ist",
 		"Pick the file again": "Datei erneut wählen",
 		"Pictures": "Bilder",

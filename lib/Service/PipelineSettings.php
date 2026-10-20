@@ -13,6 +13,8 @@ use OCP\IAppConfig;
  * and the read-only status that goes with them.
  */
 class PipelineSettings {
+	/** Below 720p nobody reviews professionally */
+	public const MIN_HEIGHT = 720;
 	/** Setting => [type, default]; empty paths mean "whatever is on PATH" */
 	private const SETTINGS = [
 		'ffmpegPath' => ['ffmpeg_path', 'string', ''],
@@ -41,6 +43,8 @@ class PipelineSettings {
 				? $this->config->getValueInt(Application::APP_ID, $key, $default)
 				: ($this->config->getValueString(Application::APP_ID, $key) ?: $default);
 		}
+		// A lower height saved before the minimum, or through occ, counts as the minimum
+		$values['maxHeight'] = max(self::MIN_HEIGHT, $values['maxHeight']);
 		return $values + [
 			'hwEncoderOk' => $this->config->getValueBool(Application::APP_ID, 'hw_encoder_ok'),
 			'hwEncoderError' => $this->config->getValueString(Application::APP_ID, 'hw_encoder_error') ?: null,
@@ -81,7 +85,7 @@ class PipelineSettings {
 	private function bounded(string $name, int $value): int {
 		[$min, $max] = match ($name) {
 			'maxJobs' => [1, 16],
-			'maxHeight' => [720, 2160],
+			'maxHeight' => [self::MIN_HEIGHT, 2160],
 			'thumbCap' => [10, 5000],
 		};
 		if ($value < $min || $value > $max) {

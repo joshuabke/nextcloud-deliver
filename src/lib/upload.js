@@ -52,6 +52,25 @@ export function parseChunks(xml) {
  */
 export const sameFile = (record, file) => record.name === file.name && record.size === file.size && record.lastModified === file.lastModified
 
+/** A tab touches the record of the upload it sends this often, in milliseconds */
+export const HEARTBEAT = 10 * 1000
+/** How long an upload that stopped is offered to go on with (story 135); Nextcloud drops its folder after a day */
+const KEPT = 24 * 60 * 60 * 1000
+
+/**
+ * @param {{seen: number}} record - an unfinished upload, as a tab left it
+ * @param {number} now - the time
+ * @return {boolean} whether it is younger than a day, so its chunks may still be there
+ */
+export const current = (record, now) => now - record.seen < KEPT
+
+/**
+ * @param {{seen: number, left?: boolean}} record - an unfinished upload, as a tab left it
+ * @param {number} now - the time
+ * @return {boolean} whether another tab is still sending it, so this one must keep its hands off
+ */
+export const sentElsewhere = (record, now) => !record.left && now - record.seen <= 3 * HEARTBEAT
+
 /**
  * Runs a request again after a lost network or a server error: while the
  * browser is offline it waits for the network without counting, a server
@@ -155,6 +174,33 @@ export async function uploadFile({ request, file, target, uploadsUrl, chunkSize,
 		done += chunk.end - chunk.start
 		onProgress(done)
 	}
-	// ponytail: a MOVE whose answer is lost is sent again and finds no folder; the file is there, the upload reads as failed
-	return fileIdOf(await send({ method: 'MOVE', url: `${folder}/.file`, headers: { ...headers, Overwrite: 'F' } }))
+	// A MOVE whose answer is lost (a proxy giving up while the server joins a large file) may have worked all the same:
+	// the name was free before, so a file there now is this one. Sent again, the MOVE would find its folder gone.
+	return retrying(async () => {
+		try {
+			return fileIdOf(await request({ method: 'MOVE', url: `${folder}/.file`, headers: { ...headers, Overwrite: 'F' }, signal }))
+		} catch (error) {
+			const arrived = signal?.aborted ? null : await fileIdAt(request, target, signal)
+			if (arrived) {
+				return arrived
+			}
+			throw error
+		}
+	}, env)
+}
+
+/**
+ * @param {(config: object) => Promise<object>} request - axios, or a fake of it
+ * @param {string} url - WebDAV URL of a file
+ * @param {AbortSignal} signal - ends the request
+ * @return {Promise<?number>} its file id, or null when there is no file
+ */
+function fileIdAt(request, url, signal) {
+	return request({
+		method: 'PROPFIND',
+		url,
+		headers: { Depth: '0' },
+		data: '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><d:prop><oc:fileid/></d:prop></d:propfind>',
+		signal,
+	}).then((response) => Number(response.data.match(/<(?:\w+:)?fileid>(\d+)</)?.[1]) || null, () => null)
 }
