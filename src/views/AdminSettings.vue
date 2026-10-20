@@ -78,7 +78,7 @@ function save() {
 				<NcTextField
 					v-model.number="settings.maxHeight"
 					type="number"
-					min="144"
+					min="720"
 					max="2160"
 					:label="t('deliver', 'Proxy resolution: short side in pixels')"
 					:helperText="t('deliver', 'Originals that browsers play are always available. Larger ones also get a lighter Proxy to switch to.')" />

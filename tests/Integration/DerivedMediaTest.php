@@ -229,10 +229,11 @@ class DerivedMediaTest extends TestCase {
 	}
 
 	public function testALargeOriginalStaysTheDefaultAndGetsALighterProxy(): void {
-		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['maxHeight' => 144])['status']);
-		// Portrait H.264 at 180x320: browsers play it, but its short side is above the limit
+		self::assertSame(400, $this->nc->ocs('PUT', '/admin/settings', ['maxHeight' => 719])['status'], 'no Proxy below 720p');
+		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['maxHeight' => 720])['status']);
+		// Portrait H.264 at 900x1600: browsers play it, but its short side is above the limit
 		[$code, $output] = $this->shell(sprintf(
-			'ffmpeg -loglevel error -y -f lavfi -i testsrc=size=180x320:rate=25:duration=1 '
+			'ffmpeg -loglevel error -y -f lavfi -i testsrc=size=900x1600:rate=25:duration=1 '
 			. '-f lavfi -i sine=frequency=440:duration=1 -c:v libx264 -pix_fmt yuv420p -c:a aac -f mp4 %s',
 			escapeshellarg($this->fixture),
 		));
@@ -244,15 +245,15 @@ class DerivedMediaTest extends TestCase {
 		$version = $this->version($versionId);
 		self::assertTrue($version['playable'], 'the original plays as it is');
 		self::assertNotNull($version['url']);
-		self::assertSame(180, $version['resolution']);
+		self::assertSame(900, $version['resolution']);
 		self::assertSame('ready', $version['derived']['proxy']['state'], (string)$version['derived']['error']);
-		self::assertSame(144, $version['derived']['proxy']['resolution']);
+		self::assertSame(720, $version['derived']['proxy']['resolution']);
 
 		$proxy = $this->nc->request('GET', $version['derived']['proxy']['url']);
 		$copy = sys_get_temp_dir() . '/deliver-proxy-' . bin2hex(random_bytes(4)) . '.mp4';
 		file_put_contents($copy, $proxy['body']);
 		[, $probed] = $this->shell('ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 ' . escapeshellarg($copy));
 		@unlink($copy);
-		self::assertSame('144,256', trim($probed), 'the limit applies to the short side, so portrait stays portrait');
+		self::assertSame('720,1280', trim($probed), 'the limit applies to the short side, so portrait stays portrait');
 	}
 }

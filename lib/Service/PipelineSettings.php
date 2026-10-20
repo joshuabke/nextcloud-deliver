@@ -81,7 +81,7 @@ class PipelineSettings {
 	private function bounded(string $name, int $value): int {
 		[$min, $max] = match ($name) {
 			'maxJobs' => [1, 16],
-			'maxHeight' => [144, 2160],
+			'maxHeight' => [720, 2160],
 			'thumbCap' => [10, 5000],
 		};
 		if ($value < $min || $value > $max) {
