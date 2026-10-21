@@ -6,26 +6,24 @@ import { generateRemoteUrl } from '@nextcloud/router'
 import { defineStore } from 'pinia'
 import { decodeInTurn, enableFile, errorMessage, getVersion, giveAudioWaveform, regenerateVersion } from '../api.js'
 import { mediaKind } from '../lib/media.js'
-import { current, HEARTBEAT, sameFile, sentElsewhere, uploadFile } from '../lib/upload.js'
+import { current, HEARTBEAT, sameFile, uploadFile } from '../lib/upload.js'
+import { ACTIVE, mergeBoard, totals } from '../lib/uploadBoard.js'
 import { settled } from '../lib/uploadStatus.js'
 import { useProjectsStore } from './projects.js'
 
 /**
  * Uploads that are being sent, by any tab, and unfinished chunked ones to go
- * on with after a reload (story 135). Every tab shows them, so uploading is in
- * one place however many tabs are open.
+ * on with after a reload (story 135), one key each after this prefix and the
+ * target: one tab writes each, so no tab writes over another's. Every tab
+ * shows them, so uploading is in one place however many tabs are open.
  */
-const RECORDS = 'deliver.uploads'
-/** Finished uploads whose Processing the card still shows, in every tab and after a reload, until they are hidden */
-const DONE = 'deliver.uploads.done'
+const RECORD = 'deliver.upload:'
+/** Finished uploads whose Processing the card still shows, in every tab and after a reload, until they are hidden: one key each by Version id */
+const DONE = 'deliver.processing:'
 /** A cancel asked for in one tab, for the tab that sends the upload: { target, at } */
-const CANCEL = 'deliver.uploads.cancel'
+const CANCEL = 'deliver.upload-cancel'
 /** Whether the server has ffmpeg (story 138); without it the uploading browser decodes the Waveform */
 export const hasFfmpeg = loadState('deliver', 'ffmpeg', true)
-/** Statuses of an upload that is still going on in this tab */
-const ACTIVE = ['waiting', 'uploading', 'finishing', 'paused']
-/** Statuses of an upload this tab only shows: another tab sends it, or it stopped and waits for its file */
-const MIRRORED = ['elsewhere', 'interrupted']
 
 /**
  * The server's largest chunk (files.chunked_upload.max_size), at least the
@@ -41,19 +39,39 @@ function chunkSizeFor(size) {
 }
 
 /**
- * @param {string} key - RECORDS or DONE
- * @return {object[]} what every tab keeps there
+ * @param {string} prefix - RECORD or DONE
+ * @return {Array<{key: string, value: object}>} what every tab keeps under it
  */
-function read(key) {
+function readAll(prefix) {
+	const found = []
 	try {
-		return JSON.parse(localStorage.getItem(key)) ?? []
+		for (let i = 0; i < localStorage.length; i++) {
+			const key = localStorage.key(i)
+			if (key?.startsWith(prefix)) {
+				found.push({ key, value: JSON.parse(localStorage.getItem(key)) })
+			}
+		}
 	} catch {
-		return []
+		// No storage, as in some private windows: the card then shows this tab alone
+	}
+	return found
+}
+
+/**
+ * @param {string} key - where
+ * @param {?object} value - what, or null to take it away
+ */
+function write(key, value) {
+	try {
+		if (value === null) {
+			localStorage.removeItem(key)
+		} else {
+			localStorage.setItem(key, JSON.stringify(value))
+		}
+	} catch {
+		// As in readAll
 	}
 }
-const readRecords = () => read(RECORDS)
-const writeRecords = (records) => localStorage.setItem(RECORDS, JSON.stringify(records))
-const writeDone = (done) => localStorage.setItem(DONE, JSON.stringify(done))
 
 let nextId = 1
 let polling = null
@@ -85,13 +103,11 @@ export const useUploadsStore = defineStore('uploads', {
 		 * @return {object[]} uploads going on in this tab or another one
 		 */
 		sending: (state) => state.items.filter((item) => ACTIVE.includes(item.status) || item.status === 'elsewhere'),
-		/** Bytes still to send for the whole queue of every tab, how many are sent, and the time left at their speeds together */
-		totals() {
-			const total = this.sending.reduce((sum, item) => sum + item.size, 0)
-			const loaded = this.sending.reduce((sum, item) => sum + item.loaded, 0)
-			const speed = this.speed + this.sending.reduce((sum, item) => sum + (item.status === 'elsewhere' ? item.speed ?? 0 : 0), 0)
-			return { total, loaded, speed, percent: total ? Math.floor(loaded / total * 100) : 100, eta: speed > 0 ? (total - loaded) / speed : null }
-		},
+		/**
+		 * @param {object} state - the store's
+		 * @return {object} bytes still to send for the whole queue of every tab, how many are sent, and the time left at their speeds together
+		 */
+		totals: (state) => totals(state.items, state.speed),
 		/** Whether the card may be closed: nothing sends, here or in another tab, and nothing is being made */
 		closable() {
 			return this.active.length === 0 && this.items.every((item) => item.status !== 'elsewhere' && (item.status !== 'done' || settled(item)))
@@ -102,11 +118,16 @@ export const useUploadsStore = defineStore('uploads', {
 		start() {
 			const now = Date.now()
 			// Older than a day: the server no longer has the chunks, and the Processing is long over
-			writeRecords(readRecords().filter((record) => current(record, now)))
-			writeDone(read(DONE).filter((done) => current(done, now)))
+			for (const { key, value } of [...readAll(RECORD), ...readAll(DONE)]) {
+				if (!current(value, now)) {
+					write(key, null)
+				}
+			}
 			this.sync()
+			// Also without a change: a tab that died without a word stops counting as sending after a while
+			setInterval(() => this.sync(), HEARTBEAT)
 			window.addEventListener('storage', (event) => {
-				if (event.key === RECORDS || event.key === DONE) {
+				if (event.key === null || event.key.startsWith(RECORD) || event.key.startsWith(DONE)) {
 					this.sync()
 				} else if (event.key === CANCEL && event.newValue) {
 					// Another tab asks to cancel an upload this one sends
@@ -120,35 +141,12 @@ export const useUploadsStore = defineStore('uploads', {
 		},
 		/** Takes in the uploads other tabs send, stopped ones, and finished ones still shown */
 		sync() {
-			const now = Date.now()
-			const records = readRecords()
-			const mine = new Set(this.active.map((item) => item.target))
-			for (const record of records.filter((each) => !mine.has(each.target))) {
-				const live = sentElsewhere(record, now)
-				// A file sent in one piece cannot be gone on with
-				if (!live && !record.folder) {
-					continue
-				}
-				const shown = this.items.find((item) => item.target === record.target && MIRRORED.includes(item.status))
-				// What the sending tab does with it (uploading, finishing, paused) is its phase here
-				const fields = { ...record, phase: live ? record.status : null, status: live ? 'elsewhere' : 'interrupted', loaded: live ? record.loaded ?? 0 : 0 }
-				if (shown) {
-					Object.assign(shown, { ...fields, id: shown.id })
-				} else {
-					this.items.push({ ...fields, id: nextId++, fileId: null, error: null, version: null, waveform: null, file: null })
-				}
-			}
-			const targets = new Set(records.map((record) => record.target))
-			const done = read(DONE)
-			const versions = new Set(done.map((each) => each.versionId))
-			// Gone from the records, it was finished or cancelled; gone from DONE, a tab hid it
-			this.items = this.items.filter((item) => (!MIRRORED.includes(item.status) || targets.has(item.target))
-				&& (item.status !== 'done' || !item.version || versions.has(item.version.id)))
-			for (const each of done.filter((one) => !this.items.some((item) => item.version?.id === one.versionId))) {
-				this.items.push({ id: nextId++, name: each.name, size: each.size, projectId: each.projectId, assetId: each.assetId, status: 'done', loaded: each.size, error: null, version: { id: each.versionId }, waveform: null, file: null })
-				// Read at once, so a finished one does not say Processing until the next round
-				this.refresh(this.items.at(-1))
-			}
+			const records = readAll(RECORD).map(({ value }) => value)
+			const done = readAll(DONE).map(({ value }) => value)
+			const { items, added } = mergeBoard(this.items, records, done, Date.now(), () => nextId++)
+			this.items = items
+			// Read at once, so a finished one does not say Processing until the next round
+			added.forEach((item) => this.refresh(item))
 			this.watch()
 		},
 		/**
@@ -236,7 +234,7 @@ export const useUploadsStore = defineStore('uploads', {
 			}
 			// The tab that sends it stops it; the records then take it off every list
 			if (item.status === 'elsewhere') {
-				localStorage.setItem(CANCEL, JSON.stringify({ target: item.target, at: Date.now() }))
+				write(CANCEL, { target: item.target, at: Date.now() })
 				return
 			}
 			item.controller?.abort()
@@ -259,8 +257,7 @@ export const useUploadsStore = defineStore('uploads', {
 		 * @param {object[]} gone - uploads to take off the list, here and in the other tabs
 		 */
 		drop(gone) {
-			const versions = gone.map((item) => item.version?.id).filter(Boolean)
-			writeDone(read(DONE).filter((done) => !versions.includes(done.versionId)))
+			gone.filter((item) => item.version).forEach((item) => write(DONE + item.version.id, null))
 			this.items = this.items.filter((item) => !gone.includes(item))
 		},
 		/**
@@ -302,7 +299,7 @@ export const useUploadsStore = defineStore('uploads', {
 				}).catch(() => null)
 			}
 			// Other tabs show it and leave it alone, also while a chunk or the final join takes long
-			const beat = setInterval(() => this.remember(item), HEARTBEAT)
+			const beat = setInterval(() => signal.aborted || this.remember(item), HEARTBEAT)
 			// Going away, a chunked upload waits for its file; one sent in one piece cannot go on
 			const leave = () => item.folder ? this.remember(item, true) : this.forget(item)
 			window.addEventListener('pagehide', leave)
@@ -346,8 +343,15 @@ export const useUploadsStore = defineStore('uploads', {
 					env: {
 						signal,
 						online: () => navigator.onLine,
-						untilOnline: () => new Promise((resolve) => window.addEventListener('online', resolve, { once: true })),
-						sleep: (seconds) => new Promise((resolve) => setTimeout(resolve, seconds * 1000)),
+						// A cancel ends the waiting too
+						untilOnline: () => new Promise((resolve) => {
+							window.addEventListener('online', resolve, { once: true })
+							signal.addEventListener('abort', resolve, { once: true })
+						}),
+						sleep: (seconds) => new Promise((resolve) => {
+							setTimeout(resolve, seconds * 1000)
+							signal.addEventListener('abort', resolve, { once: true })
+						}),
 						onPause: (paused) => {
 							item.status = paused ? 'paused' : item.loaded === item.size ? 'finishing' : 'uploading'
 							// Nothing moves while offline, so no time left is known
@@ -361,7 +365,7 @@ export const useUploadsStore = defineStore('uploads', {
 				const asset = await enableFile(item.fileId, item.projectId, item.assetId)
 				Object.assign(item, { status: 'done', loaded: item.size })
 				// Its Processing shows in every tab, and after a reload
-				writeDone([...read(DONE), { versionId: asset.versionId, name: item.name, size: item.size, projectId: item.projectId, assetId: item.assetId, seen: Date.now() }])
+				write(DONE + asset.versionId, { versionId: asset.versionId, name: item.name, size: item.size, projectId: item.projectId, assetId: item.assetId, seen: Date.now() })
 				this.handIn(item, asset)
 				this.refreshProjects(item)
 				item.onDone?.(asset.versionId)
@@ -369,6 +373,8 @@ export const useUploadsStore = defineStore('uploads', {
 				await this.refresh(item)
 				this.watch()
 			} catch (error) {
+				// Cancelled or failed, it is nobody's to show elsewhere; a retry here records it again
+				this.forget(item)
 				if (!signal.aborted) {
 					Object.assign(item, { status: 'failed', error: errorMessage(error) })
 				}
@@ -413,8 +419,11 @@ export const useUploadsStore = defineStore('uploads', {
 			try {
 				const context = await getVersion(item.version.id)
 				item.version = { ...context.versions.find((each) => each.id === item.version.id), canWrite: context.canWrite }
-			} catch {
-				// Read again on the next round
+			} catch (error) {
+				// Its Version is gone, deleted or taken out of Deliver: nothing is left to show; anything else is read again on the next round
+				if (error.response?.status === 404) {
+					this.drop([item])
+				}
 			}
 		},
 		/** Reads the Versions again every five seconds while derived media are being made */
@@ -451,13 +460,13 @@ export const useUploadsStore = defineStore('uploads', {
 			const { name, size, lastModified, type, target, projectId, assetId, folder, loaded, status } = item
 			// Status and speed too, so the other tabs show it just as this one does
 			const shared = { name, size, lastModified, type, target, projectId, assetId, folder, loaded, status, speed: this.speed }
-			writeRecords([...readRecords().filter((record) => record.target !== target), { ...shared, seen: Date.now(), left }])
+			write(RECORD + target, { ...shared, seen: Date.now(), left })
 		},
 		/**
 		 * @param {object} item - an upload that needs no going on with any more
 		 */
 		forget(item) {
-			writeRecords(readRecords().filter((record) => record.target !== item.target))
+			write(RECORD + item.target, null)
 		},
 	},
 })

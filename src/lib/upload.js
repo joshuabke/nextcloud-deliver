@@ -89,9 +89,13 @@ export async function retrying(attempt, { signal, online, untilOnline, sleep, on
 			if (signal?.aborted || (status !== undefined && status < 500)) {
 				throw error
 			}
+			// Waiting ends with a cancel too, which then ends the upload
 			if (!online()) {
 				onPause(true)
 				await untilOnline()
+				if (signal?.aborted) {
+					throw error
+				}
 				onPause(false)
 				continue
 			}
@@ -99,6 +103,9 @@ export async function retrying(attempt, { signal, online, untilOnline, sleep, on
 				throw error
 			}
 			await sleep(BACKOFF[tries++])
+			if (signal?.aborted) {
+				throw error
+			}
 		}
 	}
 }
@@ -176,11 +183,13 @@ export async function uploadFile({ request, file, target, uploadsUrl, chunkSize,
 	}
 	// A MOVE whose answer is lost (a proxy giving up while the server joins a large file) may have worked all the same:
 	// the name was free before, so a file there now is this one. Sent again, the MOVE would find its folder gone.
+	// An answer the server did give stands: a 412 means another file took the name meanwhile, and that is not this one.
 	return retrying(async () => {
 		try {
 			return fileIdOf(await request({ method: 'MOVE', url: `${folder}/.file`, headers: { ...headers, Overwrite: 'F' }, signal }))
 		} catch (error) {
-			const arrived = signal?.aborted ? null : await fileIdAt(request, target, signal)
+			const answered = error.response?.status !== undefined && error.response.status < 500
+			const arrived = signal?.aborted || answered ? null : await fileIdAt(request, target, signal)
 			if (arrived) {
 				return arrived
 			}

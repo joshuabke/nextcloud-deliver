@@ -245,7 +245,7 @@ async function create() {
 					type="submit"
 					form="deliver-new-project"
 					variant="primary"
-					:disabled="!naming.trim() || (ownFolder && naming.includes('/'))">
+					:disabled="!naming.trim() || (ownFolder && (naming.includes('/') || ['.', '..'].includes(naming.trim())))">
 					{{ t('deliver', 'Create') }}
 				</NcButton>
 			</template>

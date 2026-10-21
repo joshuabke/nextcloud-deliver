@@ -192,9 +192,14 @@ export const listPublicAssets = () => axios.get(url('/assets')).then(data)
  * @return {Promise<number>} its file id
  */
 export async function makeFolder(path) {
+	const parts = path.split('/').filter(Boolean)
+	// The browser would resolve . and .. in the URL, and the Project would get a folder above the one meant
+	if (parts.some((part) => part === '.' || part === '..')) {
+		throw new Error(t('deliver', 'A folder cannot be called . or ..'))
+	}
 	let dav = generateRemoteUrl('dav') + '/files/' + encodeURIComponent(getCurrentUser()?.uid ?? '')
 	// The folders above it too, such as the default /Deliver on its first use
-	for (const part of path.split('/').filter(Boolean)) {
+	for (const part of parts) {
 		dav += '/' + encodeURIComponent(part)
 		await axios.request({ method: 'MKCOL', url: dav }).catch((error) => {
 			if (error.response?.status !== 405) {

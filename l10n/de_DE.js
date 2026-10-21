@@ -534,7 +534,8 @@ OC.L10N.register(
 		"In each user's Files. A new Project gets its folder there, unless the user picks another place.": "In den Dateien jedes Nutzers. Ein neues Projekt bekommt dort seinen Ordner, wenn kein anderer Ort gewählt wird.",
 		"Create a Project folder": "Projektordner anlegen",
 		"Choose a place": "Ort wählen",
-		"{percent} %, in another tab": "{percent} %, in einem anderen Tab"
+		"{percent} %, in another tab": "{percent} %, in einem anderen Tab",
+		"A folder cannot be called . or ..": "Ein Ordner kann nicht . oder .. heißen"
 	},
 	"nplurals=2; plural=(n != 1);"
 );

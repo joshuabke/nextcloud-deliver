@@ -155,6 +155,26 @@ describe('an upload', () => {
 		expect(dav.log.filter((line) => line.startsWith('MOVE'))).toHaveLength(1)
 	})
 
+	it('fails when another file took the name while it uploaded, rather than taking that file for its own', async () => {
+		const dav = fakeDav()
+		const racing = (config) => {
+			if (config.method === 'MOVE') {
+				dav.files.set(TARGET, new Blob(['someone else']))
+			}
+			return dav.request(config)
+		}
+		await expect(uploadFile({ request: racing, file: file(25), target: TARGET, uploadsUrl: UPLOADS, chunkSize: 10, env: dav.env })).rejects.toMatchObject({ response: { status: 412 } })
+	})
+
+	it('stops waiting for the network when it is cancelled', async () => {
+		const dav = fakeDav({ offlineOnce: true })
+		const controller = new AbortController()
+		const paused = []
+		const env = { ...dav.env, signal: controller.signal, untilOnline: async () => controller.abort(), onPause: (p) => paused.push(p) }
+		await expect(uploadFile({ request: dav.request, file: file(25), target: TARGET, uploadsUrl: UPLOADS, chunkSize: 10, env })).rejects.toThrow()
+		expect(paused).toEqual([true])
+	})
+
 	it('goes on from the chunks the server kept, after a reload', async () => {
 		const dav = fakeDav()
 		let folder = null

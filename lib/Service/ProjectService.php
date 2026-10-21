@@ -683,9 +683,13 @@ class ProjectService {
 			$doomed[] = [$version, $file];
 		}
 		foreach ($doomed as [$version, $file]) {
-			// The review data goes first, so the trash finds no Version to mark Missing and mails nobody about it
+			// The file goes first, so one that cannot be deleted after all keeps its Version and review data;
+			// told so, the trash marks nothing Missing and mails nobody about it
+			if ($file !== null) {
+				$this->stacks->deleting($file->getId());
+				$file->delete();
+			}
 			$this->stacks->purge($version);
-			$file?->delete();
 		}
 	}
 

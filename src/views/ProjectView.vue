@@ -151,6 +151,10 @@ const filters = computed(() => FILTERS.map((id) => ({
 const shown = computed(() => inView.value.filter((asset) => passes(asset, filter.value) && found(asset, query.value)))
 // Sorted within each folder, the folders themselves by path
 const groups = computed(() => groupByFolder(sortAssets(shown.value, sort.value)))
+// Ticked Assets a filter, a search or another folder takes off the screen are no longer ticked: the menu acts only on what is in sight
+watch(shown, (now) => {
+	selected.value = selected.value.filter((id) => now.some((asset) => asset.id === id))
+})
 /** The Assets on screen that can be ticked */
 const selectable = computed(() => selectAll(shown.value.filter((asset) => asset.canWrite)))
 /** Whether the ticked Assets are Missing ones; null while none is ticked. Missing ones are only ticked together (story 141) */
