@@ -24,9 +24,13 @@ const props = defineProps({
 	candidates: { type: Array, default: () => [] },
 	/** Whether the Stack may be managed here */
 	canWrite: { type: Boolean, default: false },
+	/** Whether its checkbox is ticked (story 141) */
+	selected: { type: Boolean, default: false },
+	/** Whether any card is ticked, so every checkbox shows, also on a phone */
+	selecting: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['stack', 'menu', 'versions'])
+const emit = defineEmits(['stack', 'menu', 'versions', 'select'])
 
 /** The menu opens from a button on every screen, by a right click, and by a long press on a phone (stories 109 and 129) */
 const isMobile = useIsMobile()
@@ -68,7 +72,10 @@ const status = computed(() => {
 </script>
 
 <template>
-	<li class="deliver-card deliver-card__menu-host" v-on="press">
+	<li
+		class="deliver-card deliver-card__menu-host"
+		:class="{ 'deliver-card--selecting': selecting, 'deliver-card--selected': selected }"
+		v-on="press">
 		<RouterLink class="deliver-card__link" :to="`/versions/${newest.id}`">
 			<div class="deliver-card__still">
 				<NcIconSvgWrapper :svg="audio ? audioIcon : assetIcon" :size="40" />
@@ -107,6 +114,14 @@ const status = computed(() => {
 			</div>
 			<DueDate v-if="asset.dueDate" class="deliver-card__due" :modelValue="asset.dueDate" />
 		</RouterLink>
+		<!-- Outside the link, so ticking it does not open the Asset -->
+		<input
+			v-if="canWrite"
+			class="deliver-card__select"
+			type="checkbox"
+			:checked="selected"
+			:aria-label="t('deliver', 'Select {name}', { name: asset.name })"
+			@change="emit('select')">
 		<NcButton
 			class="deliver-card__more"
 			variant="tertiary"
@@ -219,5 +234,36 @@ const status = computed(() => {
 	padding: 0 calc(2 * var(--default-grid-baseline));
 	color: var(--color-text-maxcontrast);
 	font-size: 13px;
+}
+
+/* Top left over the still, where the Version sits; shown on hover, and on every card once one is ticked */
+.deliver-card__select {
+	position: absolute;
+	top: 14px;
+	inset-inline-start: 14px;
+	width: 20px;
+	height: 20px;
+	min-height: 0;
+	margin: 0;
+	cursor: pointer;
+	accent-color: var(--color-primary-element);
+	opacity: 0;
+}
+
+.deliver-card:hover .deliver-card__select,
+.deliver-card__select:focus-visible,
+.deliver-card--selecting .deliver-card__select {
+	opacity: 1;
+}
+
+/* The Version gives way to the checkbox while it shows */
+.deliver-card:hover .deliver-card__version,
+.deliver-card--selecting .deliver-card__version {
+	visibility: hidden;
+}
+
+.deliver-card--selected {
+	outline: 2px solid var(--color-primary-element);
+	border-radius: var(--border-radius-large);
 }
 </style>

@@ -134,6 +134,14 @@ class ProjectApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	public function deleteAsset(int $id): Response {
+		return $this->guard(function () use ($id) {
+			$this->service->deleteAsset((string)$this->userId, $id);
+			return [];
+		});
+	}
+
+	#[NoAdminRequired]
 	public function destroy(int $id): Response {
 		return $this->guard(function () use ($id) {
 			$this->service->remove((string)$this->userId, $id);

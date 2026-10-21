@@ -494,7 +494,20 @@ OC.L10N.register(
 		"What can be done without ffmpeg ↗": "Was sich ohne ffmpeg tun lässt ↗",
 		"Which files Deliver takes": "Welche Dateien Deliver nimmt",
 		"{hours} h {minutes} min left": "noch {hours} h {minutes} min",
-		"{speed}/s": "{speed}/s"
+		"{speed}/s": "{speed}/s",
+		"Select": "Auswählen",
+		"_Delete this Asset?_::_Delete %n Assets?_": [
+			"Dieses Asset löschen?",
+			"%n Assets löschen?"
+		],
+		"_The files of all its Versions go to the trash of Files. Its Comments, Drawings and Approvals are deleted._::_The files of all their Versions go to the trash of Files. Their Comments, Drawings and Approvals are deleted._": [
+			"Die Dateien aller seiner Versionen kommen in den Papierkorb von Dateien. Seine Kommentare, Zeichnungen und Abnahmen werden gelöscht.",
+			"Die Dateien aller ihrer Versionen kommen in den Papierkorb von Dateien. Ihre Kommentare, Zeichnungen und Abnahmen werden gelöscht."
+		],
+		"_%n Asset selected_::_%n Assets selected_": [
+			"%n Asset ausgewählt",
+			"%n Assets ausgewählt"
+		]
 	},
 	"nplurals=2; plural=(n != 1);"
 );

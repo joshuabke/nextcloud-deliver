@@ -1,6 +1,7 @@
 <script setup>
 import backIcon from '@mdi/svg/svg/arrow-left.svg?raw'
 import dueIcon from '@mdi/svg/svg/calendar-clock.svg?raw'
+import selectIcon from '@mdi/svg/svg/checkbox-marked-outline.svg?raw'
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import compareIcon from '@mdi/svg/svg/compare.svg?raw'
 import removeIcon from '@mdi/svg/svg/delete-outline.svg?raw'
@@ -16,8 +17,9 @@ import searchIcon from '@mdi/svg/svg/magnify.svg?raw'
 import openIcon from '@mdi/svg/svg/open-in-app.svg?raw'
 import retryIcon from '@mdi/svg/svg/refresh.svg?raw'
 import renameIcon from '@mdi/svg/svg/rename-outline.svg?raw'
+import deleteIcon from '@mdi/svg/svg/trash-can-outline.svg?raw'
 import uploadIcon from '@mdi/svg/svg/tray-arrow-up.svg?raw'
-import { t } from '@nextcloud/l10n'
+import { n, t } from '@nextcloud/l10n'
 import { generateRemoteUrl, generateUrl } from '@nextcloud/router'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, onBeforeUnmount, ref, watch, watchEffect } from 'vue'
@@ -38,7 +40,7 @@ import NotUpForReviewCard from '../components/NotUpForReviewCard.vue'
 import ProjectSettingsDialog from '../components/ProjectSettingsDialog.vue'
 import RenameDialog from '../components/RenameDialog.vue'
 import VersionStack from '../components/VersionStack.vue'
-import { assignAsset, disableAsset, enableFile, errorMessage, regenerateVersion, renameFile, stackVersion, updateAsset } from '../api.js'
+import { assignAsset, deleteAsset, disableAsset, enableFile, errorMessage, regenerateVersion, renameFile, stackVersion, updateAsset } from '../api.js'
 import { useQuery } from '../composables/query.js'
 import { confirmRemoval } from '../confirm.js'
 import { FILTER_LABELS, FILTERS, found, passes, SORT_OPTIONS, sortAssets, SORTS } from '../lib/filters.js'
@@ -72,8 +74,19 @@ const project = computed(() => store.details[props.id])
 const managing = ref(null)
 const managed = computed(() => project.value?.assets.find((asset) => asset.id === managing.value) ?? null)
 
+/** Ids of the Assets picked with their checkboxes, to delete together (story 141) */
+const selected = ref([])
+
+/**
+ * @param {object} asset - an Asset whose checkbox was clicked
+ */
+function toggle(asset) {
+	selected.value = selected.value.includes(asset.id) ? selected.value.filter((id) => id !== asset.id) : [...selected.value, asset.id]
+}
+
 watch(() => props.id, async (id) => {
 	error.value = null
+	selected.value = []
 	try {
 		await store.fetch(id)
 	} catch (e) {
@@ -312,7 +325,9 @@ function openMenu(event, asset) {
 				icon: filesIcon,
 				href: generateUrl('/apps/files/files/{fileId}', { fileId: newest.fileId }) + '?' + new URLSearchParams({ dir, opendetails: 'true' }),
 			},
+			asset.canWrite && !selected.value.includes(asset.id) && { label: t('deliver', 'Select'), icon: selectIcon, action: () => toggle(asset) },
 			asset.canWrite && { label: project.value.none ? t('deliver', 'Remove from Deliver') : t('deliver', 'Remove from Project'), icon: removeIcon, danger: true, action: () => remove(asset) },
+			asset.canWrite && { label: t('deliver', 'Delete'), icon: deleteIcon, danger: true, action: () => deleteFiles([asset.id]) },
 		].filter(Boolean),
 	}
 }
@@ -385,6 +400,33 @@ async function remove(asset) {
 	} catch (e) {
 		error.value = errorMessage(e)
 	}
+	await store.fetch(props.id).catch(() => {})
+}
+
+/**
+ * Deletes Assets with their files: the files go to the trash of Files, the
+ * Assets leave at once instead of turning Missing (story 141)
+ *
+ * @param {number[]} ids - the Assets to delete
+ */
+async function deleteFiles(ids) {
+	const confirmed = await confirmRemoval(
+		n('deliver', 'Delete this Asset?', 'Delete %n Assets?', ids.length),
+		n('deliver', 'The files of all its Versions go to the trash of Files. Its Comments, Drawings and Approvals are deleted.', 'The files of all their Versions go to the trash of Files. Their Comments, Drawings and Approvals are deleted.', ids.length),
+		t('deliver', 'Delete'),
+	)
+	if (!confirmed) {
+		return
+	}
+	error.value = null
+	for (const id of ids) {
+		try {
+			await deleteAsset(id)
+		} catch (e) {
+			error.value = errorMessage(e)
+		}
+	}
+	selected.value = []
 	await store.fetch(props.id).catch(() => {})
 }
 
@@ -504,6 +546,18 @@ function dropped(event) {
 					: project.path
 						? t('deliver', 'Enable files for review in the Deliver tab of the Files sidebar.')
 						: t('deliver', 'Add files to this Project in the Deliver tab of the Files sidebar, wherever they lie.')" />
+			<div v-if="selected.length" class="deliver-project__selection">
+				<span>{{ n('deliver', '%n Asset selected', '%n Assets selected', selected.length) }}</span>
+				<NcButton variant="error" @click="deleteFiles(selected)">
+					<template #icon>
+						<NcIconSvgWrapper :svg="deleteIcon" />
+					</template>
+					{{ t('deliver', 'Delete') }}
+				</NcButton>
+				<NcButton variant="tertiary" @click="selected = []">
+					{{ t('deliver', 'Cancel') }}
+				</NcButton>
+			</div>
 			<section v-for="group in groups" :key="group.path" class="deliver-project__group">
 				<h3 v-if="group.path !== folder" class="deliver-project__folder">
 					<NcIconSvgWrapper :svg="folderIcon" :size="20" />
@@ -516,6 +570,9 @@ function dropped(event) {
 						:asset="asset"
 						:candidates="suggestions.get(asset.id) ?? []"
 						:canWrite="asset.canWrite"
+						:selected="selected.includes(asset.id)"
+						:selecting="selected.length > 0"
+						@select="toggle(asset)"
 						@stack="accept"
 						@versions="managing = $event.id"
 						@contextmenu.prevent="openMenu($event, asset)"
@@ -632,6 +689,24 @@ function dropped(event) {
 	flex-direction: column;
 	gap: calc(4 * var(--default-grid-baseline));
 	padding: 0 calc(4 * var(--default-grid-baseline)) calc(6 * var(--default-grid-baseline));
+}
+
+/* Stays in sight while scrolling through the cards it acts on */
+.deliver-project__selection {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: calc(2 * var(--default-grid-baseline));
+	padding: calc(2 * var(--default-grid-baseline));
+	border-radius: var(--border-radius-large);
+	background: var(--color-primary-element-light);
+}
+
+.deliver-project__selection span {
+	margin-inline-end: auto;
 }
 
 /* One row next to the navigation toggle, which sits in the top left corner */

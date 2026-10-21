@@ -663,6 +663,33 @@ class ProjectService {
 	}
 
 	/**
+	 * Deletes an Asset together with its files: every Version's file goes to
+	 * the trash of Files, and the Asset goes with its review data at once
+	 * rather than staying behind as Missing (story 141).
+	 *
+	 * @throws AccessDeniedException a file of it this user may not delete
+	 */
+	public function deleteAsset(string $uid, int $assetId): void {
+		$asset = $this->assets->find($assetId) ?? throw new NotFoundException('Asset not found');
+		$this->writableAsset($uid, $asset);
+		$home = $this->root->getUserFolder($uid);
+		$doomed = [];
+		// Every file is checked before anything goes, so a refusal leaves the Asset whole
+		foreach ($this->versions->findByAsset($assetId) as $version) {
+			$file = $version->getState() === Version::STATE_MISSING ? null : $home->getFirstNodeById($version->getFileId());
+			if ($version->getState() !== Version::STATE_MISSING && ($file === null || !$file->isDeletable())) {
+				throw new AccessDeniedException('You may not delete every file of this Asset');
+			}
+			$doomed[] = [$version, $file];
+		}
+		foreach ($doomed as [$version, $file]) {
+			// The review data goes first, so the trash finds no Version to mark Missing and mails nobody about it
+			$this->stacks->purge($version);
+			$file?->delete();
+		}
+	}
+
+	/**
 	 * Removes a Project; its Assets go to No Project with their review data
 	 * (story 9). The files stay.
 	 *

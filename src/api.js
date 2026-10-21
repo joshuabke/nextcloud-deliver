@@ -52,6 +52,13 @@ export const enableFile = (fileId, projectId = null, assetId = null) => axios.po
 export const assignAsset = (id, projectId) => axios.put(url(`/assets/${id}/project`), { projectId }).then(data)
 export const updateAsset = (id, fields) => axios.put(url(`/assets/${id}`), fields).then(data)
 export const disableAsset = (id) => axios.delete(url(`/assets/${id}`))
+/**
+ * The Asset's files go to the trash of Files, the Asset with its review data at once (story 141)
+ *
+ * @param {number} id - the Asset
+ * @return {Promise<object>} the server's answer
+ */
+export const deleteAsset = (id) => axios.delete(url(`/assets/${id}/files`))
 
 export const listComments = (versionId) => axios.get(url(`/versions/${versionId}/comments`)).then(data)
 export const commentChanges = (versionId, since) => axios.get(url(`/versions/${versionId}/changes?since=${since}`)).then(data)

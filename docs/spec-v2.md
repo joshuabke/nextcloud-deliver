@@ -51,7 +51,7 @@ Deliver becomes a proper Nextcloud app, rebuilt from scratch, in which media fil
 
 ### Comments
 
-28. As a Member or Reviewer, I want to press C to open a Comment at the current Frame, so that commenting is fast.
+28. As a Member or Reviewer, I want to press C, or start typing in the Comment field, to stop the picture and open a Comment at the Frame on screen, also on a phone, so that commenting is fast.
 29. As a Member or Reviewer, I want to set an in and out point with I and O and comment on that Range, so that I can flag a whole passage.
 30. As a Member or Reviewer, I want plain-text Comments with line breaks and clickable URLs, so that feedback stays readable in marker notes.
 31. As a Member or Reviewer, I want to reply to a Comment, so that discussions stay attached to the Frame.
@@ -196,6 +196,7 @@ Issues #47 and #45.
 130. As a Member, I want an Asset card to show its Version top left, its Approval top right, its Comments bottom left and its runtime (`m:ss`, `h:mm:ss` from an hour, none for a Still) bottom right, or Missing or Processing there instead, with when its newest Version arrived on the meta line and the filename on hovering its name, so that I see the state of a cut at a glance.
 131. As a Member, I want a menu on a media file in a Folder Project's folder that is not up for review, to add it for review, add it as a new Version of an Asset of the same kind in this Project, download it, rename it or show it in Files, and on an Asset to download or rename its newest Version's file unless it is Missing, with a hint not to rename files that are actively being worked on outside of Deliver, so that I handle files without switching to Files.
 132. As a Member, I want to remove an Asset from a Folder Project with Auto Intake on and have it stay out, its files listed as not up for review until I add them again, while new files keep arriving on their own, so that Auto Intake never brings back what I removed.
+141. As a Member, I want to select several Asset cards with a checkbox, or with "Select" in a card's menu on a phone, and delete them, or one Asset from its menu, after a confirmation, so that their files go to the trash of Files and the Assets leave Deliver at once, without the Missing state deleting a file in Files leaves behind.
 
 ### Uploads
 
@@ -204,7 +205,7 @@ Issue #44.
 133. As a Member, I want the upload button to open an "Uploads" dialog with a drop zone, a file picker, the formats Deliver takes and my uploads, each with its percentage, and speed and time left for the whole queue, so that I know when a long upload will be done.
 134. As a Member, I want to send my uploads to the background, where they shrink to a card in the bottom right corner (a bar on phones) that stays on every view of Deliver until everything is done and I close it, and opens the dialog again; dropping files, "Upload a new Version" and "Upload a new cut" start there right away, so that uploading never stops me working.
 135. As a Member, I want an upload to pause when the network goes and go on by itself when it is back, and after a reload or a closed tab to go on where it stopped once I pick or drop the same file again within a day, with a warning before I leave Deliver while uploads run, so that a cut of several gigabytes never starts over.
-136. As a Member, I want to see under each of my uploads the Processing of its Waveform, Proxy and Thumbnail Strip, each waiting, running with a percentage, done or failed, and a plain note when it waits for the next background job, so that I know when the cut is ready to send.
+136. As a Member, I want to see under each of my uploads the Processing of its Waveform, Proxy and Thumbnail Strip, each waiting, running with a percentage, done or failed, and a plain note when it waits for the next background job, what is done moving up to the end of the upload's status line, so that I know when the cut is ready to send without the list growing.
 137. As a Member uploading audio to a server without ffmpeg, I want my browser to make the Waveform while the file uploads, with its percentage, without holding the whole file in memory, so that a long mix has its Waveform as soon as it has arrived.
 138. As a Member, I want the Uploads dialog to say which video, audio and picture formats Deliver takes and which of them play directly, and, as a fact rather than an error, which need ffmpeg that this server lacks, with a link to what can be done about it, so that I know before uploading what will play.
 139. As a Member, I want to cancel an upload, see why one failed and try it again, and hide the finished ones, so that the list stays mine to manage.
