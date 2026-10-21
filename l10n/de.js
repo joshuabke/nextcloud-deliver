@@ -516,6 +516,10 @@ OC.L10N.register(
 		"_Move %n Asset to another Project_::_Move %n Assets to another Project_": [
 			"%n Asset in ein anderes Projekt verschieben",
 			"%n Assets in ein anderes Projekt verschieben"
+		],
+		"_%n Asset selected_::_%n Assets selected_": [
+			"%n Asset ausgewählt",
+			"%n Assets ausgewählt"
 		]
 	},
 	"nplurals=2; plural=(n != 1);"

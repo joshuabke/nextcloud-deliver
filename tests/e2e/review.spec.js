@@ -157,6 +157,7 @@ test.describe('Review view', () => {
 		await second.getByRole('checkbox', { name: 'Select second' }).check()
 		await third.getByRole('checkbox', { name: 'Select third' }).check()
 		await third.click({ button: 'right' })
+		await expect(page.getByRole('menu', { name: '2 Assets selected' })).toBeVisible()
 		await expect(page.getByRole('menuitem', { name: 'Delete' })).toBeVisible()
 		await expect(page.getByRole('menuitem', { name: 'Open' })).toHaveCount(0)
 		await page.getByRole('menuitem', { name: 'Clear the selection' }).click()

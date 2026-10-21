@@ -8,6 +8,8 @@ const props = defineProps({
 	y: { type: Number, required: true },
 	/** [{ label, icon, action or href (download: a filename to save it under), danger }] */
 	items: { type: Array, required: true },
+	/** A heading above the entries, saying what they act on */
+	title: { type: String, default: null },
 })
 
 const emit = defineEmits(['close'])
@@ -81,8 +83,12 @@ function close() {
 			class="deliver-context-menu"
 			role="menu"
 			:style="{ left: `${left}px`, top: `${top}px` }"
+			:aria-label="title"
 			@keydown="onKey"
 			@contextmenu.prevent>
+			<li v-if="title" role="presentation" class="deliver-context-menu__title">
+				{{ title }}
+			</li>
 			<li v-for="item in items" :key="item.label" role="none">
 				<!-- Links for every entry: Nextcloud styles every button of its own, which shifts the icons -->
 				<a
@@ -109,6 +115,12 @@ function close() {
 	border-radius: var(--border-radius-large);
 	background: var(--color-main-background);
 	box-shadow: 0 1px 10px var(--color-box-shadow);
+}
+
+.deliver-context-menu__title {
+	padding: 6px 12px 6px 8px;
+	color: var(--color-text-maxcontrast);
+	font-weight: bold;
 }
 
 .deliver-context-menu__item {

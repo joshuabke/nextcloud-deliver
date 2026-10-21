@@ -330,7 +330,12 @@ function davFolder(path) {
  */
 function openMenu(event, asset) {
 	const many = selected.value.length > 1 && selected.value.includes(asset.id)
-	menu.value = { x: event.clientX, y: event.clientY, items: (many ? selectionItems() : assetItems(asset)).filter(Boolean) }
+	menu.value = {
+		x: event.clientX,
+		y: event.clientY,
+		title: many ? n('deliver', '%n Asset selected', '%n Assets selected', selected.value.length) : null,
+		items: (many ? selectionItems() : assetItems(asset)).filter(Boolean),
+	}
 }
 
 /**
