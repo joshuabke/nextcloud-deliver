@@ -18,6 +18,8 @@ import { useProjectsStore } from './projects.js'
 const RECORDS = 'deliver.uploads'
 /** Finished uploads whose Processing the card still shows, in every tab and after a reload, until they are hidden */
 const DONE = 'deliver.uploads.done'
+/** A cancel asked for in one tab, for the tab that sends the upload: { target, at } */
+const CANCEL = 'deliver.uploads.cancel'
 /** Whether the server has ffmpeg (story 138); without it the uploading browser decodes the Waveform */
 export const hasFfmpeg = loadState('deliver', 'ffmpeg', true)
 /** Statuses of an upload that is still going on in this tab */
@@ -78,11 +80,17 @@ export const useUploadsStore = defineStore('uploads', {
 		 * @return {object[]} uploads still sending or waiting to
 		 */
 		active: (state) => state.items.filter((item) => ACTIVE.includes(item.status)),
-		/** Bytes still to send for the whole queue, and how many of all of them are sent */
+		/**
+		 * @param {object} state - the store's
+		 * @return {object[]} uploads going on in this tab or another one
+		 */
+		sending: (state) => state.items.filter((item) => ACTIVE.includes(item.status) || item.status === 'elsewhere'),
+		/** Bytes still to send for the whole queue of every tab, how many are sent, and the time left at their speeds together */
 		totals() {
-			const total = this.active.reduce((sum, item) => sum + item.size, 0)
-			const loaded = this.active.reduce((sum, item) => sum + item.loaded, 0)
-			return { total, loaded, percent: total ? Math.floor(loaded / total * 100) : 100, eta: this.speed > 0 ? (total - loaded) / this.speed : null }
+			const total = this.sending.reduce((sum, item) => sum + item.size, 0)
+			const loaded = this.sending.reduce((sum, item) => sum + item.loaded, 0)
+			const speed = this.speed + this.sending.reduce((sum, item) => sum + (item.status === 'elsewhere' ? item.speed ?? 0 : 0), 0)
+			return { total, loaded, speed, percent: total ? Math.floor(loaded / total * 100) : 100, eta: speed > 0 ? (total - loaded) / speed : null }
 		},
 		/** Whether the card may be closed: nothing sends, here or in another tab, and nothing is being made */
 		closable() {
@@ -100,6 +108,13 @@ export const useUploadsStore = defineStore('uploads', {
 			window.addEventListener('storage', (event) => {
 				if (event.key === RECORDS || event.key === DONE) {
 					this.sync()
+				} else if (event.key === CANCEL && event.newValue) {
+					// Another tab asks to cancel an upload this one sends
+					const { target } = JSON.parse(event.newValue)
+					const item = this.active.find((each) => each.target === target)
+					if (item) {
+						this.cancel(item)
+					}
 				}
 			})
 		},
@@ -115,7 +130,8 @@ export const useUploadsStore = defineStore('uploads', {
 					continue
 				}
 				const shown = this.items.find((item) => item.target === record.target && MIRRORED.includes(item.status))
-				const fields = { ...record, status: live ? 'elsewhere' : 'interrupted', loaded: live ? record.loaded ?? 0 : 0 }
+				// What the sending tab does with it (uploading, finishing, paused) is its phase here
+				const fields = { ...record, phase: live ? record.status : null, status: live ? 'elsewhere' : 'interrupted', loaded: live ? record.loaded ?? 0 : 0 }
 				if (shown) {
 					Object.assign(shown, { ...fields, id: shown.id })
 				} else {
@@ -215,7 +231,12 @@ export const useUploadsStore = defineStore('uploads', {
 		 * @param {object} item - the upload
 		 */
 		cancel(item) {
-			if (item.status === 'finishing' || item.status === 'elsewhere') {
+			if (item.status === 'finishing' || (item.status === 'elsewhere' && item.phase === 'finishing')) {
+				return
+			}
+			// The tab that sends it stops it; the records then take it off every list
+			if (item.status === 'elsewhere') {
+				localStorage.setItem(CANCEL, JSON.stringify({ target: item.target, at: Date.now() }))
 				return
 			}
 			item.controller?.abort()
@@ -314,6 +335,7 @@ export const useUploadsStore = defineStore('uploads', {
 						item.loaded = loaded
 						if (loaded === item.size && item.status === 'uploading') {
 							item.status = 'finishing'
+							this.remember(item)
 						}
 						// Other tabs follow its progress once a second
 						if (now - shared > 1000) {
@@ -330,6 +352,7 @@ export const useUploadsStore = defineStore('uploads', {
 							item.status = paused ? 'paused' : item.loaded === item.size ? 'finishing' : 'uploading'
 							// Nothing moves while offline, so no time left is known
 							this.speed = 0
+							this.remember(item)
 						},
 					},
 				})
@@ -425,8 +448,10 @@ export const useUploadsStore = defineStore('uploads', {
 		 * @param {boolean} left - whether this tab goes away, so another may go on with it at once
 		 */
 		remember(item, left = false) {
-			const { name, size, lastModified, type, target, projectId, assetId, folder, loaded } = item
-			writeRecords([...readRecords().filter((record) => record.target !== target), { name, size, lastModified, type, target, projectId, assetId, folder, loaded, seen: Date.now(), left }])
+			const { name, size, lastModified, type, target, projectId, assetId, folder, loaded, status } = item
+			// Status and speed too, so the other tabs show it just as this one does
+			const shared = { name, size, lastModified, type, target, projectId, assetId, folder, loaded, status, speed: this.speed }
+			writeRecords([...readRecords().filter((record) => record.target !== target), { ...shared, seen: Date.now(), left }])
 		},
 		/**
 		 * @param {object} item - an upload that needs no going on with any more

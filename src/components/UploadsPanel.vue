@@ -27,12 +27,10 @@ const FFMPEG_HELP = 'https://github.com/joshuabke/nextcloud-deliver/blob/main/do
 
 /** One line for the card and the dialog: how far the queue is */
 const summary = computed(() => {
-	const active = store.active.length
-	if (active > 0) {
-		return [n('deliver', '%n upload', '%n uploads', active), `${store.totals.percent} %`, timeLeft(store.totals.eta)].filter(Boolean).join(' · ')
-	}
-	if (store.items.some((item) => item.status === 'elsewhere')) {
-		return t('deliver', 'Uploading in another tab')
+	// The uploads of every tab, as the tab that sends them shows them
+	const sending = store.sending.length
+	if (sending > 0) {
+		return [n('deliver', '%n upload', '%n uploads', sending), `${store.totals.percent} %`, timeLeft(store.totals.eta)].filter(Boolean).join(' · ')
 	}
 	if (store.items.some((item) => item.status === 'done' && !settled(item))) {
 		return t('deliver', 'Processing')
@@ -140,9 +138,9 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 					hidden
 					@change="picked">
 			</div>
-			<p v-if="store.active.length" class="deliver-uploads__summary">
-				{{ summary }}<template v-if="store.speed > 0">
-					· {{ t('deliver', '{speed}/s', { speed: formatFileSize(store.speed) }) }}
+			<p v-if="store.sending.length" class="deliver-uploads__summary">
+				{{ summary }}<template v-if="store.totals.speed > 0">
+					· {{ t('deliver', '{speed}/s', { speed: formatFileSize(store.totals.speed) }) }}
 				</template>
 			</p>
 			<ul v-if="store.items.length" class="deliver-uploads__list">
@@ -176,7 +174,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 							{{ t('deliver', 'Open') }}
 						</NcButton>
 						<NcButton
-							v-if="!['done', 'finishing', 'elsewhere'].includes(item.status)"
+							v-if="!['done', 'finishing'].includes(item.status) && item.phase !== 'finishing'"
 							variant="tertiary"
 							:aria-label="t('deliver', 'Cancel the upload of {name}', { name: item.name })"
 							:title="t('deliver', 'Cancel')"
@@ -243,7 +241,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 				{{ t('deliver', 'Hide finished') }}
 			</NcButton>
 			<NcButton variant="secondary" @click="store.expanded = false">
-				{{ store.active.length ? t('deliver', 'Continue in the background') : t('deliver', 'Close') }}
+				{{ store.sending.length ? t('deliver', 'Continue in the background') : t('deliver', 'Close') }}
 			</NcButton>
 		</template>
 	</NcDialog>
@@ -254,7 +252,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 		:class="{ 'deliver-uploads-card--bar': isMobile }"
 		role="status">
 		<button type="button" class="deliver-uploads-card__open" @click="store.expanded = true">
-			<NcIconSvgWrapper :svg="store.active.length ? uploadIcon : doneIcon" :size="20" />
+			<NcIconSvgWrapper :svg="store.sending.length ? uploadIcon : doneIcon" :size="20" />
 			<span class="deliver-uploads-card__text">{{ summary }}</span>
 			<NcIconSvgWrapper :svg="expandIcon" :size="20" />
 		</button>
@@ -267,7 +265,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 				<NcIconSvgWrapper :svg="closeIcon" />
 			</template>
 		</NcButton>
-		<NcProgressBar v-if="store.active.length" class="deliver-uploads-card__progress" :value="store.totals.percent" />
+		<NcProgressBar v-if="store.sending.length" class="deliver-uploads-card__progress" :value="store.totals.percent" />
 	</div>
 	<input
 		ref="repicker"
