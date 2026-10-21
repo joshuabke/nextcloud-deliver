@@ -527,11 +527,15 @@ OC.L10N.register(
 		],
 		"The folder could not be made.": "Der Ordner konnte nicht angelegt werden.",
 		"Where the folder of the new Project goes": "Wohin der Ordner des neuen Projekts kommt",
-		"A folder of its own, where uploads go": "Ein eigener Ordner, in den Uploads gehen",
 		"Folder: {path}": "Ordner: {path}",
-		"Elsewhere…": "Woanders…",
 		"Give it a name, and a folder of its own for uploads": "Gib ihm einen Namen und einen eigenen Ordner für Uploads",
-		"Without a folder it collects files from anywhere, added in the Files sidebar; there is nowhere to upload to.": "Ohne Ordner sammelt es Dateien von überall, hinzugefügt in der Seitenleiste von Dateien; hochladen lässt sich dann nirgendwohin."
+		"Without a folder it collects files from anywhere, added in the Files sidebar; there is nowhere to upload to.": "Ohne Ordner sammelt es Dateien von überall, hinzugefügt in der Seitenleiste von Dateien; hochladen lässt sich dann nirgendwohin.",
+		"Default place for Project folders": "Standardort für Projektordner",
+		"In each user's Files. A new Project gets its folder there, unless the user picks another place.": "In den Dateien jedes Nutzers. Ein neues Projekt bekommt dort seinen Ordner, wenn kein anderer Ort gewählt wird.",
+		"Create a Project folder": "Projektordner anlegen",
+		"Choose a place": "Ort wählen",
+		"Uploading in another tab": "Wird in einem anderen Tab hochgeladen",
+		"{percent} %, in another tab": "{percent} %, in einem anderen Tab"
 	},
 	"nplurals=2; plural=(n != 1);"
 );

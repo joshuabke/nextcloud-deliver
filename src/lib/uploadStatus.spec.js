@@ -21,6 +21,7 @@ describe('upload status', () => {
 	it('says how far an upload is, and that a finishing one is in the server\'s hands', () => {
 		expect(statusOf({ status: 'uploading', loaded: 5, size: 10 })).toBe('50 %')
 		expect(statusOf({ status: 'finishing', loaded: 10, size: 10 })).toBe('Finishing on the server')
+		expect(statusOf({ status: 'elsewhere', loaded: 3, size: 10 })).toBe('30 %, in another tab')
 		expect(statusOf(done(derived({ proxy: 'ready' })))).toBe('Ready')
 	})
 

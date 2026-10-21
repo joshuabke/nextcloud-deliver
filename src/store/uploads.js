@@ -10,12 +10,20 @@ import { current, HEARTBEAT, sameFile, sentElsewhere, uploadFile } from '../lib/
 import { settled } from '../lib/uploadStatus.js'
 import { useProjectsStore } from './projects.js'
 
-/** Unfinished chunked uploads, to go on with after a reload (story 135) */
+/**
+ * Uploads that are being sent, by any tab, and unfinished chunked ones to go
+ * on with after a reload (story 135). Every tab shows them, so uploading is in
+ * one place however many tabs are open.
+ */
 const RECORDS = 'deliver.uploads'
+/** Finished uploads whose Processing the card still shows, in every tab and after a reload, until they are hidden */
+const DONE = 'deliver.uploads.done'
 /** Whether the server has ffmpeg (story 138); without it the uploading browser decodes the Waveform */
 export const hasFfmpeg = loadState('deliver', 'ffmpeg', true)
-/** Statuses of an upload that is still going on */
+/** Statuses of an upload that is still going on in this tab */
 const ACTIVE = ['waiting', 'uploading', 'finishing', 'paused']
+/** Statuses of an upload this tab only shows: another tab sends it, or it stopped and waits for its file */
+const MIRRORED = ['elsewhere', 'interrupted']
 
 /**
  * The server's largest chunk (files.chunked_upload.max_size), at least the
@@ -30,15 +38,20 @@ function chunkSizeFor(size) {
 	return max > 0 ? Math.max(max, 5 * 1024 * 1024, Math.ceil(size / 10000)) : 0
 }
 
-/** @return {object[]} the unfinished uploads of every tab */
-function readRecords() {
+/**
+ * @param {string} key - RECORDS or DONE
+ * @return {object[]} what every tab keeps there
+ */
+function read(key) {
 	try {
-		return JSON.parse(localStorage.getItem(RECORDS)) ?? []
+		return JSON.parse(localStorage.getItem(key)) ?? []
 	} catch {
 		return []
 	}
 }
+const readRecords = () => read(RECORDS)
 const writeRecords = (records) => localStorage.setItem(RECORDS, JSON.stringify(records))
+const writeDone = (done) => localStorage.setItem(DONE, JSON.stringify(done))
 
 let nextId = 1
 let polling = null
@@ -48,24 +61,17 @@ let polling = null
  * (stories 133–140). The dialog and its card in the corner show it.
  */
 export const useUploadsStore = defineStore('uploads', {
-	state: () => {
-		const now = Date.now()
-		// Older than a day, the server no longer has the chunks
-		const records = readRecords().filter((record) => current(record, now))
-		writeRecords(records)
-		return {
-			items: records
-				.filter((record) => !sentElsewhere(record, now))
-				.map((record) => ({ ...record, status: 'interrupted', loaded: 0, error: null, version: null, waveform: null, file: null })),
-			/** Whether the dialog is open; closed, the card sits in the corner while there are uploads */
-			expanded: false,
-			/** The folder of the view on screen that the dialog uploads into: { folderUrl, projectId, where }, or null */
-			target: null,
-			/** Bytes per second, smoothed */
-			speed: 0,
-			running: false,
-		}
-	},
+	state: () => ({
+		/** Filled by start() from what every tab keeps in localStorage */
+		items: [],
+		/** Whether the dialog is open; closed, the card sits in the corner while there are uploads */
+		expanded: false,
+		/** The folder of the view on screen that the dialog uploads into: { folderUrl, projectId, where }, or null */
+		target: null,
+		/** Bytes per second, smoothed */
+		speed: 0,
+		running: false,
+	}),
 	getters: {
 		/**
 		 * @param {object} state - the store's
@@ -78,12 +84,55 @@ export const useUploadsStore = defineStore('uploads', {
 			const loaded = this.active.reduce((sum, item) => sum + item.loaded, 0)
 			return { total, loaded, percent: total ? Math.floor(loaded / total * 100) : 100, eta: this.speed > 0 ? (total - loaded) / this.speed : null }
 		},
-		/** Whether the card may be closed: nothing sends, nothing is being made */
+		/** Whether the card may be closed: nothing sends, here or in another tab, and nothing is being made */
 		closable() {
-			return this.active.length === 0 && this.items.every((item) => item.status !== 'done' || settled(item))
+			return this.active.length === 0 && this.items.every((item) => item.status !== 'elsewhere' && (item.status !== 'done' || settled(item)))
 		},
 	},
 	actions: {
+		/** Shows what every tab has, now and whenever another tab changes it; once, by the dialog */
+		start() {
+			const now = Date.now()
+			// Older than a day: the server no longer has the chunks, and the Processing is long over
+			writeRecords(readRecords().filter((record) => current(record, now)))
+			writeDone(read(DONE).filter((done) => current(done, now)))
+			this.sync()
+			window.addEventListener('storage', (event) => {
+				if (event.key === RECORDS || event.key === DONE) {
+					this.sync()
+				}
+			})
+		},
+		/** Takes in the uploads other tabs send, stopped ones, and finished ones still shown */
+		sync() {
+			const now = Date.now()
+			const records = readRecords()
+			const mine = new Set(this.active.map((item) => item.target))
+			for (const record of records.filter((each) => !mine.has(each.target))) {
+				const live = sentElsewhere(record, now)
+				// A file sent in one piece cannot be gone on with
+				if (!live && !record.folder) {
+					continue
+				}
+				const shown = this.items.find((item) => item.target === record.target && MIRRORED.includes(item.status))
+				const fields = { ...record, status: live ? 'elsewhere' : 'interrupted', loaded: live ? record.loaded ?? 0 : 0 }
+				if (shown) {
+					Object.assign(shown, { ...fields, id: shown.id })
+				} else {
+					this.items.push({ ...fields, id: nextId++, fileId: null, error: null, version: null, waveform: null, file: null })
+				}
+			}
+			const targets = new Set(records.map((record) => record.target))
+			const done = read(DONE)
+			const versions = new Set(done.map((each) => each.versionId))
+			// Gone from the records, it was finished or cancelled; gone from DONE, a tab hid it
+			this.items = this.items.filter((item) => (!MIRRORED.includes(item.status) || targets.has(item.target))
+				&& (item.status !== 'done' || !item.version || versions.has(item.version.id)))
+			for (const each of done.filter((one) => !this.items.some((item) => item.version?.id === one.versionId))) {
+				this.items.push({ id: nextId++, name: each.name, size: each.size, projectId: each.projectId, assetId: each.assetId, status: 'done', loaded: each.size, error: null, version: { id: each.versionId }, waveform: null, file: null })
+			}
+			this.watch()
+		},
 		/**
 		 * Queues files for upload into a folder.
 		 *
@@ -164,7 +213,7 @@ export const useUploadsStore = defineStore('uploads', {
 		 * @param {object} item - the upload
 		 */
 		cancel(item) {
-			if (item.status === 'finishing') {
+			if (item.status === 'finishing' || item.status === 'elsewhere') {
 				return
 			}
 			item.controller?.abort()
@@ -174,14 +223,22 @@ export const useUploadsStore = defineStore('uploads', {
 			this.forget(item)
 			this.items = this.items.filter((each) => each !== item)
 		},
-		/** Takes the uploads off the list whose files and derived media are all there */
+		/** Takes the uploads off the list whose files and derived media are all there, in every tab */
 		hideFinished() {
-			this.items = this.items.filter((item) => item.status !== 'done' || !settled(item))
+			this.drop(this.items.filter((item) => item.status === 'done' && settled(item)))
 		},
-		/** Closes the card; what is left to go on with comes back after a reload */
+		/** Closes the card in every tab; what is left to go on with comes back after a reload */
 		close() {
-			this.items = this.items.filter((item) => ACTIVE.includes(item.status))
+			this.drop(this.items.filter((item) => !ACTIVE.includes(item.status) && item.status !== 'elsewhere'))
 			this.expanded = false
+		},
+		/**
+		 * @param {object[]} gone - uploads to take off the list, here and in the other tabs
+		 */
+		drop(gone) {
+			const versions = gone.map((item) => item.version?.id).filter(Boolean)
+			writeDone(read(DONE).filter((done) => !versions.includes(done.versionId)))
+			this.items = this.items.filter((item) => !gone.includes(item))
 		},
 		/**
 		 * Makes the derived media of an upload's Version again (story 140)
@@ -221,13 +278,13 @@ export const useUploadsStore = defineStore('uploads', {
 					item.waveform.progress = progress
 				}).catch(() => null)
 			}
-			// Other tabs see that this one sends it, also while a chunk or the final join takes long
-			const beat = setInterval(() => item.folder && this.remember(item), HEARTBEAT)
-			const leave = () => item.folder && this.remember(item, true)
+			// Other tabs show it and leave it alone, also while a chunk or the final join takes long
+			const beat = setInterval(() => this.remember(item), HEARTBEAT)
+			// Going away, a chunked upload waits for its file; one sent in one piece cannot go on
+			const leave = () => item.folder ? this.remember(item, true) : this.forget(item)
 			window.addEventListener('pagehide', leave)
-			if (item.folder) {
-				this.remember(item)
-			}
+			this.remember(item)
+			let shared = 0
 			// Bytes that were on the server before are not speed: the first report only sets the start
 			let last = null
 			try {
@@ -256,6 +313,11 @@ export const useUploadsStore = defineStore('uploads', {
 						if (loaded === item.size && item.status === 'uploading') {
 							item.status = 'finishing'
 						}
+						// Other tabs follow its progress once a second
+						if (now - shared > 1000) {
+							shared = now
+							this.remember(item)
+						}
 					},
 					env: {
 						signal,
@@ -273,6 +335,8 @@ export const useUploadsStore = defineStore('uploads', {
 				item.folder = null
 				const asset = await enableFile(item.fileId, item.projectId, item.assetId)
 				Object.assign(item, { status: 'done', loaded: item.size })
+				// Its Processing shows in every tab, and after a reload
+				writeDone([...read(DONE), { versionId: asset.versionId, name: item.name, size: item.size, projectId: item.projectId, assetId: item.assetId, seen: Date.now() }])
 				this.handIn(item, asset)
 				this.refreshProjects(item)
 				item.onDone?.(asset.versionId)
@@ -355,12 +419,12 @@ export const useUploadsStore = defineStore('uploads', {
 			}
 		},
 		/**
-		 * @param {object} item - an upload with an upload folder on the server
+		 * @param {object} item - an upload this tab sends, or sent until it stopped
 		 * @param {boolean} left - whether this tab goes away, so another may go on with it at once
 		 */
 		remember(item, left = false) {
-			const { id, name, size, lastModified, type, target, projectId, assetId, folder } = item
-			writeRecords([...readRecords().filter((record) => record.target !== target), { id, name, size, lastModified, type, target, projectId, assetId, folder, seen: Date.now(), left }])
+			const { name, size, lastModified, type, target, projectId, assetId, folder, loaded } = item
+			writeRecords([...readRecords().filter((record) => record.target !== target), { name, size, lastModified, type, target, projectId, assetId, folder, loaded, seen: Date.now(), left }])
 		},
 		/**
 		 * @param {object} item - an upload that needs no going on with any more
@@ -370,6 +434,3 @@ export const useUploadsStore = defineStore('uploads', {
 		},
 	},
 })
-
-// Interrupted uploads after a reload get ids of their own
-nextId = Math.max(0, ...readRecords().map((record) => record.id)) + 1

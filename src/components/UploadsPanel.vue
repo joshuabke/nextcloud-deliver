@@ -31,6 +31,9 @@ const summary = computed(() => {
 	if (active > 0) {
 		return [n('deliver', '%n upload', '%n uploads', active), `${store.totals.percent} %`, timeLeft(store.totals.eta)].filter(Boolean).join(' · ')
 	}
+	if (store.items.some((item) => item.status === 'elsewhere')) {
+		return t('deliver', 'Uploading in another tab')
+	}
 	if (store.items.some((item) => item.status === 'done' && !settled(item))) {
 		return t('deliver', 'Processing')
 	}
@@ -99,7 +102,11 @@ function warn(event) {
 		event.preventDefault()
 	}
 }
-onMounted(() => window.addEventListener('beforeunload', warn))
+onMounted(() => {
+	window.addEventListener('beforeunload', warn)
+	// The card shows every tab's uploads, and comes back after a reload
+	store.start()
+})
 onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 </script>
 
@@ -169,7 +176,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 							{{ t('deliver', 'Open') }}
 						</NcButton>
 						<NcButton
-							v-if="item.status !== 'done' && item.status !== 'finishing'"
+							v-if="!['done', 'finishing', 'elsewhere'].includes(item.status)"
 							variant="tertiary"
 							:aria-label="t('deliver', 'Cancel the upload of {name}', { name: item.name })"
 							:title="t('deliver', 'Cancel')"
@@ -180,7 +187,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 						</NcButton>
 					</div>
 					<NcProgressBar
-						v-if="['uploading', 'finishing', 'paused'].includes(item.status)"
+						v-if="['uploading', 'finishing', 'paused', 'elsewhere'].includes(item.status)"
 						:value="Math.floor(item.loaded / Math.max(1, item.size) * 100)" />
 					<div class="deliver-uploads__row">
 						<span

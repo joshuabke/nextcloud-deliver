@@ -217,6 +217,8 @@ class DerivedMediaTest extends TestCase {
 		self::assertArrayHasKey('states', $shown['data']['status']);
 		self::assertSame(400, $this->nc->ocs('PUT', '/admin/settings', ['maxJobs' => 0])['status']);
 		self::assertSame(400, $this->nc->ocs('PUT', '/admin/settings', ['hwEncoder' => 'quicksync'])['status']);
+		self::assertSame('/Deliver', $shown['data']['settings']['projectFolder'], 'new Projects get their folder in /Deliver unless an admin says otherwise');
+		self::assertSame(400, $this->nc->ocs('PUT', '/admin/settings', ['projectFolder' => 'Deliver'])['status'], 'a path starts at /');
 
 		$user = 'deliver-member-' . bin2hex(random_bytes(4));
 		$password = 'Member-' . bin2hex(random_bytes(8));

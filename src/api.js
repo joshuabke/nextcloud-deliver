@@ -185,19 +185,23 @@ export const listPublicAssets = () => axios.get(url('/assets')).then(data)
 
 /**
  * Makes a folder in the Member's Files, for a new Project to upload into
- * (story 98). One that is there already by that name is taken as it is.
+ * (story 98), and the folders above it that are missing. One that is there
+ * already by that name is taken as it is.
  *
  * @param {string} path - from the Member's home, such as /Clients/Spot
  * @return {Promise<number>} its file id
  */
 export async function makeFolder(path) {
-	const dav = generateRemoteUrl('dav') + '/files/' + encodeURIComponent(getCurrentUser()?.uid ?? '')
-		+ path.split('/').filter(Boolean).map((part) => '/' + encodeURIComponent(part)).join('')
-	await axios.request({ method: 'MKCOL', url: dav }).catch((error) => {
-		if (error.response?.status !== 405) {
-			throw error
-		}
-	})
+	let dav = generateRemoteUrl('dav') + '/files/' + encodeURIComponent(getCurrentUser()?.uid ?? '')
+	// The folders above it too, such as the default /Deliver on its first use
+	for (const part of path.split('/').filter(Boolean)) {
+		dav += '/' + encodeURIComponent(part)
+		await axios.request({ method: 'MKCOL', url: dav }).catch((error) => {
+			if (error.response?.status !== 405) {
+				throw error
+			}
+		})
+	}
 	return await fileIdAt(axios.request, dav) ?? Promise.reject(new Error(t('deliver', 'The folder could not be made.')))
 }
 

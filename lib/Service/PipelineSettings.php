@@ -25,6 +25,8 @@ class PipelineSettings {
 		'hwEncoder' => ['hw_encoder', 'string', Encoder::NONE],
 		'hwDevice' => ['hw_device', 'string', Encoder::DEFAULT_DEVICE],
 		'extraArgs' => ['extra_args', 'string', ''],
+		// Where a new Project's folder goes in each Member's Files, unless they pick another place (story 98)
+		'projectFolder' => ['project_folder', 'string', '/Deliver'],
 	];
 
 	public function __construct(
@@ -98,7 +100,7 @@ class PipelineSettings {
 		if ($name === 'hwEncoder' && !in_array($value, Encoder::KINDS, true)) {
 			throw new InvalidRequestException('The hardware encoder is one of ' . implode(', ', Encoder::KINDS));
 		}
-		if (in_array($name, ['ffmpegPath', 'ffprobePath', 'hwDevice'], true) && $value !== '' && !str_starts_with($value, '/')) {
+		if (in_array($name, ['ffmpegPath', 'ffprobePath', 'hwDevice', 'projectFolder'], true) && $value !== '' && !str_starts_with($value, '/')) {
 			throw new InvalidRequestException('A path starts at /');
 		}
 		return $value;

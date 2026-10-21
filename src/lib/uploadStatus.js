@@ -57,6 +57,7 @@ export function statusOf(item) {
 		case 'waiting': return t('deliver', 'Waiting')
 		case 'uploading': return `${Math.floor(item.loaded / Math.max(1, item.size) * 100)} %`
 		case 'finishing': return t('deliver', 'Finishing on the server')
+		case 'elsewhere': return t('deliver', '{percent} %, in another tab', { percent: Math.floor(item.loaded / Math.max(1, item.size) * 100) })
 		case 'paused': return t('deliver', 'Paused until the network is back')
 		case 'interrupted': return t('deliver', 'Interrupted. Pick the file again to go on where it stopped.')
 		case 'failed': return item.error

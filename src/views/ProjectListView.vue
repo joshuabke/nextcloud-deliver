@@ -8,6 +8,7 @@ import icon from '@mdi/svg/svg/folder-play-outline.svg?raw'
 import openIcon from '@mdi/svg/svg/open-in-app.svg?raw'
 import addIcon from '@mdi/svg/svg/plus.svg?raw'
 import { FilePickerType, getFilePickerBuilder } from '@nextcloud/dialogs'
+import { loadState } from '@nextcloud/initial-state'
 import { t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import { computed, ref } from 'vue'
@@ -107,8 +108,8 @@ async function remove(project) {
 const naming = ref(null)
 /** Whether the new Project gets a folder of its own, named after it, for uploads to go to (story 98) */
 const ownFolder = ref(true)
-/** Where that folder goes, from the Member's home */
-const parent = ref('/')
+/** Where that folder goes, from the Member's home: the admin's default place, /Deliver unless set otherwise */
+const parent = ref(loadState('deliver', 'projectFolder', '/Deliver'))
 const folderPath = computed(() => `${parent.value.replace(/\/$/, '')}/${naming.value?.trim() ?? ''}`)
 
 /** Picks the folder the new Project's folder goes into */
@@ -227,12 +228,12 @@ async function create() {
 			<form id="deliver-new-project" @submit.prevent="createNamed">
 				<NcTextField v-model="naming" :label="t('deliver', 'Name')" autofocus />
 				<NcCheckboxRadioSwitch v-model="ownFolder" type="switch">
-					{{ t('deliver', 'A folder of its own, where uploads go') }}
+					{{ t('deliver', 'Create a Project folder') }}
 				</NcCheckboxRadioSwitch>
 				<div v-if="ownFolder" class="deliver-projects__folder">
 					<span>{{ t('deliver', 'Folder: {path}', { path: folderPath }) }}</span>
 					<NcButton variant="tertiary" @click="pickParent">
-						{{ t('deliver', 'Elsewhere…') }}
+						{{ t('deliver', 'Choose a place') }}
 					</NcButton>
 				</div>
 				<p v-else class="deliver-projects__hint">

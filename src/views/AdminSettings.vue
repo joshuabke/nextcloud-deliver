@@ -99,6 +99,10 @@ function save() {
 					v-model="settings.hwDevice"
 					:label="t('deliver', 'VAAPI device')" />
 				<NcTextField
+					v-model="settings.projectFolder"
+					:label="t('deliver', 'Default place for Project folders')"
+					:helperText="t('deliver', 'In each user\'s Files. A new Project gets its folder there, unless the user picks another place.')" />
+				<NcTextField
 					v-model="settings.extraArgs"
 					:label="t('deliver', 'Extra ffmpeg arguments for Proxies')"
 					:helperText="t('deliver', 'Added before the output file, for example -threads 4')" />

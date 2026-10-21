@@ -48,6 +48,7 @@ class AdminSettingsController extends OCSController {
 		?string $hwEncoder = null,
 		?string $hwDevice = null,
 		?string $extraArgs = null,
+		?string $projectFolder = null,
 	): Response {
 		$changes = [
 			'ffmpegPath' => $ffmpegPath,
@@ -58,6 +59,7 @@ class AdminSettingsController extends OCSController {
 			'hwEncoder' => $hwEncoder,
 			'hwDevice' => $hwDevice,
 			'extraArgs' => $extraArgs,
+			'projectFolder' => $projectFolder,
 		];
 		return $this->guard(fn () => ['settings' => $this->settings->save($changes), 'status' => $this->settings->status()]);
 	}
