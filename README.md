@@ -55,27 +55,23 @@ Here is a table of providers and when the info was verified.
 Everything marked with a ❓ has yet to be confirmed and is just assumed from their documentation.
 Additions or corrections are welcome as issues or pull requests!
 
-| Provider | installable | ffmpeg | Shell / `occ` | Verified | comment |
+| Provider | Installable | ffmpeg | Shell / `occ` | Verified | Comment |
 | --- | --- | --- | --- | --- | --- |
-| Hetzner Storage Share | ✅ | ❌** | ❌ | 2026-10 | ffmpeg is on their roadmap |
-| wolkesicher.de | ✅ | ❓ | ❓ | 2026-11 | ffmpeg unclear atm |
-| IONOS Managed Nextcloud | ❌ | ❌ | ❓ | 2026-11 | their nc version is too old (32) |
-| hosting.de Managed Nextcloud | ❌ | ❌ | ❓ | 2026-10 ||
-| The Good Cloud (Business, 25+ users) | ❓ | ❓ | ❓ | - ||
-| The Good Cloud (Family, Business) | 🟡* | ❓ | ❓ | - ||
-| Woelkli (own instance) | ❓ | ❓ | ❓ | - ||
-| Zaclys (Stratus, Alto, Cirrus) | ❓ | ❓ | ❓ | - ||
-| Webo (Admin) | ❓ | ❓ | ❓ | - ||
-| Cloud68 | ❓ | ❓ | ❓ | - ||
-| Stackhero | ❓ | ❓ | ❓ | - ||
-| Tab.digital | ❓ | ❓ | ❓ | - ||
-| Murena Workspace | ❌ | ❓ | ❌ | - ||
-| Framaspace | ❌ | ❓ | ❌ | - ||
-| MagentaCLOUD | ❌ | ❓ | ❌ | - ||
-| Own server ([deploy/](deploy/README.md)) | ✅ | ✅ | ✅ | 2026-10 ||
-
-\* The provider allows only apps it has approved; ask it to add Deliver.
-
+| Own server ([deploy/](deploy/README.md)) or VPS | ✅ | ✅ | ✅ | 2026-10 | Full root access |
+| wolkesicher.de (Managed Standard) | ✅ | ✅ | ❌ | 2026-11 | `ffmpeg` included on standard managed plans; no SSH/`occ` without upgrading |
+| Hetzner Storage Share | ✅ | ❌ | ❌ | 2026-10 | Managed SaaS (distinct from Hetzner Cloud VPS); `ffmpeg` is on their roadmap |
+| Webo (Admin Shared) | ✅ | ❌ | ❌ | 2026-10 (by AI) | Shared hosting tier with Nextcloud Admin & App Store |
+| Tab.digital (Managed Nextcloud) | ✅ | ❌ | ❌ | 2026-10 (by AI) | Managed `cloud.tab.digital` tiers (Standard/Premium) include App Store |
+| Zaclys (Stratus, Alto, Cirrus) | ✅ | ❌ | ❌ | 2026-10 (by AI) | Dedicated managed instances with Admin & App Store; server/SSH/`occ` via support |
+| Cloud68 (Managed Dedicated) | ✅ | ❓ | ❌ | 2026-10 (by AI) | Admin & App Store access (ticket recommended for untested apps); no SSH/`occ` provided |
+| hosting.de Managed Nextcloud | 🟡 | ❌ | ❌ | 2026-10 | Managed SaaS (distinct from hosting.de VPS); whitelisted apps via support/panel only, no SSH/`occ` |
+| Woelkli (own instance) | 🟡 | ❌ | ❌ | 2026-10 (by AI) | Private multi-user plans (Levels C5–C7) allow selecting from a curated plugin catalog only; no SSH/`occ` |
+| The Good Cloud | 🟡 | ❌ | ❌ | 2026-11 | No app store on free/personal tiers; pre-selected apps on Business plans; no shell/`occ` |
+| Stackhero (Managed Nextcloud) | ❌ | ❌ | ❌ | 2026-10 (by AI) | Currently stuck on NC 32; immutable container with no SSH/`occ` or `ffmpeg` |
+| IONOS Managed Nextcloud | ❌ | ❌ | ❌ | 2026-11 | Currently stuck on NC 32; locked-down SaaS (distinct from IONOS Cloud/VPS), no SSH/`occ` |
+| Murena Workspace | ❌ | ❌ | ❌ | 2026-10 (by AI) | Fixed /e/OS cloud ecosystem; no custom apps, no `ffmpeg`, no shell/`occ` |
+| Framaspace | ❌ | ❌ | ❌ | 2026-10 (by AI) | Locked-down NGO/community instance with fixed app list; no App Store or CLI access |
+| MagentaCLOUD | ❌ | ❌ | ❌ | 2026-10 (by AI) | Proprietary Telekom Nextcloud fork; closed ecosystem, no App Store or shell |
 ## Documentation
 
 - [Running Deliver](docs/admin.md): requirements, the derived-media pipeline, hardware encoders, live updates
