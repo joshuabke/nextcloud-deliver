@@ -43,7 +43,7 @@ import VersionStack from '../components/VersionStack.vue'
 import { assignAsset, deleteAsset, disableAsset, enableFile, errorMessage, regenerateVersion, renameFile, stackVersion, updateAsset } from '../api.js'
 import { useQuery } from '../composables/query.js'
 import { confirmRemoval } from '../confirm.js'
-import { FILTER_LABELS, FILTERS, found, passes, SORT_OPTIONS, sortAssets, SORTS } from '../lib/filters.js'
+import { allMissing, FILTER_LABELS, FILTERS, found, passes, selectAll, SORT_OPTIONS, sortAssets, SORTS } from '../lib/filters.js'
 import { groupByFolder, inFolder, projectDavPath, projectDir } from '../lib/folders.js'
 import { acceptFor, mediaKind, stackKind } from '../lib/media.js'
 import { stackSuggestions } from '../lib/suggestions.js'
@@ -159,7 +159,12 @@ const shown = computed(() => inView.value.filter((asset) => passes(asset, filter
 // Sorted within each folder, the folders themselves by path
 const groups = computed(() => groupByFolder(sortAssets(shown.value, sort.value)))
 /** The Assets on screen that can be ticked */
-const selectable = computed(() => shown.value.filter((asset) => asset.canWrite))
+const selectable = computed(() => selectAll(shown.value.filter((asset) => asset.canWrite)))
+/** Whether the ticked Assets are Missing ones; null while none is ticked. Missing ones are only ticked together (story 141) */
+const tickedMissing = computed(() => {
+	const first = project.value?.assets.find((asset) => selected.value.includes(asset.id))
+	return first ? allMissing(first) : null
+})
 /** Media files in the folder on screen that are no Assets, greyed out under them to add one by one; they have no state to filter by */
 const notUpForReview = computed(() => filter.value !== 'all'
 	? []
@@ -374,6 +379,13 @@ function assetItems(asset) {
  */
 function selectionItems() {
 	const assets = project.value.assets.filter((asset) => selected.value.includes(asset.id))
+	// Of Missing Assets, only their review data is left to go
+	if (tickedMissing.value) {
+		return [
+			{ label: t('deliver', 'Clear the selection'), icon: clearIcon, action: () => { selected.value = [] } },
+			{ label: t('deliver', 'Delete'), icon: deleteIcon, danger: true, action: () => deleteFiles(assets) },
+		]
+	}
 	const failed = assets.filter((asset) => asset.versions[0].processingFailed)
 	return [
 		failed.length > 0 && { label: t('deliver', 'Process again'), icon: retryIcon, action: () => processAgain(failed) },
@@ -451,7 +463,9 @@ async function remove(assets) {
 async function deleteFiles(assets) {
 	const confirmed = await confirmRemoval(
 		n('deliver', 'Delete this Asset?', 'Delete %n Assets?', assets.length),
-		n('deliver', 'The files of all its Versions go to the trash of Files. Its Comments, Drawings and Approvals are deleted.', 'The files of all their Versions go to the trash of Files. Their Comments, Drawings and Approvals are deleted.', assets.length),
+		assets.every(allMissing)
+			? n('deliver', 'Its files are in the trash of Files already. Its Comments, Drawings and Approvals are deleted.', 'Their files are in the trash of Files already. Their Comments, Drawings and Approvals are deleted.', assets.length)
+			: n('deliver', 'The files of all its Versions go to the trash of Files. Its Comments, Drawings and Approvals are deleted.', 'The files of all their Versions go to the trash of Files. Their Comments, Drawings and Approvals are deleted.', assets.length),
 		t('deliver', 'Delete'),
 	)
 	if (confirmed) {
@@ -601,6 +615,7 @@ function dropped(event) {
 						:canWrite="asset.canWrite"
 						:selected="selected.includes(asset.id)"
 						:selecting="selected.length > 0"
+						:locked="tickedMissing !== null && tickedMissing !== allMissing(asset)"
 						@select="toggle(asset)"
 						@stack="accept"
 						@versions="managing = $event.id"

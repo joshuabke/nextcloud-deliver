@@ -110,3 +110,18 @@ export function sortProjects(projects, sort) {
 	}))
 	return sortAssets(keyed, sort).map((each) => each.project)
 }
+
+/**
+ * @param {{versions: Array<{state: string}>}} asset - an Asset with its Version Stack
+ * @return {boolean} whether every file of it is in the trash, so ticking it goes only with others like it (story 141)
+ */
+export const allMissing = (asset) => asset.versions.every((version) => version.state === 'missing')
+
+/**
+ * @param {object[]} assets - the Assets on screen that may be ticked
+ * @return {object[]} those "Select all" ticks: the ones with files, or the Missing ones when there are no others
+ */
+export function selectAll(assets) {
+	const present = assets.filter((asset) => !allMissing(asset))
+	return present.length ? present : assets
+}

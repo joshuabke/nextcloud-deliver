@@ -185,6 +185,13 @@ class ProjectApiTest extends TestCase {
 		$trash = $this->nc->request('PROPFIND', '/remote.php/dav/trashbin/' . rawurlencode(getenv('DELIVER_TEST_USER') ?: 'admin') . '/trash', null, ['Depth: 1'])['body'];
 		self::assertStringContainsString('cut_v1.mp4', $trash, 'in the trash of Files');
 		self::assertStringContainsString('cut_v2.mp4', $trash);
+
+		// An Asset whose file is in the trash already is still the Members' to delete, and goes without a trace
+		$this->nc->delete("{$this->root}/other.mp4");
+		[$missing] = $shown($this->nc)['assets'];
+		self::assertSame(['missing', true], [$missing['versions'][0]['state'], $missing['canWrite']]);
+		self::assertSame(200, $this->nc->ocs('DELETE', "/assets/{$ids['other']}/files")['status']);
+		self::assertSame([], $shown($this->nc)['assets']);
 	}
 
 	public function testAProjectMadeAgainGetsItsAssetsBackFromNoProject(): void {

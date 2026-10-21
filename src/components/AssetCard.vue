@@ -28,6 +28,8 @@ const props = defineProps({
 	selected: { type: Boolean, default: false },
 	/** Whether any card is ticked, so every checkbox shows */
 	selecting: { type: Boolean, default: false },
+	/** Whether it may not join the ticked ones: Missing Assets go only with Missing ones (story 141) */
+	locked: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['stack', 'menu', 'versions', 'select'])
@@ -120,6 +122,8 @@ const status = computed(() => {
 			class="deliver-card__select"
 			type="checkbox"
 			:checked="selected"
+			:disabled="locked"
+			:title="!locked ? undefined : t('deliver', 'Missing Assets are selected only together with other Missing ones')"
 			:aria-label="t('deliver', 'Select {name}', { name: asset.name })"
 			@change="emit('select')">
 		<NcButton
@@ -248,6 +252,10 @@ const status = computed(() => {
 	cursor: pointer;
 	accent-color: var(--color-primary-element);
 	opacity: 0;
+}
+
+.deliver-card__select:disabled {
+	cursor: not-allowed;
 }
 
 .deliver-card:hover .deliver-card__select,

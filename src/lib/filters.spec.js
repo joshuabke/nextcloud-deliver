@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { found, passes, projectPasses, sortAssets, sortProjects } from './filters.js'
+import { allMissing, found, passes, projectPasses, selectAll, sortAssets, sortProjects } from './filters.js'
 
 const version = (fields = {}) => ({ name: 'cut_v2.mov', unseen: 0, approvals: { approved: 0, changes: 0 }, ...fields })
 const asset = (fields = {}, versions = [version()]) => ({ name: 'Cut', dueDate: null, versions, ...fields })
@@ -47,5 +47,19 @@ describe('filters', () => {
 		expect(names('created')).toEqual(['Kampagne', 'Imagefilm', 'Archiv'])
 		expect(names('due')).toEqual(['Imagefilm', 'Kampagne', 'Archiv'])
 		expect(names('name')).toEqual(['Archiv', 'Imagefilm', 'Kampagne'])
+	})
+})
+
+describe('ticking Assets', () => {
+	const missing = asset({ name: 'gone' }, [version({ state: 'missing' })])
+	const half = asset({ name: 'half' }, [version({ state: 'missing' }), version({ state: 'ready' })])
+
+	it('counts an Asset as Missing only when every file of it is', () => {
+		expect([allMissing(missing), allMissing(half)]).toEqual([true, false])
+	})
+
+	it('selects the Assets with files, or the Missing ones when there are no others', () => {
+		expect(selectAll([missing, half]).map((each) => each.name)).toEqual(['half'])
+		expect(selectAll([missing]).map((each) => each.name)).toEqual(['gone'])
 	})
 })

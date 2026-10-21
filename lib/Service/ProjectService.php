@@ -996,6 +996,13 @@ class ProjectService {
 					) || ($version->getPlayable() === null && $version->getDerivedError() !== null),
 				];
 			}
+			if ($path === null) {
+				// Every file is Missing: who manages the Project manages the Asset, as in its own view
+				try {
+					$canWrite = $this->reachVersion($uid, $stack[0]->getId())[2];
+				} catch (NotFoundException) {
+				}
+			}
 			$result[] = [
 				'id' => $asset->getId(),
 				'name' => $this->stacks->nameOf($asset),

@@ -520,6 +520,11 @@ OC.L10N.register(
 		"_%n Asset selected_::_%n Assets selected_": [
 			"%n Asset ausgewählt",
 			"%n Assets ausgewählt"
+		],
+		"Missing Assets are selected only together with other Missing ones": "Fehlende Assets lassen sich nur zusammen mit anderen fehlenden auswählen",
+		"_Its files are in the trash of Files already. Its Comments, Drawings and Approvals are deleted._::_Their files are in the trash of Files already. Their Comments, Drawings and Approvals are deleted._": [
+			"Seine Dateien liegen schon im Papierkorb von Dateien. Seine Kommentare, Zeichnungen und Abnahmen werden gelöscht.",
+			"Ihre Dateien liegen schon im Papierkorb von Dateien. Ihre Kommentare, Zeichnungen und Abnahmen werden gelöscht."
 		]
 	},
 	"nplurals=2; plural=(n != 1);"
