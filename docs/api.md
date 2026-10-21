@@ -15,6 +15,7 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | POST | `/assets` `{fileId, projectId, assetId}` | Enable one media file for review: into the Project given, 0 for No Project, or without one the Folder Project above it, else No Project; with `assetId`, as the next Version of that Asset of the same kind of media, a file already in review moving over |
 | PUT | `/assets/{id}/project` `{projectId}` | Put an Asset into another Project, or 0 for No Project; no file moves |
 | DELETE | `/assets/{id}` | Take a file out of Deliver, the file stays |
+| DELETE | `/assets/{id}/files` | Delete an Asset with its files: they go to the trash of Files, the Asset with its review data at once |
 | GET | `/versions/{id}/members` | Who can be @mentioned on a Version: whoever can open its file |
 | GET | `/versions/{id}` | Project, Asset and Version Stack for the Review view |
 | PUT | `/versions/{id}` `{number, autoStacked}` | Set the Version Number, or take note of an automatic stack |
