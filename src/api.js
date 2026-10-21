@@ -1,7 +1,9 @@
+import { getCurrentUser } from '@nextcloud/auth'
 import axios from '@nextcloud/axios'
 import { getLanguage, t } from '@nextcloud/l10n'
-import { generateOcsUrl, generateUrl } from '@nextcloud/router'
+import { generateOcsUrl, generateRemoteUrl, generateUrl } from '@nextcloud/router'
 import { baseLanguage } from './lib/language.js'
+import { fileIdAt } from './lib/upload.js'
 import { decodeWaveform } from './lib/waveform.js'
 
 /** Set on the public review page; Members leave it null and use the OCS API */
@@ -180,6 +182,24 @@ export const updateReviewer = (name, email, mail, language = baseLanguage(getLan
 export const forgetReviewer = () => axios.delete(url('/reviewer'))
 /** Every file behind the link that is an Asset: [{ fileId, versionId, assetId }], Versions of one Asset share its newest versionId */
 export const listPublicAssets = () => axios.get(url('/assets')).then(data)
+
+/**
+ * Makes a folder in the Member's Files, for a new Project to upload into
+ * (story 98). One that is there already by that name is taken as it is.
+ *
+ * @param {string} path - from the Member's home, such as /Clients/Spot
+ * @return {Promise<number>} its file id
+ */
+export async function makeFolder(path) {
+	const dav = generateRemoteUrl('dav') + '/files/' + encodeURIComponent(getCurrentUser()?.uid ?? '')
+		+ path.split('/').filter(Boolean).map((part) => '/' + encodeURIComponent(part)).join('')
+	await axios.request({ method: 'MKCOL', url: dav }).catch((error) => {
+		if (error.response?.status !== 405) {
+			throw error
+		}
+	})
+	return await fileIdAt(axios.request, dav) ?? Promise.reject(new Error(t('deliver', 'The folder could not be made.')))
+}
 
 /**
  * Renames a file in its folder through Nextcloud's own WebDAV (story 131);

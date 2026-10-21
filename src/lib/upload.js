@@ -191,11 +191,11 @@ export async function uploadFile({ request, file, target, uploadsUrl, chunkSize,
 
 /**
  * @param {(config: object) => Promise<object>} request - axios, or a fake of it
- * @param {string} url - WebDAV URL of a file
- * @param {AbortSignal} signal - ends the request
- * @return {Promise<?number>} its file id, or null when there is no file
+ * @param {string} url - WebDAV URL of a file or folder
+ * @param {AbortSignal} [signal] - ends the request
+ * @return {Promise<?number>} its file id, or null when there is nothing
  */
-function fileIdAt(request, url, signal) {
+export function fileIdAt(request, url, signal) {
 	return request({
 		method: 'PROPFIND',
 		url,

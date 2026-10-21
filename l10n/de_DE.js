@@ -112,7 +112,6 @@ OC.L10N.register(
 		"Frame rate when a file does not tell": "Framerate, wenn eine Datei keine angibt",
 		"Frames": "Frames",
 		"Fullscreen": "Vollbild",
-		"Give it a name and add files from anywhere": "Geben Sie ihm einen Namen und fügen Sie Dateien von überall hinzu",
 		"Give your name above to comment.": "Geben Sie oben Ihren Namen an, um zu kommentieren.",
 		"Go to this Frame": "Zu diesem Frame springen",
 		"Guest": "Gast",
@@ -525,7 +524,14 @@ OC.L10N.register(
 		"_Its files are in the trash of Files already. Its Comments, Drawings and Approvals are deleted._::_Their files are in the trash of Files already. Their Comments, Drawings and Approvals are deleted._": [
 			"Seine Dateien liegen schon im Papierkorb von Dateien. Seine Kommentare, Zeichnungen und Abnahmen werden gelöscht.",
 			"Ihre Dateien liegen schon im Papierkorb von Dateien. Ihre Kommentare, Zeichnungen und Abnahmen werden gelöscht."
-		]
+		],
+		"The folder could not be made.": "Der Ordner konnte nicht angelegt werden.",
+		"Where the folder of the new Project goes": "Wohin der Ordner des neuen Projekts kommt",
+		"A folder of its own, where uploads go": "Ein eigener Ordner, in den Uploads gehen",
+		"Folder: {path}": "Ordner: {path}",
+		"Elsewhere…": "Woanders…",
+		"Give it a name, and a folder of its own for uploads": "Geben Sie ihm einen Namen und einen eigenen Ordner für Uploads",
+		"Without a folder it collects files from anywhere, added in the Files sidebar; there is nowhere to upload to.": "Ohne Ordner sammelt es Dateien von überall, hinzugefügt in der Seitenleiste von Dateien; hochladen lässt sich dann nirgendwohin."
 	},
 	"nplurals=2; plural=(n != 1);"
 );
