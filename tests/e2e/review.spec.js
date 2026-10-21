@@ -162,6 +162,11 @@ test.describe('Review view', () => {
 		await expect(page.getByRole('menuitem', { name: 'Open' })).toHaveCount(0)
 		await page.getByRole('menuitem', { name: 'Clear the selection' }).click()
 		await expect(second.getByRole('checkbox', { name: 'Select second' })).not.toBeChecked()
+		// The checkbox at the start of the filter row ticks every card, and clears them again
+		await page.getByRole('checkbox', { name: 'Select all' }).check()
+		await expect(third.getByRole('checkbox', { name: 'Select third' })).toBeChecked()
+		await page.getByRole('checkbox', { name: 'Clear the selection' }).uncheck()
+		await expect(third.getByRole('checkbox', { name: 'Select third' })).not.toBeChecked()
 	})
 
 	test('renames, removes and stacks from the menus of the cards', async () => {

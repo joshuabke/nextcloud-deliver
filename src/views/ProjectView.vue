@@ -158,6 +158,8 @@ const filters = computed(() => FILTERS.map((id) => ({
 const shown = computed(() => inView.value.filter((asset) => passes(asset, filter.value) && found(asset, query.value)))
 // Sorted within each folder, the folders themselves by path
 const groups = computed(() => groupByFolder(sortAssets(shown.value, sort.value)))
+/** The Assets on screen that can be ticked */
+const selectable = computed(() => shown.value.filter((asset) => asset.canWrite))
 /** Media files in the folder on screen that are no Assets, greyed out under them to add one by one; they have no state to filter by */
 const notUpForReview = computed(() => filter.value !== 'all'
 	? []
@@ -561,7 +563,19 @@ function dropped(event) {
 				v-model:filter="filter"
 				v-model:sort="sort"
 				:filters="filters"
-				:sorts="SORT_OPTIONS" />
+				:sorts="SORT_OPTIONS">
+				<template #start>
+					<!-- Ticked while any Asset is: a click clears the selection, otherwise it ticks every card on screen that may be changed -->
+					<input
+						v-if="selectable.length"
+						class="deliver-project__select-all"
+						type="checkbox"
+						:checked="selected.length > 0"
+						:aria-label="selected.length ? t('deliver', 'Clear the selection') : t('deliver', 'Select all')"
+						:title="selected.length ? t('deliver', 'Clear the selection') : t('deliver', 'Select all')"
+						@change="selected = selected.length ? [] : selectable.map((asset) => asset.id)">
+				</template>
+			</FilterBar>
 			<NcEmptyContent
 				v-if="project.assets.length && shown.length === 0"
 				:name="t('deliver', 'No Asset fits')" />
@@ -706,6 +720,15 @@ function dropped(event) {
 	flex-direction: column;
 	gap: calc(4 * var(--default-grid-baseline));
 	padding: 0 calc(4 * var(--default-grid-baseline)) calc(6 * var(--default-grid-baseline));
+}
+
+.deliver-project__select-all {
+	width: 20px;
+	height: 20px;
+	min-height: 0;
+	margin: 0 calc(2 * var(--default-grid-baseline));
+	cursor: pointer;
+	accent-color: var(--color-primary-element);
 }
 
 /* One row next to the navigation toggle, which sits in the top left corner */
