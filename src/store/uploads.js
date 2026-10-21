@@ -130,6 +130,8 @@ export const useUploadsStore = defineStore('uploads', {
 				&& (item.status !== 'done' || !item.version || versions.has(item.version.id)))
 			for (const each of done.filter((one) => !this.items.some((item) => item.version?.id === one.versionId))) {
 				this.items.push({ id: nextId++, name: each.name, size: each.size, projectId: each.projectId, assetId: each.assetId, status: 'done', loaded: each.size, error: null, version: { id: each.versionId }, waveform: null, file: null })
+				// Read at once, so a finished one does not say Processing until the next round
+				this.refresh(this.items.at(-1))
 			}
 			this.watch()
 		},
