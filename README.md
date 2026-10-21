@@ -22,7 +22,7 @@
   - Images: JPEG, PNG, WebP, GIF, AVIF
   - Everything else (ProRes, H.265, MXF, AVI …) needs ffmpeg
 - **Waveforms, thumbnails and scrubbing** by hovering over a video
-- **Fully mobile ready**
+- **Fully mobile ready** use as webapp on iOS and Android, receive notifications via the official nextcloud app!
 - **With ffmpeg on the server**
   - Proxies, thumbnails and waveforms for every format ffmpeg reads
   - Hardware encoding: VAAPI, NVENC, VideoToolbox
