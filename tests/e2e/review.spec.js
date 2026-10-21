@@ -162,6 +162,13 @@ test.describe('Review view', () => {
 		await expect(page.getByRole('menuitem', { name: 'Open' })).toHaveCount(0)
 		await page.getByRole('menuitem', { name: 'Clear the selection' }).click()
 		await expect(second.getByRole('checkbox', { name: 'Select second' })).not.toBeChecked()
+		// A shift-click ticks every card from the one clicked last
+		const cards = page.locator('.deliver-card__select')
+		await cards.first().check()
+		await cards.last().click({ modifiers: ['Shift'] })
+		await expect(page.locator('.deliver-card__select:checked')).toHaveCount(await cards.count())
+		await page.getByRole('checkbox', { name: 'Clear the selection' }).uncheck()
+
 		// The checkbox at the start of the filter row ticks every card, and clears them again
 		await page.getByRole('checkbox', { name: 'Select all' }).check()
 		await expect(third.getByRole('checkbox', { name: 'Select third' })).toBeChecked()

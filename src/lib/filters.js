@@ -125,3 +125,18 @@ export function selectAll(assets) {
 	const present = assets.filter((asset) => !allMissing(asset))
 	return present.length ? present : assets
 }
+
+/**
+ * @param {object[]} assets - the Assets in the order they are on screen
+ * @param {number} from - the id of the Asset ticked last
+ * @param {number} to - the id of the Asset shift-clicked now
+ * @return {object[]} the Assets from one to the other, both included; only the clicked one when the first is gone
+ */
+export function between(assets, from, to) {
+	const ids = assets.map((asset) => asset.id)
+	const [start, end] = [ids.indexOf(from), ids.indexOf(to)]
+	if (start === -1) {
+		return assets.filter((asset) => asset.id === to)
+	}
+	return assets.slice(Math.min(start, end), Math.max(start, end) + 1)
+}

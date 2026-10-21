@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { allMissing, found, passes, projectPasses, selectAll, sortAssets, sortProjects } from './filters.js'
+import { allMissing, between, found, passes, projectPasses, selectAll, sortAssets, sortProjects } from './filters.js'
 
 const version = (fields = {}) => ({ name: 'cut_v2.mov', unseen: 0, approvals: { approved: 0, changes: 0 }, ...fields })
 const asset = (fields = {}, versions = [version()]) => ({ name: 'Cut', dueDate: null, versions, ...fields })
@@ -61,5 +61,12 @@ describe('ticking Assets', () => {
 	it('selects the Assets with files, or the Missing ones when there are no others', () => {
 		expect(selectAll([missing, half]).map((each) => each.name)).toEqual(['half'])
 		expect(selectAll([missing]).map((each) => each.name)).toEqual(['gone'])
+	})
+
+	it('takes every Asset between the one ticked last and the one shift-clicked, either way round', () => {
+		const row = [1, 2, 3, 4].map((id) => ({ id }))
+		expect(between(row, 2, 4).map((each) => each.id)).toEqual([2, 3, 4])
+		expect(between(row, 4, 1).map((each) => each.id)).toEqual([1, 2, 3, 4])
+		expect(between(row, 9, 3).map((each) => each.id)).toEqual([3])
 	})
 })

@@ -125,7 +125,7 @@ const status = computed(() => {
 			:disabled="locked"
 			:title="!locked ? undefined : t('deliver', 'Missing Assets are selected only together with other Missing ones')"
 			:aria-label="t('deliver', 'Select {name}', { name: asset.name })"
-			@change="emit('select')">
+			@click="emit('select', $event.shiftKey)">
 		<NcButton
 			class="deliver-card__more"
 			variant="tertiary"

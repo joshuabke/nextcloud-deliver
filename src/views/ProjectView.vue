@@ -43,7 +43,7 @@ import VersionStack from '../components/VersionStack.vue'
 import { assignAsset, deleteAsset, disableAsset, enableFile, errorMessage, regenerateVersion, renameFile, stackVersion, updateAsset } from '../api.js'
 import { useQuery } from '../composables/query.js'
 import { confirmRemoval } from '../confirm.js'
-import { allMissing, FILTER_LABELS, FILTERS, found, passes, selectAll, SORT_OPTIONS, sortAssets, SORTS } from '../lib/filters.js'
+import { allMissing, between, FILTER_LABELS, FILTERS, found, passes, selectAll, SORT_OPTIONS, sortAssets, SORTS } from '../lib/filters.js'
 import { groupByFolder, inFolder, projectDavPath, projectDir } from '../lib/folders.js'
 import { acceptFor, mediaKind, stackKind } from '../lib/media.js'
 import { stackSuggestions } from '../lib/suggestions.js'
@@ -76,13 +76,6 @@ const managed = computed(() => project.value?.assets.find((asset) => asset.id ==
 
 /** Ids of the Assets picked with their checkboxes, to delete together (story 141) */
 const selected = ref([])
-
-/**
- * @param {object} asset - an Asset whose checkbox was clicked
- */
-function toggle(asset) {
-	selected.value = selected.value.includes(asset.id) ? selected.value.filter((id) => id !== asset.id) : [...selected.value, asset.id]
-}
 
 /**
  * Runs a call for each of several Assets, keeps the last error, takes them
@@ -165,6 +158,28 @@ const tickedMissing = computed(() => {
 	const first = project.value?.assets.find((asset) => selected.value.includes(asset.id))
 	return first ? allMissing(first) : null
 })
+
+/** The Asset ticked or unticked last, where a shift-click range starts */
+let anchor = null
+
+/**
+ * A click ticks or unticks one card; a shift-click ticks every card on screen
+ * from the one clicked last to this one, of those that may join the ticked ones
+ *
+ * @param {object} asset - an Asset whose checkbox was clicked
+ * @param {boolean} range - whether Shift was held
+ */
+function toggle(asset, range) {
+	if (range && anchor !== null) {
+		const missing = tickedMissing.value ?? allMissing(asset)
+		const order = groups.value.flatMap((group) => group.assets)
+		const added = between(order, anchor, asset.id).filter((each) => each.canWrite && allMissing(each) === missing)
+		selected.value = [...new Set([...selected.value, ...added.map((each) => each.id)])]
+	} else {
+		selected.value = selected.value.includes(asset.id) ? selected.value.filter((id) => id !== asset.id) : [...selected.value, asset.id]
+	}
+	anchor = asset.id
+}
 /** Media files in the folder on screen that are no Assets, greyed out under them to add one by one; they have no state to filter by */
 const notUpForReview = computed(() => filter.value !== 'all'
 	? []
@@ -616,7 +631,7 @@ function dropped(event) {
 						:selected="selected.includes(asset.id)"
 						:selecting="selected.length > 0"
 						:locked="tickedMissing !== null && tickedMissing !== allMissing(asset)"
-						@select="toggle(asset)"
+						@select="toggle(asset, $event)"
 						@stack="accept"
 						@versions="managing = $event.id"
 						@contextmenu.prevent="openMenu($event, asset)"
