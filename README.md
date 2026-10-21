@@ -1,50 +1,41 @@
 # Deliver
 
-**Frame-accurate video and audio review, right where your files already are.**
+**Multimedia review tool for creatives.** 100% free, feature-complete alternative to Frame.io, but aspiring for more.
 
-> **Pre-release.** The 0.x releases come before 1.0: use Deliver on real projects, but keep your own backups and expect rough edges. 1.0 follows once they have settled.
+> [!NOTE]
+> Deliver is approaching v1.0 and will still have some bugs. Please help by [creating an issue](https://github.com/joshuabke/nextcloud-deliver/issues/new) for everything you find!
 
-[![Deliver in a slideshow: the Review view, a Project, Compare, a client's link with Watermark, a phone, the Projects](docs/screenshots/slideshow.webp)](#screenshots)
+[![The Review view: a Comment on a Range with a Drawing, Replies and Reactions](docs/screenshots/banner.png)](https://apps.nextcloud.com/apps/deliver)
 
 ## What it does
 
-- **Review in place** from the Files sidebar, or a whole folder as a Project. Nothing is copied or moved.
-- **Comments on the Frame** or a Range, with Drawings, Replies, Reactions, Mentions and Attachments
-- **Versions** stack by name (`…_v1`, `…_v2`) and compare side by side or under a wipe
-- **Sign-off** with Approvals, Due Dates and reminders
-- **Clients without accounts** on Project Links: password, expiry, Watermark, downloads, and who watched what
-- **Back into the edit** export comments as markers for:
+- 📂 **Review in place** from the Files sidebar, or a whole folder as a Project. Nothing is copied or moved.
+- 🎯 **Comments on the Frame** or a Range, with Drawings, Replies, Reactions, Mentions and Attachments
+- 🗂️ **Versions** stack by name (`…_v1`, `…_v2`) and compare side by side or under a wipe
+- ✅ **Sign-off** with Approvals, Due Dates and reminders
+- 🔗 **Clients without accounts** on Project Links: password, expiry, Watermark, downloads, and who watched what
+- ⬆️ **Uploads in Deliver** that resume after an interruption, run in the background and show the processing until it is done
+- 🎬 **Back into the edit** export comments as markers for:
   - Video: DaVinci Resolve (EDL), Premiere Pro (FCP7 XML), Final Cut Pro (FCPXML), CSV
   - Audio: WAV markers, MIDI, REAPER regions, Ableton Live Set
-- **Supported files**
+- 🎞️ **Supported files**
   - Video: MP4 and MOV (H.264), WebM
   - Audio: WAV, FLAC, MP3, AAC, Ogg
   - Images: JPEG, PNG, WebP, GIF, AVIF
   - Everything else (ProRes, H.265, MXF, AVI …) needs ffmpeg
-- **Waveforms, thumbnails and scrubbing** by hovering over a video
-- **Fully mobile ready** use as webapp on iOS and Android, receive notifications via the official nextcloud app!
-- **With ffmpeg on the server**
+- 🌊 **Waveforms, thumbnails and scrubbing** by hovering over a video
+- 📱 **Fully mobile ready**: use it as a web app on iOS and Android, and get notifications through the official Nextcloud app
+- ⚡ **With ffmpeg on the server**
   - Proxies, thumbnails and waveforms for every format ffmpeg reads
   - Hardware encoding: VAAPI, NVENC, VideoToolbox
 
-## Screenshots
+More screenshots are on the [App Store page](https://apps.nextcloud.com/apps/deliver).
 
-<table>
-<tr>
-<td width="50%"><b>The Review view</b><br><a href="docs/screenshots/review.png"><img src="docs/screenshots/review.png" alt="A Comment on a Range with a Drawing, Replies and Reactions" width="100%"></a></td>
-<td width="50%"><b>Compare under a wipe</b><br><a href="docs/screenshots/compare.png"><img src="docs/screenshots/compare.png" alt="Compare view: the flat v1 against the graded v2" width="100%"></a></td>
-</tr>
-<tr>
-<td width="50%"><b>A client on a Project Link</b><br><a href="docs/screenshots/reviewer.png"><img src="docs/screenshots/reviewer.png" alt="A Reviewer's page with a Watermark and the Approval Changes requested" width="100%"></a></td>
-<td width="50%" rowspan="3" valign="top"><b>On a phone</b><br><a href="docs/screenshots/phone.png"><img src="docs/screenshots/phone.png" alt="The Review view on a phone" width="100%"></a></td>
-</tr>
-<tr>
-<td width="50%"><b>The Projects</b><br><a href="docs/screenshots/projects.png"><img src="docs/screenshots/projects.png" alt="The Projects as tiles" width="100%"></a></td>
-</tr>
-<tr>
-<td width="50%"><b>A Project</b><br><a href="docs/screenshots/project.png"><img src="docs/screenshots/project.png" alt="A Project with its Assets as cards: filters, Approvals, Due Dates" width="100%"></a></td>
-</tr>
-</table>
+## Roadmap
+
+- **1.0**: the 0.x pre-releases settle, with the bugs you report fixed
+- **1.1 – Takes**: compare the Takes of a recording session on one timeline, jump between them at the same position and comment on the one that works
+- **Ideas**: [captions (.srt)](https://github.com/joshuabke/nextcloud-deliver/issues/54), [Proxies uploaded by hand](https://github.com/joshuabke/nextcloud-deliver/issues/55) for servers without ffmpeg, [protecting files with Comments against silent overwrites](https://github.com/joshuabke/nextcloud-deliver/issues/13)
 
 ## Installation
 

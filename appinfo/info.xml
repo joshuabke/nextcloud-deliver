@@ -62,8 +62,8 @@ Screenshots: Filmmaterial aus Tears of Steel, (CC) Blender Foundation | mango.bl
 	<repository>https://github.com/joshuabke/nextcloud-deliver</repository>
 	<screenshot>https://raw.githubusercontent.com/joshuabke/nextcloud-deliver/main/docs/screenshots/review.png</screenshot>
 	<screenshot>https://raw.githubusercontent.com/joshuabke/nextcloud-deliver/main/docs/screenshots/compare.png</screenshot>
-	<screenshot>https://raw.githubusercontent.com/joshuabke/nextcloud-deliver/main/docs/screenshots/reviewer.png</screenshot>
 	<screenshot>https://raw.githubusercontent.com/joshuabke/nextcloud-deliver/main/docs/screenshots/project.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/joshuabke/nextcloud-deliver/main/docs/screenshots/uploads.png</screenshot>
 	<screenshot>https://raw.githubusercontent.com/joshuabke/nextcloud-deliver/main/docs/screenshots/projects.png</screenshot>
 	<screenshot>https://raw.githubusercontent.com/joshuabke/nextcloud-deliver/main/docs/screenshots/phone.png</screenshot>
 	<dependencies>
