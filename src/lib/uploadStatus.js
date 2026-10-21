@@ -75,7 +75,7 @@ export function statusOf(item) {
 
 /**
  * @param {object} item - a finished upload
- * @return {Array<{kind: string, label: string, text: string}>} its derived media and how far each is (story 136)
+ * @return {Array<{kind: string, label: string, text: string, done: boolean}>} its derived media and how far each is (story 136)
  */
 export function processingOf(item) {
 	const labels = {
@@ -90,6 +90,7 @@ export function processingOf(item) {
 			kind: 'browser',
 			label: t('deliver', 'Waveform, in this browser'),
 			text: { running: `${item.waveform.progress} %`, ready: t('deliver', 'Done'), failed: t('deliver', 'Failed') }[item.waveform.state],
+			done: item.waveform.state === 'ready',
 		})
 	}
 	const derived = item.version?.derived
@@ -107,6 +108,7 @@ export function processingOf(item) {
 				ready: t('deliver', 'Done'),
 				failed: t('deliver', 'Failed'),
 			}[state],
+			done: state === 'ready',
 		})
 	}
 	return lines

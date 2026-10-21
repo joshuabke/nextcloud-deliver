@@ -182,13 +182,23 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 					<NcProgressBar
 						v-if="['uploading', 'finishing', 'paused'].includes(item.status)"
 						:value="Math.floor(item.loaded / Math.max(1, item.size) * 100)" />
-					<span
-						class="deliver-uploads__status"
-						:class="{ 'deliver-uploads__status--error': item.status === 'failed' || processingFailed(item) || (item.status === 'interrupted' && item.error) }">
-						{{ item.status === 'interrupted' && item.error ? item.error : statusOf(item) }}
-					</span>
-					<ul v-if="processingOf(item).length" class="deliver-uploads__processing">
-						<li v-for="line in processingOf(item)" :key="line.kind">
+					<div class="deliver-uploads__row">
+						<span
+							class="deliver-uploads__status"
+							:class="{ 'deliver-uploads__status--error': item.status === 'failed' || processingFailed(item) || (item.status === 'interrupted' && item.error) }">
+							{{ item.status === 'interrupted' && item.error ? item.error : statusOf(item) }}
+						</span>
+						<!-- What is made sits at the end of the status line; only what is still going on takes a line of its own -->
+						<span
+							v-for="line in processingOf(item).filter((each) => each.done)"
+							:key="line.kind"
+							class="deliver-uploads__made">
+							<NcIconSvgWrapper :svg="doneIcon" :size="16" />
+							{{ line.label }}
+						</span>
+					</div>
+					<ul v-if="processingOf(item).some((line) => !line.done)" class="deliver-uploads__processing">
+						<li v-for="line in processingOf(item).filter((each) => !each.done)" :key="line.kind">
 							<span>{{ line.label }}</span>
 							<span>{{ line.text }}</span>
 						</li>
@@ -322,6 +332,18 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 .deliver-uploads__processing,
 .deliver-uploads__hint {
 	color: var(--color-text-maxcontrast);
+}
+
+.deliver-uploads__made {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--default-grid-baseline);
+	color: var(--color-text-maxcontrast);
+	white-space: nowrap;
+}
+
+.deliver-uploads__status + .deliver-uploads__made {
+	margin-inline-start: auto;
 }
 
 .deliver-uploads__status--error {
