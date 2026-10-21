@@ -1,5 +1,5 @@
 /**
- * The App Store screenshots and the README's slideshow (docs/screenshots/),
+ * The App Store screenshots and the README's banner (docs/screenshots/),
  * taken from the dev instance with footage from Tears of Steel,
  * (CC) Blender Foundation | mango.blender.org.
  *
@@ -131,7 +131,7 @@ async function seed() {
 
 	const enable = async (folder) => ocs(await sarah.post(`${API}/projects?format=json`, { data: { folderId: await fileId(sarah, encodeURIComponent(folder)), autoIntake: true } }))
 	await enable(folders.sound)
-	await enable(folders.trailer)
+	const trailer = await enable(folders.trailer)
 	const project = await enable(folders.cut)
 	const leo = await as('leo')
 	const comment = async (api, version, fields) => ocs(await api.post(`${API}/versions/${version.id}/comments?format=json`, { data: fields }))
@@ -160,14 +160,15 @@ async function seed() {
 	})
 	await comment(sarah, graded, { inFrame: 210, body: 'Agreed, I\'ll send it back to VFX with the new plate.', parentId: first.id })
 	await ocs(await leo.put(`${API}/comments/${first.id}/reactions?format=json`, { data: { emoji: '👍' } }))
-	await ocs(await sarah.put(`${API}/assets/${closeup.id}?format=json`, { data: { dueDate: '2026-10-09' } }))
-	await ocs(await sarah.put(`${API}/assets/${asset('TOS_0195_lab').id}?format=json`, { data: { dueDate: '2026-10-14' } }))
+	// Due in a few days, whenever the shots are taken
+	const inDays = (days) => new Date(Date.now() + days * 86400000).toISOString().slice(0, 10)
+	await ocs(await sarah.put(`${API}/assets/${closeup.id}?format=json`, { data: { dueDate: inDays(3) } }))
+	await ocs(await sarah.put(`${API}/assets/${asset('TOS_0195_lab').id}?format=json`, { data: { dueDate: inDays(8) } }))
 	await ocs(await leo.put(`${API}/versions/${asset('TOS_0030_bridge').versions[0].id}/approval?format=json`, { data: { status: 'approved' } }))
 	await comment(leo, asset('TOS_0090_scope').versions[0], { inFrame: 60, body: 'Scope reticle flickers for two frames.' })
 
 	// A Project Link for the client, and her own Personal Link
 	const link = await ocs(await sarah.post(`${API}/projects/${project.id}/links?format=json`))
-	await ocs(await sarah.put(`${API}/links/${link.id}?format=json`, { data: { watermark: true } }))
 	const reviewer = await ocs(await sarah.post(`${API}/links/${link.id}/reviewers?format=json`, { data: { name: 'Ines Visser' } }))
 	const client = await request.newContext({ baseURL: URL })
 	const personal = new globalThis.URL(reviewer.link ?? reviewer.personalLink)
@@ -181,7 +182,7 @@ async function seed() {
 	await pub(`/versions/${graded.id}/approval`, { status: 'changes' }, 'put')
 
 	await Promise.all([sarah.dispose(), leo.dispose(), client.dispose()])
-	return { project, flat, graded, personal: personal.pathname + personal.search, token }
+	return { project, flat, graded, trailer }
 }
 
 /** @param {...string} args - for occ in the dev instance */
@@ -205,10 +206,9 @@ function worker() {
  * @param {{id: number}} seeded.project - the cut's Project
  * @param {{id: number}} seeded.flat - the close-up's v1
  * @param {{id: number}} seeded.graded - the close-up's v2
- * @param {string} seeded.personal - the Reviewer's Personal Link, path and query
- * @param {string} seeded.token - the Project Link's token
+ * @param {{id: number}} seeded.trailer - the trailer's Project, for the uploads
  */
-async function shoot({ project, flat, graded, personal, token }) {
+async function shoot({ project, flat, graded, trailer }) {
 	mkdirSync(OUT, { recursive: true })
 	const browser = await chromium.connectOverCDP(CDP)
 	const desktop = await browser.newContext({ baseURL: BROWSER_URL, viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 })
@@ -225,6 +225,12 @@ async function shoot({ project, flat, graded, personal, token }) {
 	await settle()
 	await page.screenshot({ path: join(OUT, 'review.png') })
 
+	// The README's banner: the same, at 21:9
+	await page.setViewportSize({ width: 1680, height: 720 })
+	await settle()
+	await page.screenshot({ path: join(OUT, 'banner.png') })
+	await page.setViewportSize({ width: 1440, height: 900 })
+
 	await page.goto(`/apps/deliver/projects/${project.id}`)
 	await settle()
 	await page.screenshot({ path: join(OUT, 'project.png') })
@@ -239,12 +245,23 @@ async function shoot({ project, flat, graded, personal, token }) {
 	await settle()
 	await page.screenshot({ path: join(OUT, 'projects.png') })
 
-	const client = await browser.newContext({ baseURL: BROWSER_URL, viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 })
-	const guest = await client.newPage()
-	await guest.goto(personal)
-	await guest.goto(`/apps/deliver/s/${token}/versions/${graded.id}`)
-	await guest.waitForTimeout(2500)
-	await guest.screenshot({ path: join(OUT, 'reviewer.png') })
+	// The Uploads dialog: two files uploaded and processed, the third on its way on a slow line
+	await page.goto(`/apps/deliver/projects/${trailer.id}`)
+	await page.getByRole('button', { name: 'Upload' }).click()
+	const pick = (files) => page.locator('.deliver-uploads input[type=file]').setInputFiles(files.map(([name, file]) => ({
+		name,
+		mimeType: name.endsWith('.wav') ? 'audio/wav' : 'video/webm',
+		buffer: readFileSync(join(MEDIA, file)),
+	})))
+	await pick([['TOS_trailer_v2.webm', 'TOS_0030_bridge_v1.webm'], ['TOS_trailer_mix.wav', 'TOS_mix_stereo.wav']])
+	await page.locator('.deliver-uploads__summary').waitFor({ state: 'detached' })
+	worker()
+	const cdp = await desktop.newCDPSession(page)
+	await cdp.send('Network.emulateNetworkConditions', { offline: false, latency: 20, downloadThroughput: -1, uploadThroughput: 300 * 1024 })
+	await pick([['TOS_teaser_v1.webm', 'TOS_0195_lab_v1.webm'], ['TOS_teaser_v1_alt.webm', 'TOS_0090_scope_v1.webm']])
+	await page.waitForTimeout(7000)
+	await page.screenshot({ path: join(OUT, 'uploads.png') })
+	await cdp.send('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 })
 
 	// An iPhone as Nextcloud accepts it, with Sarah's session
 	const phone = await browser.newContext({
@@ -267,20 +284,10 @@ async function shoot({ project, flat, graded, personal, token }) {
 	await browser.close()
 }
 
-/** The README's slideshow: every shot for three seconds on one 1440×900 canvas, looping */
-function slideshow() {
-	const shots = ['review', 'project', 'compare', 'reviewer', 'phone', 'projects']
-	const fit = shots.map((_, i) => `[${i}]scale=1440:900:force_original_aspect_ratio=decrease,pad=1440:900:(ow-iw)/2:(oh-ih)/2:color=0x171717,setsar=1,fps=1[v${i}]`)
-	const filter = fit.join(';') + ';' + shots.map((_, i) => `[v${i}]`).join('') + `concat=n=${shots.length}:v=1[out]`
-	const inputs = shots.flatMap((shot) => ['-loop', '1', '-t', '3', '-i', join(OUT, shot + '.png')])
-	execFileSync('ffmpeg', ['-v', 'error', '-y', ...inputs, '-filter_complex', filter, '-map', '[out]', '-c:v', 'libwebp_anim', '-quality', '80', '-loop', '0', join(OUT, 'slideshow.webp')])
-}
-
 media()
 previews()
 await users()
 const seeded = await seed()
 worker()
 await shoot(seeded)
-slideshow()
 process.stdout.write(`Screenshots in ${OUT}\n`)

@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.9.0 – 2026-10-21
+
+### Added
+- Uploads dialog: one queue for every upload in Deliver, one file at a time, keeps running across views.
+- "Continue in the background": the dialog shrinks to a card (a bar on phones).
+- Chunked uploads: pause while offline, retry failed chunks, resume after a reload.
+- Progress with speed and time left, then the state of Waveform, Proxy and Thumbnail Strip.
+- Uploads show in every open tab and can be cancelled from any of them.
+- Without ffmpeg, the uploading browser makes the Waveform during the upload.
+- Formats list in the dialog: what plays directly, what needs ffmpeg.
+- "Processing failed" on Asset cards; "Process again" in the Asset menu and the upload list.
+- Select Asset cards: checkbox, Ctrl/Cmd-click, Shift-click, select all.
+- Menu for selected Assets: Process again, Due Date, Move to Project, Remove, Delete.
+- Delete an Asset: files of every Version go to the trash, the Asset goes with its review data. Missing Assets too.
+- "New Project" creates a Project folder, under `/Deliver` or the place set in Administration → Deliver.
+- API: `DELETE /assets/{id}/files`.
+
+### Changed
+- Click on a card selects it, double click opens the Review.
+- Proxies are at least 720p.
+
+### Fixed
+- Phone: typing a Comment stops playback, and the anchor matches the Frame shown.
+
 ## 0.8.4 – 2026-10-13
 
 - Every card has a "…" button beside its name, on every screen, that opens the same menu as a right click or a long press. A Project's settings moved from the gear into that menu.

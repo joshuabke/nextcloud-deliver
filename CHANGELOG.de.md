@@ -1,5 +1,29 @@
 # Änderungen
 
+## 0.9.0 – 2026-10-21
+
+### Neu
+- Uploads-Dialog: eine Warteschlange für alle Uploads in Deliver, eine Datei nach der anderen, läuft beim Wechsel der Ansicht weiter.
+- „Im Hintergrund weiter“: der Dialog wird zur Karte (auf Telefonen zur Leiste).
+- Uploads in Teilen: pausieren offline, wiederholen fehlgeschlagene Teile, setzen nach dem Neuladen fort.
+- Fortschritt mit Geschwindigkeit und Restzeit, danach der Stand von Wellenform, Proxy und Vorschauleiste.
+- Uploads erscheinen in jedem offenen Tab und lassen sich aus jedem abbrechen.
+- Ohne ffmpeg erstellt der hochladende Browser die Wellenform schon während des Uploads.
+- Formatliste im Dialog: was direkt abspielt, was ffmpeg braucht.
+- „Verarbeitung fehlgeschlagen“ auf Asset-Karten; „Erneut verarbeiten“ im Asset-Menü und in der Upload-Liste.
+- Asset-Karten auswählen: Checkbox, Strg/Cmd-Klick, Umschalt-Klick, alle auswählen.
+- Menü für ausgewählte Assets: Erneut verarbeiten, Fälligkeitsdatum, In Projekt verschieben, Entfernen, Löschen.
+- Asset löschen: die Dateien aller Versionen gehen in den Papierkorb, das Asset mit seinen Review-Daten. Auch fehlende Assets.
+- „Neues Projekt“ legt einen Projektordner an, unter `/Deliver` oder am Ort aus Verwaltung → Deliver.
+- API: `DELETE /assets/{id}/files`.
+
+### Geändert
+- Klick auf eine Karte wählt sie aus, Doppelklick öffnet das Review.
+- Proxies haben mindestens 720p.
+
+### Behoben
+- Telefon: Tippen eines Kommentars hält die Wiedergabe an, und der Anker passt zum gezeigten Frame.
+
 ## 0.8.4 – 2026-10-13
 
 - Jede Karte hat neben ihrem Namen einen „…“-Knopf, auf jedem Bildschirm, der dasselbe Menü öffnet wie ein Rechtsklick oder langes Drücken. Die Einstellungen eines Projekts sind vom Zahnrad in dieses Menü gewandert.
