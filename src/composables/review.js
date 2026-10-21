@@ -103,11 +103,12 @@ export function useReview({ version, projectMode, projectFps, refresh }) {
 	}
 
 	/**
-	 * Typing started: the Comment belongs to the Frame on screen now, not to
-	 * wherever the player is when it is sent.
+	 * Typing started: the picture stops, as with C, and the Comment belongs to
+	 * the Frame on screen now, not to wherever the player is when it is sent.
 	 */
 	function hold() {
 		if (pinned.value === null) {
+			player.value?.pause()
 			pinned.value = anchor.value
 			pinnedByTyping = true
 		}
