@@ -33,9 +33,8 @@ More screenshots are on the [App Store page](https://apps.nextcloud.com/apps/del
 
 ## Roadmap
 
-- **1.0**: the 0.x pre-releases settle, with the bugs you report fixed
+- **1.0**: the 0.x pre-releases settle, srt-subtitles support
 - **1.1 – Takes**: compare the Takes of a recording session on one timeline, jump between them at the same position and comment on the one that works
-- **Ideas**: [captions (.srt)](https://github.com/joshuabke/nextcloud-deliver/issues/54), [Proxies uploaded by hand](https://github.com/joshuabke/nextcloud-deliver/issues/55) for servers without ffmpeg, [protecting files with Comments against silent overwrites](https://github.com/joshuabke/nextcloud-deliver/issues/13)
 
 ## Installation
 
@@ -56,24 +55,24 @@ Here is a table of providers and when the info was verified.
 Everything marked with a ❓ has yet to be confirmed and is just assumed from their documentation.
 Additions or corrections are welcome as issues or pull requests!
 
-| Provider | Deliver in the app list | ffmpeg | Shell / `occ` | Verified |
-| --- | --- | --- | --- | --- |
-| Hetzner Storage Share | ✅ | ❌ (on the roadmap) | ❌ | 2026-10 |
-| IONOS Managed Nextcloud | ❌ | ❌ | ❓ | - |
-| hosting.de Managed Nextcloud | ❌ | ❌ | ❓ | - |
-| The Good Cloud (Business, 25+ users) | ❓ | ❓ | ❓ | - |
-| The Good Cloud (Family, Business) | 🟡* | ❓ | ❓ | - |
-| Woelkli (own instance) | ❓ | ❓ | ❓ | - |
-| Zaclys (Stratus, Alto, Cirrus) | ❓ | ❓ | ❓ | - |
-| Webo (Admin) | ❓ | ❓ | ❓ | - |
-| Cloud68 | ❓ | ❓ | ❓ | - |
-| Stackhero | ❓ | ❓ | ❓ | - |
-| wolkesicher.de | ❓ | ❓ | ❓ | - |
-| Tab.digital | ❓ | ❓ | ❓ | - |
-| Murena Workspace | ❌ | ❓ | ❌ | - |
-| Framaspace | ❌ | ❓ | ❌ | - |
-| MagentaCLOUD | ❌ | ❓ | ❌ | - |
-| Own server ([deploy/](deploy/README.md)) | ✅ | ✅ | ✅ | 2026-10 |
+| Provider | installable | ffmpeg | Shell / `occ` | Verified | comment |
+| --- | --- | --- | --- | --- | --- |
+| Hetzner Storage Share | ✅ | ❌** | ❌ | 2026-10 | ffmpeg is on their roadmap |
+| wolkesicher.de | ✅ | ❓ | ❓ | 2026-11 | ffmpeg unclear atm |
+| IONOS Managed Nextcloud | ❌ | ❌ | ❓ | - | their nc version is too old (32) |
+| hosting.de Managed Nextcloud | ❌ | ❌ | ❓ | 2026-10 ||
+| The Good Cloud (Business, 25+ users) | ❓ | ❓ | ❓ | - ||
+| The Good Cloud (Family, Business) | 🟡* | ❓ | ❓ | - ||
+| Woelkli (own instance) | ❓ | ❓ | ❓ | - ||
+| Zaclys (Stratus, Alto, Cirrus) | ❓ | ❓ | ❓ | - ||
+| Webo (Admin) | ❓ | ❓ | ❓ | - ||
+| Cloud68 | ❓ | ❓ | ❓ | - ||
+| Stackhero | ❓ | ❓ | ❓ | - ||
+| Tab.digital | ❓ | ❓ | ❓ | - ||
+| Murena Workspace | ❌ | ❓ | ❌ | - ||
+| Framaspace | ❌ | ❓ | ❌ | - ||
+| MagentaCLOUD | ❌ | ❓ | ❌ | - ||
+| Own server ([deploy/](deploy/README.md)) | ✅ | ✅ | ✅ | 2026-10 ||
 
 \* The provider allows only apps it has approved; ask it to add Deliver.
 
