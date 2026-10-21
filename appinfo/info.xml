@@ -3,54 +3,66 @@
 	  xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
 	<id>deliver</id>
 	<name>Deliver</name>
-	<summary>Frame-accurate video review inside Nextcloud Files</summary>
-	<summary lang="de">Framegenaues Video-Review direkt in Nextcloud Dateien</summary>
-	<description><![CDATA[Frame-accurate video and audio review, right where your files already are.
+	<summary>Multimedia review tool for creatives, a free alternative to Frame.io</summary>
+	<summary lang="de">Multimedia-Review-Tool für Kreative, eine kostenlose Alternative zu Frame.io</summary>
+	<description><![CDATA[**Multimedia review tool for creatives.** 100% free, feature-complete alternative to Frame.io, but aspiring for more.
 
-**Pre-release:** the 0.x releases come before 1.0. Use Deliver on real projects, but keep your own backups and expect rough edges; please report what you find on GitHub.
+**Note:** Deliver is approaching v1.0 and will still have some bugs. Please help by [creating an issue](https://github.com/joshuabke/nextcloud-deliver/issues/new) for everything you find!
 
-- **Review in place** from the Files sidebar, or a whole folder as a Project. Nothing is copied or moved.
-- **Comments on the Frame** or a Range, with Drawings, Replies, Reactions, Mentions and Attachments
-- **Versions** stack by name (`…_v1`, `…_v2`) and compare side by side or under a wipe
-- **Sign-off** with Approvals, Due Dates and reminders
-- **Clients without accounts** on Project Links: password, expiry, Watermark, downloads, and who watched what
-- **Back into the edit:** export comments as markers for
+- 📂 **Review in place** from the Files sidebar, or a whole folder as a Project. Nothing is copied or moved.
+- 🎯 **Comments on the Frame** or a Range, with Drawings, Replies, Reactions, Mentions and Attachments
+- 🗂️ **Versions** stack by name (`…_v1`, `…_v2`) and compare side by side or under a wipe
+- ✅ **Sign-off** with Approvals, Due Dates and reminders
+- 🔗 **Clients without accounts** on Project Links: password, expiry, Watermark, downloads, and who watched what
+- ⬆️ **Uploads in Deliver** that resume after an interruption, run in the background and show the processing until it is done
+- 🎬 **Back into the edit:** export comments as markers for
   - Video: DaVinci Resolve (EDL), Premiere Pro (FCP7 XML), Final Cut Pro (FCPXML), CSV
   - Audio: WAV markers, MIDI, REAPER regions, Ableton Live Set
-- **Supported files**
+- 🎞️ **Supported files**
   - Video: MP4 and MOV (H.264), WebM
   - Audio: WAV, FLAC, MP3, AAC, Ogg
   - Images: JPEG, PNG, WebP, GIF, AVIF
   - Everything else (ProRes, H.265, MXF, AVI …) needs ffmpeg
-- **Waveforms, thumbnails and scrubbing** by hovering over a video
-- **Fully mobile ready**
-- **With ffmpeg on the server**
+- 🌊 **Waveforms, thumbnails and scrubbing** by hovering over a video
+- 📱 **Fully mobile ready:** use it as a web app on iOS and Android, and get notifications through the official Nextcloud app
+- ⚡ **With ffmpeg on the server**
   - Proxies, thumbnails and waveforms for every format ffmpeg reads
   - Hardware encoding: VAAPI, NVENC, VideoToolbox
 
+**Roadmap**
+
+- **1.0:** the 0.x pre-releases settle, srt subtitles support
+- **1.1 – Takes:** compare the Takes of a recording session on one timeline, jump between them at the same position and comment on the one that works
+
 Screenshots: footage from Tears of Steel, (CC) Blender Foundation | mango.blender.org.]]></description>
-	<description lang="de"><![CDATA[Framegenaues Video- und Audio-Review, genau dort, wo Ihre Dateien schon liegen.
+	<description lang="de"><![CDATA[**Multimedia-Review-Tool für Kreative.** 100 % kostenlos, vollwertige Alternative zu Frame.io, mit dem Anspruch auf mehr.
 
-**Vorabversion:** Die 0.x-Versionen kommen vor 1.0. Nutzen Sie Deliver an echten Projekten, aber behalten Sie eigene Backups und rechnen Sie mit Ecken und Kanten; melden Sie bitte, was Ihnen auffällt, auf GitHub.
+**Hinweis:** Deliver steht kurz vor v1.0 und hat noch einige Fehler. Bitte helfen Sie mit und [legen Sie ein Issue an](https://github.com/joshuabke/nextcloud-deliver/issues/new) für alles, was Ihnen auffällt!
 
-- **Review an Ort und Stelle** aus der Dateien-Seitenleiste, oder ein ganzer Ordner als Projekt. Nichts wird kopiert oder verschoben.
-- **Kommentare auf dem Frame** oder einem Bereich, mit Zeichnungen, Antworten, Reaktionen, Erwähnungen und Anhängen
-- **Versionen** stapeln sich nach Namen (`…_v1`, `…_v2`) und lassen sich nebeneinander oder per Wischen vergleichen
-- **Abnahme** mit Fälligkeitsdaten und Erinnerungen
-- **Kunden ohne Konto** über Projekt-Links: Passwort, Ablaufdatum, Wasserzeichen, Downloads und wer was angesehen hat
-- **Zurück in den Schnitt:** Kommentare als Marker exportieren für
+- 📂 **Review an Ort und Stelle** aus der Dateien-Seitenleiste, oder ein ganzer Ordner als Projekt. Nichts wird kopiert oder verschoben.
+- 🎯 **Kommentare auf dem Frame** oder einem Bereich, mit Zeichnungen, Antworten, Reaktionen, Erwähnungen und Anhängen
+- 🗂️ **Versionen** stapeln sich nach Namen (`…_v1`, `…_v2`) und lassen sich nebeneinander oder per Wischen vergleichen
+- ✅ **Abnahme** mit Fälligkeitsdaten und Erinnerungen
+- 🔗 **Kunden ohne Konto** über Projekt-Links: Passwort, Ablaufdatum, Wasserzeichen, Downloads und wer was angesehen hat
+- ⬆️ **Uploads in Deliver**, die nach einer Unterbrechung weiterlaufen, im Hintergrund arbeiten und die Verarbeitung bis zum Ende zeigen
+- 🎬 **Zurück in den Schnitt:** Kommentare als Marker exportieren für
   - Video: DaVinci Resolve (EDL), Premiere Pro (FCP7 XML), Final Cut Pro (FCPXML), CSV
   - Audio: WAV-Marker, MIDI, REAPER-Regionen, Ableton Live Set
-- **Unterstützte Dateien**
+- 🎞️ **Unterstützte Dateien**
   - Video: MP4 und MOV (H.264), WebM
   - Audio: WAV, FLAC, MP3, AAC, Ogg
   - Bilder: JPEG, PNG, WebP, GIF, AVIF
   - Alles andere (ProRes, H.265, MXF, AVI …) braucht ffmpeg
-- **Wellenformen, Vorschaubilder und Scrubbing** beim Überfahren eines Videos
-- **Voll mobiltauglich**
-- **Mit ffmpeg auf dem Server**
+- 🌊 **Wellenformen, Vorschaubilder und Scrubbing** beim Überfahren eines Videos
+- 📱 **Voll mobiltauglich:** als Web-App auf iOS und Android, Benachrichtigungen über die offizielle Nextcloud-App
+- ⚡ **Mit ffmpeg auf dem Server**
   - Proxys, Vorschaubilder und Wellenformen für jedes Format, das ffmpeg liest
   - Hardware-Kodierung: VAAPI, NVENC, VideoToolbox
+
+**Roadmap**
+
+- **1.0:** die 0.x-Vorabversionen werden stabil, Untertitel als SRT
+- **1.1 – Takes:** die Takes einer Aufnahmesitzung auf einer Zeitleiste vergleichen, an derselben Stelle zwischen ihnen springen und den passenden kommentieren
 
 Screenshots: Filmmaterial aus Tears of Steel, (CC) Blender Foundation | mango.blender.org.]]></description>
 	<version>0.9.0</version>
