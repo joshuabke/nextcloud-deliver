@@ -59,7 +59,7 @@ Additions or corrections are welcome as issues or pull requests!
 | --- | --- | --- | --- | --- | --- |
 | Hetzner Storage Share | ✅ | ❌** | ❌ | 2026-10 | ffmpeg is on their roadmap |
 | wolkesicher.de | ✅ | ❓ | ❓ | 2026-11 | ffmpeg unclear atm |
-| IONOS Managed Nextcloud | ❌ | ❌ | ❓ | - | their nc version is too old (32) |
+| IONOS Managed Nextcloud | ❌ | ❌ | ❓ | 2026-11 | their nc version is too old (32) |
 | hosting.de Managed Nextcloud | ❌ | ❌ | ❓ | 2026-10 ||
 | The Good Cloud (Business, 25+ users) | ❓ | ❓ | ❓ | - ||
 | The Good Cloud (Family, Business) | 🟡* | ❓ | ❓ | - ||
