@@ -555,7 +555,7 @@ class DerivedMedia {
 	}
 
 	public function maxHeight(): int {
-		return $this->config->getValueInt(Application::APP_ID, 'max_height', 1080);
+		return max(PipelineSettings::MIN_HEIGHT, $this->config->getValueInt(Application::APP_ID, 'max_height', 1080));
 	}
 
 	/** Only to space the thumbnails; an unknown length counts as a minute */

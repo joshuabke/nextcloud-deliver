@@ -75,7 +75,12 @@ test.describe('Review view', () => {
 		await expect(tile).toContainText('1 Asset')
 		await tile.click()
 		await expect(page).toHaveURL(new RegExp(`/projects/${projectId}$`))
-		await page.locator('.deliver-card__link').first().click()
+		// A click ticks the card, a double click opens it (story 141)
+		const link = page.locator('.deliver-card__link').first()
+		await link.click()
+		await expect(page.locator('.deliver-card').first()).toHaveClass(/deliver-card--selected/)
+		await expect(page).toHaveURL(new RegExp(`/projects/${projectId}$`))
+		await link.dblclick()
 		await expect(page).toHaveURL(new RegExp(`/versions/${versionId}$`))
 		await page.getByRole('link', { name: folder, exact: true }).click()
 		await expect(page).toHaveURL(new RegExp(`/projects/${projectId}$`))
@@ -91,11 +96,16 @@ test.describe('Review view', () => {
 
 	test('uploads into the Project, then filters and finds its Assets', async () => {
 		await page.goto(`/apps/deliver/projects/${projectId}`)
-		await page.locator('input[type=file][multiple]').setInputFiles({ name: 'second.webm', mimeType: 'video/webm', buffer: readFileSync(CLIP) })
+		// The upload button opens the Uploads dialog (story 133)
+		await page.getByRole('button', { name: 'Upload', exact: true }).click()
+		const uploads = page.getByRole('dialog', { name: 'Uploads' })
+		await uploads.locator('input[type=file][multiple]').setInputFiles({ name: 'second.webm', mimeType: 'video/webm', buffer: readFileSync(CLIP) })
+		// Auto Intake would take the file anyway; the upload itself must not fail
+		await expect(uploads.getByText('Open', { exact: true })).toBeVisible()
+		await expect(uploads.locator('.deliver-uploads__status--error')).toHaveCount(0)
+		await page.keyboard.press('Escape')
 		const second = card(page, 'second')
 		await expect(second).toBeVisible()
-		// Auto Intake would take the file anyway; the upload itself must not fail
-		await expect(page.locator('.deliver-project .notecard')).toHaveCount(0)
 
 		await page.getByRole('button', { name: /^Changes requested/ }).click()
 		await expect(page).toHaveURL(/filter=changes/)
@@ -124,8 +134,11 @@ test.describe('Review view', () => {
 			}
 		}, [...readFileSync(CLIP)])
 		await expect(card(page, 'third')).toBeVisible()
-		await expect(page.locator('.deliver-project .notecard')).toContainText('Only video, audio and image files')
 		await expect(page.locator('.deliver-card', { hasText: 'notes' })).toHaveCount(0)
+		// They go with the card in the corner, which opens the dialog again (story 134)
+		await page.locator('.deliver-uploads-card__open').click()
+		await expect(uploads).toContainText('Only video, audio and image files')
+		await page.keyboard.press('Escape')
 
 		// A Version Stack is managed from its card, not in the Review view
 		await second.click({ button: 'right' })
@@ -143,6 +156,29 @@ test.describe('Review view', () => {
 		await second.click({ button: 'right' })
 		await expect(page.getByRole('menuitem', { name: 'Change the Due Date' })).toBeVisible()
 		await page.keyboard.press('Escape')
+
+		// Ticked, two cards share one menu with what applies to both (story 141)
+		const third = card(page, 'third')
+		await second.getByRole('checkbox', { name: 'Select second' }).check()
+		await third.getByRole('checkbox', { name: 'Select third' }).check()
+		await third.click({ button: 'right' })
+		await expect(page.getByRole('menu', { name: '2 Assets selected' })).toBeVisible()
+		await expect(page.getByRole('menuitem', { name: 'Delete' })).toBeVisible()
+		await expect(page.getByRole('menuitem', { name: 'Open' })).toHaveCount(0)
+		await page.getByRole('menuitem', { name: 'Clear the selection' }).click()
+		await expect(second.getByRole('checkbox', { name: 'Select second' })).not.toBeChecked()
+		// A shift-click ticks every card from the one clicked last
+		const cards = page.locator('.deliver-card__select')
+		await cards.first().check()
+		await cards.last().click({ modifiers: ['Shift'] })
+		await expect(page.locator('.deliver-card__select:checked')).toHaveCount(await cards.count())
+		await page.getByRole('checkbox', { name: 'Clear the selection' }).uncheck()
+
+		// The checkbox at the start of the filter row ticks every card, and clears them again
+		await page.getByRole('checkbox', { name: 'Select all' }).check()
+		await expect(third.getByRole('checkbox', { name: 'Select third' })).toBeChecked()
+		await page.getByRole('checkbox', { name: 'Clear the selection' }).uncheck()
+		await expect(third.getByRole('checkbox', { name: 'Select third' })).not.toBeChecked()
 	})
 
 	test('renames, removes and stacks from the menus of the cards', async () => {

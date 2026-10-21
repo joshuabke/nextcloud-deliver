@@ -663,6 +663,37 @@ class ProjectService {
 	}
 
 	/**
+	 * Deletes an Asset together with its files: every Version's file goes to
+	 * the trash of Files, and the Asset goes with its review data at once
+	 * rather than staying behind as Missing (story 141).
+	 *
+	 * @throws AccessDeniedException a file of it this user may not delete
+	 */
+	public function deleteAsset(string $uid, int $assetId): void {
+		$asset = $this->assets->find($assetId) ?? throw new NotFoundException('Asset not found');
+		$this->writableAsset($uid, $asset);
+		$home = $this->root->getUserFolder($uid);
+		$doomed = [];
+		// Every file is checked before anything goes, so a refusal leaves the Asset whole
+		foreach ($this->versions->findByAsset($assetId) as $version) {
+			$file = $version->getState() === Version::STATE_MISSING ? null : $home->getFirstNodeById($version->getFileId());
+			if ($version->getState() !== Version::STATE_MISSING && ($file === null || !$file->isDeletable())) {
+				throw new AccessDeniedException('You may not delete every file of this Asset');
+			}
+			$doomed[] = [$version, $file];
+		}
+		foreach ($doomed as [$version, $file]) {
+			// The file goes first, so one that cannot be deleted after all keeps its Version and review data;
+			// told so, the trash marks nothing Missing and mails nobody about it
+			if ($file !== null) {
+				$this->stacks->deleting($file->getId());
+				$file->delete();
+			}
+			$this->stacks->purge($version);
+		}
+	}
+
+	/**
 	 * Removes a Project; its Assets go to No Project with their review data
 	 * (story 9). The files stay.
 	 *
@@ -961,7 +992,20 @@ class ProjectService {
 						[$version->getProxyState(), $version->getThumbsState(), $version->getWaveformState()],
 						[DerivedMedia::STATE_QUEUED, DerivedMedia::STATE_RUNNING],
 					) === [] ? null : ['progress' => $this->progress($version)],
+					// Its card says so, and a Member with write access starts it again (story 140); a failed probe leaves only its error
+					'processingFailed' => in_array(
+						DerivedMedia::STATE_FAILED,
+						[$version->getProxyState(), $version->getThumbsState(), $version->getWaveformState()],
+						true,
+					) || ($version->getPlayable() === null && $version->getDerivedError() !== null),
 				];
+			}
+			if ($path === null) {
+				// Every file is Missing: who manages the Project manages the Asset, as in its own view
+				try {
+					$canWrite = $this->reachVersion($uid, $stack[0]->getId())[2];
+				} catch (NotFoundException) {
+				}
 			}
 			$result[] = [
 				'id' => $asset->getId(),

@@ -24,6 +24,8 @@ const isMobile = useIsMobile()
 
 <template>
 	<div class="deliver-filter-bar" :class="{ 'deliver-filter-bar--mobile': isMobile }">
+		<!-- What acts on the cards as a whole, such as ticking them all -->
+		<slot name="start" />
 		<div class="deliver-filter-bar__filters" role="group" :aria-label="t('deliver', 'Show')">
 			<NcButton
 				v-for="(each, index) in filters"

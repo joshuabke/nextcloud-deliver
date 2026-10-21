@@ -8,11 +8,13 @@ import icon from '@mdi/svg/svg/folder-play-outline.svg?raw'
 import openIcon from '@mdi/svg/svg/open-in-app.svg?raw'
 import addIcon from '@mdi/svg/svg/plus.svg?raw'
 import { FilePickerType, getFilePickerBuilder } from '@nextcloud/dialogs'
+import { loadState } from '@nextcloud/initial-state'
 import { t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
@@ -23,7 +25,7 @@ import ContextMenu from '../components/ContextMenu.vue'
 import FilterBar from '../components/FilterBar.vue'
 import ProjectCard from '../components/ProjectCard.vue'
 import ProjectSettingsDialog from '../components/ProjectSettingsDialog.vue'
-import { errorMessage } from '../api.js'
+import { errorMessage, makeFolder } from '../api.js'
 import { useQuery } from '../composables/query.js'
 import { confirmProjectRemoval } from '../confirm.js'
 import { FILTER_LABELS, PROJECT_FILTERS, projectPasses, SORT_OPTIONS, sortProjects, SORTS } from '../lib/filters.js'
@@ -104,12 +106,39 @@ async function remove(project) {
 
 /** The name of a new Project, while its dialog is open */
 const naming = ref(null)
+/** Whether the new Project gets a folder of its own, named after it, for uploads to go to (story 98) */
+const ownFolder = ref(true)
+/** Where that folder goes, from the Member's home: the admin's default place, /Deliver unless set otherwise */
+const parent = ref(loadState('deliver', 'projectFolder', '/Deliver'))
+const folderPath = computed(() => `${parent.value.replace(/\/$/, '')}/${naming.value?.trim() ?? ''}`)
 
-/** A Project by name, which collects files from anywhere without moving them (ADR 0009) */
+/** Picks the folder the new Project's folder goes into */
+async function pickParent() {
+	try {
+		const [folder] = await getFilePickerBuilder(t('deliver', 'Where the folder of the new Project goes'))
+			.setMultiSelect(false)
+			.allowDirectories(true)
+			.setMimeTypeFilter(['httpd/unix-directory'])
+			.setType(FilePickerType.Choose)
+			.build()
+			.pickNodes()
+		parent.value = folder.path || '/'
+	} catch {
+		// Closed without a choice
+	}
+}
+
+/**
+ * A Project with a new folder of its own, which makes it a Folder Project; or
+ * one by name alone, which collects files from anywhere without moving them
+ * and has nowhere to upload to (ADR 0009)
+ */
 async function createNamed() {
 	error.value = null
 	try {
-		const project = await store.createNamed(naming.value)
+		const project = ownFolder.value
+			? await store.create(await makeFolder(folderPath.value))
+			: await store.createNamed(naming.value)
 		naming.value = null
 		router.push(`/projects/${project.id}`)
 	} catch (e) {
@@ -180,7 +209,7 @@ async function create() {
 				<button type="button" class="deliver-projects__new" @click="naming = ''">
 					<NcIconSvgWrapper :svg="projects.length ? addIcon : icon" :size="projects.length ? 32 : 48" />
 					<strong>{{ t('deliver', 'New Project') }}</strong>
-					<span>{{ t('deliver', 'Give it a name and add files from anywhere') }}</span>
+					<span>{{ t('deliver', 'Give it a name, and a folder of its own for uploads') }}</span>
 				</button>
 			</li>
 			<li>
@@ -198,13 +227,25 @@ async function create() {
 			@closing="naming = null">
 			<form id="deliver-new-project" @submit.prevent="createNamed">
 				<NcTextField v-model="naming" :label="t('deliver', 'Name')" autofocus />
+				<NcCheckboxRadioSwitch v-model="ownFolder" type="switch">
+					{{ t('deliver', 'Create a Project folder') }}
+				</NcCheckboxRadioSwitch>
+				<div v-if="ownFolder" class="deliver-projects__folder">
+					<span>{{ t('deliver', 'Folder: {path}', { path: folderPath }) }}</span>
+					<NcButton variant="tertiary" @click="pickParent">
+						{{ t('deliver', 'Choose a place') }}
+					</NcButton>
+				</div>
+				<p v-else class="deliver-projects__hint">
+					{{ t('deliver', 'Without a folder it collects files from anywhere, added in the Files sidebar; there is nowhere to upload to.') }}
+				</p>
 			</form>
 			<template #actions>
 				<NcButton
 					type="submit"
 					form="deliver-new-project"
 					variant="primary"
-					:disabled="!naming.trim()">
+					:disabled="!naming.trim() || (ownFolder && (naming.includes('/') || ['.', '..'].includes(naming.trim())))">
 					{{ t('deliver', 'Create') }}
 				</NcButton>
 			</template>
@@ -227,6 +268,19 @@ async function create() {
 	flex-direction: column;
 	gap: calc(4 * var(--default-grid-baseline));
 	padding: 0 calc(4 * var(--default-grid-baseline)) calc(6 * var(--default-grid-baseline));
+}
+
+.deliver-projects__folder {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: calc(2 * var(--default-grid-baseline));
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.deliver-projects__hint {
+	color: var(--color-text-maxcontrast);
 }
 
 .deliver-projects__head {

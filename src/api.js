@@ -1,8 +1,9 @@
+import { getCurrentUser } from '@nextcloud/auth'
 import axios from '@nextcloud/axios'
 import { getLanguage, t } from '@nextcloud/l10n'
-import { generateOcsUrl, generateUrl } from '@nextcloud/router'
+import { generateOcsUrl, generateRemoteUrl, generateUrl } from '@nextcloud/router'
 import { baseLanguage } from './lib/language.js'
-import { mediaKind } from './lib/media.js'
+import { fileIdAt } from './lib/upload.js'
 import { decodeWaveform } from './lib/waveform.js'
 
 /** Set on the public review page; Members leave it null and use the OCS API */
@@ -53,6 +54,13 @@ export const enableFile = (fileId, projectId = null, assetId = null) => axios.po
 export const assignAsset = (id, projectId) => axios.put(url(`/assets/${id}/project`), { projectId }).then(data)
 export const updateAsset = (id, fields) => axios.put(url(`/assets/${id}`), fields).then(data)
 export const disableAsset = (id) => axios.delete(url(`/assets/${id}`))
+/**
+ * The Asset's files go to the trash of Files, the Asset with its review data at once (story 141)
+ *
+ * @param {number} id - the Asset
+ * @return {Promise<object>} the server's answer
+ */
+export const deleteAsset = (id) => axios.delete(url(`/assets/${id}/files`))
 
 export const listComments = (versionId) => axios.get(url(`/versions/${versionId}/comments`)).then(data)
 export const commentChanges = (versionId, since) => axios.get(url(`/versions/${versionId}/changes?since=${since}`)).then(data)
@@ -86,6 +94,27 @@ export const decideVersion = (versionId, status) => axios.put(url(`/versions/${v
 export const giveWaveform = (versionId, peaks, durationFrames) => axios.post(url(`/versions/${versionId}/waveform`), { peaks, durationFrames }).then(data)
 let decoding = Promise.resolve()
 /**
+ * Decodes a file's Waveform after the ones before it, one at a time, so a
+ * batch of long mixes is not in memory at once.
+ *
+ * @param {Blob} file - an audio file
+ * @param {(percent: number) => void} onProgress - how far it is
+ * @return {Promise<{peaks: number[], seconds: number}>} its Waveform
+ */
+export function decodeInTurn(file, onProgress) {
+	const turn = decoding.then(() => decodeWaveform(file, onProgress))
+	decoding = turn.catch(() => {})
+	return turn
+}
+
+/**
+ * @param {number} versionId - an audio Version
+ * @param {{peaks: number[], seconds: number}} decoded - its Waveform; audio counts in milliseconds (ADR 0007), also before the probe ran
+ * @return {Promise<object>} the server's answer
+ */
+export const giveAudioWaveform = (versionId, { peaks, seconds }) => giveWaveform(versionId, peaks, Math.max(1, Math.round(seconds * 1000)))
+
+/**
  * Where the server has no ffmpeg, the browser that uploaded an audio file
  * decodes its Waveform from the file it still holds, so nobody downloads it
  * for that (spec: Media metadata and derived media). Fire and forget: without
@@ -95,14 +124,9 @@ let decoding = Promise.resolve()
  * @param {{versionId: number, waveformFromBrowser: boolean}} asset - its Asset, as getAssetForFile or enableFile give it
  */
 export function handInWaveform(file, asset) {
-	if (!asset.waveformFromBrowser) {
-		return
+	if (asset.waveformFromBrowser) {
+		decodeInTurn(file).then((decoded) => giveAudioWaveform(asset.versionId, decoded)).catch(() => {})
 	}
-	// One at a time, so a batch of long mixes is not in memory at once; audio counts in milliseconds (ADR 0007), also before the probe ran
-	decoding = decoding
-		.then(() => decodeWaveform(file))
-		.then(({ peaks, seconds }) => giveWaveform(asset.versionId, peaks, Math.max(1, Math.round(seconds * 1000))))
-		.catch(() => {})
 }
 export const markSeen = (versionId, at) => axios.post(url(`/versions/${versionId}/seen`), { at }).then(data)
 
@@ -160,25 +184,30 @@ export const forgetReviewer = () => axios.delete(url('/reviewer'))
 export const listPublicAssets = () => axios.get(url('/assets')).then(data)
 
 /**
- * Drop upload: puts the file into a folder through Nextcloud's own WebDAV
- * (spec: Discovery and stacking). It never replaces a file of the same name.
+ * Makes a folder in the Member's Files, for a new Project to upload into
+ * (story 98), and the folders above it that are missing. One that is there
+ * already by that name is taken as it is.
  *
- * @param {string} folderUrl - WebDAV URL of the folder, without a trailing slash
- * @param {File} file - what was dropped
- * @return {Promise<number>} the Nextcloud file id of the upload
+ * @param {string} path - from the Member's home, such as /Clients/Spot
+ * @return {Promise<number>} its file id
  */
-export async function uploadVersion(folderUrl, file) {
-	const target = `${folderUrl}/${encodeURIComponent(file.name)}`
-	// Ask first, so a taken name is refused now rather than after the whole upload
-	const taken = await axios.head(target).then(() => true, () => false)
-	if (taken) {
-		throw Object.assign(new Error('taken'), { response: { status: 412 } })
+export async function makeFolder(path) {
+	const parts = path.split('/').filter(Boolean)
+	// The browser would resolve . and .. in the URL, and the Project would get a folder above the one meant
+	if (parts.some((part) => part === '.' || part === '..')) {
+		throw new Error(t('deliver', 'A folder cannot be called . or ..'))
 	}
-	const response = await axios.put(target, file, {
-		headers: { 'Content-Type': file.type || 'application/octet-stream', 'If-None-Match': '*' },
-	})
-	// OC-FileId carries the instance id after the number, as in 00000123ocabc123
-	return parseInt(response.headers['oc-fileid'], 10)
+	let dav = generateRemoteUrl('dav') + '/files/' + encodeURIComponent(getCurrentUser()?.uid ?? '')
+	// The folders above it too, such as the default /Deliver on its first use
+	for (const part of parts) {
+		dav += '/' + encodeURIComponent(part)
+		await axios.request({ method: 'MKCOL', url: dav }).catch((error) => {
+			if (error.response?.status !== 405) {
+				throw error
+			}
+		})
+	}
+	return await fileIdAt(axios.request, dav) ?? Promise.reject(new Error(t('deliver', 'The folder could not be made.')))
 }
 
 /**
@@ -194,27 +223,6 @@ export function renameFile(url, name) {
 		url,
 		headers: { Destination: url.slice(0, url.lastIndexOf('/') + 1) + encodeURIComponent(name), Overwrite: 'F' },
 	})
-}
-
-/**
- * Uploads a file next to the newest Version and stacks it on top as the next
- * Version (story 17).
- *
- * @param {string} folderUrl - WebDAV URL of the folder, without a trailing slash
- * @param {File} file - the new cut
- * @param {number} assetId - the Asset it belongs to
- * @param {string|null} kind - the kind of media of its Version Stack, from stackKind; null when unknown
- * @return {Promise<number>} the id of the new Version
- */
-export async function uploadNextVersion(folderUrl, file, assetId, kind) {
-	// Checked before the upload: a file of another kind would land in the folder as an Asset of its own
-	const theirs = mediaKind(file.type)
-	if (kind && theirs && theirs !== kind) {
-		throw new Error(t('deliver', 'A Version Stack holds one kind of media: video, audio or stills.'))
-	}
-	const asset = await enableFile(await uploadVersion(folderUrl, file), null, assetId)
-	handInWaveform(file, asset)
-	return asset.versionId
 }
 
 /**

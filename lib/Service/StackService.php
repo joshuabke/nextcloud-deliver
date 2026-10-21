@@ -33,6 +33,14 @@ use OCP\IDBConnection;
  * (spec: Versions).
  */
 class StackService {
+	/**
+	 * Files Deliver itself sends to the trash with their Asset, in this
+	 * request: their Versions go, so the trash marks nothing Missing.
+	 *
+	 * @var array<int, true>
+	 */
+	private static array $deleting = [];
+
 	public function __construct(
 		private ProjectMapper $projects,
 		private AssetMapper $assets,
@@ -311,9 +319,14 @@ class StackService {
 		}
 	}
 
+	/** Deliver sends this file to the trash and deletes its Version itself (story 141) */
+	public function deleting(int $fileId): void {
+		self::$deleting[$fileId] = true;
+	}
+
 	/** The file went to the trash: the Version is Missing, its Comments stay (story 18) */
 	public function markMissing(Version $version): void {
-		if ($version->getState() === Version::STATE_MISSING) {
+		if ($version->getState() === Version::STATE_MISSING || isset(self::$deleting[$version->getFileId()])) {
 			return;
 		}
 		$version->setState(Version::STATE_MISSING);

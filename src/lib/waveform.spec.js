@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { peaksOf, uploadedAudio } from './waveform.js'
+import { addPeaks, peaksOf, roundPeaks, uploadedAudio } from './waveform.js'
 
 describe('a Waveform from decoded audio', () => {
 	it('keeps the loudest sample of each bucket over all channels', () => {
@@ -14,6 +14,22 @@ describe('a Waveform from decoded audio', () => {
 
 	it('makes no more buckets than there are samples', () => {
 		expect(peaksOf([Float32Array.from([0.5, 0.25])], 2000)).toEqual([0.5, 0.25])
+	})
+})
+
+describe('a Waveform decoded piece by piece', () => {
+	it('puts each sample into the bucket of its time, whatever the pieces', () => {
+		// Two seconds at 4 samples a second into 4 buckets, in two pieces of one second each
+		const peaks = new Float32Array(4)
+		addPeaks(peaks, [Float32Array.from([0.1, -0.2, 0.3, 0])], 0, 4, 2)
+		addPeaks(peaks, [Float32Array.from([0, -0.9, 0.4, 0.05])], 1, 4, 2)
+		expect(roundPeaks(peaks)).toEqual([0.2, 0.3, 0.9, 0.4])
+	})
+
+	it('keeps samples past the expected end in the last bucket', () => {
+		const peaks = new Float32Array(2)
+		addPeaks(peaks, [Float32Array.from([0.5])], 3, 1, 2)
+		expect(roundPeaks(peaks)).toEqual([0, 0.5])
 	})
 })
 

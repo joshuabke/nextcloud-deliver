@@ -28,7 +28,7 @@ import ReviewLayout from '../components/ReviewLayout.vue'
 import ShareLinks from '../components/ShareLinks.vue'
 import VersionPicker from '../components/VersionPicker.vue'
 import VideoPlayer from '../components/VideoPlayer.vue'
-import { errorMessage, getVersion, giveWaveform, listMembers, updateAsset, uploadNextVersion } from '../api.js'
+import { errorMessage, getVersion, giveWaveform, listMembers, updateAsset } from '../api.js'
 import { useLiveUpdates } from '../composables/live.js'
 import { usePanelOpen } from '../composables/panel.js'
 import { useReview } from '../composables/review.js'
@@ -38,6 +38,7 @@ import { fpsValue } from '../lib/timecode.js'
 import { decodeWaveform } from '../lib/waveform.js'
 import { useCommentsStore } from '../store/comments.js'
 import { useProjectsStore } from '../store/projects.js'
+import { useUploadsStore } from '../store/uploads.js'
 
 const props = defineProps({
 	id: { type: Number, required: true },
@@ -52,7 +53,7 @@ const isMobile = useIsMobile()
 useLiveUpdates(store)
 const context = ref(null)
 const error = ref(null)
-const uploading = ref(false)
+const uploads = useUploadsStore()
 const fileInput = ref(null)
 /** The phone's date picker for a first Due Date; once set, the date in the bar changes it */
 const pickingDue = ref(false)
@@ -147,27 +148,29 @@ function step(by) {
 }
 
 /**
- * Uploads the picked file as the next Version and opens it
+ * Uploads the picked file as the next Version, with the card in the corner
+ * (story 134), and opens it once it is there, unless the Member moved on
  *
  * @param {Event} event - the file input's change event
  */
-async function upload(event) {
+function upload(event) {
 	const file = event.target.files?.[0]
 	event.target.value = ''
 	if (!file) {
 		return
 	}
-	uploading.value = true
-	error.value = null
-	try {
-		const versionId = await uploadNextVersion(folderUrl.value, file, context.value.asset.id, stackKind(context.value.versions))
-		projects.fetch(context.value.project.id).catch(() => {})
-		router.push(`/versions/${versionId}`)
-	} catch (e) {
-		error.value = errorMessage(e)
-	} finally {
-		uploading.value = false
-	}
+	const from = props.id
+	uploads.add([file], {
+		folderUrl: folderUrl.value,
+		projectId: context.value.project.id,
+		assetId: context.value.asset.id,
+		kind: stackKind(context.value.versions),
+		onDone: (versionId) => {
+			if (props.id === from && router.currentRoute.value.path === `/versions/${from}`) {
+				router.push(`/versions/${versionId}`)
+			}
+		},
+	})
 }
 </script>
 
@@ -235,12 +238,10 @@ async function upload(event) {
 			<template v-if="context.canWrite">
 				<NcButton
 					v-if="folderUrl && !isMobile"
-					:disabled="uploading"
 					:title="t('deliver', 'Upload a new cut and stack it on top')"
 					@click="fileInput.click()">
 					<template #icon>
-						<NcLoadingIcon v-if="uploading" />
-						<NcIconSvgWrapper v-else :svg="uploadIcon" />
+						<NcIconSvgWrapper :svg="uploadIcon" />
 					</template>
 					{{ t('deliver', 'New Version') }}
 				</NcButton>
@@ -275,7 +276,6 @@ async function upload(event) {
 			<template v-if="context.canWrite">
 				<NcActionButton
 					v-if="folderUrl"
-					:disabled="uploading"
 					closeAfterClick
 					@click="fileInput.click()">
 					<template #icon>

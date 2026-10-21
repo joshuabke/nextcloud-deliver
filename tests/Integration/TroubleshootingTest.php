@@ -60,4 +60,30 @@ class TroubleshootingTest extends TestCase {
 		$this->nc->ocs('DELETE', "/projects/$project");
 		$this->nc->delete($root);
 	}
+
+	public function testAVersionWhoseProcessingFailedSaysSoAndIsMadeAgain(): void {
+		$root = 'deliver-test-' . bin2hex(random_bytes(4));
+		$this->nc->mkdir($root);
+		$this->nc->put("$root/cut.mp4", 'not really a video');
+		$project = $this->nc->ocs('POST', '/projects', ['folderId' => $this->nc->fileId($root)])['data']['id'];
+		exec('php /var/www/html/occ deliver:worker --once 2>&1');
+
+		$newest = fn () => $this->nc->ocs('GET', "/projects/$project")['data']['assets'][0]['versions'][0];
+		self::assertTrue($newest()['processingFailed'], 'a probe that failed shows on the card (story 140)');
+
+		$again = $this->nc->ocs('POST', "/versions/{$newest()['id']}/regenerate");
+		self::assertSame(200, $again['status'], json_encode($again['data']));
+		self::assertFalse($newest()['processingFailed'], 'it is queued again');
+
+		$this->nc->ocs('DELETE', "/projects/$project");
+		$this->nc->delete($root);
+	}
+
+	public function testTheAppPageTellsWhetherTheServerHasFfmpeg(): void {
+		$page = $this->nc->request('GET', '/index.php/apps/deliver/');
+		self::assertSame(200, $page['status']);
+		self::assertSame(1, preg_match('/id="initial-state-deliver-ffmpeg" value="([^"]*)"/', $page['body'], $match), 'the Uploads dialog reads it (story 138)');
+		exec('ffmpeg -version 2>&1', $output, $code);
+		self::assertSame($code === 0, json_decode(base64_decode($match[1])));
+	}
 }

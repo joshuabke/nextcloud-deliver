@@ -78,7 +78,7 @@ function save() {
 				<NcTextField
 					v-model.number="settings.maxHeight"
 					type="number"
-					min="144"
+					min="720"
 					max="2160"
 					:label="t('deliver', 'Proxy resolution: short side in pixels')"
 					:helperText="t('deliver', 'Originals that browsers play are always available. Larger ones also get a lighter Proxy to switch to.')" />
@@ -98,6 +98,10 @@ function save() {
 					v-if="settings.hwEncoder === 'vaapi'"
 					v-model="settings.hwDevice"
 					:label="t('deliver', 'VAAPI device')" />
+				<NcTextField
+					v-model="settings.projectFolder"
+					:label="t('deliver', 'Default place for Project folders')"
+					:helperText="t('deliver', 'In each user\'s Files. A new Project gets its folder there, unless the user picks another place.')" />
 				<NcTextField
 					v-model="settings.extraArgs"
 					:label="t('deliver', 'Extra ffmpeg arguments for Proxies')"

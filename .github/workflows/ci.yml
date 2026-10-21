@@ -1,9 +1,12 @@
 name: CI
 
+# Text alone needs no build and no test run
 on:
   pull_request:
+    paths-ignore: ['**.md', 'docs/**', 'LICENSE']
   push:
     branches: [main]
+    paths-ignore: ['**.md', 'docs/**', 'LICENSE']
 
 permissions:
   contents: read

@@ -156,6 +156,44 @@ class ProjectApiTest extends TestCase {
 		self::assertSame(['trailer_v1.mp4', 'trailer_v2.mp4'], array_column($shown()['notEnabled'], 'name'));
 	}
 
+	public function testADeletedAssetTakesItsFilesToTheTrashAndLeavesNoMissingBehind(): void {
+		$this->nc->emptyTrash();
+		$this->nc->put("{$this->root}/cut_v1.mp4", 'not really a video');
+		$this->nc->put("{$this->root}/cut_v2.mp4", 'not really a video');
+		$this->nc->put("{$this->root}/other.mp4", 'not really a video');
+		$projectId = $this->createProject($this->nc, $this->nc->fileId($this->root))['id'];
+		$shown = fn (NextcloudClient $client) => $client->ocs('GET', "/projects/$projectId")['data'];
+		$ids = array_column($shown($this->nc)['assets'], 'id', 'name');
+		self::assertSame(['cut', 'other'], array_keys($ids));
+
+		// A Member who may change the files but not delete them is refused, and nothing goes
+		$asMember = $this->createUser();
+		$shared = $this->nc->ocsForm('POST', '/ocs/v2.php/apps/files_sharing/api/v1/shares', [
+			'path' => "/{$this->root}",
+			'shareType' => 0,
+			'shareWith' => end($this->users),
+			'permissions' => 7,
+		]);
+		self::assertSame(200, $shared['status'], json_encode($shared['data']));
+		self::assertSame(403, $asMember->ocs('DELETE', "/assets/{$ids['cut']}/files")['status']);
+		self::assertSame(['cut', 'other'], array_column($shown($this->nc)['assets'], 'name'));
+
+		self::assertSame(200, $this->nc->ocs('DELETE', "/assets/{$ids['cut']}/files")['status']);
+		$after = $shown($this->nc);
+		self::assertSame(['other'], array_column($after['assets'], 'name'), 'gone at once, not Missing (story 141)');
+		self::assertSame([], $after['notEnabled'], 'its files left the folder');
+		$trash = $this->nc->request('PROPFIND', '/remote.php/dav/trashbin/' . rawurlencode(getenv('DELIVER_TEST_USER') ?: 'admin') . '/trash', null, ['Depth: 1'])['body'];
+		self::assertStringContainsString('cut_v1.mp4', $trash, 'in the trash of Files');
+		self::assertStringContainsString('cut_v2.mp4', $trash);
+
+		// An Asset whose file is in the trash already is still the Members' to delete, and goes without a trace
+		$this->nc->delete("{$this->root}/other.mp4");
+		[$missing] = $shown($this->nc)['assets'];
+		self::assertSame(['missing', true], [$missing['versions'][0]['state'], $missing['canWrite']]);
+		self::assertSame(200, $this->nc->ocs('DELETE', "/assets/{$ids['other']}/files")['status']);
+		self::assertSame([], $shown($this->nc)['assets']);
+	}
+
 	public function testAProjectMadeAgainGetsItsAssetsBackFromNoProject(): void {
 		$this->nc->put("{$this->root}/cut.mp4", 'not really a video');
 		$this->nc->put("{$this->root}/other.mp4", 'not really a video');

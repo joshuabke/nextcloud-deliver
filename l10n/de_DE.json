@@ -111,7 +111,6 @@
 		"Frame rate when a file does not tell": "Framerate, wenn eine Datei keine angibt",
 		"Frames": "Frames",
 		"Fullscreen": "Vollbild",
-		"Give it a name and add files from anywhere": "Geben Sie ihm einen Namen und fügen Sie Dateien von überall hinzu",
 		"Give your name above to comment.": "Geben Sie oben Ihren Namen an, um zu kommentieren.",
 		"Go to this Frame": "Zu diesem Frame springen",
 		"Guest": "Gast",
@@ -124,7 +123,6 @@
 		"It stops working for everyone who has it, Personal Links through it too. Comments stay.": "Er funktioniert für niemanden mehr, auch nicht als persönlicher Link. Die Kommentare bleiben erhalten.",
 		"Its Assets keep their Comments and go to No Project. The files stay untouched.": "Seine Assets behalten ihre Kommentare und kommen nach „Ohne Projekt“. Die Dateien bleiben unverändert.",
 		"Its Comments and Versions are deleted. The file itself stays untouched.": "Seine Kommentare und Versionen werden gelöscht. Die Datei selbst bleibt unberührt.",
-		"Its Comments and Versions are deleted. The files themselves stay untouched.": "Seine Kommentare und Versionen werden gelöscht. Die Dateien selbst bleiben unberührt.",
 		"Its Versions and Comments go along. The files stay where they are.": "Versionen und Kommentare kommen mit. Die Dateien bleiben, wo sie sind.",
 		"Jobs running at the same time": "Gleichzeitig laufende Jobs",
 		"Keep": "Behalten",
@@ -248,8 +246,6 @@
 		"Remove Reviewer": "Reviewer entfernen",
 		"Remove from Deliver": "Aus Deliver entfernen",
 		"Remove from Project": "Aus Projekt entfernen",
-		"Remove this Asset from Deliver?": "Dieses Asset aus Deliver entfernen?",
-		"Remove this Asset from the Project?": "Dieses Asset aus dem Projekt entfernen?",
 		"Remove this file from Deliver?": "Diese Datei aus Deliver entfernen?",
 		"Remove this file from the Project?": "Diese Datei aus dem Projekt entfernen?",
 		"Remove {name}": "{name} entfernen",
@@ -442,7 +438,103 @@
 			"%n Medienjobs sind fehlgeschlagen. Die Deliver-Verwaltungseinstellungen zeigen, warum, und wiederholen sie."
 		],
 		"A preview of what Reviewers see. You comment and approve in Deliver.": "Eine Vorschau dessen, was Reviewer sehen. Kommentieren und abnehmen können Sie in Deliver.",
-		"Select all": "Alle auswählen"
+		"Select all": "Alle auswählen",
+		"_%n minute left_::_%n minutes left_": [
+			"noch %n Minute",
+			"noch %n Minuten"
+		],
+		"_%n upload_::_%n uploads_": [
+			"%n Upload",
+			"%n Uploads"
+		],
+		"All done": "Alles fertig",
+		"Audio": "Audio",
+		"Cancel the upload of {name}": "Upload von {name} abbrechen",
+		"Choose files": "Dateien auswählen",
+		"Close": "Schließen",
+		"Continue in the background": "Im Hintergrund weiter",
+		"Drop files here to upload them into {where}": "Legen Sie Dateien hier ab, um sie nach {where} hochzuladen",
+		"Everything else ffmpeg reads, such as ProRes, H.265, MXF or AVI, plays as a Proxy.": "Alles andere, was ffmpeg liest, etwa ProRes, H.265, MXF oder AVI, spielt als Proxy.",
+		"Failed": "Fehlgeschlagen",
+		"Hide finished": "Fertige ausblenden",
+		"Interrupted. Pick the file again to go on where it stopped.": "Unterbrochen. Wählen Sie die Datei erneut, um dort weiterzumachen, wo es aufgehört hat.",
+		"JPEG, PNG, WebP, GIF and AVIF.": "JPEG, PNG, WebP, GIF und AVIF.",
+		"less than a minute left": "noch weniger als eine Minute",
+		"MP4 and MOV with H.264, and WebM, play as they are.": "MP4 und MOV mit H.264 sowie WebM spielen, wie sie sind.",
+		"Other audio ffmpeg reads plays as a Proxy.": "Anderes Audio, das ffmpeg liest, spielt als Proxy.",
+		"Other audio needs ffmpeg.": "Anderes Audio braucht ffmpeg.",
+		"Finishing on the server": "Wird auf dem Server fertiggestellt",
+		"Paused until the network is back": "Pausiert, bis das Netz wieder da ist",
+		"Pick the file again": "Datei erneut wählen",
+		"Pictures": "Bilder",
+		"Process again": "Erneut verarbeiten",
+		"Processing failed": "Verarbeitung fehlgeschlagen",
+		"ProRes, H.265, MXF, AVI and other formats need ffmpeg, which this server does not have.": "ProRes, H.265, MXF, AVI und andere Formate brauchen ffmpeg, das dieser Server nicht hat.",
+		"Ready": "Fertig",
+		"Running": "Läuft",
+		"Something failed": "Etwas ist fehlgeschlagen",
+		"That is not the same file: {name} has another size or date.": "Das ist nicht dieselbe Datei: {name} hat eine andere Größe oder ein anderes Datum.",
+		"Thumbnail Strip": "Vorschauleiste",
+		"Try again": "Erneut versuchen",
+		"Uploaded": "Hochgeladen",
+		"Uploaded, waiting for the server to read it. That starts with the next background job.": "Hochgeladen, wartet darauf, dass der Server die Datei liest. Das beginnt mit dem nächsten Hintergrundjob.",
+		"Uploads": "Uploads",
+		"Uploads interrupted": "Uploads unterbrochen",
+		"Video": "Video",
+		"Waiting": "Wartet",
+		"Waiting, starts with the next background job": "Wartet, startet mit dem nächsten Hintergrundjob",
+		"WAV, FLAC, MP3, AAC and Ogg play as they are.": "WAV, FLAC, MP3, AAC und Ogg spielen, wie sie sind.",
+		"Waveform": "Wellenform",
+		"Waveform, in this browser": "Wellenform, in diesem Browser",
+		"What can be done without ffmpeg ↗": "Was sich ohne ffmpeg tun lässt ↗",
+		"Which files Deliver takes": "Welche Dateien Deliver nimmt",
+		"{hours} h {minutes} min left": "noch {hours} h {minutes} min",
+		"{speed}/s": "{speed}/s",
+		"_Delete this Asset?_::_Delete %n Assets?_": [
+			"Dieses Asset löschen?",
+			"%n Assets löschen?"
+		],
+		"_The files of all its Versions go to the trash of Files. Its Comments, Drawings and Approvals are deleted._::_The files of all their Versions go to the trash of Files. Their Comments, Drawings and Approvals are deleted._": [
+			"Die Dateien aller seiner Versionen kommen in den Papierkorb von Dateien. Seine Kommentare, Zeichnungen und Abnahmen werden gelöscht.",
+			"Die Dateien aller ihrer Versionen kommen in den Papierkorb von Dateien. Ihre Kommentare, Zeichnungen und Abnahmen werden gelöscht."
+		],
+		"Clear the selection": "Auswahl aufheben",
+		"_Remove this Asset from Deliver?_::_Remove %n Assets from Deliver?_": [
+			"Dieses Asset aus Deliver entfernen?",
+			"%n Assets aus Deliver entfernen?"
+		],
+		"_Remove this Asset from the Project?_::_Remove %n Assets from the Project?_": [
+			"Dieses Asset aus dem Projekt entfernen?",
+			"%n Assets aus dem Projekt entfernen?"
+		],
+		"_Its Comments and Versions are deleted. The files themselves stay untouched._::_Their Comments and Versions are deleted. The files themselves stay untouched._": [
+			"Seine Kommentare und Versionen werden gelöscht. Die Dateien selbst bleiben unberührt.",
+			"Ihre Kommentare und Versionen werden gelöscht. Die Dateien selbst bleiben unberührt."
+		],
+		"_Move %n Asset to another Project_::_Move %n Assets to another Project_": [
+			"%n Asset in ein anderes Projekt verschieben",
+			"%n Assets in ein anderes Projekt verschieben"
+		],
+		"_%n Asset selected_::_%n Assets selected_": [
+			"%n Asset ausgewählt",
+			"%n Assets ausgewählt"
+		],
+		"Missing Assets are selected only together with other Missing ones": "Fehlende Assets lassen sich nur zusammen mit anderen fehlenden auswählen",
+		"_Its files are in the trash of Files already. Its Comments, Drawings and Approvals are deleted._::_Their files are in the trash of Files already. Their Comments, Drawings and Approvals are deleted._": [
+			"Seine Dateien liegen schon im Papierkorb von Dateien. Seine Kommentare, Zeichnungen und Abnahmen werden gelöscht.",
+			"Ihre Dateien liegen schon im Papierkorb von Dateien. Ihre Kommentare, Zeichnungen und Abnahmen werden gelöscht."
+		],
+		"The folder could not be made.": "Der Ordner konnte nicht angelegt werden.",
+		"Where the folder of the new Project goes": "Wohin der Ordner des neuen Projekts kommt",
+		"Folder: {path}": "Ordner: {path}",
+		"Give it a name, and a folder of its own for uploads": "Geben Sie ihm einen Namen und einen eigenen Ordner für Uploads",
+		"Without a folder it collects files from anywhere, added in the Files sidebar; there is nowhere to upload to.": "Ohne Ordner sammelt es Dateien von überall, hinzugefügt in der Seitenleiste von Dateien; hochladen lässt sich dann nirgendwohin.",
+		"Default place for Project folders": "Standardort für Projektordner",
+		"In each user's Files. A new Project gets its folder there, unless the user picks another place.": "In den Dateien jedes Nutzers. Ein neues Projekt bekommt dort seinen Ordner, wenn kein anderer Ort gewählt wird.",
+		"Create a Project folder": "Projektordner anlegen",
+		"Choose a place": "Ort wählen",
+		"{percent} %, in another tab": "{percent} %, in einem anderen Tab",
+		"A folder cannot be called . or ..": "Ein Ordner kann nicht . oder .. heißen"
 	},
 	"pluralForm": "nplurals=2; plural=(n != 1);"
 }
