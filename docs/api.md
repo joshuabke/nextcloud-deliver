@@ -15,6 +15,7 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | POST | `/assets` `{fileId, projectId, assetId}` | Enable one media file for review: into the Project given, 0 for No Project, or without one the Folder Project above it, else No Project; with `assetId`, as the next Version of that Asset of the same kind of media, a file already in review moving over |
 | PUT | `/assets/{id}/project` `{projectId}` | Put an Asset into another Project, or 0 for No Project; no file moves |
 | DELETE | `/assets/{id}` | Take a file out of Deliver, the file stays |
+| DELETE | `/assets/{id}/files` | Delete an Asset with its files: they go to the trash of Files, the Asset with its review data at once |
 | GET | `/versions/{id}/members` | Who can be @mentioned on a Version: whoever can open its file |
 | GET | `/versions/{id}` | Project, Asset and Version Stack for the Review view |
 | PUT | `/versions/{id}` `{number, autoStacked}` | Set the Version Number, or take note of an automatic stack |
@@ -23,7 +24,7 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | POST | `/versions/{id}/regenerate` | Delete the Version's derived media and queue it again |
 | POST | `/versions/{id}/waveform` `{peaks, durationFrames}` | Hand in a Waveform (1 to 2000 peaks from 0 to 1) and the duration in Frames, for audio milliseconds, also before the probe ran; 409 once the Version has one or the server is making one, which then replaces it (ADR 0012) |
 | GET | `/admin/settings` | Pipeline settings and status, admins only |
-| PUT | `/admin/settings` `{ffmpegPath, ffprobePath, maxJobs, maxHeight, thumbCap, hwEncoder, hwDevice, extraArgs}` | Save and test the encoder, admins only |
+| PUT | `/admin/settings` `{ffmpegPath, ffprobePath, maxJobs, maxHeight, thumbCap, hwEncoder, hwDevice, extraArgs, projectFolder}` | Save and test the encoder, admins only |
 | GET | `/apps/deliver/versions/{id}/export/{format}` `?unresolvedOnly=1&zeroBased=1` | The Comments as `edl` (DaVinci Resolve markers), `fcpxml` (FCP7 XML, Premiere Pro), `fcpx` (FCPXML, Final Cut Pro) or `csv`, and for audio as `wav` (embedded markers), `midi` (marker meta events) or `reaper` (Region/Marker Manager CSV); needs write access |
 | POST | `/apps/deliver/versions/{id}/export/ableton` (multipart `set`) | An Ableton Live Set back with the Comments as locators |
 | GET | `/apps/deliver/versions/{id}/media/{kind}` | Proxy, Thumbnail Strip, its index or the Waveform, with byte ranges |

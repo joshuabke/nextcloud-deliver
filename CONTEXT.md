@@ -142,6 +142,10 @@ _Avoid_: Sprite, scrubber, filmstrip
 Precomputed audio peaks of a Version, drawn under the timeline; the primary visual for audio-only Assets.
 _Avoid_: Peaks, audio graph
 
+**Processing**:
+The time in which a Version's derived media is being made. The original plays meanwhile; a failed part can be made again.
+_Avoid_: Transcoding, rendering, conversion
+
 **Missing**:
 The state of a Version whose file has gone to trash. Comments stay until the file is permanently deleted or a Member removes the Version.
 _Avoid_: Orphaned, broken, deleted
@@ -173,6 +177,7 @@ The German translation (`l10n/de` with "du", `l10n/de_DE` with "Sie") uses these
 | Project Link, Personal Link | Projekt-Link, Persönlicher Link |
 | Unseen | Ungesehen |
 | Proxy, Thumbnail Strip, Waveform | Proxy, Vorschauleiste, Wellenform |
+| Processing | Verarbeitung (on cards „Wird verarbeitet“) |
 | Missing | Fehlt |
 | Export | Export |
 | Delivery | Delivery |
