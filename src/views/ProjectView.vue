@@ -170,6 +170,9 @@ let anchor = null
  * @param {boolean} range - whether Shift was held
  */
 function toggle(asset, range) {
+	if (!range && !selected.value.includes(asset.id) && tickedMissing.value !== null && tickedMissing.value !== allMissing(asset)) {
+		return
+	}
 	if (range && anchor !== null) {
 		const missing = tickedMissing.value ?? allMissing(asset)
 		const order = groups.value.flatMap((group) => group.assets)
@@ -178,6 +181,22 @@ function toggle(asset, range) {
 	} else {
 		selected.value = selected.value.includes(asset.id) ? selected.value.filter((id) => id !== asset.id) : [...selected.value, asset.id]
 	}
+	anchor = asset.id
+}
+
+/**
+ * A click on a card ticks it alone; with Ctrl or Cmd it joins the ticked ones,
+ * with Shift the cards up to it do (story 141)
+ *
+ * @param {object} asset - the Asset clicked
+ * @param {{range: boolean, add: boolean}} how - the keys held
+ */
+function pick(asset, { range, add }) {
+	if (range || add) {
+		toggle(asset, range)
+		return
+	}
+	selected.value = [asset.id]
 	anchor = asset.id
 }
 /** Media files in the folder on screen that are no Assets, greyed out under them to add one by one; they have no state to filter by */
@@ -632,6 +651,7 @@ function dropped(event) {
 						:selecting="selected.length > 0"
 						:locked="tickedMissing !== null && tickedMissing !== allMissing(asset)"
 						@select="toggle(asset, $event)"
+						@pick="pick(asset, $event)"
 						@stack="accept"
 						@versions="managing = $event.id"
 						@contextmenu.prevent="openMenu($event, asset)"

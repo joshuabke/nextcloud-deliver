@@ -8,6 +8,7 @@ import audioIcon from '@mdi/svg/svg/waveform.svg?raw'
 import { n, t } from '@nextcloud/l10n'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDateTime from '@nextcloud/vue/components/NcDateTime'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
@@ -32,13 +33,37 @@ const props = defineProps({
 	locked: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['stack', 'menu', 'versions', 'select'])
+const emit = defineEmits(['stack', 'menu', 'versions', 'select', 'pick'])
 
 /** The menu opens from a button on every screen, by a right click, and by a long press on a phone (stories 109 and 129) */
 const isMobile = useIsMobile()
 const { press, fromButton } = useLongPress((where) => emit('menu', where))
 
 const newest = computed(() => props.asset.versions[0])
+
+const router = useRouter()
+const review = computed(() => `/versions/${newest.value.id}`)
+
+/**
+ * A click ticks the card, as in a file manager, and a double click opens it
+ * (story 141). Enter on the keyboard, a tap on a phone and a card that cannot
+ * be ticked open it at once; with Ctrl or Shift such a card opens elsewhere,
+ * as any link.
+ *
+ * @param {MouseEvent} event - the click
+ */
+function onClick(event) {
+	const add = event.ctrlKey || event.metaKey
+	if (!props.canWrite || isMobile.value || event.detail === 0) {
+		if (!add && !event.shiftKey) {
+			event.preventDefault()
+			router.push(review.value)
+		}
+		return
+	}
+	event.preventDefault()
+	emit('pick', { range: event.shiftKey, add })
+}
 /** A Version stacked by its name waits here until a Member keeps or undoes it (story 13) */
 const autoStacked = computed(() => props.canWrite && !isMobile.value && props.asset.versions.some((version) => version.autoStacked))
 /** Comments by others on any Version of the Stack that I have not had on screen */
@@ -78,7 +103,11 @@ const status = computed(() => {
 		class="deliver-card deliver-card__menu-host"
 		:class="{ 'deliver-card--selecting': canWrite && (selecting || isMobile), 'deliver-card--selected': selected }"
 		v-on="press">
-		<RouterLink class="deliver-card__link" :to="`/versions/${newest.id}`">
+		<a
+			class="deliver-card__link"
+			:href="router.resolve(review).href"
+			@click="onClick"
+			@dblclick="router.push(review)">
 			<div class="deliver-card__still">
 				<NcIconSvgWrapper :svg="audio ? audioIcon : assetIcon" :size="40" />
 				<MediaStill
@@ -115,7 +144,7 @@ const status = computed(() => {
 				<NcDateTime :timestamp="newest.createdAt * 1000" />
 			</div>
 			<DueDate v-if="asset.dueDate" class="deliver-card__due" :modelValue="asset.dueDate" />
-		</RouterLink>
+		</a>
 		<!-- Outside the link, so ticking it does not open the Asset -->
 		<input
 			v-if="canWrite"
@@ -268,6 +297,11 @@ const status = computed(() => {
 .deliver-card:has(.deliver-card__select):hover .deliver-card__version,
 .deliver-card--selecting .deliver-card__version {
 	inset-inline-start: 38px;
+}
+
+.deliver-card__link {
+	/* A double click opens the card rather than marking its name */
+	user-select: none;
 }
 
 .deliver-card--selected {
