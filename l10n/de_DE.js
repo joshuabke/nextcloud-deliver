@@ -125,7 +125,6 @@ OC.L10N.register(
 		"It stops working for everyone who has it, Personal Links through it too. Comments stay.": "Er funktioniert für niemanden mehr, auch nicht als persönlicher Link. Die Kommentare bleiben erhalten.",
 		"Its Assets keep their Comments and go to No Project. The files stay untouched.": "Seine Assets behalten ihre Kommentare und kommen nach „Ohne Projekt“. Die Dateien bleiben unverändert.",
 		"Its Comments and Versions are deleted. The file itself stays untouched.": "Seine Kommentare und Versionen werden gelöscht. Die Datei selbst bleibt unberührt.",
-		"Its Comments and Versions are deleted. The files themselves stay untouched.": "Seine Kommentare und Versionen werden gelöscht. Die Dateien selbst bleiben unberührt.",
 		"Its Versions and Comments go along. The files stay where they are.": "Versionen und Kommentare kommen mit. Die Dateien bleiben, wo sie sind.",
 		"Jobs running at the same time": "Gleichzeitig laufende Jobs",
 		"Keep": "Behalten",
@@ -249,8 +248,6 @@ OC.L10N.register(
 		"Remove Reviewer": "Reviewer entfernen",
 		"Remove from Deliver": "Aus Deliver entfernen",
 		"Remove from Project": "Aus Projekt entfernen",
-		"Remove this Asset from Deliver?": "Dieses Asset aus Deliver entfernen?",
-		"Remove this Asset from the Project?": "Dieses Asset aus dem Projekt entfernen?",
 		"Remove this file from Deliver?": "Diese Datei aus Deliver entfernen?",
 		"Remove this file from the Project?": "Diese Datei aus dem Projekt entfernen?",
 		"Remove {name}": "{name} entfernen",
@@ -495,7 +492,6 @@ OC.L10N.register(
 		"Which files Deliver takes": "Welche Dateien Deliver nimmt",
 		"{hours} h {minutes} min left": "noch {hours} h {minutes} min",
 		"{speed}/s": "{speed}/s",
-		"Select": "Auswählen",
 		"_Delete this Asset?_::_Delete %n Assets?_": [
 			"Dieses Asset löschen?",
 			"%n Assets löschen?"
@@ -504,9 +500,22 @@ OC.L10N.register(
 			"Die Dateien aller seiner Versionen kommen in den Papierkorb von Dateien. Seine Kommentare, Zeichnungen und Abnahmen werden gelöscht.",
 			"Die Dateien aller ihrer Versionen kommen in den Papierkorb von Dateien. Ihre Kommentare, Zeichnungen und Abnahmen werden gelöscht."
 		],
-		"_%n Asset selected_::_%n Assets selected_": [
-			"%n Asset ausgewählt",
-			"%n Assets ausgewählt"
+		"Clear the selection": "Auswahl aufheben",
+		"_Remove this Asset from Deliver?_::_Remove %n Assets from Deliver?_": [
+			"Dieses Asset aus Deliver entfernen?",
+			"%n Assets aus Deliver entfernen?"
+		],
+		"_Remove this Asset from the Project?_::_Remove %n Assets from the Project?_": [
+			"Dieses Asset aus dem Projekt entfernen?",
+			"%n Assets aus dem Projekt entfernen?"
+		],
+		"_Its Comments and Versions are deleted. The files themselves stay untouched._::_Their Comments and Versions are deleted. The files themselves stay untouched._": [
+			"Seine Kommentare und Versionen werden gelöscht. Die Dateien selbst bleiben unberührt.",
+			"Ihre Kommentare und Versionen werden gelöscht. Die Dateien selbst bleiben unberührt."
+		],
+		"_Move %n Asset to another Project_::_Move %n Assets to another Project_": [
+			"%n Asset in ein anderes Projekt verschieben",
+			"%n Assets in ein anderes Projekt verschieben"
 		]
 	},
 	"nplurals=2; plural=(n != 1);"

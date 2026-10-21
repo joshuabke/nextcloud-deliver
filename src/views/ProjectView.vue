@@ -1,7 +1,7 @@
 <script setup>
 import backIcon from '@mdi/svg/svg/arrow-left.svg?raw'
 import dueIcon from '@mdi/svg/svg/calendar-clock.svg?raw'
-import selectIcon from '@mdi/svg/svg/checkbox-marked-outline.svg?raw'
+import clearIcon from '@mdi/svg/svg/checkbox-blank-off-outline.svg?raw'
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import compareIcon from '@mdi/svg/svg/compare.svg?raw'
 import removeIcon from '@mdi/svg/svg/delete-outline.svg?raw'
@@ -65,7 +65,7 @@ const uploads = useUploadsStore()
 const versionInput = ref(null)
 /** The right-click menu: where, and its entries */
 const menu = ref(null)
-/** The Asset whose Due Date is being set */
+/** The Assets whose Due Date is being set */
 const dueFor = ref(null)
 /** The Asset a new Version is picked for */
 const stackOn = ref(null)
@@ -84,6 +84,27 @@ function toggle(asset) {
 	selected.value = selected.value.includes(asset.id) ? selected.value.filter((id) => id !== asset.id) : [...selected.value, asset.id]
 }
 
+/**
+ * Runs a call for each of several Assets, keeps the last error, takes them
+ * out of the selection and reads the Project again
+ *
+ * @param {object[]} assets - the Assets
+ * @param {(asset: object) => Promise<unknown>} call - what to do with each
+ */
+async function forEach(assets, call) {
+	error.value = null
+	for (const asset of assets) {
+		try {
+			await call(asset)
+		} catch (e) {
+			error.value = errorMessage(e)
+		}
+	}
+	const done = assets.map((asset) => asset.id)
+	selected.value = selected.value.filter((id) => !done.includes(id))
+	await store.fetch(props.id).catch(() => {})
+}
+
 watch(() => props.id, async (id) => {
 	error.value = null
 	selected.value = []
@@ -97,6 +118,8 @@ watch(() => props.id, async (id) => {
 // While derived media is being made, look again every ten seconds for the progress
 let recheck = null
 watch(project, (current) => {
+	// Ticked Assets that are gone since are no longer ticked
+	selected.value = selected.value.filter((id) => current?.assets.some((asset) => asset.id === id))
 	clearTimeout(recheck)
 	if (current?.assets.some((asset) => asset.versions[0].processing)) {
 		recheck = setTimeout(() => store.fetch(props.id).catch(() => {}), 10000)
@@ -146,7 +169,7 @@ const adding = ref(new Set())
  * folder, and in another Project only once a folder of it is open
  */
 const canUpload = computed(() => project.value?.path ? project.value.canWrite : folder.value.startsWith('/'))
-/** The Asset being put into another Project, while its dialog is open */
+/** The Assets being put into another Project, while its dialog is open */
 const assigning = ref(null)
 const assignTo = ref(null)
 /** Where an Asset can go: the Projects this Member sees, and No Project (ADR 0009) */
@@ -156,25 +179,22 @@ const assignOptions = computed(() => [
 ].filter((each) => each.id !== project.value?.id))
 
 /**
- * @param {object} asset - the Asset to put into another Project
+ * @param {object[]} assets - the Assets to put into another Project
  */
-async function openAssign(asset) {
+async function openAssign(assets) {
 	assignTo.value = null
-	assigning.value = asset
+	assigning.value = assets
 	if (!store.loaded) {
 		await store.fetchAll().catch(() => {})
 	}
 }
 
-/** Puts the Asset into the Project picked; no file moves */
+/** Puts the Assets into the Project picked; no file moves */
 async function assign() {
-	try {
-		await assignAsset(assigning.value.id, assignTo.value.id)
-		assigning.value = null
-		await Promise.all([store.fetch(props.id), store.fetchAll()])
-	} catch (e) {
-		error.value = errorMessage(e)
-	}
+	const [assets, to] = [assigning.value, assignTo.value.id]
+	assigning.value = null
+	await forEach(assets, (asset) => assignAsset(asset.id, to))
+	await store.fetchAll().catch(() => {})
 }
 
 /** The file being renamed, as { name, url }, while its dialog is open */
@@ -302,34 +322,60 @@ function davFolder(path) {
 }
 
 /**
+ * On a ticked card while others are ticked too, the menu acts on all of them,
+ * with what can be done to several at once (story 141)
+ *
  * @param {MouseEvent} event - the right click
  * @param {object} asset - the Asset under it
  */
 function openMenu(event, asset) {
+	const many = selected.value.length > 1 && selected.value.includes(asset.id)
+	menu.value = { x: event.clientX, y: event.clientY, items: (many ? selectionItems() : assetItems(asset)).filter(Boolean) }
+}
+
+/**
+ * @param {object} asset - an Asset
+ * @return {Array<object|false>} its menu
+ */
+function assetItems(asset) {
 	const [newest, previous] = asset.versions
 	const dir = asset.path.startsWith('/') ? asset.path : projectDir(project.value.path) + (asset.path ? '/' + asset.path : '')
-	menu.value = {
-		x: event.clientX,
-		y: event.clientY,
-		items: [
-			{ label: t('deliver', 'Open'), icon: openIcon, action: () => router.push(`/versions/${newest.id}`) },
-			previous && { label: t('deliver', 'Compare with the Version before'), icon: compareIcon, action: () => router.push(`/compare/${previous.id}/${newest.id}`) },
-			asset.canWrite && { label: t('deliver', 'Upload a new Version'), icon: newVersionIcon, action: () => pickVersion(asset) },
-			asset.canWrite && newest.processingFailed && { label: t('deliver', 'Process again'), icon: retryIcon, action: () => processAgain(newest) },
-			asset.canWrite && { label: asset.dueDate ? t('deliver', 'Change the Due Date') : t('deliver', 'Set a Due Date'), icon: dueIcon, action: () => { dueFor.value = asset } },
-			asset.canWrite && !isMobile.value && { label: t('deliver', 'Manage Versions'), icon: stackIcon, action: () => { managing.value = asset.id } },
-			asset.canWrite && { label: t('deliver', 'Move to Project…'), icon: moveIcon, action: () => openAssign(asset) },
-			...(newest.url ? fileItems(newest.url, newest.name, asset.canWrite) : []),
-			{
-				label: t('deliver', 'Show in Files'),
-				icon: filesIcon,
-				href: generateUrl('/apps/files/files/{fileId}', { fileId: newest.fileId }) + '?' + new URLSearchParams({ dir, opendetails: 'true' }),
-			},
-			asset.canWrite && !selected.value.includes(asset.id) && { label: t('deliver', 'Select'), icon: selectIcon, action: () => toggle(asset) },
-			asset.canWrite && { label: project.value.none ? t('deliver', 'Remove from Deliver') : t('deliver', 'Remove from Project'), icon: removeIcon, danger: true, action: () => remove(asset) },
-			asset.canWrite && { label: t('deliver', 'Delete'), icon: deleteIcon, danger: true, action: () => deleteFiles([asset.id]) },
-		].filter(Boolean),
-	}
+	return [
+		{ label: t('deliver', 'Open'), icon: openIcon, action: () => router.push(`/versions/${newest.id}`) },
+		previous && { label: t('deliver', 'Compare with the Version before'), icon: compareIcon, action: () => router.push(`/compare/${previous.id}/${newest.id}`) },
+		asset.canWrite && { label: t('deliver', 'Upload a new Version'), icon: newVersionIcon, action: () => pickVersion(asset) },
+		asset.canWrite && newest.processingFailed && { label: t('deliver', 'Process again'), icon: retryIcon, action: () => processAgain([asset]) },
+		asset.canWrite && { label: asset.dueDate ? t('deliver', 'Change the Due Date') : t('deliver', 'Set a Due Date'), icon: dueIcon, action: () => { dueFor.value = [asset] } },
+		asset.canWrite && !isMobile.value && { label: t('deliver', 'Manage Versions'), icon: stackIcon, action: () => { managing.value = asset.id } },
+		asset.canWrite && { label: t('deliver', 'Move to Project…'), icon: moveIcon, action: () => openAssign([asset]) },
+		...(newest.url ? fileItems(newest.url, newest.name, asset.canWrite) : []),
+		{
+			label: t('deliver', 'Show in Files'),
+			icon: filesIcon,
+			href: generateUrl('/apps/files/files/{fileId}', { fileId: newest.fileId }) + '?' + new URLSearchParams({ dir, opendetails: 'true' }),
+		},
+		asset.canWrite && { label: project.value.none ? t('deliver', 'Remove from Deliver') : t('deliver', 'Remove from Project'), icon: removeIcon, danger: true, action: () => remove([asset]) },
+		asset.canWrite && { label: t('deliver', 'Delete'), icon: deleteIcon, danger: true, action: () => deleteFiles([asset]) },
+	]
+}
+
+/**
+ * Only what applies to each ticked Asset on its own; opening, comparing,
+ * Versions and the file of one Asset stay on its own menu
+ *
+ * @return {Array<object|false>} the menu of the ticked Assets
+ */
+function selectionItems() {
+	const assets = project.value.assets.filter((asset) => selected.value.includes(asset.id))
+	const failed = assets.filter((asset) => asset.versions[0].processingFailed)
+	return [
+		failed.length > 0 && { label: t('deliver', 'Process again'), icon: retryIcon, action: () => processAgain(failed) },
+		{ label: t('deliver', 'Set a Due Date'), icon: dueIcon, action: () => { dueFor.value = assets } },
+		{ label: t('deliver', 'Move to Project…'), icon: moveIcon, action: () => openAssign(assets) },
+		{ label: t('deliver', 'Clear the selection'), icon: clearIcon, action: () => { selected.value = [] } },
+		{ label: project.value.none ? t('deliver', 'Remove from Deliver') : t('deliver', 'Remove from Project'), icon: removeIcon, danger: true, action: () => remove(assets) },
+		{ label: t('deliver', 'Delete'), icon: deleteIcon, danger: true, action: () => deleteFiles(assets) },
+	]
 }
 
 /**
@@ -356,78 +402,54 @@ function uploadStacked(event) {
 }
 
 /**
- * Makes the derived media of a Version again after they failed (story 140)
+ * Makes the derived media of the newest Versions again after they failed (story 140)
  *
- * @param {object} version - the newest Version of an Asset
+ * @param {object[]} assets - Assets whose newest Version failed
  */
-async function processAgain(version) {
-	try {
-		await regenerateVersion(version.id)
-	} catch (e) {
-		error.value = errorMessage(e)
-	}
-	await store.fetch(props.id).catch(() => {})
+function processAgain(assets) {
+	return forEach(assets, (asset) => regenerateVersion(asset.versions[0].id))
 }
 
 /**
- * @param {string|null} dueDate - the new Due Date of dueFor, or null
+ * @param {string|null} dueDate - the new Due Date of the Assets in dueFor, or null
  */
-async function setDue(dueDate) {
-	try {
-		await updateAsset(dueFor.value.id, { dueDate })
-	} catch (e) {
-		error.value = errorMessage(e)
-	}
-	await store.fetch(props.id).catch(() => {})
+function setDue(dueDate) {
+	return forEach(dueFor.value, (asset) => updateAsset(asset.id, { dueDate }))
 }
 
 /**
- * Removes the Asset with its Comments and Versions; the files stay, and Auto Intake leaves them out (stories 4 and 132)
+ * Removes Assets with their Comments and Versions; the files stay, and Auto Intake leaves them out (stories 4 and 132)
  *
- * @param {object} asset - the Asset to remove
+ * @param {object[]} assets - the Assets to remove
  */
-async function remove(asset) {
+async function remove(assets) {
 	const confirmed = await confirmRemoval(
-		project.value.none ? t('deliver', 'Remove this Asset from Deliver?') : t('deliver', 'Remove this Asset from the Project?'),
-		t('deliver', 'Its Comments and Versions are deleted. The files themselves stay untouched.'),
+		project.value.none
+			? n('deliver', 'Remove this Asset from Deliver?', 'Remove %n Assets from Deliver?', assets.length)
+			: n('deliver', 'Remove this Asset from the Project?', 'Remove %n Assets from the Project?', assets.length),
+		n('deliver', 'Its Comments and Versions are deleted. The files themselves stay untouched.', 'Their Comments and Versions are deleted. The files themselves stay untouched.', assets.length),
 		t('deliver', 'Remove'),
 	)
-	if (!confirmed) {
-		return
+	if (confirmed) {
+		await forEach(assets, (asset) => disableAsset(asset.id))
 	}
-	try {
-		await disableAsset(asset.id)
-	} catch (e) {
-		error.value = errorMessage(e)
-	}
-	await store.fetch(props.id).catch(() => {})
 }
 
 /**
  * Deletes Assets with their files: the files go to the trash of Files, the
  * Assets leave at once instead of turning Missing (story 141)
  *
- * @param {number[]} ids - the Assets to delete
+ * @param {object[]} assets - the Assets to delete
  */
-async function deleteFiles(ids) {
+async function deleteFiles(assets) {
 	const confirmed = await confirmRemoval(
-		n('deliver', 'Delete this Asset?', 'Delete %n Assets?', ids.length),
-		n('deliver', 'The files of all its Versions go to the trash of Files. Its Comments, Drawings and Approvals are deleted.', 'The files of all their Versions go to the trash of Files. Their Comments, Drawings and Approvals are deleted.', ids.length),
+		n('deliver', 'Delete this Asset?', 'Delete %n Assets?', assets.length),
+		n('deliver', 'The files of all its Versions go to the trash of Files. Its Comments, Drawings and Approvals are deleted.', 'The files of all their Versions go to the trash of Files. Their Comments, Drawings and Approvals are deleted.', assets.length),
 		t('deliver', 'Delete'),
 	)
-	if (!confirmed) {
-		return
+	if (confirmed) {
+		await forEach(assets, (asset) => deleteAsset(asset.id))
 	}
-	error.value = null
-	for (const id of ids) {
-		try {
-			await deleteAsset(id)
-		} catch (e) {
-			error.value = errorMessage(e)
-		}
-	}
-	selected.value = []
-	await store.fetch(props.id).catch(() => {})
 }
 
 /**
@@ -546,18 +568,6 @@ function dropped(event) {
 					: project.path
 						? t('deliver', 'Enable files for review in the Deliver tab of the Files sidebar.')
 						: t('deliver', 'Add files to this Project in the Deliver tab of the Files sidebar, wherever they lie.')" />
-			<div v-if="selected.length" class="deliver-project__selection">
-				<span>{{ n('deliver', '%n Asset selected', '%n Assets selected', selected.length) }}</span>
-				<NcButton variant="error" @click="deleteFiles(selected)">
-					<template #icon>
-						<NcIconSvgWrapper :svg="deleteIcon" />
-					</template>
-					{{ t('deliver', 'Delete') }}
-				</NcButton>
-				<NcButton variant="tertiary" @click="selected = []">
-					{{ t('deliver', 'Cancel') }}
-				</NcButton>
-			</div>
 			<section v-for="group in groups" :key="group.path" class="deliver-project__group">
 				<h3 v-if="group.path !== folder" class="deliver-project__folder">
 					<NcIconSvgWrapper :svg="folderIcon" :size="20" />
@@ -622,7 +632,9 @@ function dropped(event) {
 			</NcDialog>
 			<NcDialog
 				v-if="assigning"
-				:name="t('deliver', 'Move {asset} to another Project', { asset: assigning.name })"
+				:name="assigning.length === 1
+					? t('deliver', 'Move {asset} to another Project', { asset: assigning[0].name })
+					: n('deliver', 'Move %n Asset to another Project', 'Move %n Assets to another Project', assigning.length)"
 				size="small"
 				@closing="assigning = null">
 				<p class="deliver-project__hint">
@@ -665,7 +677,7 @@ function dropped(event) {
 				@close="renaming = null" />
 			<DueDateDialog
 				v-if="dueFor"
-				:modelValue="dueFor.dueDate"
+				:modelValue="dueFor.length === 1 ? dueFor[0].dueDate : null"
 				@update:modelValue="setDue"
 				@close="dueFor = null" />
 			<ProjectSettingsDialog
@@ -689,24 +701,6 @@ function dropped(event) {
 	flex-direction: column;
 	gap: calc(4 * var(--default-grid-baseline));
 	padding: 0 calc(4 * var(--default-grid-baseline)) calc(6 * var(--default-grid-baseline));
-}
-
-/* Stays in sight while scrolling through the cards it acts on */
-.deliver-project__selection {
-	position: sticky;
-	top: 0;
-	z-index: 2;
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: calc(2 * var(--default-grid-baseline));
-	padding: calc(2 * var(--default-grid-baseline));
-	border-radius: var(--border-radius-large);
-	background: var(--color-primary-element-light);
-}
-
-.deliver-project__selection span {
-	margin-inline-end: auto;
 }
 
 /* One row next to the navigation toggle, which sits in the top left corner */

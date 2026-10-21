@@ -26,7 +26,7 @@ const props = defineProps({
 	canWrite: { type: Boolean, default: false },
 	/** Whether its checkbox is ticked (story 141) */
 	selected: { type: Boolean, default: false },
-	/** Whether any card is ticked, so every checkbox shows, also on a phone */
+	/** Whether any card is ticked, so every checkbox shows */
 	selecting: { type: Boolean, default: false },
 })
 
@@ -74,7 +74,7 @@ const status = computed(() => {
 <template>
 	<li
 		class="deliver-card deliver-card__menu-host"
-		:class="{ 'deliver-card--selecting': selecting, 'deliver-card--selected': selected }"
+		:class="{ 'deliver-card--selecting': canWrite && (selecting || isMobile), 'deliver-card--selected': selected }"
 		v-on="press">
 		<RouterLink class="deliver-card__link" :to="`/versions/${newest.id}`">
 			<div class="deliver-card__still">
@@ -236,7 +236,7 @@ const status = computed(() => {
 	font-size: 13px;
 }
 
-/* Top left over the still, where the Version sits; shown on hover, and on every card once one is ticked */
+/* Top left over the still; shown on hover, on every card once one is ticked, and always on a phone, which has no hover */
 .deliver-card__select {
 	position: absolute;
 	top: 14px;
@@ -256,10 +256,10 @@ const status = computed(() => {
 	opacity: 1;
 }
 
-/* The Version gives way to the checkbox while it shows */
-.deliver-card:hover .deliver-card__version,
+/* The Version moves aside for the checkbox while it shows */
+.deliver-card:has(.deliver-card__select):hover .deliver-card__version,
 .deliver-card--selecting .deliver-card__version {
-	visibility: hidden;
+	inset-inline-start: 38px;
 }
 
 .deliver-card--selected {

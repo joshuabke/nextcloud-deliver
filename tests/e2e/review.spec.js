@@ -151,6 +151,16 @@ test.describe('Review view', () => {
 		await second.click({ button: 'right' })
 		await expect(page.getByRole('menuitem', { name: 'Change the Due Date' })).toBeVisible()
 		await page.keyboard.press('Escape')
+
+		// Ticked, two cards share one menu with what applies to both (story 141)
+		const third = card(page, 'third')
+		await second.getByRole('checkbox', { name: 'Select second' }).check()
+		await third.getByRole('checkbox', { name: 'Select third' }).check()
+		await third.click({ button: 'right' })
+		await expect(page.getByRole('menuitem', { name: 'Delete' })).toBeVisible()
+		await expect(page.getByRole('menuitem', { name: 'Open' })).toHaveCount(0)
+		await page.getByRole('menuitem', { name: 'Clear the selection' }).click()
+		await expect(second.getByRole('checkbox', { name: 'Select second' })).not.toBeChecked()
 	})
 
 	test('renames, removes and stacks from the menus of the cards', async () => {
