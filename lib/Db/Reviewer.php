@@ -13,6 +13,8 @@ use OCP\AppFramework\Db\Entity;
  *
  * @method string getOwnerUid()
  * @method void setOwnerUid(string $ownerUid)
+ * @method ?int getProjectId()
+ * @method void setProjectId(?int $projectId)
  * @method string getName()
  * @method void setName(string $name)
  * @method ?string getEmail()
@@ -39,6 +41,8 @@ use OCP\AppFramework\Db\Entity;
 class Reviewer extends Entity {
 	/** The Member they belong to: who invited them, or whose Project Link they named themselves on */
 	protected string $ownerUid = '';
+	/** The Project whose links they come by (ADR 0013); null for the Member's links on No Project */
+	protected ?int $projectId = null;
 	protected ?string $name = null;
 	protected ?string $email = null;
 	protected ?string $secretKey = null;
@@ -55,6 +59,7 @@ class Reviewer extends Entity {
 	protected ?bool $watermark = null;
 
 	public function __construct() {
+		$this->addType('projectId', 'integer');
 		$this->addType('createdAt', 'integer');
 		$this->addType('mailReplies', 'boolean');
 		$this->addType('mailComments', 'boolean');
