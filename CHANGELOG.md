@@ -2,8 +2,8 @@
 
 ## 0.9.1 – 2026-10-22
 
-- Uploads on a hosted Nextcloud no longer wait for the night: Proxies, Thumbnail Strips, Waveforms and Due Date reminders now run with every cron job, even where the admin set a maintenance window.
-- The icons on the minimised uploads card sit level with its text.
+- Fix cron jobs being set as non-time-critical.
+- Fix icon alignment on the minimised upload card.
 
 ## 0.9.0 – 2026-10-21
 
