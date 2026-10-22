@@ -1,5 +1,10 @@
 # Änderungen
 
+## 0.9.1 – 2026-10-22
+
+- Uploads auf einer gehosteten Nextcloud warten nicht mehr bis zur Nacht: Proxies, Vorschauleisten und Wellenformen sowie die Erinnerungen an Fälligkeitsdaten laufen jetzt bei jedem Cron-Lauf, auch wenn der Admin ein Wartungsfenster gesetzt hat.
+- Die Icons auf der minimierten Upload-Karte stehen auf einer Höhe mit dem Text.
+
 ## 0.9.0 – 2026-10-21
 
 ### Neu
