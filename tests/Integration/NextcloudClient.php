@@ -7,8 +7,12 @@ namespace OCA\Deliver\Tests\Integration;
 /**
  * Minimal HTTP client for a running Nextcloud: WebDAV for Files, OCS for Deliver.
  * Basic auth on every request; OCS-APIREQUEST makes the CSRF check accept it.
+ * One curl handle per user keeps the connection and the session cookie, so
+ * Nextcloud logs the user in once and not on every request.
  */
 class NextcloudClient {
+	private ?\CurlHandle $handle = null;
+
 	public function __construct(
 		private string $baseUrl,
 		public readonly string $user,
@@ -18,8 +22,9 @@ class NextcloudClient {
 
 	/** @return array{status: int, body: string} */
 	public function request(string $method, string $path, ?string $body = null, array $headers = []): array {
-		$ch = curl_init($this->baseUrl . $path);
+		$ch = $this->handle();
 		curl_setopt_array($ch, [
+			CURLOPT_URL => $this->baseUrl . $path,
 			CURLOPT_CUSTOMREQUEST => $method,
 			CURLOPT_RETURNTRANSFER => true,
 			CURLOPT_USERPWD => $this->user . ':' . $this->password,
@@ -42,8 +47,9 @@ class NextcloudClient {
 	 * @return array{status: int, data: mixed}
 	 */
 	public function upload(string $path, string $name, string $content): array {
-		$ch = curl_init($this->baseUrl . '/ocs/v2.php/apps/deliver/api/v1' . $path . '?format=json');
+		$ch = $this->handle();
 		curl_setopt_array($ch, [
+			CURLOPT_URL => $this->baseUrl . '/ocs/v2.php/apps/deliver/api/v1' . $path . '?format=json',
 			CURLOPT_RETURNTRANSFER => true,
 			CURLOPT_USERPWD => $this->user . ':' . $this->password,
 			CURLOPT_HTTPHEADER => ['OCS-APIREQUEST: true', 'Accept: application/json'],
@@ -75,6 +81,17 @@ class NextcloudClient {
 		);
 		$decoded = json_decode($response['body'], true);
 		return ['status' => $response['status'], 'data' => $decoded['ocs']['data'] ?? $decoded];
+	}
+
+	/** The client's handle, reset to no options but keeping its connection and cookies */
+	private function handle(): \CurlHandle {
+		if ($this->handle === null) {
+			$this->handle = curl_init();
+		} else {
+			curl_reset($this->handle);
+		}
+		curl_setopt($this->handle, CURLOPT_COOKIEFILE, '');
+		return $this->handle;
 	}
 
 	public function withUser(string $user, string $password): self {
