@@ -221,4 +221,20 @@ class NotificationTest extends TestCase {
 		$base = rtrim((string)shell_exec('php /var/www/html/occ config:system:get overwrite.cli.url'));
 		self::assertStringContainsString("$base/apps/deliver/s/{$link['data']['token']}/versions/{$this->versionId}?r=", $mail['Text'], 'straight into the Review view, as that Reviewer');
 	}
+
+	public function testNoMailLeadsAReviewerIntoAnotherProject(): void {
+		$link = $this->nc->ocs('POST', "/projects/{$this->projectId}/links")['data'];
+		$email = 'reviewer-' . bin2hex(random_bytes(4)) . '@example.test';
+		$reviewer = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $link['token']);
+		$reviewer->call('POST', '/api/reviewer', ['name' => 'Mara', 'email' => $email]);
+		$question = $reviewer->call('POST', "/api/versions/{$this->versionId}/comments", ['inFrame' => 3, 'body' => 'final grade?'])['data'];
+
+		$other = $this->nc->ocs('POST', '/projects', ['name' => 'Other client'])['data']['id'];
+		$this->nc->ocs('POST', "/projects/$other/links");
+		$assetId = $this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'][0]['id'];
+		self::assertSame(200, $this->nc->ocs('PUT', "/assets/$assetId/project", ['projectId' => $other])['status']);
+		$this->nc->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 3, 'body' => 'yes, final', 'parentId' => $question['id']]);
+		self::assertSame(['Your Personal Link to the review'], $this->subjectsTo($email), 'the Reply stays in the other Project, where Mara\'s Personal Link does not open');
+		$this->nc->ocs('DELETE', "/projects/$other");
+	}
 }
