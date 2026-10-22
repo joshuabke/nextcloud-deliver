@@ -46,6 +46,8 @@ jobs:
   # instance `make up` starts on a developer machine
   integration:
     runs-on: ubuntu-latest
+    # A stalled download or a browser that never answers fails here, not after six hours
+    timeout-minutes: 30
     env:
       COMPOSE: docker compose -f docker-compose.yml -f .github/compose.ci.yml
     steps:
@@ -60,9 +62,8 @@ jobs:
       - run: make test-integration COMPOSE="$COMPOSE"
       - name: Browser tests
         run: |
-          sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
           docker run -d --name chrome --network host --shm-size=1g chromedp/headless-shell
-          until curl -sf http://127.0.0.1:9222/json/version >/dev/null; do sleep 1; done
+          timeout 60 sh -c 'until curl -sf http://127.0.0.1:9222/json/version >/dev/null; do sleep 1; done'
           npm run test:e2e
       - name: Nextcloud log on failure
         if: failure()

@@ -10,5 +10,5 @@ export default defineConfig({
 	globalSetup: './tests/e2e/fixtures.js',
 	timeout: 60000,
 	expect: { timeout: 10000 },
-	reporter: process.env.CI ? 'github' : 'list',
+	reporter: process.env.CI ? [['github'], ['list']] : 'list',
 })

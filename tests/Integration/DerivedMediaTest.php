@@ -127,10 +127,7 @@ class DerivedMediaTest extends TestCase {
 
 		$waveform = json_decode($this->nc->request('GET', $version['derived']['waveform']['url'])['body'], true);
 		self::assertNotEmpty($waveform['peaks']);
-		foreach ($waveform['peaks'] as $peak) {
-			self::assertGreaterThanOrEqual(0, $peak);
-			self::assertLessThanOrEqual(1, $peak);
-		}
+		self::assertSame([], array_filter($waveform['peaks'], fn ($peak) => $peak < 0 || $peak > 1), 'every peak lies in 0..1');
 	}
 
 	public function testRegeneratingDeletesTheDerivedMediaAndMakesItAgain(): void {
