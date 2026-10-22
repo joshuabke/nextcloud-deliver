@@ -24,6 +24,9 @@ up:
 	$(OCC) config:system:set mail_smtpport --value 1025 --type integer
 	$(OCC) config:system:set mail_from_address --value deliver
 	$(OCC) config:system:set mail_domain --value example.test
+	# New accounts start empty: copying the sample files made every first login of a test user take seconds
+	$(OCC) config:system:set skeletondirectory --value ''
+	$(OCC) config:system:set templatedirectory --value ''
 	$(MAKE) enable
 
 down:
