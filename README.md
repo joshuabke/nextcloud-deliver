@@ -77,7 +77,6 @@ Additions or corrections are welcome as issues or pull requests!
 - [Running Deliver](docs/admin.md): requirements, the derived-media pipeline, hardware encoders, live updates
 - [Developing Deliver](docs/development.md): the dev instance, tests, packaging and releases
 - [API](docs/api.md): the OCS API and the Reviewer's surface
-- [App Store](docs/app-store.md): certificate, registration and publishing
 - [Glossary](CONTEXT.md), [decisions](docs/adr/) and the [spec](docs/spec-v2.md)
 - [Changelog](CHANGELOG.md)
 

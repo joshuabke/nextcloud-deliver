@@ -24,3 +24,6 @@ tests/e2e/media/
 .phpunit.result.cache
 build/
 .php-cs-fixer.cache
+
+# Maintainer notes kept out of the repo
+docs/app-store.md

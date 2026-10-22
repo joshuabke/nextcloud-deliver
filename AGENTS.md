@@ -12,7 +12,7 @@ Deliver is a Nextcloud app for frame-accurate video and audio review (a Frame.io
 
 - Work on short branches off `main` in a worktree, one small PR each.
 - Stack: PHP 8.2+ Nextcloud app framework, minimum Nextcloud 33 (the web-component sidebar tab API of `@nextcloud/files` 4 needs it), Vue 3 + @nextcloud/vue 9 + Pinia + Vite via @nextcloud/vite-config. Pinned versions live in `package.json`; verify against the Nextcloud developer docs and the server's own `package.json` before bumping.
-- Pre-releases ship to the App Store as plain 0.x versions (from 0.8.0, see `docs/app-store.md`); 1.0.0 comes once they have settled. App id stays `deliver`. Author Joshua Böke, repo `git@github.com:joshuabke/nextcloud-deliver.git`.
+- Pre-releases ship to the App Store as plain 0.x versions (from 0.8.0, see `docs/development.md`); 1.0.0 comes once they have settled. App id stays `deliver`. Author Joshua Böke, repo `git@github.com:joshuabke/nextcloud-deliver.git`.
 - No attribution lines of any kind in commits, PRs, issues or files.
 
 ## Dev environment

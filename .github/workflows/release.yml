@@ -1,8 +1,8 @@
 name: Release
 
 # A tag v1.2.3 builds and signs the app, attaches it to a GitHub release and
-# publishes it in the App Store. Secrets and the manual steps behind it are in
-# docs/app-store.md: APP_PRIVATE_KEY (deliver.key) and APPSTORE_TOKEN.
+# publishes it in the App Store. Release steps are in docs/development.md;
+# secrets: APP_PRIVATE_KEY (deliver.key) and APPSTORE_TOKEN.
 on:
   push:
     tags: ['v*']

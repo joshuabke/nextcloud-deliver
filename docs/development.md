@@ -68,7 +68,22 @@ PHPUnit has two tiers: `tests/Unit` for pure PHP (filename convention, timecode,
 
 The built `js/` is gitignored, so a release is always `make package`, never `git archive`.
 
-A pushed tag `v1.2.3` builds, signs and publishes the release (`.github/workflows/release.yml`). Certificate, store registration, the secrets and the release steps are in [app-store.md](app-store.md).
+A release:
+
+1. Set the version in `appinfo/info.xml` and `package.json`, and give it a section `## 1.2.3 – 2026-10-01` in `CHANGELOG.md` and `CHANGELOG.de.md`. The store shows that section (the German one on German instances) and matches it to the version in `info.xml`. Merge.
+2. Tag the merge on `main` and push the tag:
+
+   ```bash
+   git tag v1.2.3 && git push origin v1.2.3
+   ```
+
+`.github/workflows/release.yml` takes it from there: it refuses a tag that disagrees with `info.xml` or the changelogs, runs `make package`, signs the code with `occ integrity:sign-app` from an unpacked Nextcloud 33 (no installed instance needed), creates the GitHub release with `deliver-1.2.3.tar.gz` and the changelog section as text, and posts the download URL and the tarball's signature to the store. It needs the repository secrets `APP_PRIVATE_KEY` (the app's signing key) and `APPSTORE_TOKEN`; the certificate is the public `deliver.crt` from nextcloud/app-certificate-requests.
+
+The code signature (`appinfo/signature.json`) covers every file, so nothing in the tarball may change after signing. The store requires signed apps, and a signed app has to stay signed.
+
+A version with a pre-release part (`1.0.0-beta.1`) becomes a pre-release on GitHub and lands in the store's beta channel. Nextcloud offers such versions only to instances whose update channel is beta, daily or git (`AppFetcher` in the server), so a managed Nextcloud on the stable channel never sees them. Pre-releases therefore ship as plain 0.x versions (from 0.8.0 on), marked as pre-release in the description and the changelog.
+
+Once any instance has installed a store release, the database schema only moves forward through new migrations; the shipped migration is never rewritten again.
 
 `node dev/screenshots.mjs` takes the App Store screenshots in `docs/screenshots/` again after UI changes; its header says what it needs.
 
