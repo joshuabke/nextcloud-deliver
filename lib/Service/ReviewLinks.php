@@ -267,16 +267,17 @@ class ReviewLinks {
 	}
 
 	/**
-	 * The Review view of the Version through a live link of the Reviewer's
-	 * Member that shows it, with the Reviewer's key, for mails; null when none
-	 * does any more. It opens the player straight away.
+	 * The Review view of the Version through a live link the Reviewer comes
+	 * by that shows it, with the Reviewer's key, for mails; null when none
+	 * does any more, or the Version went to another Project. It opens the
+	 * player straight away.
 	 */
 	public function reviewLinkFor(Version $version, Reviewer $reviewer): ?string {
 		$token = null;
 		foreach ($this->projectLinks->findByProject($version->getProjectId(), $reviewer->getOwnerUid()) as $each) {
 			$link = $this->of($each);
 			try {
-				if ($link->isLive() && $link->version($version) === $version) {
+				if ($link->isLive() && $link->takes($reviewer) && $link->version($version) === $version) {
 					$token = $link->token();
 					break;
 				}
