@@ -19,7 +19,6 @@ class ProcessDerivedMedia extends TimedJob {
 	) {
 		parent::__construct($time);
 		$this->setInterval(5 * 60);
-		$this->setTimeSensitivity(self::TIME_INSENSITIVE);
 	}
 
 	protected function run($argument): void {

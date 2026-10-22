@@ -29,7 +29,6 @@ class RemindDueDates extends TimedJob {
 	) {
 		parent::__construct($time);
 		$this->setInterval(3600);
-		$this->setTimeSensitivity(self::TIME_INSENSITIVE);
 	}
 
 	protected function run($argument): void {
