@@ -113,7 +113,7 @@ class CollectionsTest extends TestCase {
 		self::assertSame([], $visitor->call('GET', '/api/assets')['data'], 'an Asset leaves the link once it joins a Project');
 	}
 
-	public function testReviewersBelongToTheMemberWhoInvitedThem(): void {
+	public function testReviewersBelongToTheMemberAndProjectThatInvitedThem(): void {
 		$first = $this->owner->ocs('POST', '/projects', ['name' => 'Acme spot'])['data']['id'];
 		$this->enable('clients/acme/cut.mp4', $first);
 		$mix = $this->enable('sound/mix.wav', 0);
@@ -122,13 +122,12 @@ class CollectionsTest extends TestCase {
 
 		$invited = $this->owner->ocs('POST', "/links/{$cutLink['id']}/reviewers", ['name' => 'Kim']);
 		self::assertSame(201, $invited['status'], json_encode($invited['data']));
-		$onMix = array_column($this->owner->ocs('GET', "/links/{$mixLink['id']}/reviewers")['data'], 'link', 'name');
-		self::assertStringContainsString("/s/{$mixLink['token']}?r=", $onMix['Kim'], 'Kim has a Personal Link through every link of the Member, whatever the Project');
+		self::assertSame([], $this->owner->ocs('GET', "/links/{$mixLink['id']}/reviewers")['data'], 'the Member\'s link on No Project lists none of the Project\'s Reviewers');
 
 		$asKim = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $mixLink['token']);
 		$mixVersion = $asKim->call('GET', '/api/assets')['data'][0]['newestId'];
 		$context = $asKim->call('GET', "/api/context?versionId=$mixVersion&r={$invited['data']['key']}");
-		self::assertSame(['reviewer', 'Kim'], [$context['data']['me']['type'], $context['data']['me']['name']]);
+		self::assertSame('unnamed', $context['data']['me']['type'], 'nor does it know Kim');
 
 		// Another Member's link does not know Kim
 		$this->owner->put('sound/other.wav', 'not really audio');

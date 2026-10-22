@@ -248,7 +248,7 @@ class PublicApiController extends PublicShareController {
 				throw new AccessDeniedException('Members review in Deliver itself');
 			}
 			// The same name and address lead back to that Reviewer, but only through their mailbox:
-			// name and address are no secret, and the key carries the Reviewer's own rights on every link of the Member
+			// name and address are no secret, and the key carries the Reviewer's own rights on every link of the Member on the Project
 			$returning = $this->links->returning($link, $name, $email);
 			if ($returning !== null) {
 				if (!$this->mail->welcome($returning, $link->personalLink($returning), $language)) {
@@ -258,7 +258,7 @@ class PublicApiController extends PublicShareController {
 			}
 			$this->links->assertNameFree($link, $name, reviewersToo: false);
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
-			$reviewer = $this->reviewers->claim($link->ownerUid(), $name, $email, $wishes, $language);
+			$reviewer = $this->reviewers->claim($link, $name, $email, $wishes, $language);
 			$this->reviewers->cameBy($reviewer, $link->token());
 			$mailed = $this->mail->welcome($reviewer, $link->personalLink($reviewer), $language);
 			// A JSONResponse, because a DataResponse loses its cookies on the way out

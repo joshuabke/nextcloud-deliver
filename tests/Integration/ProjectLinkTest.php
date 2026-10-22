@@ -163,6 +163,31 @@ class ProjectLinkTest extends TestCase {
 		self::assertSame([], $paused['reviewers'][0]['links'], 'but no Personal Link goes through a paused one');
 	}
 
+	public function testAReviewerBelongsToTheProjectOfTheirLink(): void {
+		$link = $this->link();
+		$kim = $this->nc->ocs('POST', "/links/{$link['id']}/reviewers", ['name' => 'Kim', 'email' => 'kim@example.test'])['data'];
+		$other = 'deliver-test-' . bin2hex(random_bytes(4));
+		$this->nc->mkdir($other);
+		$this->nc->put("$other/promo.mp4", 'not really a video');
+		$otherId = $this->nc->ocs('POST', '/projects', ['folderId' => $this->nc->fileId($other)])['data']['id'];
+		try {
+			$otherLink = $this->nc->ocs('POST', "/projects/$otherId/links")['data'];
+			self::assertSame([], $this->nc->ocs('GET', "/links/{$otherLink['id']}/reviewers")['data'], 'another Project lists none of them');
+
+			$visitor = $this->visitor($otherLink);
+			$visitor->raw('?r=' . $kim['key']);
+			$versionId = $this->nc->ocs('GET', "/projects/$otherId")['data']['assets'][0]['versions'][0]['id'];
+			self::assertSame('unnamed', $visitor->call('GET', "/api/context?versionId=$versionId")['data']['me']['type'], 'their Personal Link opens only their Project');
+
+			$named = $visitor->call('POST', '/api/reviewer', ['name' => 'Kim', 'email' => 'kim@example.test']);
+			self::assertSame(201, $named['status'], 'the same name and address make a new Reviewer there, not a mail of the old Personal Link');
+			self::assertSame(['Kim'], array_column($this->nc->ocs('GET', "/links/{$link['id']}/reviewers")['data'], 'name'), 'and leave the first Project as it was');
+		} finally {
+			$this->nc->ocs('DELETE', "/projects/$otherId");
+			$this->nc->delete($other);
+		}
+	}
+
 	public function testDownloadAllZipsTheNewestOfEveryAsset(): void {
 		$link = $this->link();
 		$visitor = $this->visitor($link);

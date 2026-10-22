@@ -140,6 +140,11 @@ class ReviewLink {
 		return $this->files[$version->getId()] ?? null;
 	}
 
+	/** Whether the Reviewer comes by it: a link of their Member on their Project (ADR 0013) */
+	public function takes(Reviewer $reviewer): bool {
+		return $reviewer->getOwnerUid() === $this->ownerUid() && $reviewer->getProjectId() === $this->projectId();
+	}
+
 	/** The share URL plus the Reviewer's key: whoever opens it is that Reviewer */
 	public function personalLink(Reviewer $reviewer): string {
 		return $this->url() . '?r=' . rawurlencode((string)$reviewer->getSecretKey());

@@ -123,15 +123,15 @@ class ReviewLinks {
 	}
 
 	/**
-	 * The Reviewers of the Member who made the link, each with a Personal Link
-	 * through it, so a replaced link can be handed out again (story 55).
+	 * The Reviewers who come by the link, each with a Personal Link through
+	 * it, so a replaced link can be handed out again (story 55).
 	 *
 	 * @return list<array<string, mixed>>
 	 */
 	public function reviewersOf(ReviewLink $link): array {
 		return array_map(
 			fn (Reviewer $reviewer) => $this->reviewers->serialize($reviewer) + ['link' => $link->personalLink($reviewer)],
-			$this->reviewerMapper->findByOwners([$link->ownerUid()]),
+			array_values(array_filter($this->reviewerMapper->findByOwners([$link->ownerUid()]), $link->takes(...))),
 		);
 	}
 
@@ -143,7 +143,7 @@ class ReviewLinks {
 	 */
 	public function invite(ReviewLink $link, string $name, ?string $email): Reviewer {
 		$this->assertNameFree($link, $name);
-		$reviewer = $this->reviewers->claim($link->ownerUid(), $name, $email);
+		$reviewer = $this->reviewers->claim($link, $name, $email);
 		$this->reviewers->cameBy($reviewer, $link->token());
 		return $reviewer;
 	}
@@ -200,7 +200,7 @@ class ReviewLinks {
 	}
 
 	/**
-	 * The Member's Reviewer who goes by this name and address: naming oneself
+	 * The link's Reviewer who goes by this name and address: naming oneself
 	 * with both mails them their Personal Link, as on Frame.io.
 	 */
 	public function returning(ReviewLink $link, string $name, ?string $email): ?Reviewer {
@@ -209,7 +209,7 @@ class ReviewLinks {
 			return null;
 		}
 		foreach ($this->reviewerMapper->findByAddress($link->ownerUid(), $email) as $reviewer) {
-			if (self::normal((string)$reviewer->getName()) === self::normal($name)) {
+			if ($link->takes($reviewer) && self::normal((string)$reviewer->getName()) === self::normal($name)) {
 				return $reviewer;
 			}
 		}
@@ -218,7 +218,7 @@ class ReviewLinks {
 
 	/**
 	 * Refuses a Reviewer's new name and address when another Reviewer of the
-	 * Member has both: naming oneself with them could only lead to one.
+	 * link has both: naming oneself with them could only lead to one.
 	 *
 	 * @throws ProjectConflictException
 	 */
@@ -240,15 +240,16 @@ class ReviewLinks {
 	}
 
 	/**
-	 * The user's Reviewers who came by one of these links, paused or not, each
+	 * The user's Reviewers of the Project who came by one of these links, paused or not, each
 	 * with their Personal Link through every live one, and who came by which link.
 	 *
+	 * @param ?int $projectId null for No Project
 	 * @param list<string> $tokens every link listed
 	 * @param array<string, string> $urls token → URL of each live link
 	 * @return array{reviewers: list<array<string, mixed>>, cameBy: array<string, list<int>>}
 	 */
-	public function reviewersBy(string $uid, array $tokens, array $urls): array {
-		$reviewers = $this->reviewerMapper->findByOwners([$uid]);
+	public function reviewersBy(string $uid, ?int $projectId, array $tokens, array $urls): array {
+		$reviewers = array_filter($this->reviewerMapper->findByOwners([$uid]), static fn (Reviewer $reviewer) => $reviewer->getProjectId() === $projectId);
 		$cameBy = $this->reviewerMapper->reviewersByLink(array_map(static fn (Reviewer $reviewer) => $reviewer->getId(), $reviewers));
 		$cameBy = array_intersect_key($cameBy, array_flip($tokens));
 		$shown = array_merge([], ...array_values($cameBy));

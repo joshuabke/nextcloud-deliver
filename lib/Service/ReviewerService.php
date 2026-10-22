@@ -27,16 +27,17 @@ class ReviewerService {
 	}
 
 	/**
-	 * A new Reviewer of a Member, named by themselves on that Member's Share
-	 * Link or invited by them (ADR 0009).
+	 * A new Reviewer of the link's Member and Project, named by themselves on
+	 * the link or invited through it (ADR 0013).
 	 *
 	 * @param array{replies?: ?bool, comments?: ?bool, versions?: ?bool} $mail what they want mailed
 	 * @throws InvalidRequestException the name is empty or the email is not one
 	 */
-	public function claim(string $ownerUid, string $name, ?string $email, array $mail = [], ?string $language = null): Reviewer {
+	public function claim(ReviewLink $link, string $name, ?string $email, array $mail = [], ?string $language = null): Reviewer {
 		$email = self::email($email);
 		$reviewer = new Reviewer();
-		$reviewer->setOwnerUid($ownerUid);
+		$reviewer->setOwnerUid($link->ownerUid());
+		$reviewer->setProjectId($link->projectId());
 		$reviewer->setName(self::name($name));
 		$reviewer->setEmail($email);
 		$reviewer->setSecretKey($this->random->generate(self::KEY_LENGTH, ISecureRandom::CHAR_ALPHANUMERIC));
@@ -142,13 +143,13 @@ class ReviewerService {
 		return $this->reviewers->find($id) ?? throw new NotFoundException('Reviewer not found');
 	}
 
-	/** The Reviewer with this key, if they belong to the Member who made this link */
+	/** The Reviewer with this key, if they come by this link */
 	public function byKey(?string $key, ReviewLink $link): ?Reviewer {
 		if ($key === null || $key === '') {
 			return null;
 		}
 		$reviewer = $this->reviewers->findByKey($key);
-		return $reviewer?->getOwnerUid() === $link->ownerUid() ? $reviewer : null;
+		return $reviewer !== null && $link->takes($reviewer) ? $reviewer : null;
 	}
 
 	public function serialize(Reviewer $reviewer): array {

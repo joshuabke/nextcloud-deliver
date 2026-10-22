@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Deliver\Controller;
 
 use OCA\Deliver\Service\ProjectLinkService;
+use OCA\Deliver\Service\ProjectService;
 use OCA\Deliver\Service\ReviewerMail;
 use OCA\Deliver\Service\ReviewerService;
 use OCA\Deliver\Service\ReviewLink;
@@ -46,7 +47,7 @@ class ProjectLinkApiController extends OCSController {
 			$uid = (string)$this->userId;
 			$links = $this->projectLinks->listFor($uid, $id);
 			$live = array_filter($links, static fn (array $link) => $link['review']);
-			['reviewers' => $reviewers, 'cameBy' => $cameBy] = $this->links->reviewersBy($uid, array_column($links, 'token'), array_column($live, 'url', 'token'));
+			['reviewers' => $reviewers, 'cameBy' => $cameBy] = $this->links->reviewersBy($uid, $id === ProjectService::NONE ? null : $id, array_column($links, 'token'), array_column($live, 'url', 'token'));
 			return [
 				'links' => array_map(static fn (array $link) => $link + ['reviewerIds' => $cameBy[$link['token']] ?? []], $links),
 				'reviewers' => $reviewers,
