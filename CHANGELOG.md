@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.1 – 2026-10-22
+
+- Fix cron jobs being set as non-time-critical.
+- Fix icon alignment on the minimised upload card.
+
 ## 0.9.0 – 2026-10-21
 
 ### Added

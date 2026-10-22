@@ -1,5 +1,10 @@
 # Änderungen
 
+## 0.9.1 – 2026-10-22
+
+- Cron-Jobs nicht mehr als zeitunkritisch markiert.
+- Ausrichtung der Icons auf der minimierten Upload-Karte korrigiert.
+
 ## 0.9.0 – 2026-10-21
 
 ### Neu
