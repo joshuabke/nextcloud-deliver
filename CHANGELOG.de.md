@@ -1,5 +1,9 @@
 # Änderungen
 
+## 0.9.2 – 2026-10-22
+
+- Reviewer gehören zum Projekt des Links, über den sie kamen: die Einstellungen eines Links zeigen nur sie, und ihr Persönlicher Link und ihre Mails bleiben in diesem Projekt. Wer schon mehrere Projekte reviewt hat, behält das erste; für die anderen lädst du sie neu ein.
+
 ## 0.9.1 – 2026-10-22
 
 - Cron-Jobs nicht mehr als zeitunkritisch markiert.

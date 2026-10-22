@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.2 – 2026-10-22
+
+- Reviewers belong to the Project of the link they came by: a link's settings list only them, and their Personal Link and mails stay within that Project. Someone who already reviewed several Projects keeps the first; invite them again on the others.
+
 ## 0.9.1 – 2026-10-22
 
 - Fix cron jobs being set as non-time-critical.
