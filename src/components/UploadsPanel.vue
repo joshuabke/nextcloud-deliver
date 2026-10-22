@@ -427,6 +427,11 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 	text-align: start;
 }
 
+/* Nextcloud makes an icon span in a plain button inline-block, which puts the svg at the top */
+.deliver-uploads-card__open > .icon-vue {
+	display: flex;
+}
+
 .deliver-uploads-card__text {
 	flex: 1;
 	min-width: 0;
