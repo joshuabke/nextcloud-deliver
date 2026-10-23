@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import NcListItemIcon from '@nextcloud/vue/components/NcListItemIcon'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { searchContacts } from '../api.js'
@@ -42,14 +42,56 @@ watch(name, (typed) => {
 })
 
 const open = computed(() => suggestions.value.length > 0)
+const field = useTemplateRef('field')
 const list = useTemplateRef('list')
+/** Where the list hangs: over a dialog's scrolling content, so that nothing cuts it off */
+const layer = ref(null)
+/** The list's place on screen, under the field or above it when there is no room */
+const place = ref({})
 
-// The field may sit at the foot of a scrolling dialog: bring the list into sight
-watch(open, async (opened) => {
-	if (opened) {
-		await nextTick()
-		list.value?.scrollIntoView({ block: 'nearest' })
+onMounted(() => {
+	// Inside the dialog's mask the list stays within its focus trap
+	layer.value = field.value.closest('.modal-mask') ?? document.body
+})
+
+/** Five rows of 48px and the list's padding, as the style below caps it */
+const ROWS_HEIGHT = 5 * 48 + 8
+
+/** Puts the list at the field, as wide as its longest row allows on screen */
+function position() {
+	const rect = field.value?.getBoundingClientRect()
+	if (!rect) {
+		return
 	}
+	const gap = 4
+	const room = window.innerHeight - rect.bottom - 2 * gap
+	// What the list wants, up to its five rows, whatever height it was cut to before
+	const wanted = Math.min(list.value?.scrollHeight ?? 0, ROWS_HEIGHT)
+	const above = wanted > room && rect.top > room
+	place.value = {
+		'--deliver-contact-room': `${above ? rect.top - 2 * gap : room}px`,
+		left: `${rect.left}px`,
+		minWidth: `${rect.width}px`,
+		maxWidth: `${window.innerWidth - rect.left - 2 * gap}px`,
+		...(above ? { bottom: `${window.innerHeight - rect.top + gap}px` } : { top: `${rect.bottom + gap}px` }),
+	}
+}
+
+// The list follows the field while the dialog scrolls or the window changes size
+watch(open, async (opened) => {
+	window.removeEventListener('scroll', position, true)
+	window.removeEventListener('resize', position)
+	if (opened) {
+		window.addEventListener('scroll', position, true)
+		window.addEventListener('resize', position)
+		position()
+		await nextTick()
+		position()
+	}
+})
+onBeforeUnmount(() => {
+	window.removeEventListener('scroll', position, true)
+	window.removeEventListener('resize', position)
 })
 
 /**
@@ -87,7 +129,7 @@ function onKey(event) {
 </script>
 
 <template>
-	<div class="deliver-contact-field">
+	<div ref="field" class="deliver-contact-field">
 		<NcTextField
 			v-model="name"
 			:label="props.label"
@@ -100,31 +142,34 @@ function onKey(event) {
 			autocomplete="off"
 			@keydown="onKey"
 			@blur="suggestions = []" />
-		<ul
-			v-if="open"
-			:id="listId"
-			ref="list"
-			class="deliver-contact-field__list"
-			role="listbox">
-			<li
-				v-for="(contact, index) in suggestions"
-				:id="`${listId}-${index}`"
-				:key="contact.email"
-				role="option"
-				:aria-selected="index === active ? 'true' : 'false'"
-				class="deliver-contact-field__option"
-				:class="{ 'deliver-contact-field__option--active': index === active }"
-				@mouseenter="active = index"
-				@mousedown.prevent="pick(contact)">
-				<NcListItemIcon
-					:name="contact.name"
-					:subname="contact.email"
-					:search="name"
-					:url="contact.photo ?? undefined"
-					:avatarSize="32"
-					isNoUser />
-			</li>
-		</ul>
+		<Teleport :to="layer ?? 'body'">
+			<ul
+				v-if="open"
+				:id="listId"
+				ref="list"
+				:style="place"
+				class="deliver-contact-field__list"
+				role="listbox">
+				<li
+					v-for="(contact, index) in suggestions"
+					:id="`${listId}-${index}`"
+					:key="contact.email"
+					role="option"
+					:aria-selected="index === active ? 'true' : 'false'"
+					class="deliver-contact-field__option"
+					:class="{ 'deliver-contact-field__option--active': index === active }"
+					@mouseenter="active = index"
+					@mousedown.prevent="pick(contact)">
+					<NcListItemIcon
+						:name="contact.name"
+						:subname="contact.email"
+						:search="name"
+						:url="contact.photo ?? undefined"
+						:avatarSize="32"
+						isNoUser />
+				</li>
+			</ul>
+		</Teleport>
 	</div>
 </template>
 
@@ -137,15 +182,12 @@ function onKey(event) {
 }
 
 .deliver-contact-field__list {
-	position: absolute;
-	z-index: 10;
-	inset-inline-start: 0;
-	top: calc(100% + var(--default-grid-baseline));
-	/* Wider than a narrow field, so that names and addresses fit */
+	position: fixed;
+	/* Over the dialog it may belong to */
+	z-index: 10000;
 	width: max-content;
-	min-width: 100%;
-	max-width: min(320px, 80vw);
-	max-height: calc(5 * var(--default-clickable-area));
+	/* Five rows of 48px, or less when the screen has no more room on that side */
+	max-height: min(var(--deliver-contact-room, 100vh), 5 * 48px + 2 * var(--default-grid-baseline));
 	overflow-y: auto;
 	padding: var(--default-grid-baseline);
 	border-radius: var(--border-radius-large);
