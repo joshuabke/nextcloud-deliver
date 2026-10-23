@@ -34,9 +34,9 @@ class Contacts {
 
 	/**
 	 * Contacts whose name or address matches, one row per address, those
-	 * without one left out.
+	 * without one left out, with the URL of their picture if they have one.
 	 *
-	 * @return list<array{name: string, email: string}>
+	 * @return list<array{name: string, email: string, photo: ?string}>
 	 */
 	public function search(string $term): array {
 		$term = trim($term);
@@ -46,10 +46,12 @@ class Contacts {
 		$rows = [];
 		foreach ($this->manager->search($term, ['FN', 'EMAIL'], self::OWN_BOOKS + ['limit' => 20]) as $contact) {
 			$name = (string)($contact['FN'] ?? '');
+			// Nextcloud hands a contact's picture out as a CardDAV URL behind this prefix
+			$photo = isset($contact['PHOTO']) ? preg_replace('/^VALUE=uri:/', '', (string)$contact['PHOTO']) : null;
 			foreach ((array)($contact['EMAIL'] ?? []) as $email) {
 				// Found by one address, the contact's others are no match
 				if (mb_stripos($name, $term) !== false || mb_stripos((string)$email, $term) !== false) {
-					$rows[] = ['name' => $name !== '' ? $name : (string)$email, 'email' => (string)$email];
+					$rows[] = ['name' => $name !== '' ? $name : (string)$email, 'email' => (string)$email, 'photo' => $photo];
 				}
 			}
 		}

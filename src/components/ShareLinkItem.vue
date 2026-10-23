@@ -12,11 +12,11 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcPasswordField from '@nextcloud/vue/components/NcPasswordField'
 import NcTextArea from '@nextcloud/vue/components/NcTextArea'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
-import { linkApi, removeReviewer, searchContacts } from '../api.js'
+import ContactField from './ContactField.vue'
+import { linkApi, removeReviewer } from '../api.js'
 import { copyLink } from '../clipboard.js'
 import { useBusy } from '../composables/busy.js'
 import { confirmLinkDeletion, confirmReviewerRemoval } from '../confirm.js'
-import { contactOptions, pickedContact } from '../lib/contacts.js'
 
 const props = defineProps({
 	/** One Project Link of the Member's, as the server lists it */
@@ -33,37 +33,6 @@ const reviewers = ref(null)
 const inviting = ref(false)
 const name = ref('')
 const email = ref('')
-/** People of the Member's address books matching the name being typed, one option per address (story 142) */
-const suggestions = ref([])
-const listId = `deliver-contacts-${props.share.token}`
-let searching = null
-/** The name a pick put in the field, which needs no search of its own */
-let pickedName = null
-
-// Picking a suggestion fills in name and address; typing searches the address books
-watch(name, (typed) => {
-	clearTimeout(searching)
-	const picked = pickedContact(suggestions.value, typed)
-	if (picked) {
-		pickedName = picked.name
-		name.value = picked.name
-		email.value = picked.email
-		suggestions.value = []
-		return
-	}
-	if (typed === pickedName || typed.trim().length < 2) {
-		suggestions.value = []
-		return
-	}
-	pickedName = null
-	searching = setTimeout(async () => {
-		const found = await searchContacts(typed).catch(() => [])
-		if (name.value === typed) {
-			suggestions.value = contactOptions(found)
-		}
-	}, 250)
-})
-
 /** Whether the invited Reviewer gets their Personal Link by mail, under the Member's own message */
 const sendMail = ref(false)
 const message = ref('')
@@ -326,14 +295,7 @@ function invite() {
 
 				<form v-if="inviting" class="deliver-link__invite" @submit.prevent="invite">
 					<div class="deliver-link__invite-row">
-						<NcTextField
-							v-model="name"
-							:label="t('deliver', 'Name')"
-							:list="listId"
-							autocomplete="off" />
-						<datalist :id="listId">
-							<option v-for="each in suggestions" :key="each.label" :value="each.label" />
-						</datalist>
+						<ContactField v-model="name" :label="t('deliver', 'Name')" @pick="(contact) => email = contact.email" />
 						<NcTextField v-model="email" type="email" :label="t('deliver', 'Email (optional)')" />
 						<NcButton type="submit" variant="primary" :disabled="busy || !name.trim()">
 							{{ t('deliver', 'Invite') }}

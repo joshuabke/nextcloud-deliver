@@ -45,7 +45,7 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | POST | `/reviewers/{id}/key` | A new Personal Link; the old ones stop working |
 | DELETE | `/reviewers/{id}` | Remove a Reviewer: their Personal Links stop working, their Comments stay |
 | POST | `/reviewers/{id}/contact` | Save a Reviewer to my address book: 201 `{saved: true}`, or 200 `{saved: false}` when the address is in one of my address books already |
-| GET | `/contacts?search=` | People of my own and shared address books whose name or address matches, `{name, email}` per address; never the instance's users |
+| GET | `/contacts?search=` | People of my own and shared address books whose name or address matches, `{name, email, photo}` per address, `photo` the CardDAV URL of their picture or null; never the instance's users |
 | GET/PUT | `/settings` `{addressBook}` | My Deliver settings: the address book Reviewers are saved to, of `addressBooks` I can write to |
 
 Rights follow each Version's file (ADR 0009): read access views and comments, write access manages. Missing write access answers 403; a request that clashes with the current state (a nested Folder Project, a taken Version Number, an older Version closed for Comments) answers 409.

@@ -41,10 +41,12 @@ class ContactsTest extends TestCase {
 	}
 
 	/** Puts a contact into one of the user's address books, by CardDAV as the Contacts app does */
-	private function contact(string $name, array $emails, string $book = 'contacts'): void {
+	private function contact(string $name, array $emails, string $book = 'contacts', bool $photo = false): void {
 		$uid = bin2hex(random_bytes(8));
 		$card = "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:$uid\r\nFN:$name\r\n"
 			. implode('', array_map(static fn (string $email) => "EMAIL;TYPE=WORK:$email\r\n", $emails))
+			// A 1×1 PNG, as the Contacts app stores a picture
+			. ($photo ? "PHOTO;ENCODING=b;TYPE=PNG:iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==\r\n" : '')
 			. "END:VCARD\r\n";
 		$status = $this->nc->request('PUT', "/remote.php/dav/addressbooks/users/{$this->uid}/$book/$uid.vcf", $card, ['Content-Type: text/vcard'])['status'];
 		self::assertSame(201, $status, "PUT contact into $book");
@@ -62,10 +64,16 @@ class ContactsTest extends TestCase {
 		$this->contact('Kimberly Nomail', []);
 
 		self::assertSame([
-			['name' => 'Kim Novak', 'email' => 'kim@studio.test'],
-			['name' => 'Kim Novak', 'email' => 'kim@home.test'],
+			['name' => 'Kim Novak', 'email' => 'kim@studio.test', 'photo' => null],
+			['name' => 'Kim Novak', 'email' => 'kim@home.test', 'photo' => null],
 		], $this->suggest('kim'), 'one row per address, none without one');
 		self::assertSame(['kim@home.test'], array_column($this->suggest('home.test'), 'email'), 'found by address too');
+
+		$this->contact('Mo Picture', ['mo@studio.test'], photo: true);
+		$photo = $this->suggest('mo@')[0]['photo'];
+		self::assertStringEndsWith('?photo', (string)$photo, 'a contact\'s picture comes along');
+		$fetched = $this->nc->request('GET', (string)parse_url($photo, PHP_URL_PATH) . '?photo');
+		self::assertSame([200, "\x89PNG"], [$fetched['status'], substr($fetched['body'], 0, 4)], 'and the Member can load it');
 
 		$colleague = 'colleague-' . bin2hex(random_bytes(4));
 		$this->admin->ocsForm('POST', '/ocs/v2.php/cloud/users', ['userid' => $colleague, 'password' => 'deliver-' . bin2hex(random_bytes(8)), 'email' => "$colleague@studio.test"]);
@@ -104,7 +112,7 @@ class ContactsTest extends TestCase {
 
 		$saved = $this->save($lee);
 		self::assertSame([201, ['saved' => true]], [$saved['status'], $saved['data']]);
-		self::assertSame([['name' => 'Lee', 'email' => 'lee@studio.test']], $this->suggest('lee'), 'name and address went in');
+		self::assertSame([['name' => 'Lee', 'email' => 'lee@studio.test', 'photo' => null]], $this->suggest('lee'), 'name and address went in');
 		self::assertTrue($this->inContacts()['Lee']);
 
 		$again = $this->save($lee);
