@@ -516,19 +516,18 @@ test.describe('Review view', () => {
 		await visitor.close()
 	})
 
-	test('a Member invites a Reviewer picked from their contacts', async ({ playwright }) => {
+	test('a Member invites someone from their contacts on a link of their own', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		const card = `/remote.php/dav/addressbooks/users/${USER}/contacts/deliver-e2e-${randomBytes(4).toString('hex')}.vcf`
 		const vcard = 'BEGIN:VCARD\r\nVERSION:3.0\r\nUID:deliver-e2e-zoe\r\nFN:Zoe Quill\r\n'
 			+ 'EMAIL;TYPE=WORK:zoe@studio.test\r\nEMAIL;TYPE=HOME:zoe@home.test\r\nEND:VCARD\r\n'
 		expect((await api.fetch(card, { method: 'PUT', data: vcard, headers: { 'Content-Type': 'text/vcard' } })).status()).toBe(201)
-		await api.post(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`)
 
 		try {
 			await page.goto(`/apps/deliver/projects/${projectId}`)
-			await page.locator('.app-navigation').getByText('Project Link').first().click()
-			await page.getByRole('button', { name: 'Invite a Reviewer' }).click()
-			const name = page.getByRole('combobox', { name: 'Name' })
+			await page.locator('.app-navigation').getByRole('button', { name: 'Invite a Reviewer' }).click()
+			const dialog = page.getByRole('dialog', { name: 'Invite a Reviewer' })
+			const name = dialog.getByRole('combobox', { name: 'Name' })
 			await name.pressSequentially('Zo')
 			// One row per address; the arrow keys move, Enter picks
 			await expect(page.getByRole('option')).toHaveCount(2)
@@ -536,10 +535,16 @@ test.describe('Review view', () => {
 			await name.press('Enter')
 			await expect(page.getByRole('listbox')).toHaveCount(0)
 			await expect(name).toHaveValue('Zoe Quill')
-			await expect(page.getByLabel('Email (optional)')).toHaveValue('zoe@home.test')
-			await page.getByRole('button', { name: 'Invite', exact: true }).click()
-			await expect(page.locator('.deliver-link__reviewer').filter({ hasText: 'Zoe Quill' })).toBeVisible()
-			await page.keyboard.press('Escape')
+			await expect(dialog.getByLabel('Email (optional)')).toHaveValue('zoe@home.test')
+			await dialog.getByText('Reviewers may download the original').click()
+			await dialog.getByRole('button', { name: 'Invite', exact: true }).click()
+			await expect(dialog).toHaveCount(0)
+
+			// A link of their own, titled by what it shows, with them under it
+			const listed = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`)).json()
+			const zoeId = listed.ocs.data.reviewers.find((each) => each.name === 'Zoe Quill').id
+			const theirs = listed.ocs.data.links.find((link) => link.reviewerIds.includes(zoeId))
+			expect([theirs.reviewerIds, theirs.assetIds, theirs.canDownload]).toEqual([[zoeId], null, false])
 
 			// Already a contact: nothing to save
 			const zoe = page.locator('.app-navigation li').filter({ hasText: 'Zoe Quill' }).last()
@@ -547,6 +552,7 @@ test.describe('Review view', () => {
 			await zoe.getByRole('button', { name: 'Actions' }).click()
 			await expect(page.getByRole('menuitem', { name: 'In your contacts' })).toBeDisabled()
 		} finally {
+			await page.keyboard.press('Escape')
 			const cleanup = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth })
 			await cleanup.fetch(card, { method: 'DELETE' })
 			await cleanup.dispose()

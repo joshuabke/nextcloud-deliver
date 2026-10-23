@@ -35,8 +35,9 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | PUT | `/comments/{id}` `{body}` | Edit one's own Comment |
 | DELETE | `/comments/{id}` | Remove a Comment, with its Replies |
 | PUT | `/comments/{id}/resolved` `{resolved}` | Resolve or unresolve, needs write access |
-| GET | `/projects/{id}/links` | `{links, reviewers}`: my Project Links of the Project, or of No Project for id 0, and my Reviewers who came by any of them, each with a Personal Link through every live one, keyed by token, and `inContacts` (null without an address) |
+| GET | `/projects/{id}/links` | `{links, reviewers, canMail}`: my Project Links of the Project, or of No Project for id 0, and my Reviewers who came by any of them, each with a Personal Link through every live one, keyed by token, and `inContacts` (null without an address) |
 | POST | `/projects/{id}/links` `{assetIds}` | A Project Link (ADRs 0010 and 0011), live and showing the whole Project, or only the Assets given; on No Project (id 0) `assetIds` is required |
+| POST | `/projects/{id}/invitations` `{name, email, sendMail, message, assetIds, canComment, allowOlder, watermark, canDownload, latestOnly}` | Invite one person on a Project Link of their own, the whole Project or the Assets given (required on No Project); `{link, reviewer}`, and no link is left when the invitation is refused |
 | PUT | `/links/{id}` `{review, canComment, allowOlder, watermark, canDownload, latestOnly, label, description, password, expireDate, assetIds}` | Change a Project Link; `''` removes password, expiry or description, `assetIds: null` shows the whole Project again (not on No Project); `review: false` pauses it |
 | DELETE | `/links/{id}` | Delete a Project Link |
 | GET/POST | `/links/{id}/reviewers` | Its Reviewers with Personal Links; invite one `{name, email}` |

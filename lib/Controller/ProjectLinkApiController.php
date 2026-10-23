@@ -15,6 +15,7 @@ use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Response;
 use OCP\AppFramework\OCSController;
+use OCP\IConfig;
 use OCP\IRequest;
 use OCP\IUserSession;
 
@@ -33,6 +34,7 @@ class ProjectLinkApiController extends OCSController {
 		private ReviewerMail $mail,
 		private IUserSession $userSession,
 		private Contacts $contacts,
+		private IConfig $config,
 		private ?string $userId,
 	) {
 		parent::__construct($appName, $request);
@@ -53,6 +55,8 @@ class ProjectLinkApiController extends OCSController {
 			return [
 				'links' => array_map(static fn (array $link) => $link + ['reviewerIds' => $cameBy[$link['token']] ?? []], $links),
 				'reviewers' => $reviewers,
+				// Whether an invitation can mail the Personal Link (story 145)
+				'canMail' => ReviewerMail::configured($this->config),
 			];
 		});
 	}
@@ -83,15 +87,43 @@ class ProjectLinkApiController extends OCSController {
 	/** A Member invites a Reviewer and, when asked, mails them their Personal Link with a message of their own */
 	#[NoAdminRequired]
 	public function invite(int $id, string $name, ?string $email = null, bool $sendMail = false, ?string $message = null): Response {
-		return $this->guard(function () use ($id, $name, $email, $sendMail, $message) {
-			$link = $this->projectLinks->ownLink((string)$this->userId, $id);
-			$reviewer = $this->links->invite($link, $name, $email);
-			$this->contacts->checkContacts([$reviewer]);
-			$personalLink = $link->personalLink($reviewer);
-			$member = $this->userSession->getUser();
-			$mailed = $sendMail && $member !== null && $this->mail->invited($reviewer, $personalLink, $member, $message);
-			return $this->reviewers->serialize($reviewer) + ['link' => $personalLink, 'mailed' => $mailed];
+		return $this->guard(
+			fn () => $this->inviteThrough($this->projectLinks->ownLink((string)$this->userId, $id), $name, $email, $sendMail, $message),
+			Http::STATUS_CREATED,
+		);
+	}
+
+	/**
+	 * Invites one person on a Project Link of their own, showing the whole
+	 * Project or the Assets given, with the rights given (story 145). A refused
+	 * invitation leaves no link behind.
+	 *
+	 * @param ?list<int> $assetIds only these Assets; required on No Project (0)
+	 */
+	#[NoAdminRequired]
+	public function invitation(int $id, string $name, ?string $email = null, bool $sendMail = false, ?string $message = null, ?array $assetIds = null): Response {
+		return $this->guard(function () use ($id, $name, $email, $sendMail, $message, $assetIds) {
+			$uid = (string)$this->userId;
+			$linkId = $this->projectLinks->create($uid, $id, $assetIds)['id'];
+			try {
+				$link = $this->projectLinks->update($uid, $linkId, array_intersect_key($this->request->getParams(), array_flip(ReviewLink::FLAGS)));
+				$reviewer = $this->inviteThrough($this->projectLinks->ownLink($uid, $linkId), $name, $email, $sendMail, $message);
+			} catch (\Throwable $e) {
+				$this->projectLinks->delete($uid, $linkId);
+				throw $e;
+			}
+			return ['link' => $link, 'reviewer' => $reviewer];
 		}, Http::STATUS_CREATED);
+	}
+
+	/** @return array<string, mixed> the new Reviewer with their Personal Link, mailed to them when asked */
+	private function inviteThrough(ReviewLink $link, string $name, ?string $email, bool $sendMail, ?string $message): array {
+		$reviewer = $this->links->invite($link, $name, $email);
+		$this->contacts->checkContacts([$reviewer]);
+		$personalLink = $link->personalLink($reviewer);
+		$member = $this->userSession->getUser();
+		$mailed = $sendMail && $member !== null && $this->mail->invited($reviewer, $personalLink, $member, $message);
+		return $this->reviewers->serialize($reviewer) + ['link' => $personalLink, 'mailed' => $mailed];
 	}
 
 	#[NoAdminRequired]

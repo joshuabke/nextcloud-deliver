@@ -47,6 +47,7 @@ return [
 		['name' => 'project_api#mute', 'url' => '/api/v1/projects/{id}/mute', 'verb' => 'PUT'],
 		['name' => 'project_link_api#index', 'url' => '/api/v1/projects/{id}/links', 'verb' => 'GET'],
 		['name' => 'project_link_api#create', 'url' => '/api/v1/projects/{id}/links', 'verb' => 'POST'],
+		['name' => 'project_link_api#invitation', 'url' => '/api/v1/projects/{id}/invitations', 'verb' => 'POST'],
 		['name' => 'project_link_api#update', 'url' => '/api/v1/links/{id}', 'verb' => 'PUT'],
 		['name' => 'project_link_api#destroy', 'url' => '/api/v1/links/{id}', 'verb' => 'DELETE'],
 		['name' => 'project_link_api#reviewers', 'url' => '/api/v1/links/{id}/reviewers', 'verb' => 'GET'],

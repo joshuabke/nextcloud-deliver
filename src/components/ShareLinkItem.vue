@@ -13,6 +13,7 @@ import NcPasswordField from '@nextcloud/vue/components/NcPasswordField'
 import NcTextArea from '@nextcloud/vue/components/NcTextArea'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import ContactField from './ContactField.vue'
+import LinkRights from './LinkRights.vue'
 import { linkApi, removeReviewer } from '../api.js'
 import { copyLink } from '../clipboard.js'
 import { useBusy } from '../composables/busy.js'
@@ -219,36 +220,7 @@ function invite() {
 				{{ t('deliver', 'This Nextcloud sends no email, so Reviewers are not mailed when someone replies to them.') }}
 			</p>
 			<div class="deliver-link__flags">
-				<NcCheckboxRadioSwitch
-					:modelValue="share.canComment"
-					:disabled="busy"
-					@update:modelValue="setFlags({ canComment: $event })">
-					{{ t('deliver', 'Reviewers may comment') }}
-				</NcCheckboxRadioSwitch>
-				<NcCheckboxRadioSwitch
-					:modelValue="share.watermark"
-					:disabled="busy"
-					@update:modelValue="setFlags({ watermark: $event })">
-					{{ t('deliver', 'Watermark with the Reviewer\'s name') }}
-				</NcCheckboxRadioSwitch>
-				<NcCheckboxRadioSwitch
-					:modelValue="share.allowOlder"
-					:disabled="busy || !share.canComment || share.latestOnly"
-					@update:modelValue="setFlags({ allowOlder: $event })">
-					{{ t('deliver', 'Also on older Versions') }}
-				</NcCheckboxRadioSwitch>
-				<NcCheckboxRadioSwitch
-					:modelValue="share.latestOnly"
-					:disabled="busy"
-					@update:modelValue="setFlags({ latestOnly: $event })">
-					{{ t('deliver', 'Only the newest Version') }}
-				</NcCheckboxRadioSwitch>
-				<NcCheckboxRadioSwitch
-					:modelValue="share.canDownload"
-					:disabled="busy"
-					@update:modelValue="setFlags({ canDownload: $event })">
-					{{ t('deliver', 'Reviewers may download the original') }}
-				</NcCheckboxRadioSwitch>
+				<LinkRights :flags="share" :disabled="busy" @change="setFlags" />
 				<NcTextArea
 					v-model="description"
 					class="deliver-link__description"

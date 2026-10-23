@@ -5,6 +5,9 @@
 - Suggest contacts from the Member's address books when inviting a Reviewer.
 - Add "Save to Contacts" to a Reviewer's menu.
 - Add Deliver settings with the address book Reviewers are saved to.
+- Move "Create Review Link" to a plus next to "Links".
+- Add a plus next to "Reviewers" that invites one person on a Project Link of their own.
+- Title Project Links by what they show.
 
 ## 0.9.2 – 2026-10-22
 

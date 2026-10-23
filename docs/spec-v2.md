@@ -71,7 +71,7 @@ Deliver becomes a proper Nextcloud app, rebuilt from scratch, in which media fil
 42. As a Member, I want to hand out a Project Link for a whole Project, for Assets I pick of it, or for Assets I pick of No Project, so that reviewing needs neither a shared folder nor moving files.
 43. As a Member with write access, I want sharing a file in Files to stay ordinary Nextcloud sharing, without Comments or a Reviewer, so that an ordinary link stays an ordinary link.
 44. As a Member with write access, I want to share the same file twice, once in Files for watching and once on a Project Link for review, so that an audience can see the cut without seeing the feedback.
-45. As a Member, I want a "Create Review Link" button in Deliver that makes a Project Link: for the whole Project in the Project's navigation and on a Folder Project's folder in the Files sidebar, for the one Asset in the Files sidebar on a file and in the Review view's Share dialog, in No Project too, so that the common case is one click.
+45. As a Member, I want a "Create Review Link" button in Deliver that makes a Project Link: for the whole Project as a plus next to "Links" in the Project's navigation and on a Folder Project's folder in the Files sidebar, for the one Asset in the Files sidebar on a file and in the Review view's Share dialog, in No Project too, so that the common case is one click.
 46. As a Member, I want a hint on a Project Link that has no password, so that I notice before the link goes out.
 47. As a Reviewer opening a link with several Assets, I want every Asset on it to open in the player with one click, so that I review instead of downloading.
 48. As a Reviewer opening a link that shows a single Asset, I want the review view right away, so that there is no step in between.
@@ -218,6 +218,7 @@ Issue #66. Contacts only fill in a Reviewer's name and address; the Reviewer sta
 142. As a Member, I want the name field of the invite form to suggest people from my address books and those shared with me, by name or address, one row per address and only those with one, never the instance's users, so that I do not type the same client in again on every Project.
 143. As a Member, I want "Save to Contacts" in a Reviewer's menu when they have an address, greyed out when they are already in one of my address books at the time they are added, and telling me so if I added them by hand since, so that a client who named themselves is in my address book with one click and never twice.
 144. As a Member, I want a "Deliver settings" dialog at the foot of the navigation with the address book Reviewers are saved to, from those I can write to, so that they land where my team keeps its contacts.
+145. As a Member, I want a plus next to "Reviewers" in the Project's navigation that invites one person on a Project Link of their own: their name (suggested from my contacts) and address, their Personal Link mailed under my message or copied, the whole Project or the Assets I pick (always picked on No Project), and the link's rights, so that sending a cut to one more person is one dialog; a link without a label is titled by what it shows (the whole Project, its one Asset, or how many), its Reviewers listed under it.
 
 ## Implementation Decisions
 

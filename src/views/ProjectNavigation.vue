@@ -10,7 +10,7 @@ import pausedIcon from '@mdi/svg/svg/link-variant-off.svg?raw'
 import pickedIcon from '@mdi/svg/svg/playlist-check.svg?raw'
 import addIcon from '@mdi/svg/svg/plus.svg?raw'
 import { showError, showSuccess } from '@nextcloud/dialogs'
-import { t } from '@nextcloud/l10n'
+import { n, t } from '@nextcloud/l10n'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -18,6 +18,7 @@ import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
 import NcAppNavigationCaption from '@nextcloud/vue/components/NcAppNavigationCaption'
 import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import InviteDialog from '../components/InviteDialog.vue'
 import ReviewerDialog from '../components/ReviewerDialog.vue'
 import SettingsDialog from '../components/SettingsDialog.vue'
 import ShareLinkDialog from '../components/ShareLinkDialog.vue'
@@ -44,6 +45,10 @@ const editing = ref(null)
 const person = ref(null)
 /** Whether the Deliver settings are open */
 const settingsOpen = ref(false)
+/** Whether the dialog that invites someone on a link of their own is open (story 145) */
+const invitingOpen = ref(false)
+/** Whether this Nextcloud sends mail, for invitations */
+const canMail = ref(false)
 
 const project = computed(() => store.details[props.id])
 const folders = computed(() => folderTree(project.value?.assets ?? []))
@@ -56,20 +61,26 @@ const byId = computed(() => new Map(reviewers.value.map((reviewer) => [reviewer.
 async function load(id = props.id) {
 	const found = await listProjectLinks(id).catch(() => ({ links: [], reviewers: [] }))
 	if (props.id === id) {
-		links.value = found.links.map((link, index) => ({ ...link, title: titleOf(link, index) }))
+		links.value = found.links.map((link) => ({ ...link, title: titleOf(link) }))
 		reviewers.value = found.reviewers
+		canMail.value = found.canMail ?? false
 		person.value = person.value && (byId.value.get(person.value.id) ?? null)
 	}
 }
 
 /**
  * @param {object} link - a Project Link
- * @param {number} index - its place in the list
- * @return {string} its label, else the one Asset it shows, else a number
+ * @return {string} its label, else what it shows: the whole Project, its one Asset, or how many (story 145)
  */
-function titleOf(link, index) {
-	const only = link.assetIds?.length === 1 ? project.value?.assets.find((asset) => asset.id === link.assetIds[0]) : null
-	return link.label || only?.name || (index === 0 ? t('deliver', 'Project Link') : t('deliver', 'Project Link {number}', { number: index + 1 }))
+function titleOf(link) {
+	if (link.label) {
+		return link.label
+	}
+	if (link.assetIds === null) {
+		return t('deliver', 'Whole Project')
+	}
+	const only = link.assetIds.length === 1 ? project.value?.assets.find((asset) => asset.id === link.assetIds[0]) : null
+	return only?.name ?? n('deliver', '%n Asset', '%n Assets', link.assetIds.length)
 }
 
 /**
@@ -201,7 +212,16 @@ function personalLink(reviewer) {
 				</template>
 			</NcAppNavigationItem>
 
-			<NcAppNavigationCaption :name="t('deliver', 'Links')" />
+			<NcAppNavigationCaption :name="t('deliver', 'Links')" :inline="1">
+				<template v-if="project && !project.none" #actions>
+					<NcActionButton :aria-label="t('deliver', 'Create Review Link')" @click="createLink">
+						<template #icon>
+							<NcIconSvgWrapper :svg="addIcon" />
+						</template>
+						{{ t('deliver', 'Create Review Link') }}
+					</NcActionButton>
+				</template>
+			</NcAppNavigationCaption>
 			<li v-if="links.length === 0" class="deliver-navigation__hint">
 				{{ t('deliver', 'No link with review yet.') }}
 			</li>
@@ -235,17 +255,21 @@ function personalLink(reviewer) {
 					</template>
 				</NcAppNavigationItem>
 			</NcAppNavigationItem>
-			<NcAppNavigationItem
-				v-if="project && !project.none"
-				:name="t('deliver', 'Create Review Link')"
-				@click="createLink">
-				<template #icon>
-					<NcIconSvgWrapper :svg="addIcon" />
-				</template>
-			</NcAppNavigationItem>
 
-			<template v-if="reviewers.length">
-				<NcAppNavigationCaption :name="t('deliver', 'Reviewers')" />
+			<NcAppNavigationCaption :name="t('deliver', 'Reviewers')" :inline="1">
+				<template v-if="project" #actions>
+					<NcActionButton :aria-label="t('deliver', 'Invite a Reviewer')" @click="invitingOpen = true">
+						<template #icon>
+							<NcIconSvgWrapper :svg="addIcon" />
+						</template>
+						{{ t('deliver', 'Invite a Reviewer') }}
+					</NcActionButton>
+				</template>
+			</NcAppNavigationCaption>
+			<li v-if="reviewers.length === 0" class="deliver-navigation__hint">
+				{{ t('deliver', 'No Reviewers yet.') }}
+			</li>
+			<template v-else>
 				<NcAppNavigationItem
 					v-for="reviewer in reviewers"
 					:key="reviewer.id"
@@ -282,6 +306,13 @@ function personalLink(reviewer) {
 				</NcAppNavigationItem>
 			</ul>
 			<SettingsDialog v-if="settingsOpen" @close="settingsOpen = false" />
+			<InviteDialog
+				v-if="invitingOpen"
+				:projectId="id"
+				:assets="project?.assets ?? []"
+				:canMail="canMail"
+				@invited="load()"
+				@close="invitingOpen = false" />
 			<!-- The dialogs render over the page; they only live here -->
 			<ShareLinkDialog
 				v-if="editing"

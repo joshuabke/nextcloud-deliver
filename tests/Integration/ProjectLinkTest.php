@@ -188,6 +188,26 @@ class ProjectLinkTest extends TestCase {
 		}
 	}
 
+	public function testInvitingSomeoneMakesALinkOfTheirOwn(): void {
+		$invited = $this->nc->ocs('POST', "/projects/{$this->projectId}/invitations", ['name' => 'Kim', 'email' => 'kim@example.test', 'canDownload' => false]);
+		self::assertSame(201, $invited['status'], json_encode($invited['data']));
+		['link' => $link, 'reviewer' => $kim] = $invited['data'];
+		self::assertSame([null, false, true], [$link['assetIds'], $link['canDownload'], $link['canComment']], 'the whole Project, with the rights given and the rest as on a new link');
+		self::assertStringContainsString($link['token'] . '?r=', $kim['link'], 'their Personal Link goes through it');
+		self::assertFalse($kim['mailed']);
+
+		$cutId = $this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'][0]['id'];
+		$lee = $this->nc->ocs('POST', "/projects/{$this->projectId}/invitations", ['name' => 'Lee', 'assetIds' => [$cutId]])['data'];
+		self::assertSame([$cutId], $lee['link']['assetIds'], 'or only the Assets picked');
+
+		$listed = $this->nc->ocs('GET', "/projects/{$this->projectId}/links")['data']['links'];
+		self::assertSame([[$kim['id']], [$lee['reviewer']['id']]], array_column($listed, 'reviewerIds'), 'each on a link of their own');
+
+		self::assertSame(409, $this->nc->ocs('POST', "/projects/{$this->projectId}/invitations", ['name' => 'kim'])['status'], 'a name taken in the review');
+		self::assertCount(2, $this->nc->ocs('GET', "/projects/{$this->projectId}/links")['data']['links'], 'leaves no link behind');
+		self::assertSame(400, $this->nc->ocs('POST', '/projects/0/invitations', ['name' => 'Mo'])['status'], 'No Project needs Assets picked');
+	}
+
 	public function testDownloadAllZipsTheNewestOfEveryAsset(): void {
 		$link = $this->link();
 		$visitor = $this->visitor($link);
