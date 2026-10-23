@@ -1,5 +1,7 @@
 <script setup>
 import reviewerIcon from '@mdi/svg/svg/account-outline.svg?raw'
+import contactIcon from '@mdi/svg/svg/account-plus-outline.svg?raw'
+import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import copyIcon from '@mdi/svg/svg/content-copy.svg?raw'
 import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
 import allIcon from '@mdi/svg/svg/folder-play-outline.svg?raw'
@@ -7,7 +9,7 @@ import projectWideIcon from '@mdi/svg/svg/link-box-variant-outline.svg?raw'
 import pausedIcon from '@mdi/svg/svg/link-variant-off.svg?raw'
 import pickedIcon from '@mdi/svg/svg/playlist-check.svg?raw'
 import addIcon from '@mdi/svg/svg/plus.svg?raw'
-import { showError } from '@nextcloud/dialogs'
+import { showError, showSuccess } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -17,8 +19,9 @@ import NcAppNavigationCaption from '@nextcloud/vue/components/NcAppNavigationCap
 import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import ReviewerDialog from '../components/ReviewerDialog.vue'
+import SettingsDialog from '../components/SettingsDialog.vue'
 import ShareLinkDialog from '../components/ShareLinkDialog.vue'
-import { createProjectLink, errorMessage, listProjectLinks, removeReviewer } from '../api.js'
+import { createProjectLink, errorMessage, listProjectLinks, removeReviewer, saveReviewerContact } from '../api.js'
 import { copyLink } from '../clipboard.js'
 import { confirmReviewerRemoval } from '../confirm.js'
 import { folderTree } from '../lib/folders.js'
@@ -39,6 +42,8 @@ const reviewers = ref([])
 const editing = ref(null)
 /** The Reviewer whose settings are open */
 const person = ref(null)
+/** Whether the Deliver settings are open */
+const settingsOpen = ref(false)
 
 const project = computed(() => store.details[props.id])
 const folders = computed(() => folderTree(project.value?.assets ?? []))
@@ -112,6 +117,23 @@ async function dropReviewer(reviewer) {
 		} catch (e) {
 			showError(errorMessage(e))
 		}
+	}
+}
+
+/**
+ * Saves the Reviewer to the Member's address book, or says they are in one already (story 143)
+ *
+ * @param {object} reviewer - a Reviewer with an address
+ */
+async function saveContact(reviewer) {
+	try {
+		const { saved } = await saveReviewerContact(reviewer.id)
+		showSuccess(saved
+			? t('deliver', '{name} saved to Contacts', { name: reviewer.name })
+			: t('deliver', '{name} is already in your contacts', { name: reviewer.name }))
+		await load()
+	} catch (e) {
+		showError(errorMessage(e))
 	}
 }
 
@@ -241,12 +263,26 @@ function personalLink(reviewer) {
 							</template>
 							{{ t('deliver', 'Copy Personal Link') }}
 						</NcActionButton>
+						<NcActionButton v-if="reviewer.email" :disabled="reviewer.inContacts === true" @click="saveContact(reviewer)">
+							<template #icon>
+								<NcIconSvgWrapper :svg="contactIcon" />
+							</template>
+							{{ reviewer.inContacts ? t('deliver', 'In your contacts') : t('deliver', 'Save to Contacts') }}
+						</NcActionButton>
 					</template>
 				</NcAppNavigationItem>
 			</template>
 		</template>
 		<template #footer>
-			<!-- The dialog renders over the page; it only lives here -->
+			<ul class="deliver-navigation__footer">
+				<NcAppNavigationItem :name="t('deliver', 'Deliver settings')" @click="settingsOpen = true">
+					<template #icon>
+						<NcIconSvgWrapper :svg="settingsIcon" />
+					</template>
+				</NcAppNavigationItem>
+			</ul>
+			<SettingsDialog v-if="settingsOpen" @close="settingsOpen = false" />
+			<!-- The dialogs render over the page; they only live here -->
 			<ShareLinkDialog
 				v-if="editing"
 				:share="editing"
@@ -268,6 +304,10 @@ function personalLink(reviewer) {
 </template>
 
 <style scoped>
+.deliver-navigation__footer {
+	padding: var(--default-grid-baseline);
+}
+
 .deliver-navigation__hint {
 	padding: 0 calc(3 * var(--default-grid-baseline));
 	color: var(--color-text-maxcontrast);

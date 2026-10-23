@@ -12,7 +12,7 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcPasswordField from '@nextcloud/vue/components/NcPasswordField'
 import NcTextArea from '@nextcloud/vue/components/NcTextArea'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
-import { linkApi, removeReviewer } from '../api.js'
+import { linkApi, removeReviewer, searchContacts } from '../api.js'
 import { copyLink } from '../clipboard.js'
 import { useBusy } from '../composables/busy.js'
 import { confirmLinkDeletion, confirmReviewerRemoval } from '../confirm.js'
@@ -32,6 +32,33 @@ const reviewers = ref(null)
 const inviting = ref(false)
 const name = ref('')
 const email = ref('')
+/** People of the Member's address books matching the name being typed, `Name <address>` each (story 142) */
+const suggestions = ref([])
+const listId = `deliver-contacts-${props.share.token}`
+let searching = null
+
+// Picking a suggestion fills in name and address; typing searches the address books
+watch(name, (typed) => {
+	const picked = suggestions.value.find((each) => each.label === typed)
+	if (picked) {
+		name.value = picked.name
+		email.value = picked.email
+		suggestions.value = []
+		return
+	}
+	clearTimeout(searching)
+	if (typed.trim().length < 2) {
+		suggestions.value = []
+		return
+	}
+	searching = setTimeout(async () => {
+		const found = await searchContacts(typed).catch(() => [])
+		if (name.value === typed) {
+			suggestions.value = found.map((each) => ({ ...each, label: `${each.name} <${each.email}>` }))
+		}
+	}, 250)
+})
+
 /** Whether the invited Reviewer gets their Personal Link by mail, under the Member's own message */
 const sendMail = ref(false)
 const message = ref('')
@@ -294,7 +321,14 @@ function invite() {
 
 				<form v-if="inviting" class="deliver-link__invite" @submit.prevent="invite">
 					<div class="deliver-link__invite-row">
-						<NcTextField v-model="name" :label="t('deliver', 'Name')" />
+						<NcTextField
+							v-model="name"
+							:label="t('deliver', 'Name')"
+							:list="listId"
+							autocomplete="off" />
+						<datalist :id="listId">
+							<option v-for="each in suggestions" :key="each.label" :value="each.label" />
+						</datalist>
 						<NcTextField v-model="email" type="email" :label="t('deliver', 'Email (optional)')" />
 						<NcButton type="submit" variant="primary" :disabled="busy || !name.trim()">
 							{{ t('deliver', 'Invite') }}
