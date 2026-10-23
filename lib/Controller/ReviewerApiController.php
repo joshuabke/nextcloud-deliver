@@ -47,7 +47,7 @@ class ReviewerApiController extends OCSController {
 			$this->links->assertRenameFree($reviewer, $name);
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
 			$reviewer = $this->reviewers->update($reviewer, $name, $email, $wishes, $rights);
-			$this->contacts->settle([$reviewer]);
+			$this->contacts->checkContacts([$reviewer]);
 			return $this->reviewers->serialize($reviewer);
 		});
 	}

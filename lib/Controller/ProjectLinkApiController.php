@@ -86,7 +86,7 @@ class ProjectLinkApiController extends OCSController {
 		return $this->guard(function () use ($id, $name, $email, $sendMail, $message) {
 			$link = $this->projectLinks->ownLink((string)$this->userId, $id);
 			$reviewer = $this->links->invite($link, $name, $email);
-			$this->contacts->settle([$reviewer]);
+			$this->contacts->checkContacts([$reviewer]);
 			$personalLink = $link->personalLink($reviewer);
 			$member = $this->userSession->getUser();
 			$mailed = $sendMail && $member !== null && $this->mail->invited($reviewer, $personalLink, $member, $message);

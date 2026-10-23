@@ -255,7 +255,7 @@ class ReviewLinks {
 		$cameBy = array_intersect_key($cameBy, array_flip($tokens));
 		$shown = array_merge([], ...array_values($cameBy));
 		$reviewers = array_values(array_filter($reviewers, static fn (Reviewer $reviewer) => in_array($reviewer->getId(), $shown, true)));
-		$this->contacts->settle($reviewers);
+		$this->contacts->checkContacts($reviewers);
 		return [
 			'reviewers' => array_map(fn (Reviewer $reviewer) => $this->reviewers->serialize($reviewer) + [
 				'inContacts' => $reviewer->getInContacts(),

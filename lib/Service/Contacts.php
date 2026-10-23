@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Service;
 
+use OCA\Deliver\AppInfo\Application;
 use OCA\Deliver\Db\Reviewer;
 use OCA\Deliver\Db\ReviewerMapper;
 use OCP\Config\IUserConfig;
 use OCP\Constants;
 use OCP\Contacts\IManager;
 use OCP\IAddressBook;
+use OCP\IAddressBookEnabled;
 
 /**
  * The logged-in Member's address books, as a source of Reviewers' names and
@@ -61,7 +63,7 @@ class Contacts {
 	 *
 	 * @param list<Reviewer> $reviewers of the logged-in Member
 	 */
-	public function settle(array $reviewers): void {
+	public function checkContacts(array $reviewers): void {
 		foreach ($reviewers as $reviewer) {
 			$email = $reviewer->getEmail();
 			if ($email !== null && $reviewer->getInContacts() === null) {
@@ -107,7 +109,8 @@ class Contacts {
 	private function writable(): array {
 		$books = [];
 		foreach ($this->manager->getUserAddressBooks() as $book) {
-			if (!$book->isSystemAddressBook() && ($book->getPermissions() & Constants::PERMISSION_CREATE)) {
+			$enabled = !$book instanceof IAddressBookEnabled || $book->isEnabled();
+			if ($enabled && !$book->isSystemAddressBook() && ($book->getPermissions() & Constants::PERMISSION_CREATE)) {
 				$books[(string)$book->getKey()] = $book;
 			}
 		}
@@ -117,7 +120,7 @@ class Contacts {
 	/** The address book Reviewers are saved to: the Member's pick while it stands, else their Contacts */
 	private function target(): ?IAddressBook {
 		$books = $this->writable();
-		$picked = $this->config->getValueString((string)$this->userId, 'deliver', self::SETTING);
+		$picked = $this->config->getValueString((string)$this->userId, Application::APP_ID, self::SETTING);
 		foreach ($books as $book) {
 			if ($book->getUri() === 'contacts' && !$book->isShared()) {
 				$default = $book;
@@ -143,6 +146,6 @@ class Contacts {
 		if (!isset($this->writable()[$key])) {
 			throw new InvalidRequestException('Not an address book you can save to');
 		}
-		$this->config->setValueString((string)$this->userId, 'deliver', self::SETTING, $key);
+		$this->config->setValueString((string)$this->userId, Application::APP_ID, self::SETTING, $key);
 	}
 }

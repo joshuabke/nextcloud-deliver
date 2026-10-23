@@ -16,6 +16,7 @@ import { linkApi, removeReviewer, searchContacts } from '../api.js'
 import { copyLink } from '../clipboard.js'
 import { useBusy } from '../composables/busy.js'
 import { confirmLinkDeletion, confirmReviewerRemoval } from '../confirm.js'
+import { contactOptions, pickedContact } from '../lib/contacts.js'
 
 const props = defineProps({
 	/** One Project Link of the Member's, as the server lists it */
@@ -32,29 +33,33 @@ const reviewers = ref(null)
 const inviting = ref(false)
 const name = ref('')
 const email = ref('')
-/** People of the Member's address books matching the name being typed, `Name <address>` each (story 142) */
+/** People of the Member's address books matching the name being typed, one option per address (story 142) */
 const suggestions = ref([])
 const listId = `deliver-contacts-${props.share.token}`
 let searching = null
+/** The name a pick put in the field, which needs no search of its own */
+let pickedName = null
 
 // Picking a suggestion fills in name and address; typing searches the address books
 watch(name, (typed) => {
-	const picked = suggestions.value.find((each) => each.label === typed)
+	clearTimeout(searching)
+	const picked = pickedContact(suggestions.value, typed)
 	if (picked) {
+		pickedName = picked.name
 		name.value = picked.name
 		email.value = picked.email
 		suggestions.value = []
 		return
 	}
-	clearTimeout(searching)
-	if (typed.trim().length < 2) {
+	if (typed === pickedName || typed.trim().length < 2) {
 		suggestions.value = []
 		return
 	}
+	pickedName = null
 	searching = setTimeout(async () => {
 		const found = await searchContacts(typed).catch(() => [])
 		if (name.value === typed) {
-			suggestions.value = found.map((each) => ({ ...each, label: `${each.name} <${each.email}>` }))
+			suggestions.value = contactOptions(found)
 		}
 	}, 250)
 })
