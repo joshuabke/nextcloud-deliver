@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Suggest contacts from the Member's address books when inviting a Reviewer.
+- Add "Save to Contacts" to a Reviewer's menu.
+- Add Deliver settings with the address book Reviewers are saved to.
+
 ## 0.9.2 – 2026-10-22
 
 - Reviewers belong to the Project of the link they came by: a link's settings list only them, and their Personal Link and mails stay within that Project. Someone who already reviewed several Projects keeps the first; invite them again on the others.

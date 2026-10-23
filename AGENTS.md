@@ -39,7 +39,7 @@ Deliver is a Nextcloud app for frame-accurate video and audio review (a Frame.io
 - Files is the source of truth: never copy, move or write media outside the Project folder except derived media in app data.
 - Frames are the anchor; seconds are derived. Any code path that stores seconds is wrong.
 - Every UI string goes through `t()`; German translation ships. Add the German to `l10n/de.json` (du) and `l10n/de_DE.json` (Sie) with the terms in `CONTEXT.md`, then `npm run l10n` writes the `.js` files; Vitest fails on any untranslated or stale string.
-- Changelog entries (`CHANGELOG.md`, `CHANGELOG.de.md`) are terse one-liners starting with a verb, what changed rather than why or what the user now sees: `Fix icon alignment on the minimised upload card.` Group them under `### Added`/`### Changed`/`### Fixed` only when a release has several kinds.
+- Changelog entries (`CHANGELOG.md`, `CHANGELOG.de.md`) are terse one-liners starting with a verb, what changed rather than why or what the user now sees: `Fix icon alignment on the minimised upload card.` Group them under `### Added`/`### Changed`/`### Fixed` only when a release has several kinds. Every implementation PR adds its lines to the `## Unreleased` section at the top of both files (`## Unveröffentlicht` in German); the release commit turns it into the version heading.
 - Spec changes go to `docs/spec-v2.md`; glossary changes go to `CONTEXT.md` in the same commit as the code that introduces the term.
 
 ## Maintaining this file

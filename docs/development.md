@@ -70,7 +70,7 @@ The built `js/` is gitignored, so a release is always `make package`, never `git
 
 A release:
 
-1. Set the version in `appinfo/info.xml` and `package.json`, and give it a section `## 1.2.3 – 2026-10-01` in `CHANGELOG.md` and `CHANGELOG.de.md`. The store shows that section (the German one on German instances) and matches it to the version in `info.xml`. Merge.
+1. Set the version in `appinfo/info.xml` and `package.json`, and turn the `## Unreleased` section of `CHANGELOG.md` (`## Unveröffentlicht` in `CHANGELOG.de.md`) into `## 1.2.3 – 2026-10-01`. The store shows that section (the German one on German instances) and matches it to the version in `info.xml`. Merge.
 2. Tag the merge on `main` and push the tag:
 
    ```bash
