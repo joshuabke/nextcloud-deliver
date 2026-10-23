@@ -35,6 +35,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setWatermark(?bool $watermark)
  * @method ?string getLanguage()
  * @method void setLanguage(?string $language)
+ * @method ?bool getInContacts()
+ * @method void setInContacts(?bool $inContacts)
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
  */
@@ -57,6 +59,8 @@ class Reviewer extends Entity {
 	protected ?bool $canComment = null;
 	protected ?bool $allowOlder = null;
 	protected ?bool $watermark = null;
+	/** Whether their address is in one of the Member's address books (#66); null until checked */
+	protected ?bool $inContacts = null;
 
 	public function __construct() {
 		$this->addType('projectId', 'integer');
@@ -67,6 +71,7 @@ class Reviewer extends Entity {
 		$this->addType('canComment', 'boolean');
 		$this->addType('allowOlder', 'boolean');
 		$this->addType('watermark', 'boolean');
+		$this->addType('inContacts', 'boolean');
 	}
 
 	/** @return array{canComment: ?bool, allowOlder: ?bool, watermark: ?bool} their own rights, null where the link decides */

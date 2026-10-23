@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Controller;
 
+use OCA\Deliver\Service\Contacts;
 use OCA\Deliver\Service\ProjectLinkService;
 use OCA\Deliver\Service\ProjectService;
 use OCA\Deliver\Service\ReviewerMail;
@@ -31,6 +32,7 @@ class ProjectLinkApiController extends OCSController {
 		private ReviewerService $reviewers,
 		private ReviewerMail $mail,
 		private IUserSession $userSession,
+		private Contacts $contacts,
 		private ?string $userId,
 	) {
 		parent::__construct($appName, $request);
@@ -84,6 +86,7 @@ class ProjectLinkApiController extends OCSController {
 		return $this->guard(function () use ($id, $name, $email, $sendMail, $message) {
 			$link = $this->projectLinks->ownLink((string)$this->userId, $id);
 			$reviewer = $this->links->invite($link, $name, $email);
+			$this->contacts->settle([$reviewer]);
 			$personalLink = $link->personalLink($reviewer);
 			$member = $this->userSession->getUser();
 			$mailed = $sendMail && $member !== null && $this->mail->invited($reviewer, $personalLink, $member, $message);
