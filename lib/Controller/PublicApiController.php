@@ -23,6 +23,7 @@ use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\AnonRateLimit;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\Attribute\PublicPage;
+use OCP\AppFramework\Http\Attribute\UserRateLimit;
 use OCP\AppFramework\Http\FileDisplayResponse;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\Response;
@@ -238,6 +239,7 @@ class PublicApiController extends PublicShareController {
 	#[PublicPage]
 	#[NoCSRFRequired]
 	#[AnonRateLimit(limit: 10, period: 3600)]
+	#[UserRateLimit(limit: 10, period: 3600)]
 	public function claim(string $name, ?string $email = null, ?bool $mailReplies = null, ?bool $mailComments = null, ?bool $mailVersions = null, ?string $language = null): Response {
 		return $this->guard(function () use ($name, $email, $mailReplies, $mailComments, $mailVersions, $language) {
 			$link = $this->link();
@@ -249,24 +251,25 @@ class PublicApiController extends PublicShareController {
 			// an address is no secret, and the key is their identity (ADR 0014)
 			$returning = $this->links->returning($link, $email);
 			if ($returning !== null) {
-				if (!$this->mail->welcome($returning, $link->personalLink($returning), $language)) {
+				// The Personal Link through this link goes to their mailbox only; they are on it once it went out
+				$key = $this->reviewers->keyOn($returning, $link->token()) ?? $this->reviewers->newKey();
+				if (!$this->mail->welcome($returning, $link->personalLink($key), $language)) {
 					throw $this->links->addressTaken((string)$email);
 				}
-				// The Personal Link mailed for this link has to open it: they are on it from now on, and only once it went out
-				$this->reviewers->cameBy($returning, $link->token());
+				$this->reviewers->putOn($returning, $link->token(), $key);
 				return new JSONResponse(['returning' => true, 'mailed' => true, 'email' => $returning->getEmail()], Http::STATUS_ACCEPTED);
 			}
 			$this->links->assertNameFree($link, $name, reviewersToo: false);
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
 			$reviewer = $this->reviewers->claim($link, $name, $email, $wishes, $language);
-			$this->reviewers->cameBy($reviewer, $link->token());
-			$mailed = $this->mail->welcome($reviewer, $link->personalLink($reviewer), $language);
+			$key = $this->reviewers->putOn($reviewer, $link->token());
+			$mailed = $this->mail->welcome($reviewer, $link->personalLink($key), $language);
 			// A JSONResponse, because a DataResponse loses its cookies on the way out
 			$response = new JSONResponse(
-				$this->reviewers->serialize($reviewer) + ['link' => $link->personalLink($reviewer), 'mailed' => $mailed],
+				$this->reviewers->serialize($reviewer) + ['key' => $key, 'link' => $link->personalLink($key), 'mailed' => $mailed],
 				Http::STATUS_CREATED,
 			);
-			$this->rememberReviewer($response, $reviewer->getSecretKey());
+			$this->rememberReviewer($response, $key);
 			return $response;
 		});
 	}
@@ -283,16 +286,17 @@ class PublicApiController extends PublicShareController {
 			if ($name !== null) {
 				$this->links->assertRenameFree($reviewer, $name, reviewersToo: false);
 			}
-			$this->links->assertAddressFree($reviewer, $email);
 			$before = mb_strtolower((string)$reviewer->getEmail());
 			$changed = $email !== null && mb_strtolower(trim($email)) !== $before;
 			if ($changed) {
-				// A new address is mailed, so it has a limit of its own, as naming oneself does
+				// A new address is mailed, so it has a limit of its own, as naming oneself does,
+				// counted before the address is checked, so that trying addresses costs as much as mailing them
 				$this->limiter->registerAnonRequest('deliver-reviewer-address', 10, 3600, $this->request->getRemoteAddress());
 			}
+			$this->links->assertAddressFree($reviewer, $email);
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
 			$reviewer = $this->reviewers->updateSettings($reviewer, $email, $wishes, $name, $language);
-			$mailed = $changed && $this->mail->welcome($reviewer, $this->link()->personalLink($reviewer), $language);
+			$mailed = $changed && $this->mail->welcome($reviewer, $this->link()->personalLink((string)$this->reviewers->keyOn($reviewer, $this->getToken())), $language);
 			return $this->reviewers->serialize($reviewer) + ['mailed' => $mailed];
 		});
 	}

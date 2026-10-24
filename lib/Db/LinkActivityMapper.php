@@ -45,11 +45,4 @@ class LinkActivityMapper {
 		$result->closeCursor();
 		return $rows;
 	}
-
-	public function deleteByToken(string $token): void {
-		$qb = $this->db->getQueryBuilder();
-		$qb->delete('deliver_link_activity')
-			->where($qb->expr()->eq('token', $qb->createNamedParameter($token)))
-			->executeStatement();
-	}
 }

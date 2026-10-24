@@ -8,8 +8,9 @@ use OCP\AppFramework\Db\Entity;
 
 /**
  * Someone who reaches a Version through a Review Link instead of Files
- * permissions. The secret key is their identity: a Personal Link carries it,
- * so the same person is the same author on any device, forever.
+ * permissions. Each link they are on has a key of its own, which their
+ * Personal Link through it carries, so the same person is the same author
+ * on any device, forever (ADR 0014).
  *
  * @method string getOwnerUid()
  * @method void setOwnerUid(string $ownerUid)
@@ -19,8 +20,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setName(string $name)
  * @method ?string getEmail()
  * @method void setEmail(?string $email)
- * @method ?string getSecretKey()
- * @method void setSecretKey(?string $secretKey)
+ * @method ?int getRemovedAt()
+ * @method void setRemovedAt(?int $removedAt)
  * @method ?bool getMailReplies()
  * @method void setMailReplies(?bool $mailReplies)
  * @method ?bool getMailComments()
@@ -41,7 +42,8 @@ class Reviewer extends Entity {
 	protected ?int $projectId = null;
 	protected ?string $name = null;
 	protected ?string $email = null;
-	protected ?string $secretKey = null;
+	/** When a Member removed them; their Comments keep their name, their Personal Links stop working */
+	protected ?int $removedAt = null;
 	protected ?int $createdAt = null;
 	/** What they want mailed; null is the default: Replies yes, the rest no */
 	protected ?bool $mailReplies = null;
@@ -55,6 +57,7 @@ class Reviewer extends Entity {
 	public function __construct() {
 		$this->addType('projectId', 'integer');
 		$this->addType('createdAt', 'integer');
+		$this->addType('removedAt', 'integer');
 		$this->addType('mailReplies', 'boolean');
 		$this->addType('mailComments', 'boolean');
 		$this->addType('mailVersions', 'boolean');

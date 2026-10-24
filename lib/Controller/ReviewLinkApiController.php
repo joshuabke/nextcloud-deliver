@@ -51,7 +51,7 @@ class ReviewLinkApiController extends OCSController {
 		return $this->guard(function () use ($id) {
 			$uid = (string)$this->userId;
 			$links = $this->linkService->listFor($uid, $id);
-			$live = array_filter($links, static fn (array $link) => $link['review']);
+			$live = array_filter($links, static fn (array $link) => $link['live']);
 			['reviewers' => $reviewers, 'cameBy' => $cameBy] = $this->links->reviewersBy($uid, $id === ProjectService::NONE ? null : $id, array_column($links, 'token'), array_column($live, 'url', 'token'));
 			return [
 				'links' => array_map(static fn (array $link) => $link + ['reviewerIds' => $cameBy[$link['token']] ?? []], $links),
@@ -90,7 +90,8 @@ class ReviewLinkApiController extends OCSController {
 	public function invite(int $id, string $name, ?string $email = null, bool $sendMail = false, ?string $message = null): Response {
 		return $this->guard(function () use ($id, $name, $email, $sendMail, $message) {
 			$link = $this->linkService->ownLink((string)$this->userId, $id);
-			return $this->welcome($link, $this->links->invite($link, $name, $email), $sendMail, $message);
+			[$reviewer, $key] = $this->links->invite($link, $name, $email);
+			return $this->welcome($link, $reviewer, $key, $sendMail, $message);
 		}, Http::STATUS_CREATED);
 	}
 
@@ -107,25 +108,27 @@ class ReviewLinkApiController extends OCSController {
 			$uid = (string)$this->userId;
 			$linkId = $this->linkService->create($uid, $id, $assetIds)['id'];
 			try {
-				$link = $this->linkService->update($uid, $linkId, array_intersect_key($this->request->getParams(), array_flip(ReviewLink::FLAGS)));
+				// A new invitation is live: the rights given, but never paused
+				$rights = array_diff(ReviewLink::FLAGS, ['review']);
+				$link = $this->linkService->update($uid, $linkId, array_intersect_key($this->request->getParams(), array_flip($rights)));
 				$reviewLink = $this->linkService->ownLink($uid, $linkId);
-				$reviewer = $this->links->invite($reviewLink, $name, $email);
+				[$reviewer, $key] = $this->links->invite($reviewLink, $name, $email);
 			} catch (\Throwable $e) {
 				$this->linkService->delete($uid, $linkId);
 				throw $e;
 			}
 			// Invited: what follows only tells them, and never takes the link back
-			return ['link' => $link, 'reviewer' => $this->welcome($reviewLink, $reviewer, $sendMail, $message)];
+			return ['link' => $link, 'reviewer' => $this->welcome($reviewLink, $reviewer, $key, $sendMail, $message)];
 		}, Http::STATUS_CREATED);
 	}
 
 	/** @return array<string, mixed> the invited Reviewer with their Personal Link, mailed to them when asked */
-	private function welcome(ReviewLink $link, Reviewer $reviewer, bool $sendMail, ?string $message): array {
+	private function welcome(ReviewLink $link, Reviewer $reviewer, string $key, bool $sendMail, ?string $message): array {
 		$this->contacts->checkContacts([$reviewer]);
-		$personalLink = $link->personalLink($reviewer);
+		$personalLink = $link->personalLink($key);
 		$member = $this->userSession->getUser();
 		$mailed = $sendMail && $member !== null && $this->mail->invited($reviewer, $personalLink, $member, $message);
-		return $this->reviewers->serialize($reviewer) + ['link' => $personalLink, 'mailed' => $mailed];
+		return $this->reviewers->serialize($reviewer) + ['key' => $key, 'link' => $personalLink, 'mailed' => $mailed];
 	}
 
 	#[NoAdminRequired]
