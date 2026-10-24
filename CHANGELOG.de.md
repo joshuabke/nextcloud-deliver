@@ -5,6 +5,9 @@
 - Beim Einladen von Reviewern Kontakte aus den Adressbüchern vorgeschlagen.
 - „In Kontakte speichern“ im Menü eines Reviewers hinzugefügt.
 - Deliver-Einstellungen mit dem Adressbuch für gespeicherte Reviewer hinzugefügt.
+- „Review-Link erstellen“ als Plus neben „Links“ verschoben.
+- Plus neben „Reviewer“ hinzugefügt, das eine Person über einen eigenen Projekt-Link einlädt.
+- Projekt-Links nach ihrem Inhalt benannt.
 
 ## 0.9.2 – 2026-10-22
 

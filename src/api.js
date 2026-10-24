@@ -36,6 +36,8 @@ export const renewReviewerKey = (id) => axios.post(url(`/reviewers/${id}/key`)).
 export const removeReviewer = (id) => axios.delete(url(`/reviewers/${id}`)).then(data)
 // Whether the Reviewer went into the Member's Contacts or was there already (#66)
 export const saveReviewerContact = (id) => axios.post(url(`/reviewers/${id}/contact`)).then(data)
+// One person on a Project Link of their own: {name, email, sendMail, message, assetIds} and the link's rights (story 145)
+export const inviteToProject = (projectId, fields) => axios.post(url(`/projects/${projectId}/invitations`), fields).then(data)
 export const searchContacts = (search) => axios.get(url('/contacts'), { params: { search } }).then(data)
 export const getSettings = () => axios.get(url('/settings')).then(data)
 export const updateSettings = (settings) => axios.put(url('/settings'), settings).then(data)
