@@ -562,18 +562,15 @@ test.describe('Review view', () => {
 			const person = page.getByRole('dialog', { name: zoeName })
 			await person.getByRole('button', { name: `Rights of ${zoeName} on this link` }).click()
 			const rights = page.getByRole('dialog', { name: `${zoeName} on “Whole Project”` })
-			// A click while the dialog still sets its first focus would be lost
-			await expect(rights.locator('input').first()).toBeFocused()
-			await rights.getByRole('combobox', { name: 'Comment', exact: true }).click()
-			await page.getByRole('option', { name: 'No', exact: true }).click()
+			await rights.getByRole('radiogroup', { name: 'Comment', exact: true }).getByText('No', { exact: true }).click()
 			await expect.poll(async () => {
 				const now = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`)).json()
 				return now.ocs.data.reviewers.find((each) => each.id === zoeId).links.find((each) => each.token === theirs.token).rights.canComment
 			}).toBe(false)
-			// One dialog at a time: a second Escape while the first one still fades out would be lost
-			await page.keyboard.press('Escape')
+			// One dialog at a time, by its own close button
+			await rights.getByRole('button', { name: 'Close' }).click()
 			await expect(rights).toHaveCount(0)
-			await page.keyboard.press('Escape')
+			await person.getByRole('button', { name: 'Close' }).click()
 			await expect(person).toHaveCount(0)
 
 			// Under the link, a click opens their rights on that very link
