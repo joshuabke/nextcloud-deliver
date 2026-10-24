@@ -10,6 +10,9 @@ use OCP\IDBConnection;
 
 /** @template-extends Mapper<Reviewer> */
 class ReviewerMapper extends Mapper {
+	/** The rights a Reviewer can have of their own on a link, over the link's (ADR 0014) */
+	private const RIGHTS = ['canComment' => 'can_comment', 'allowOlder' => 'allow_older', 'watermark' => 'watermark'];
+
 	public function __construct(IDBConnection $db) {
 		parent::__construct($db, 'deliver_reviewers', Reviewer::class);
 	}
@@ -111,9 +114,6 @@ class ReviewerMapper extends Mapper {
 		return $names;
 	}
 
-	/** The rights a Reviewer can have of their own on a link, over the link's (ADR 0014) */
-	public const RIGHTS = ['canComment' => 'can_comment', 'allowOlder' => 'allow_older', 'watermark' => 'watermark'];
-
 	/**
 	 * @param list<int> $reviewerIds
 	 * @return array<int, array<string, array{canComment: ?bool, allowOlder: ?bool, watermark: ?bool}>> reviewer id → token → their own rights there, for the links they came by
@@ -135,6 +135,11 @@ class ReviewerMapper extends Mapper {
 		}
 		$result->closeCursor();
 		return $rights;
+	}
+
+	/** @return ?array{canComment: ?bool, allowOlder: ?bool, watermark: ?bool} their own rights on the link, null when they never came by it */
+	public function rightsOn(int $reviewerId, string $token): ?array {
+		return $this->rightsByLink([$reviewerId])[$reviewerId][$token] ?? null;
 	}
 
 	/**

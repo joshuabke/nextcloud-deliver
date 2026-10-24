@@ -7,6 +7,7 @@ import AssetPicker from './AssetPicker.vue'
 import LinkActivityDialog from './LinkActivityDialog.vue'
 import ShareLinkItem from './ShareLinkItem.vue'
 import { errorMessage, linkApi } from '../api.js'
+import { linkTitle } from '../lib/linkTitle.js'
 
 const props = defineProps({
 	/** A Project Link as the Project's navigation lists it */
@@ -41,7 +42,7 @@ async function pick(assetIds) {
 
 <template>
 	<NcDialog
-		:name="share.label || share.title || t('deliver', 'Project Link')"
+		:name="share.title ?? linkTitle(share, assets)"
 		size="normal"
 		@closing="emit('close')">
 		<ShareLinkItem

@@ -18,3 +18,15 @@ export function peopleToSuggest(typed, reviewers, contacts) {
 		...contacts.filter((contact) => !known.has(contact.email.toLowerCase())).map((contact) => ({ ...contact, reviewer: false })),
 	]
 }
+
+/**
+ * The Reviewer an address belongs to, whatever its case: inviting it gives them one more link (ADR 0014)
+ *
+ * @param {Array<{name: string, email: ?string}>} reviewers - the Project's Reviewers
+ * @param {string} email - the address typed
+ * @return {{name: string, email: string}|undefined} the Reviewer with that address
+ */
+export function reviewerWithAddress(reviewers, email) {
+	const address = email.trim().toLowerCase()
+	return address === '' ? undefined : reviewers.find((reviewer) => reviewer.email?.toLowerCase() === address)
+}

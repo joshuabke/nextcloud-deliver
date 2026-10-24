@@ -19,6 +19,8 @@ import { linkApi, removeReviewer } from '../api.js'
 import { copyLink } from '../clipboard.js'
 import { useBusy } from '../composables/busy.js'
 import { confirmLinkDeletion, confirmReviewerRemoval } from '../confirm.js'
+import { linkTitle } from '../lib/linkTitle.js'
+import { reviewerWithAddress } from '../lib/people.js'
 
 const props = defineProps({
 	/** One Project Link of the Member's, as the server lists it */
@@ -39,7 +41,7 @@ const name = ref('')
 const email = ref('')
 const withAddress = computed(() => (reviewers.value ?? []).filter((reviewer) => reviewer.email))
 /** The Reviewer the address belongs to: this link goes to them, under their name (ADR 0014) */
-const known = computed(() => withAddress.value.find((reviewer) => reviewer.email.toLowerCase() === email.value.trim().toLowerCase()))
+const known = computed(() => reviewerWithAddress(withAddress.value, email.value))
 /** Whether the invited Reviewer gets their Personal Link by mail, under the Member's own message */
 const sendMail = ref(false)
 const message = ref('')
@@ -314,7 +316,7 @@ function invite() {
 		<PersonalLinkRightsDialog
 			v-if="rightsOf"
 			:reviewer="rightsOf"
-			:share="{ ...share, title: share.label || share.title || t('deliver', 'Review Link') }"
+			:share="{ ...share, title: share.title ?? linkTitle(share, []) }"
 			:rights="rightsOf.rights"
 			@changed="(rights) => rightsOf.rights = rights"
 			@close="rightsOf = null" />

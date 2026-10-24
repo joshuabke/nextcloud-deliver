@@ -8,8 +8,8 @@
 - „Review-Link erstellen“ als Plus neben „Links“ verschoben.
 - Plus neben „Reviewer“ hinzugefügt, das eine Person über einen eigenen Projekt-Link einlädt.
 - Projekt-Links nach ihrem Inhalt benannt.
-- Eine E-Mail-Adresse ist ein Reviewer pro Projekt; eine erneute Einladung fügt einen Link hinzu.
-- Eigene Rechte eines Reviewers pro Link, gesetzt über ein Zahnrad am Persönlichen Link.
+- E-Mail-Adresse auf einen Reviewer pro Projekt beschränkt.
+- Eigene Rechte eines Reviewers auf die einzelnen Links verlegt.
 
 ## 0.9.2 – 2026-10-22
 

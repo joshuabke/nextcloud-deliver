@@ -13,6 +13,7 @@ import LinkRights from './LinkRights.vue'
 import { inviteToProject } from '../api.js'
 import { copyLink } from '../clipboard.js'
 import { useBusy } from '../composables/busy.js'
+import { reviewerWithAddress } from '../lib/people.js'
 
 /**
  * Invites one person on a Project Link of their own: who, what they see and
@@ -40,7 +41,7 @@ const message = ref('')
 const assetIds = ref(onNoProject ? props.assets.map((asset) => asset.id) : null)
 const withAddress = computed(() => props.reviewers.filter((reviewer) => reviewer.email))
 /** The Reviewer the address belongs to: the new link goes to them, under their name (ADR 0014) */
-const known = computed(() => withAddress.value.find((reviewer) => reviewer.email.toLowerCase() === email.value.trim().toLowerCase()))
+const known = computed(() => reviewerWithAddress(withAddress.value, email.value))
 /** As on a new link */
 const rights = reactive({ canComment: true, watermark: false, allowOlder: false, latestOnly: false, canDownload: true })
 

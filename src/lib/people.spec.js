@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { peopleToSuggest } from './people.js'
+import { peopleToSuggest, reviewerWithAddress } from './people.js'
 
 describe('people to suggest when inviting', () => {
 	const reviewers = [
@@ -20,5 +20,14 @@ describe('people to suggest when inviting', () => {
 
 	it('finds Reviewers by address as well', () => {
 		expect(peopleToSuggest('MO@', reviewers, []).map((each) => each.name)).toEqual(['Mo Blue'])
+	})
+})
+
+describe('the Reviewer an address belongs to', () => {
+	it('is found whatever the case and the spaces around it', () => {
+		const reviewers = [{ name: 'Leon Green', email: 'Leon@Example.com' }, { name: 'Noa', email: null }]
+		expect(reviewerWithAddress(reviewers, ' leon@example.COM ')?.name).toBe('Leon Green')
+		expect(reviewerWithAddress(reviewers, 'mo@example.com')).toBeUndefined()
+		expect(reviewerWithAddress(reviewers, '')).toBeUndefined()
 	})
 })

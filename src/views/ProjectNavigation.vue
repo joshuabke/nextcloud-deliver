@@ -10,7 +10,7 @@ import pausedIcon from '@mdi/svg/svg/link-variant-off.svg?raw'
 import pickedIcon from '@mdi/svg/svg/playlist-check.svg?raw'
 import addIcon from '@mdi/svg/svg/plus.svg?raw'
 import { showError, showSuccess } from '@nextcloud/dialogs'
-import { n, t } from '@nextcloud/l10n'
+import { t } from '@nextcloud/l10n'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -26,6 +26,7 @@ import { createProjectLink, errorMessage, listProjectLinks, removeReviewer, save
 import { copyLink } from '../clipboard.js'
 import { confirmReviewerRemoval } from '../confirm.js'
 import { folderTree } from '../lib/folders.js'
+import { linkTitle } from '../lib/linkTitle.js'
 import { useProjectsStore } from '../store/projects.js'
 
 const props = defineProps({
@@ -61,26 +62,11 @@ const byId = computed(() => new Map(reviewers.value.map((reviewer) => [reviewer.
 async function load(id = props.id) {
 	const found = await listProjectLinks(id).catch(() => ({ links: [], reviewers: [] }))
 	if (props.id === id) {
-		links.value = found.links.map((link) => ({ ...link, title: titleOf(link) }))
+		links.value = found.links.map((link) => ({ ...link, title: linkTitle(link, project.value?.assets ?? []) }))
 		reviewers.value = found.reviewers
 		canMail.value = found.canMail ?? false
 		person.value = person.value && (byId.value.get(person.value.id) ?? null)
 	}
-}
-
-/**
- * @param {object} link - a Project Link
- * @return {string} its label, else what it shows: the whole Project, its one Asset, or how many (story 145)
- */
-function titleOf(link) {
-	if (link.label) {
-		return link.label
-	}
-	if (link.assetIds === null) {
-		return t('deliver', 'Whole Project')
-	}
-	const only = link.assetIds.length === 1 ? project.value?.assets.find((asset) => asset.id === link.assetIds[0]) : null
-	return only?.name ?? n('deliver', '%n Asset', '%n Assets', link.assetIds.length)
 }
 
 /**

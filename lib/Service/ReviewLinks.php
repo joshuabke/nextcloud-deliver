@@ -230,14 +230,15 @@ class ReviewLinks {
 	}
 
 	/**
-	 * Refuses an address another Reviewer of the same Project already has
-	 * (ADR 0014), whoever changes it.
+	 * Refuses a new address another Reviewer of the same Project already has
+	 * (ADR 0014), whoever changes it; the one they have stays theirs, even
+	 * where two Reviewers share it from before.
 	 *
 	 * @throws ProjectConflictException
 	 */
 	public function assertAddressFree(Reviewer $reviewer, ?string $email): void {
 		$email = trim((string)$email);
-		if ($email === '') {
+		if ($email === '' || mb_strtolower($email) === mb_strtolower((string)$reviewer->getEmail())) {
 			return;
 		}
 		foreach ($this->reviewerMapper->findByAddress($reviewer->getOwnerUid(), $email) as $other) {
@@ -256,8 +257,7 @@ class ReviewLinks {
 	public function flagsFor(ReviewLink $link, ?Reviewer $reviewer): array {
 		$flags = $link->flags();
 		if ($reviewer !== null) {
-			$own = $this->reviewerMapper->rightsByLink([$reviewer->getId()])[$reviewer->getId()][$link->token()] ?? [];
-			foreach ($own as $right => $value) {
+			foreach ($this->reviewerMapper->rightsOn($reviewer->getId(), $link->token()) ?? [] as $right => $value) {
 				if ($value !== null) {
 					$flags[$right] = $value;
 				}
@@ -275,11 +275,11 @@ class ReviewLinks {
 	 * @throws NotFoundException the Reviewer never came by that link
 	 */
 	public function setRights(Reviewer $reviewer, string $token, array $rights): array {
-		if (!isset($this->reviewerMapper->rightsByLink([$reviewer->getId()])[$reviewer->getId()][$token])) {
+		if ($this->reviewerMapper->rightsOn($reviewer->getId(), $token) === null) {
 			throw new NotFoundException('The Reviewer never came by that link');
 		}
 		$this->reviewerMapper->setRightsOn($reviewer->getId(), $token, $rights);
-		return $this->reviewerMapper->rightsByLink([$reviewer->getId()])[$reviewer->getId()][$token];
+		return $this->reviewerMapper->rightsOn($reviewer->getId(), $token) ?? throw new NotFoundException('The Reviewer never came by that link');
 	}
 
 	/** The refusal of an address another Reviewer of the Project has */

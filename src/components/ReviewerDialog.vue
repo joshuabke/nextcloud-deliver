@@ -27,8 +27,8 @@ const emit = defineEmits(['changed', 'close', 'remove'])
 const name = ref(props.reviewer.name)
 const email = ref(props.reviewer.email ?? '')
 const mail = ref({ ...props.reviewer.mail })
-/** The Personal Link whose rights are open: one of reviewer.links, with its link */
-const rightsOf = ref(null)
+/** The Personal Link whose rights are open, {personal, share}: one of reviewer.links and the link it goes through */
+const openRights = ref(null)
 
 const WISHES = [
 	{ id: 'replies', label: t('deliver', 'Replies to their Comments') },
@@ -99,32 +99,32 @@ async function renew() {
 				{{ t('deliver', 'Each one makes whoever opens it {name}. Give them to that person only.', { name: reviewer.name }) }}
 			</p>
 			<ul>
-				<li v-for="each in reviewer.links" :key="each.token" class="deliver-reviewer__link">
-					<span>{{ links.find((share) => share.token === each.token)?.title }}</span>
+				<li v-for="personal in reviewer.links" :key="personal.token" class="deliver-reviewer__link">
+					<span>{{ links.find((share) => share.token === personal.token)?.title }}</span>
 					<!-- Their own rights, on a link they came by (ADR 0014) -->
 					<NcButton
-						v-if="canWrite && each.rights"
+						v-if="canWrite && personal.rights"
 						variant="tertiary"
 						:aria-label="t('deliver', 'Rights of {name} on this link', { name: reviewer.name })"
 						:title="t('deliver', 'Rights of {name} on this link', { name: reviewer.name })"
-						@click="rightsOf = { each, share: links.find((share) => share.token === each.token) }">
+						@click="openRights = { personal, share: links.find((share) => share.token === personal.token) }">
 						<template #icon>
 							<NcIconSvgWrapper :svg="settingsIcon" />
 						</template>
 					</NcButton>
-					<NcButton variant="tertiary" @click="copyLink(each.url, t('deliver', 'Personal Link copied'))">
+					<NcButton variant="tertiary" @click="copyLink(personal.url, t('deliver', 'Personal Link copied'))">
 						{{ t('deliver', 'Copy') }}
 					</NcButton>
 				</li>
 			</ul>
 		</div>
 		<PersonalLinkRightsDialog
-			v-if="rightsOf"
+			v-if="openRights"
 			:reviewer="reviewer"
-			:share="rightsOf.share"
-			:rights="rightsOf.each.rights"
+			:share="openRights.share"
+			:rights="openRights.personal.rights"
 			@changed="emit('changed')"
-			@close="rightsOf = null" />
+			@close="openRights = null" />
 		<template v-if="canWrite" #actions>
 			<NcButton variant="tertiary" :disabled="busy" @click="emit('remove')">
 				{{ t('deliver', 'Remove Reviewer') }}
