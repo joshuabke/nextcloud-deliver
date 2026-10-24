@@ -5,13 +5,13 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import AssetPicker from './AssetPicker.vue'
 import LinkActivityDialog from './LinkActivityDialog.vue'
-import ShareLinkItem from './ShareLinkItem.vue'
+import ReviewLinkItem from './ReviewLinkItem.vue'
 import { errorMessage, linkApi } from '../api.js'
 import { linkTitle } from '../lib/linkTitle.js'
 
 const props = defineProps({
 	/** A Review Link as the Project's navigation lists it */
-	share: { type: Object, required: true },
+	link: { type: Object, required: true },
 	/** The Project's Assets, or those of No Project, to pick from */
 	assets: { type: Array, default: () => [] },
 	/** The Project's Reviewers, for inviting on this link */
@@ -22,7 +22,7 @@ const emit = defineEmits(['update', 'close', 'deleted'])
 
 const item = ref(null)
 /** A link on No Project shows picked Assets only, never all of it */
-const onNoProject = computed(() => props.share.projectId === 0)
+const onNoProject = computed(() => props.link.projectId === 0)
 const pickError = ref(null)
 const showActivity = ref(false)
 
@@ -34,7 +34,7 @@ const showActivity = ref(false)
 async function pick(assetIds) {
 	pickError.value = null
 	try {
-		emit('update', await linkApi(props.share).update({ assetIds }))
+		emit('update', await linkApi(props.link).update({ assetIds }))
 	} catch (e) {
 		pickError.value = errorMessage(e)
 	}
@@ -44,12 +44,12 @@ async function pick(assetIds) {
 
 <template>
 	<NcDialog
-		:name="share.title ?? linkTitle(share, assets)"
+		:name="link.title ?? linkTitle(link, assets)"
 		size="normal"
 		@closing="emit('close')">
-		<ShareLinkItem
+		<ReviewLinkItem
 			ref="item"
-			:share="share"
+			:link="link"
 			:people="people"
 			:assets="assets"
 			inDialog
@@ -58,7 +58,7 @@ async function pick(assetIds) {
 		<section class="deliver-link-dialog__section">
 			<h3>{{ t('deliver', 'What the link shows') }}</h3>
 			<AssetPicker
-				:modelValue="share.assetIds"
+				:modelValue="link.assetIds"
 				:assets="assets"
 				:onNoProject="onNoProject"
 				name="deliver-link-content"
@@ -72,13 +72,13 @@ async function pick(assetIds) {
 				{{ t('deliver', 'Activity') }}
 			</NcButton>
 			<NcButton
-				v-if="share.review && !item?.inviting"
+				v-if="link.review && !item?.inviting"
 				class="deliver-link-dialog__invite"
 				@click="item.startInvite()">
 				{{ t('deliver', 'Invite a Reviewer') }}
 			</NcButton>
 		</template>
-		<LinkActivityDialog v-if="showActivity" :share="share" @close="showActivity = false" />
+		<LinkActivityDialog v-if="showActivity" :link="link" @close="showActivity = false" />
 	</NcDialog>
 </template>
 

@@ -10,13 +10,13 @@ import { linkApi } from '../api.js'
 // Who opened a link, watched and downloaded what, newest first (story 124)
 const props = defineProps({
 	/** A Review Link as the Project's navigation lists it */
-	share: { type: Object, required: true },
+	link: { type: Object, required: true },
 })
 
 const emit = defineEmits(['close'])
 
 const activity = ref(null)
-linkApi(props.share).activity().then((rows) => {
+linkApi(props.link).activity().then((rows) => {
 	activity.value = rows
 }).catch(() => {
 	activity.value = []

@@ -28,7 +28,7 @@ const emit = defineEmits(['changed', 'close', 'remove'])
 const name = ref(props.reviewer.name)
 const email = ref(props.reviewer.email ?? '')
 const mail = ref({ ...props.reviewer.mail })
-/** The Personal Link whose rights are open, {personal, share}: one of reviewer.links and the link it goes through */
+/** The Personal Link whose rights are open, {personal, reviewLink}: one of reviewer.links and the link it goes through */
 const openRights = ref(null)
 
 const WISHES = [
@@ -40,16 +40,16 @@ const { busy, error, run } = useBusy()
 watch(error, (message) => message && showError(message))
 
 /** The Project's links they are not on, to put them on one (story 55) */
-const otherLinks = computed(() => props.links.filter((share) => !props.reviewer.links.some((personal) => personal.token === share.token)))
+const otherLinks = computed(() => props.links.filter((reviewLink) => !props.reviewer.links.some((personal) => personal.token === reviewLink.token)))
 
 /**
  * Puts them on another link with a Personal Link of its own, and copies it
  *
- * @param {{token: string}} share - one of otherLinks
+ * @param {{token: string}} reviewLink - one of otherLinks
  */
-function putOn(share) {
+function putOn(reviewLink) {
 	return run(async () => {
-		const { link } = await putReviewerOn(props.reviewer.id, share.token)
+		const { link } = await putReviewerOn(props.reviewer.id, reviewLink.token)
 		await copyLink(link, t('deliver', 'Personal Link copied'))
 		emit('changed')
 	})
@@ -117,13 +117,13 @@ async function renew() {
 			</p>
 			<ul>
 				<li v-for="personal in reviewer.links" :key="personal.token" class="deliver-reviewer__link">
-					<span>{{ links.find((share) => share.token === personal.token)?.title }}</span>
+					<span>{{ links.find((reviewLink) => reviewLink.token === personal.token)?.title }}</span>
 					<!-- Their own rights on this link (ADR 0014) -->
 					<NcButton
 						variant="tertiary"
 						:aria-label="t('deliver', 'Rights of {name} on this link', { name: reviewer.name })"
 						:title="t('deliver', 'Rights of {name} on this link', { name: reviewer.name })"
-						@click="openRights = { personal, share: links.find((share) => share.token === personal.token) }">
+						@click="openRights = { personal, reviewLink: links.find((reviewLink) => reviewLink.token === personal.token) }">
 						<template #icon>
 							<NcIconSvgWrapper :svg="settingsIcon" />
 						</template>
@@ -148,12 +148,12 @@ async function renew() {
 				:clearable="false"
 				:disabled="busy"
 				:inputLabel="t('deliver', 'Put on another Review Link')"
-				@update:modelValue="(share) => share && putOn(share)" />
+				@update:modelValue="(reviewLink) => reviewLink && putOn(reviewLink)" />
 		</div>
 		<PersonalLinkRightsDialog
 			v-if="openRights"
 			:reviewer="reviewer"
-			:share="openRights.share"
+			:link="openRights.reviewLink"
 			:rights="openRights.personal.rights"
 			@changed="(rights) => openRights.personal.rights = rights"
 			@close="openRights = null" />

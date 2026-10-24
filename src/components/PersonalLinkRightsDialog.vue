@@ -14,7 +14,7 @@ const props = defineProps({
 	/** {id, name} */
 	reviewer: { type: Object, required: true },
 	/** The link as the navigation lists it: title, token and its rights */
-	share: { type: Object, required: true },
+	link: { type: Object, required: true },
 	/** {canComment, allowOlder, watermark}, null where the link decides */
 	rights: { type: Object, required: true },
 })
@@ -36,7 +36,7 @@ const VALUES = { link: null, yes: true, no: false }
  * @return {Array<{value: string, label: string}>} the link's setting, with what it says now, or yes or no
  */
 function choices(right) {
-	const linkSays = props.share[right] ? t('deliver', 'Yes') : t('deliver', 'No')
+	const linkSays = props.link[right] ? t('deliver', 'Yes') : t('deliver', 'No')
 	return [
 		{ value: 'link', label: t('deliver', 'From the Review Link ({value})', { value: linkSays }) },
 		{ value: 'yes', label: t('deliver', 'Yes') },
@@ -58,7 +58,7 @@ function radio(value) {
  */
 function set(right, value) {
 	return run(async () => {
-		own.value = await setReviewerRights(props.reviewer.id, props.share.token, { ...own.value, [right]: value })
+		own.value = await setReviewerRights(props.reviewer.id, props.link.token, { ...own.value, [right]: value })
 		emit('changed', own.value)
 	})
 }
@@ -66,7 +66,7 @@ function set(right, value) {
 
 <template>
 	<NcDialog
-		:name="t('deliver', '{name} on “{link}”', { name: reviewer.name, link: share.title })"
+		:name="t('deliver', '{name} on “{link}”', { name: reviewer.name, link: link.title })"
 		size="normal"
 		@closing="emit('close')">
 		<div class="deliver-personal-rights">

@@ -2,7 +2,7 @@
 import { t } from '@nextcloud/l10n'
 import { ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import ShareLinkItem from './ShareLinkItem.vue'
+import ReviewLinkItem from './ReviewLinkItem.vue'
 import { createReviewLink, listReviewLinks } from '../api.js'
 import { useBusy } from '../composables/busy.js'
 
@@ -66,10 +66,10 @@ function drop(id) {
 		<p v-if="links.length === 0 && !busy" class="deliver-links__hint">
 			{{ t('deliver', 'No link yet.') }}
 		</p>
-		<ShareLinkItem
+		<ReviewLinkItem
 			v-for="link in links"
 			:key="link.id"
-			:share="link"
+			:link="link"
 			:people="reviewers"
 			:assets="assetId === null ? [] : [{ id: assetId, name: assetName }]"
 			@update="replace"

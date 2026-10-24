@@ -98,7 +98,7 @@ watch(reviewerName, (now, before) => {
 	}
 })
 
-/** Reloads what the share shows of this Version, for instance once its Proxy is ready */
+/** Reloads what the link shows of this Version, for instance once its Proxy is ready */
 async function reload() {
 	context.value = await getPublicContext({ versionId: current.value })
 	// A Member's preview of a Version names no Reviewer, even where they review another Version as one

@@ -8,7 +8,7 @@ import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwit
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import ProjectSettingsFields from '../components/ProjectSettingsFields.vue'
-import ShareLinks from '../components/ShareLinks.vue'
+import ReviewLinks from '../components/ReviewLinks.vue'
 import {
 	assignAsset,
 	createProject,
@@ -223,7 +223,7 @@ async function remove() {
 
 		<section v-if="asset || project" class="deliver-tab__section">
 			<h4>{{ t('deliver', 'Review Links') }}</h4>
-			<ShareLinks :projectId="asset ? asset.projectId : project.id" :assetId="asset?.assetId ?? null" :assetName="asset?.assetName ?? null" />
+			<ReviewLinks :projectId="asset ? asset.projectId : project.id" :assetId="asset?.assetId ?? null" :assetName="asset?.assetName ?? null" />
 		</section>
 
 		<NcNoteCard v-if="error" type="error">
