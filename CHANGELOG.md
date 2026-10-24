@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.5 – 2026-10-24
 
 ### Added
 - Suggest the Project's Reviewers and the Member's contacts, with their pictures, when inviting a Reviewer.

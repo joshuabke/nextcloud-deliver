@@ -1,6 +1,6 @@
 # Änderungen
 
-## Unveröffentlicht
+## 0.9.5 – 2026-10-24
 
 ### Neu
 - Beim Einladen von Reviewern die Reviewer des Projekts und Kontakte mit ihren Bildern vorgeschlagen.
