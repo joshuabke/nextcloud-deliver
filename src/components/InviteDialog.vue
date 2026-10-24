@@ -1,7 +1,7 @@
 <script setup>
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
@@ -25,6 +25,8 @@ const props = defineProps({
 	assets: { type: Array, required: true },
 	/** Whether this Nextcloud sends mail */
 	canMail: { type: Boolean, default: false },
+	/** The Project's Reviewers, to suggest and to recognise by address */
+	reviewers: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['invited', 'close'])
 
@@ -36,6 +38,9 @@ const sendMail = ref(false)
 const message = ref('')
 /** The whole Project unless picked; No Project always picks */
 const assetIds = ref(onNoProject ? props.assets.map((asset) => asset.id) : null)
+const withAddress = computed(() => props.reviewers.filter((reviewer) => reviewer.email))
+/** The Reviewer the address belongs to: the new link goes to them, under their name (ADR 0014) */
+const known = computed(() => withAddress.value.find((reviewer) => reviewer.email.toLowerCase() === email.value.trim().toLowerCase()))
 /** As on a new link */
 const rights = reactive({ canComment: true, watermark: false, allowOlder: false, latestOnly: false, canDownload: true })
 
@@ -72,6 +77,7 @@ function invite() {
 				<ContactField
 					v-model="name"
 					:label="t('deliver', 'Name')"
+					:people="withAddress"
 					:disabled="busy"
 					@pick="(contact) => email = contact.email" />
 				<NcTextField
@@ -80,6 +86,9 @@ function invite() {
 					:label="t('deliver', 'Email (optional)')"
 					:disabled="busy" />
 			</div>
+			<p v-if="known" class="deliver-invite__hint">
+				{{ t('deliver', '{name} reviews this Project already; the new link is added to them.', { name: known.name }) }}
+			</p>
 			<template v-if="email.trim() && canMail">
 				<NcCheckboxRadioSwitch v-model="sendMail" :disabled="busy">
 					{{ t('deliver', 'Mail them their Personal Link') }}
@@ -133,6 +142,10 @@ function invite() {
 .deliver-invite h3 {
 	margin: calc(2 * var(--default-grid-baseline)) 0 0;
 	font-size: 16px;
+}
+
+.deliver-invite__hint {
+	color: var(--color-text-maxcontrast);
 }
 
 .deliver-invite__error {

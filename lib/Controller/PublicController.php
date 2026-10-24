@@ -94,7 +94,7 @@ class PublicController extends AuthPublicShareController {
 			$this->initialState->provideInitialState('versionId', $version->getId());
 		}
 		// For the landing page of a link with several Assets (stories 123, 125)
-		$flags = $reviewer === null ? $link->flags() : $reviewer->over($link->flags());
+		$flags = $this->links->flagsFor($link, $reviewer);
 		$this->initialState->provideInitialState('link', [
 			'title' => $link->title(),
 			'description' => $link->description(),

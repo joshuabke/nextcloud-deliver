@@ -247,12 +247,12 @@ class PublicApiController extends PublicShareController {
 			if ($this->member(...array_column(array_column($link->assets(), 'versions'), 0))) {
 				throw new AccessDeniedException('Members review in Deliver itself');
 			}
-			// The same name and address lead back to that Reviewer, but only through their mailbox:
-			// name and address are no secret, and the key carries the Reviewer's own rights on every link of the Member on the Project
-			$returning = $this->links->returning($link, $name, $email);
+			// An address the Project knows leads back to that Reviewer, but only through their mailbox:
+			// an address is no secret, and the key opens every link of the Member on the Project (ADR 0014)
+			$returning = $this->links->returning($link, $email);
 			if ($returning !== null) {
 				if (!$this->mail->welcome($returning, $link->personalLink($returning), $language)) {
-					throw $this->links->nameTaken($name);
+					throw $this->links->addressTaken((string)$email);
 				}
 				return new JSONResponse(['returning' => true, 'mailed' => true, 'email' => $returning->getEmail()], Http::STATUS_ACCEPTED);
 			}
@@ -283,7 +283,7 @@ class PublicApiController extends PublicShareController {
 			if ($name !== null) {
 				$this->links->assertRenameFree($reviewer, $name, reviewersToo: false);
 			}
-			$this->links->assertNoTwin($this->link(), $reviewer, $name ?? (string)$reviewer->getName(), $email);
+			$this->links->assertAddressFree($reviewer, $email);
 			$before = mb_strtolower((string)$reviewer->getEmail());
 			$changed = $email !== null && mb_strtolower(trim($email)) !== $before;
 			if ($changed) {
@@ -434,7 +434,7 @@ class PublicApiController extends PublicShareController {
 	 * @return array<string, mixed>
 	 */
 	private function flags(ReviewLink $link, ?Reviewer $reviewer): array {
-		return $reviewer === null ? $link->flags() : $reviewer->over($link->flags());
+		return $this->links->flagsFor($link, $reviewer);
 	}
 
 	/** The logged-in user can open the file of each of these Versions, and previews them rather than reviewing (story 59) */

@@ -162,17 +162,6 @@ function closeEditing() {
 }
 
 /**
- * From a link's settings to a Reviewer's: one dialog at a time
- *
- * @param {number} id - the Reviewer
- */
-async function openPerson(id) {
-	editing.value = null
-	await load()
-	person.value = byId.value.get(id) ?? null
-}
-
-/**
  * @param {object} reviewer - a Reviewer
  * @return {string} their Personal Link through the first live link
  */
@@ -311,6 +300,7 @@ function personalLink(reviewer) {
 				:projectId="id"
 				:assets="project?.assets ?? []"
 				:canMail="canMail"
+				:reviewers="reviewers"
 				@invited="load()"
 				@close="invitingOpen = false" />
 			<!-- The dialogs render over the page; they only live here -->
@@ -319,7 +309,6 @@ function personalLink(reviewer) {
 				:share="editing"
 				:assets="project?.assets ?? []"
 				@update="replace"
-				@person="openPerson"
 				@deleted="closeEditing"
 				@close="closeEditing" />
 			<ReviewerDialog

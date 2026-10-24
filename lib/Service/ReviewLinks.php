@@ -130,21 +130,32 @@ class ReviewLinks {
 	 * @return list<array<string, mixed>>
 	 */
 	public function reviewersOf(ReviewLink $link): array {
+		$reviewers = array_values(array_filter($this->reviewerMapper->findByOwners([$link->ownerUid()]), $link->takes(...)));
+		$rights = $this->reviewerMapper->rightsByLink(array_map(static fn (Reviewer $reviewer) => $reviewer->getId(), $reviewers));
 		return array_map(
-			fn (Reviewer $reviewer) => $this->reviewers->serialize($reviewer) + ['link' => $link->personalLink($reviewer)],
-			array_values(array_filter($this->reviewerMapper->findByOwners([$link->ownerUid()]), $link->takes(...))),
+			fn (Reviewer $reviewer) => $this->reviewers->serialize($reviewer) + [
+				'link' => $link->personalLink($reviewer),
+				// Their own rights here, null when they never came by this link (ADR 0014)
+				'rights' => $rights[$reviewer->getId()][$link->token()] ?? null,
+			],
+			$reviewers,
 		);
 	}
 
 	/**
-	 * A new Reviewer, invited by a Member, for their Personal Link (story 53).
+	 * A Reviewer invited by a Member, for their Personal Link (story 53): one
+	 * whose address the Project already knows gets this link too, under the
+	 * name they have, so that every address is one Reviewer (ADR 0014).
 	 *
 	 * @throws InvalidRequestException the name is empty or the email is not one
 	 * @throws ProjectConflictException someone in the review has the name
 	 */
 	public function invite(ReviewLink $link, string $name, ?string $email): Reviewer {
-		$this->assertNameFree($link, $name);
-		$reviewer = $this->reviewers->claim($link, $name, $email);
+		$reviewer = $this->returning($link, $email);
+		if ($reviewer === null) {
+			$this->assertNameFree($link, $name);
+			$reviewer = $this->reviewers->claim($link, $name, $email);
+		}
 		$this->reviewers->cameBy($reviewer, $link->token());
 		return $reviewer;
 	}
@@ -201,16 +212,17 @@ class ReviewLinks {
 	}
 
 	/**
-	 * The link's Reviewer who goes by this name and address: naming oneself
-	 * with both mails them their Personal Link, as on Frame.io.
+	 * The link's Reviewer with this address, whatever their case: naming
+	 * oneself with it mails them their Personal Link, as on Frame.io, and an
+	 * invitation gives them the link too (ADR 0014).
 	 */
-	public function returning(ReviewLink $link, string $name, ?string $email): ?Reviewer {
+	public function returning(ReviewLink $link, ?string $email): ?Reviewer {
 		$email = trim((string)$email);
 		if ($email === '') {
 			return null;
 		}
 		foreach ($this->reviewerMapper->findByAddress($link->ownerUid(), $email) as $reviewer) {
-			if ($link->takes($reviewer) && self::normal((string)$reviewer->getName()) === self::normal($name)) {
+			if ($link->takes($reviewer)) {
 				return $reviewer;
 			}
 		}
@@ -218,16 +230,61 @@ class ReviewLinks {
 	}
 
 	/**
-	 * Refuses a Reviewer's new name and address when another Reviewer of the
-	 * link has both: naming oneself with them could only lead to one.
+	 * Refuses an address another Reviewer of the same Project already has
+	 * (ADR 0014), whoever changes it.
 	 *
 	 * @throws ProjectConflictException
 	 */
-	public function assertNoTwin(ReviewLink $link, Reviewer $reviewer, string $name, ?string $email): void {
-		$twin = $this->returning($link, $name, $email);
-		if ($twin !== null && $twin->getId() !== $reviewer->getId()) {
-			throw $this->nameTaken($name);
+	public function assertAddressFree(Reviewer $reviewer, ?string $email): void {
+		$email = trim((string)$email);
+		if ($email === '') {
+			return;
 		}
+		foreach ($this->reviewerMapper->findByAddress($reviewer->getOwnerUid(), $email) as $other) {
+			if ($other->getId() !== $reviewer->getId() && $other->getProjectId() === $reviewer->getProjectId()) {
+				throw $this->addressTaken($email);
+			}
+		}
+	}
+
+	/**
+	 * The link's review flags as they hold for this Reviewer: their own rights
+	 * on this link over the link's (ADR 0014)
+	 *
+	 * @return array<string, mixed>
+	 */
+	public function flagsFor(ReviewLink $link, ?Reviewer $reviewer): array {
+		$flags = $link->flags();
+		if ($reviewer !== null) {
+			$own = $this->reviewerMapper->rightsByLink([$reviewer->getId()])[$reviewer->getId()][$link->token()] ?? [];
+			foreach ($own as $right => $value) {
+				if ($value !== null) {
+					$flags[$right] = $value;
+				}
+			}
+		}
+		return $flags;
+	}
+
+	/**
+	 * A Member sets a Reviewer's own rights on one link they came by; null
+	 * leaves each to the link
+	 *
+	 * @param array{canComment?: ?bool, allowOlder?: ?bool, watermark?: ?bool} $rights
+	 * @return array{canComment: ?bool, allowOlder: ?bool, watermark: ?bool} the rights as they are now
+	 * @throws NotFoundException the Reviewer never came by that link
+	 */
+	public function setRights(Reviewer $reviewer, string $token, array $rights): array {
+		if (!isset($this->reviewerMapper->rightsByLink([$reviewer->getId()])[$reviewer->getId()][$token])) {
+			throw new NotFoundException('The Reviewer never came by that link');
+		}
+		$this->reviewerMapper->setRightsOn($reviewer->getId(), $token, $rights);
+		return $this->reviewerMapper->rightsByLink([$reviewer->getId()])[$reviewer->getId()][$token];
+	}
+
+	/** The refusal of an address another Reviewer of the Project has */
+	public function addressTaken(string $email): ProjectConflictException {
+		return new ProjectConflictException($this->l->t('Someone in this review already has the address %s.', [trim($email)]));
 	}
 
 	/** The refusal of a name someone in the review already goes by */
@@ -256,11 +313,17 @@ class ReviewLinks {
 		$shown = array_merge([], ...array_values($cameBy));
 		$reviewers = array_values(array_filter($reviewers, static fn (Reviewer $reviewer) => in_array($reviewer->getId(), $shown, true)));
 		$this->contacts->checkContacts($reviewers);
+		$rights = $this->reviewerMapper->rightsByLink(array_map(static fn (Reviewer $reviewer) => $reviewer->getId(), $reviewers));
 		return [
 			'reviewers' => array_map(fn (Reviewer $reviewer) => $this->reviewers->serialize($reviewer) + [
 				'inContacts' => $reviewer->getInContacts(),
 				'links' => array_map(
-					static fn (string $token, string $url) => ['token' => $token, 'url' => $url . '?r=' . rawurlencode((string)$reviewer->getSecretKey())],
+					static fn (string $token, string $url) => [
+						'token' => $token,
+						'url' => $url . '?r=' . rawurlencode((string)$reviewer->getSecretKey()),
+						// Their own rights there, null on a link they never came by (ADR 0014)
+						'rights' => $rights[$reviewer->getId()][$token] ?? null,
+					],
 					array_keys($urls),
 					array_values($urls),
 				),

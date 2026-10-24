@@ -5,7 +5,7 @@ import copyIcon from '@mdi/svg/svg/content-copy.svg?raw'
 import deleteIcon from '@mdi/svg/svg/trash-can-outline.svg?raw'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
@@ -14,6 +14,7 @@ import NcTextArea from '@nextcloud/vue/components/NcTextArea'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import ContactField from './ContactField.vue'
 import LinkRights from './LinkRights.vue'
+import PersonalLinkRightsDialog from './PersonalLinkRightsDialog.vue'
 import { linkApi, removeReviewer } from '../api.js'
 import { copyLink } from '../clipboard.js'
 import { useBusy } from '../composables/busy.js'
@@ -26,14 +27,19 @@ const props = defineProps({
 	inDialog: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['update', 'person', 'deleted'])
+const emit = defineEmits(['update', 'deleted'])
 
 const { busy, error, run } = useBusy()
 /** The Member's Reviewers, each with their Personal Link through this link; null while loading */
 const reviewers = ref(null)
+/** The Reviewer whose own rights on this link are open */
+const rightsOf = ref(null)
 const inviting = ref(false)
 const name = ref('')
 const email = ref('')
+const withAddress = computed(() => (reviewers.value ?? []).filter((reviewer) => reviewer.email))
+/** The Reviewer the address belongs to: this link goes to them, under their name (ADR 0014) */
+const known = computed(() => withAddress.value.find((reviewer) => reviewer.email.toLowerCase() === email.value.trim().toLowerCase()))
 /** Whether the invited Reviewer gets their Personal Link by mail, under the Member's own message */
 const sendMail = ref(false)
 const message = ref('')
@@ -249,12 +255,13 @@ function invite() {
 								<NcIconSvgWrapper :svg="removeIcon" />
 							</template>
 						</NcButton>
+						<!-- Their own rights on this link, once they came by it (ADR 0014) -->
 						<NcButton
-							v-if="inDialog"
+							v-if="reviewer.rights"
 							variant="tertiary"
-							:aria-label="t('deliver', 'Settings of {name}', { name: reviewer.name })"
-							:title="t('deliver', 'Settings of {name}', { name: reviewer.name })"
-							@click="emit('person', reviewer.id)">
+							:aria-label="t('deliver', 'Rights of {name} on this link', { name: reviewer.name })"
+							:title="t('deliver', 'Rights of {name} on this link', { name: reviewer.name })"
+							@click="rightsOf = reviewer">
 							<template #icon>
 								<NcIconSvgWrapper :svg="settingsIcon" />
 							</template>
@@ -267,12 +274,19 @@ function invite() {
 
 				<form v-if="inviting" class="deliver-link__invite" @submit.prevent="invite">
 					<div class="deliver-link__invite-row">
-						<ContactField v-model="name" :label="t('deliver', 'Name')" @pick="(contact) => email = contact.email" />
+						<ContactField
+							v-model="name"
+							:label="t('deliver', 'Name')"
+							:people="withAddress"
+							@pick="(contact) => email = contact.email" />
 						<NcTextField v-model="email" type="email" :label="t('deliver', 'Email (optional)')" />
 						<NcButton type="submit" variant="primary" :disabled="busy || !name.trim()">
 							{{ t('deliver', 'Invite') }}
 						</NcButton>
 					</div>
+					<p v-if="known" class="deliver-link__hint">
+						{{ t('deliver', '{name} reviews this Project already; the new link is added to them.', { name: known.name }) }}
+					</p>
 					<template v-if="email.trim() && share.canMail">
 						<NcCheckboxRadioSwitch v-model="sendMail">
 							{{ t('deliver', 'Mail them their Personal Link') }}
@@ -297,6 +311,13 @@ function invite() {
 		<p v-if="error" class="deliver-link__error">
 			{{ error }}
 		</p>
+		<PersonalLinkRightsDialog
+			v-if="rightsOf"
+			:reviewer="rightsOf"
+			:share="{ ...share, title: share.label || share.title || t('deliver', 'Review Link') }"
+			:rights="rightsOf.rights"
+			@changed="(rights) => rightsOf.rights = rights"
+			@close="rightsOf = null" />
 	</div>
 </template>
 

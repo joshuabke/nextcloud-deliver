@@ -15,7 +15,7 @@ const props = defineProps({
 	assets: { type: Array, default: () => [] },
 })
 
-const emit = defineEmits(['update', 'person', 'close', 'deleted'])
+const emit = defineEmits(['update', 'close', 'deleted'])
 
 const item = ref(null)
 /** A link on No Project shows picked Assets only, never all of it */
@@ -49,7 +49,6 @@ async function pick(assetIds) {
 			:share="share"
 			inDialog
 			@update="emit('update', $event)"
-			@person="emit('person', $event)"
 			@deleted="emit('deleted')" />
 		<section class="deliver-link-dialog__section">
 			<h3>{{ t('deliver', 'What the link shows') }}</h3>

@@ -31,7 +31,7 @@ class ReviewerApiController extends OCSController {
 		parent::__construct($appName, $request);
 	}
 
-	/** A Member edits a Reviewer of theirs: name, address, mail wishes, own rights */
+	/** A Member edits a Reviewer of theirs: name, address, mail wishes */
 	#[NoAdminRequired]
 	public function update(
 		int $id,
@@ -40,16 +40,27 @@ class ReviewerApiController extends OCSController {
 		?bool $mailReplies = null,
 		?bool $mailComments = null,
 		?bool $mailVersions = null,
-		?array $rights = null,
 	): Response {
-		return $this->guard(function () use ($id, $name, $email, $mailReplies, $mailComments, $mailVersions, $rights) {
+		return $this->guard(function () use ($id, $name, $email, $mailReplies, $mailComments, $mailVersions) {
 			$reviewer = $this->own($id);
 			$this->links->assertRenameFree($reviewer, $name);
+			$this->links->assertAddressFree($reviewer, $email);
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
-			$reviewer = $this->reviewers->update($reviewer, $name, $email, $wishes, $rights);
+			$reviewer = $this->reviewers->update($reviewer, $name, $email, $wishes);
 			$this->contacts->checkContacts([$reviewer]);
 			return $this->reviewers->serialize($reviewer);
 		});
+	}
+
+	/**
+	 * A Member sets a Reviewer's own rights on one link they came by, over the
+	 * link's (ADR 0014)
+	 *
+	 * @param array{canComment?: ?bool, allowOlder?: ?bool, watermark?: ?bool} $rights null or left out: the link decides
+	 */
+	#[NoAdminRequired]
+	public function rights(int $id, string $token, array $rights = []): Response {
+		return $this->guard(fn () => $this->links->setRights($this->own($id), $token, $rights));
 	}
 
 	/** Saves the Reviewer's name and address to the Member's Contacts, unless the address is there already (#66) */

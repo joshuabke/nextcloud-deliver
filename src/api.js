@@ -32,6 +32,8 @@ export const removeProject = (id) => axios.delete(url(`/projects/${id}`))
 // Who can be @mentioned on a Version: whoever can open its file
 export const listMembers = (versionId) => axios.get(url(`/versions/${versionId}/members`)).then(data)
 export const updateReviewerAsMember = (id, fields) => axios.put(url(`/reviewers/${id}`), fields).then(data)
+// A Reviewer's own rights on one link they came by, null each to leave it to the link (ADR 0014)
+export const setReviewerRights = (id, token, rights) => axios.put(url(`/reviewers/${id}/rights`), { token, rights }).then(data)
 export const renewReviewerKey = (id) => axios.post(url(`/reviewers/${id}/key`)).then(data)
 export const removeReviewer = (id) => axios.delete(url(`/reviewers/${id}`)).then(data)
 // Whether the Reviewer went into the Member's Contacts or was there already (#66)

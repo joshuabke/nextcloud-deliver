@@ -1,12 +1,14 @@
 <script setup>
+import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
 import { ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
-import NcSelect from '@nextcloud/vue/components/NcSelect'
+import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
+import PersonalLinkRightsDialog from './PersonalLinkRightsDialog.vue'
 import { renewReviewerKey, updateReviewerAsMember } from '../api.js'
 import { copyLink } from '../clipboard.js'
 import { useBusy } from '../composables/busy.js'
@@ -25,23 +27,13 @@ const emit = defineEmits(['changed', 'close', 'remove'])
 const name = ref(props.reviewer.name)
 const email = ref(props.reviewer.email ?? '')
 const mail = ref({ ...props.reviewer.mail })
-/** Their own rights; null leaves it to the link they come by */
-const rights = ref({ ...props.reviewer.rights })
+/** The Personal Link whose rights are open: one of reviewer.links, with its link */
+const rightsOf = ref(null)
 
 const WISHES = [
 	{ id: 'replies', label: t('deliver', 'Replies to their Comments') },
 	{ id: 'comments', label: t('deliver', 'Every new Comment') },
 	{ id: 'versions', label: t('deliver', 'New Versions') },
-]
-const RIGHTS = [
-	{ id: 'canComment', label: t('deliver', 'Comment') },
-	{ id: 'allowOlder', label: t('deliver', 'Comment on older Versions') },
-	{ id: 'watermark', label: t('deliver', 'Watermark with their name') },
-]
-const CHOICES = [
-	{ id: null, label: t('deliver', 'As the link says') },
-	{ id: true, label: t('deliver', 'Yes') },
-	{ id: false, label: t('deliver', 'No') },
 ]
 const { busy, error, run } = useBusy()
 watch(error, (message) => message && showError(message))
@@ -55,7 +47,6 @@ function save() {
 			mailReplies: mail.value.replies,
 			mailComments: mail.value.comments,
 			mailVersions: mail.value.versions,
-			rights: rights.value,
 		})
 		showSuccess(t('deliver', 'Saved'))
 		emit('changed')
@@ -98,18 +89,6 @@ async function renew() {
 						{{ wish.label }}
 					</NcCheckboxRadioSwitch>
 				</fieldset>
-				<fieldset class="deliver-reviewer__rights">
-					<legend>{{ t('deliver', 'Rights, over those of the link') }}</legend>
-					<NcSelect
-						v-for="right in RIGHTS"
-						:key="right.id"
-						:modelValue="CHOICES.find((choice) => choice.id === (rights[right.id] ?? null))"
-						:options="CHOICES"
-						:clearable="false"
-						:disabled="busy"
-						:inputLabel="right.label"
-						@update:modelValue="rights[right.id] = $event.id" />
-				</fieldset>
 				<NcButton type="submit" variant="primary" :disabled="busy || !name.trim()">
 					{{ t('deliver', 'Save') }}
 				</NcButton>
@@ -122,12 +101,30 @@ async function renew() {
 			<ul>
 				<li v-for="each in reviewer.links" :key="each.token" class="deliver-reviewer__link">
 					<span>{{ links.find((share) => share.token === each.token)?.title }}</span>
+					<!-- Their own rights, on a link they came by (ADR 0014) -->
+					<NcButton
+						v-if="canWrite && each.rights"
+						variant="tertiary"
+						:aria-label="t('deliver', 'Rights of {name} on this link', { name: reviewer.name })"
+						:title="t('deliver', 'Rights of {name} on this link', { name: reviewer.name })"
+						@click="rightsOf = { each, share: links.find((share) => share.token === each.token) }">
+						<template #icon>
+							<NcIconSvgWrapper :svg="settingsIcon" />
+						</template>
+					</NcButton>
 					<NcButton variant="tertiary" @click="copyLink(each.url, t('deliver', 'Personal Link copied'))">
 						{{ t('deliver', 'Copy') }}
 					</NcButton>
 				</li>
 			</ul>
 		</div>
+		<PersonalLinkRightsDialog
+			v-if="rightsOf"
+			:reviewer="reviewer"
+			:share="rightsOf.share"
+			:rights="rightsOf.each.rights"
+			@changed="emit('changed')"
+			@close="rightsOf = null" />
 		<template v-if="canWrite" #actions>
 			<NcButton variant="tertiary" :disabled="busy" @click="emit('remove')">
 				{{ t('deliver', 'Remove Reviewer') }}
@@ -158,12 +155,6 @@ async function renew() {
 	width: 100%;
 }
 
-.deliver-reviewer__rights {
-	display: flex;
-	flex-direction: column;
-	gap: var(--default-grid-baseline);
-}
-
 .deliver-reviewer h3 {
 	margin: calc(2 * var(--default-grid-baseline)) 0 0;
 	font-size: 16px;
@@ -176,6 +167,10 @@ async function renew() {
 .deliver-reviewer__link {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
+}
+
+/* The link's title takes the room, its buttons sit together at the end */
+.deliver-reviewer__link > span {
+	flex: 1;
 }
 </style>
