@@ -18,7 +18,7 @@ use OCP\AppFramework\OCSController;
 use OCP\Files\NotFoundException;
 use OCP\IRequest;
 
-/** A Member's Reviewers, whichever link they came by */
+/** A Member's Reviewers, on whichever link */
 class ReviewerApiController extends OCSController {
 	use GuardsErrors;
 

@@ -77,7 +77,7 @@ async function load(id = props.id) {
  * @return {string} whether it is paused or shows all or picked Assets
  */
 function iconOf(link) {
-	return !link.review ? pausedIcon : link.assetIds === null ? projectWideIcon : pickedIcon
+	return !link.live ? pausedIcon : link.assetIds === null ? projectWideIcon : pickedIcon
 }
 
 watch(() => props.id, (id) => {
@@ -153,7 +153,7 @@ function closeEditing() {
 /**
  * @param {object} reviewer - a Reviewer
  * @param {object} share - a link they are on
- * @return {object|undefined} their Personal Link through it, with their own rights there; none while it is paused
+ * @return {object|undefined} their place on it: their own rights there and their Personal Link through it, null while it is paused or expired
  */
 function personalLinkOn(reviewer, share) {
 	return reviewer.links.find((each) => each.token === share.token)
@@ -161,11 +161,10 @@ function personalLinkOn(reviewer, share) {
 
 /**
  * @param {object} reviewer - a Reviewer
- * @return {string} their Personal Link through the first live link
+ * @return {string|undefined} their Personal Link through the first of their links that is live
  */
 function personalLink(reviewer) {
-	const share = links.value[0]
-	return reviewer.links.find((each) => each.token === share?.token)?.url ?? reviewer.links[0]?.url
+	return reviewer.links.find((each) => each.url)?.url
 }
 </script>
 
@@ -243,7 +242,7 @@ function personalLink(reviewer) {
 					</template>
 					<template #actions>
 						<NcActionButton
-							v-if="personalLinkOn(reviewer, share)"
+							v-if="personalLinkOn(reviewer, share)?.url"
 							:aria-label="t('deliver', 'Copy Personal Link')"
 							@click="copyLink(personalLinkOn(reviewer, share).url, t('deliver', 'Personal Link copied'))">
 							<template #icon>
@@ -280,7 +279,7 @@ function personalLink(reviewer) {
 						<PersonAvatar :author="{ type: 'reviewer', id: reviewer.id, name: reviewer.name }" :size="24" />
 					</template>
 					<template #actions>
-						<NcActionButton v-if="personalLink(reviewer)" :aria-label="t('deliver', 'Copy Personal Link')" @click="copyLink(personalLink(reviewer), t('deliver', 'Link copied'))">
+						<NcActionButton v-if="personalLink(reviewer)" :aria-label="t('deliver', 'Copy Personal Link')" @click="copyLink(personalLink(reviewer), t('deliver', 'Personal Link copied'))">
 							<template #icon>
 								<NcIconSvgWrapper :svg="copyIcon" />
 							</template>

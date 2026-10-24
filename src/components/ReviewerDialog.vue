@@ -2,14 +2,15 @@
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import PersonalLinkRightsDialog from './PersonalLinkRightsDialog.vue'
-import { renewReviewerKey, updateReviewerAsMember } from '../api.js'
+import { putReviewerOn, renewReviewerKey, updateReviewerAsMember } from '../api.js'
 import { copyLink } from '../clipboard.js'
 import { useBusy } from '../composables/busy.js'
 import { confirmRemoval } from '../confirm.js'
@@ -37,6 +38,22 @@ const WISHES = [
 ]
 const { busy, error, run } = useBusy()
 watch(error, (message) => message && showError(message))
+
+/** The Project's links they are not on, to put them on one (story 55) */
+const otherLinks = computed(() => props.links.filter((share) => !props.reviewer.links.some((personal) => personal.token === share.token)))
+
+/**
+ * Puts them on another link with a Personal Link of its own, and copies it
+ *
+ * @param {{token: string}} share - one of otherLinks
+ */
+function putOn(share) {
+	return run(async () => {
+		const { link } = await putReviewerOn(props.reviewer.id, share.token)
+		await copyLink(link, t('deliver', 'Personal Link copied'))
+		emit('changed')
+	})
+}
 
 /** Name, address and mail wishes, as a Member sets them for the Reviewer */
 function save() {
@@ -111,11 +128,27 @@ async function renew() {
 							<NcIconSvgWrapper :svg="settingsIcon" />
 						</template>
 					</NcButton>
-					<NcButton variant="tertiary" @click="copyLink(personal.url, t('deliver', 'Personal Link copied'))">
+					<!-- None through a paused or expired link -->
+					<NcButton
+						v-if="personal.url"
+						variant="tertiary"
+						@click="copyLink(personal.url, t('deliver', 'Personal Link copied'))">
 						{{ t('deliver', 'Copy') }}
 					</NcButton>
 				</li>
 			</ul>
+			<p v-if="reviewer.links.length === 0" class="deliver-reviewer__hint">
+				{{ t('deliver', '{name} is on no Review Link.', { name: reviewer.name }) }}
+			</p>
+			<NcSelect
+				v-if="canWrite && otherLinks.length"
+				:modelValue="null"
+				:options="otherLinks"
+				label="title"
+				:clearable="false"
+				:disabled="busy"
+				:inputLabel="t('deliver', 'Put on another Review Link')"
+				@update:modelValue="(share) => share && putOn(share)" />
 		</div>
 		<PersonalLinkRightsDialog
 			v-if="openRights"

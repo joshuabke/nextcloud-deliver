@@ -139,7 +139,8 @@ async function claim({ name, email, mail }) {
 		await store.reload()
 	} catch (e) {
 		// The server answers in the browser's language, the page may speak another
-		error.value = e?.response?.status === 409 ? t('deliver', 'Someone in this review is already called "{name}".', { name }) : errorMessage(e)
+		// The server says what is taken, the name or the address
+		error.value = errorMessage(e)
 	}
 }
 </script>

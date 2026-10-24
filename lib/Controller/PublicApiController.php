@@ -82,7 +82,7 @@ class PublicApiController extends PublicShareController {
 			if (!$member) {
 				$this->links->record($link, LinkActivityMapper::VIEWED, $reviewer, $version);
 			}
-			$flags = ($member ? ['canComment' => false] : []) + $this->flags($link, $reviewer);
+			$flags = ($member ? ['canComment' => false] : []) + $this->links->flagsFor($link, $reviewer);
 			return [
 				'versionId' => $version->getId(),
 				'flags' => $flags,
@@ -108,7 +108,7 @@ class PublicApiController extends PublicShareController {
 	public function assets(): Response {
 		return $this->guard(function () {
 			$link = $this->link();
-			$canDownload = $this->flags($link, $this->reviewer())['canDownload'];
+			$canDownload = $this->links->flagsFor($link, $this->reviewer())['canDownload'];
 			$result = [];
 			foreach ($link->assets() as ['asset' => $asset, 'versions' => $versions]) {
 				$newest = $versions[0];
@@ -146,7 +146,7 @@ class PublicApiController extends PublicShareController {
 		try {
 			$link = $this->link();
 			$reviewer = $this->reviewer();
-			if (!$this->flags($link, $reviewer)['canDownload']) {
+			if (!$this->links->flagsFor($link, $reviewer)['canDownload']) {
 				return new Response(Http::STATUS_NOT_FOUND);
 			}
 			$zip = new ZipResponse($this->request, $link->title() !== '' ? $link->title() : 'download');
@@ -193,7 +193,7 @@ class PublicApiController extends PublicShareController {
 				return RangeFileResponse::ofSimpleFile($this->media->file($version, $kind), $this->request->getHeader('Range'));
 			}
 			$file = $link->originalFile($version);
-			$canDownload = $this->flags($link, $this->reviewer())['canDownload'];
+			$canDownload = $this->links->flagsFor($link, $this->reviewer())['canDownload'];
 			if ($file === null || !$this->mayPlayOriginal($version, $canDownload)) {
 				return new Response(Http::STATUS_NOT_FOUND);
 			}
@@ -432,15 +432,6 @@ class PublicApiController extends PublicShareController {
 		return $this->reviewers->byKey(is_string($key) ? $key : null, $this->link());
 	}
 
-	/**
-	 * The link's review flags, with the Reviewer's own rights over them
-	 *
-	 * @return array<string, mixed>
-	 */
-	private function flags(ReviewLink $link, ?Reviewer $reviewer): array {
-		return $this->links->flagsFor($link, $reviewer);
-	}
-
 	/** The logged-in user can open the file of each of these Versions, and previews them rather than reviewing (story 59) */
 	private function member(Version ...$versions): bool {
 		return $this->links->isMember($this->userSession->getUser()?->getUID(), ...$versions);
@@ -452,7 +443,7 @@ class PublicApiController extends PublicShareController {
 			return Viewer::unnamed(false, $link->flags()['allowOlder']);
 		}
 		$reviewer = $this->reviewer();
-		$flags = $this->flags($link, $reviewer);
+		$flags = $this->links->flagsFor($link, $reviewer);
 		return $reviewer === null
 			? Viewer::unnamed($flags['canComment'], $flags['allowOlder'])
 			: Viewer::reviewer($reviewer->getId(), $flags['canComment'], $flags['allowOlder']);

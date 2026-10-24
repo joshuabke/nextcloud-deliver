@@ -223,7 +223,7 @@ async function remove() {
 
 		<section v-if="asset || project" class="deliver-tab__section">
 			<h4>{{ t('deliver', 'Review Links') }}</h4>
-			<ShareLinks :projectId="asset ? asset.projectId : project.id" :assetId="asset?.assetId ?? null" />
+			<ShareLinks :projectId="asset ? asset.projectId : project.id" :assetId="asset?.assetId ?? null" :assetName="asset?.assetName ?? null" />
 		</section>
 
 		<NcNoteCard v-if="error" type="error">

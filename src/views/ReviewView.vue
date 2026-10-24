@@ -360,7 +360,7 @@ function upload(event) {
 		:name="t('deliver', 'Review Links on {name}', { name: context.asset.name })"
 		size="normal"
 		@closing="sharing = false">
-		<ShareLinks :projectId="context.project.id" :assetId="context.asset.id" />
+		<ShareLinks :projectId="context.project.id" :assetId="context.asset.id" :assetName="context.asset.name" />
 	</NcDialog>
 </template>
 

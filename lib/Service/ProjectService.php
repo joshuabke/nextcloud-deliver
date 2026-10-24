@@ -338,6 +338,7 @@ class ProjectService {
 		$project = $this->projectOf($asset);
 		return [
 			'assetId' => $version->getAssetId(),
+			'assetName' => $this->stacks->nameOf($asset),
 			'projectId' => $project?->getId() ?? self::NONE,
 			'projectName' => $project === null ? null : $this->nameOf($project, $this->root->getUserFolder($uid)),
 			'versionId' => $version->getId(),

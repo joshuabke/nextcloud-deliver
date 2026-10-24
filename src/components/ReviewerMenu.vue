@@ -72,7 +72,8 @@ async function save(change) {
 		}
 	} catch (e) {
 		name.value = props.reviewer.name
-		showError(e?.response?.status === 409 ? t('deliver', 'Someone in this review is already called "{name}".', { name: change.name ?? props.reviewer.name }) : errorMessage(e))
+		// The server says what is taken, the name or the address
+		showError(errorMessage(e))
 	}
 }
 

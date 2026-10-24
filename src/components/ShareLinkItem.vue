@@ -15,10 +15,10 @@ import NcTextField from '@nextcloud/vue/components/NcTextField'
 import ContactField from './ContactField.vue'
 import LinkRights from './LinkRights.vue'
 import PersonalLinkRightsDialog from './PersonalLinkRightsDialog.vue'
-import { linkApi, removeReviewer } from '../api.js'
+import { linkApi, takeReviewerOff } from '../api.js'
 import { copyLink } from '../clipboard.js'
 import { useBusy } from '../composables/busy.js'
-import { confirmLinkDeletion, confirmReviewerRemoval } from '../confirm.js'
+import { confirmLinkDeletion, confirmTakeOff } from '../confirm.js'
 import { linkTitle } from '../lib/linkTitle.js'
 import { reviewerWithAddress } from '../lib/people.js'
 
@@ -29,6 +29,8 @@ const props = defineProps({
 	inDialog: { type: Boolean, default: false },
 	/** The Project's Reviewers, to suggest and to recognise by address when inviting; without them, those of this link */
 	people: { type: Array, default: null },
+	/** The Assets it may show, to title a link by its one Asset */
+	assets: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['update', 'deleted'])
@@ -36,6 +38,8 @@ const emit = defineEmits(['update', 'deleted'])
 const { busy, error, run } = useBusy()
 /** The Reviewers on this link, each with their Personal Link through it and their own rights on it; null while loading */
 const reviewers = ref(null)
+/** The link's title as the navigation gives it: its label, else what it shows (story 145) */
+const title = computed(() => props.share.title ?? linkTitle(props.share, props.assets))
 /** The Reviewer whose own rights on this link are open */
 const rightsOf = ref(null)
 const inviting = ref(false)
@@ -102,12 +106,14 @@ async function remove() {
 }
 
 /**
+ * Takes a Reviewer off this link only; they stay the Project's, on their other links
+ *
  * @param {object} reviewer - one of the Reviewers listed
  */
-async function dropReviewer(reviewer) {
-	if (await confirmReviewerRemoval(reviewer.name)) {
+async function takeOff(reviewer) {
+	if (await confirmTakeOff(reviewer.name)) {
 		await run(async () => {
-			await removeReviewer(reviewer.id)
+			await takeReviewerOff(reviewer.id, props.share.token)
 			reviewers.value = reviewers.value.filter((each) => each.id !== reviewer.id)
 		})
 	}
@@ -160,7 +166,7 @@ function invite() {
 <template>
 	<div class="deliver-link">
 		<div class="deliver-link__head">
-			<span class="deliver-link__title" :title="share.url">{{ share.label || share.url }}</span>
+			<span class="deliver-link__title" :title="share.url">{{ title }}</span>
 			<NcButton
 				variant="tertiary"
 				:aria-label="t('deliver', 'Copy link')"
@@ -255,9 +261,9 @@ function invite() {
 						</NcButton>
 						<NcButton
 							variant="tertiary"
-							:aria-label="t('deliver', 'Remove {name}', { name: reviewer.name })"
-							:title="t('deliver', 'Remove {name}', { name: reviewer.name })"
-							@click="dropReviewer(reviewer)">
+							:aria-label="t('deliver', 'Take {name} off this link', { name: reviewer.name })"
+							:title="t('deliver', 'Take {name} off this link', { name: reviewer.name })"
+							@click="takeOff(reviewer)">
 							<template #icon>
 								<NcIconSvgWrapper :svg="removeIcon" />
 							</template>
@@ -323,7 +329,7 @@ function invite() {
 		<PersonalLinkRightsDialog
 			v-if="rightsOf"
 			:reviewer="rightsOf"
-			:share="{ ...share, title: share.title ?? linkTitle(share, []) }"
+			:share="{ ...share, title }"
 			:rights="rightsOf.rights"
 			@changed="(rights) => rightsOf.rights = rights"
 			@close="rightsOf = null" />

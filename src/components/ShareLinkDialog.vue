@@ -51,6 +51,7 @@ async function pick(assetIds) {
 			ref="item"
 			:share="share"
 			:people="people"
+			:assets="assets"
 			inDialog
 			@update="emit('update', $event)"
 			@deleted="emit('deleted')" />

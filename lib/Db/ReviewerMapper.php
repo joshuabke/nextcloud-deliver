@@ -115,7 +115,7 @@ class ReviewerMapper extends Mapper {
 
 	/**
 	 * @param list<int> $reviewerIds
-	 * @return array<string, list<int>> link token → the Reviewers who came by it
+	 * @return array<string, list<int>> link token → the Reviewers on it
 	 */
 	public function reviewersByLink(array $reviewerIds): array {
 		if ($reviewerIds === []) {
@@ -146,7 +146,7 @@ class ReviewerMapper extends Mapper {
 
 	/**
 	 * @param list<string> $tokens
-	 * @return list<string> the names of the Reviewers who came by these links, removed ones and the one excepted left out
+	 * @return list<string> the names of the Reviewers on these links, removed ones and the one excepted left out
 	 */
 	public function namesByLinks(array $tokens, ?int $exceptId): array {
 		if ($tokens === []) {
@@ -171,7 +171,7 @@ class ReviewerMapper extends Mapper {
 
 	/**
 	 * @param list<int> $reviewerIds
-	 * @return array<int, array<string, array{canComment: ?bool, allowOlder: ?bool, watermark: ?bool}>> reviewer id → token → their own rights there, for the links they came by
+	 * @return array<int, array<string, array{canComment: ?bool, allowOlder: ?bool, watermark: ?bool}>> reviewer id → token → their own rights there, for the links they are on
 	 */
 	public function rightsByLink(array $reviewerIds): array {
 		if ($reviewerIds === []) {
@@ -192,18 +192,18 @@ class ReviewerMapper extends Mapper {
 		return $rights;
 	}
 
-	/** Whether the Reviewer is on the link: invited through it or came by it, so that their Personal Link opens it (ADR 0014) */
+	/** Whether the Reviewer is on the link: invited through it, put on it or named there (ADR 0014) */
 	public function isOn(int $reviewerId, string $token): bool {
 		return $this->rightsOn($reviewerId, $token) !== null;
 	}
 
-	/** @return ?array{canComment: ?bool, allowOlder: ?bool, watermark: ?bool} their own rights on the link, null when they never came by it */
+	/** @return ?array{canComment: ?bool, allowOlder: ?bool, watermark: ?bool} their own rights on the link, null when they are not on it */
 	public function rightsOn(int $reviewerId, string $token): ?array {
 		return $this->rightsByLink([$reviewerId])[$reviewerId][$token] ?? null;
 	}
 
 	/**
-	 * The Reviewer's own rights on a link they came by
+	 * The Reviewer's own rights on a link they are on
 	 *
 	 * @param array{canComment?: ?bool, allowOlder?: ?bool, watermark?: ?bool} $rights null or left out: the link decides
 	 */

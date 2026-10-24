@@ -168,7 +168,7 @@ class ReviewLinks {
 
 	/**
 	 * Refuses a Reviewer's new name that someone already has in a review the
-	 * Reviewer came by; the name they have stays theirs. Renaming themselves,
+	 * Reviewer is on; the name they have stays theirs. Renaming themselves,
 	 * a Reviewer only keeps clear of the Members' names, as on naming oneself.
 	 *
 	 * @throws ProjectConflictException
@@ -194,7 +194,7 @@ class ReviewLinks {
 
 	/**
 	 * Refuses a name someone in the review already goes by: a Member of what
-	 * the link shows and, unless left out, a Reviewer who came by any Member's
+	 * the link shows and, unless left out, a Reviewer on any Member's
 	 * link of its Project (of this link alone, for a file in No Project),
 	 * other than the one named (stories 53, 54). Case and surrounding spaces
 	 * do not count.
@@ -273,19 +273,19 @@ class ReviewLinks {
 	}
 
 	/**
-	 * A Member sets a Reviewer's own rights on one link they came by; null
+	 * A Member sets a Reviewer's own rights on one link they are on; null
 	 * leaves each to the link
 	 *
 	 * @param array{canComment?: ?bool, allowOlder?: ?bool, watermark?: ?bool} $rights
 	 * @return array{canComment: ?bool, allowOlder: ?bool, watermark: ?bool} the rights as they are now
-	 * @throws NotFoundException the Reviewer never came by that link
+	 * @throws NotFoundException the Reviewer is not on that link
 	 */
 	public function setRights(Reviewer $reviewer, string $token, array $rights): array {
 		if ($this->reviewerMapper->rightsOn($reviewer->getId(), $token) === null) {
-			throw new NotFoundException('The Reviewer never came by that link');
+			throw new NotFoundException('The Reviewer is not on that link');
 		}
 		$this->reviewerMapper->setRightsOn($reviewer->getId(), $token, $rights);
-		return $this->reviewerMapper->rightsOn($reviewer->getId(), $token) ?? throw new NotFoundException('The Reviewer never came by that link');
+		return $this->reviewerMapper->rightsOn($reviewer->getId(), $token) ?? throw new NotFoundException('The Reviewer is not on that link');
 	}
 
 	/** The refusal of an address another Reviewer of the Project has */
@@ -310,7 +310,7 @@ class ReviewLinks {
 	 * @param ?int $projectId null for No Project
 	 * @param list<string> $tokens every link listed
 	 * @param array<string, string> $urls token → URL of each live link
-	 * @return array{reviewers: list<array<string, mixed>>, cameBy: array<string, list<int>>}
+	 * @return array{reviewers: list<array<string, mixed>>, on: array<string, list<int>>}
 	 */
 	public function reviewersBy(string $uid, ?int $projectId, array $tokens, array $urls): array {
 		// Every Reviewer of the Project, on a link or not, so that one can be put on a link again (story 55)
@@ -320,10 +320,10 @@ class ReviewLinks {
 		$rights = $this->reviewerMapper->rightsByLink($ids);
 		$keys = $this->reviewerMapper->keysByLink($ids);
 		$listed = array_flip($tokens);
-		$cameBy = [];
+		$on = [];
 		foreach ($rights as $reviewerId => $byToken) {
 			foreach (array_keys(array_intersect_key($byToken, $listed)) as $token) {
-				$cameBy[(string)$token][] = $reviewerId;
+				$on[(string)$token][] = $reviewerId;
 			}
 		}
 		$this->contacts->checkContacts($reviewers);
@@ -332,7 +332,7 @@ class ReviewLinks {
 				'inContacts' => $reviewer->getInContacts(),
 				'links' => self::personalLinks($tokens, $rights[$reviewer->getId()] ?? [], $keys[$reviewer->getId()] ?? [], $urls),
 			], $reviewers),
-			'cameBy' => $cameBy,
+			'on' => $on,
 		];
 	}
 
