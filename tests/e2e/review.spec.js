@@ -570,8 +570,11 @@ test.describe('Review view', () => {
 				const now = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`)).json()
 				return now.ocs.data.reviewers.find((each) => each.id === zoeId).links.find((each) => each.token === theirs.token).rights.canComment
 			}).toBe(false)
+			// One dialog at a time: a second Escape while the first one still fades out would be lost
 			await page.keyboard.press('Escape')
+			await expect(rights).toHaveCount(0)
 			await page.keyboard.press('Escape')
+			await expect(person).toHaveCount(0)
 
 			// Under the link, a click opens their rights on that very link
 			await page.locator('.app-navigation').getByText(zoeName).first().click()
