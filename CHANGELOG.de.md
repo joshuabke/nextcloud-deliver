@@ -2,17 +2,27 @@
 
 ## Unveröffentlicht
 
-- Beim Einladen von Reviewern Kontakte aus den Adressbüchern vorgeschlagen.
+### Neu
+- Beim Einladen von Reviewern die Reviewer des Projekts und Kontakte mit ihren Bildern vorgeschlagen.
 - „In Kontakte speichern“ im Menü eines Reviewers hinzugefügt.
 - Deliver-Einstellungen mit dem Adressbuch für gespeicherte Reviewer hinzugefügt.
-- „Review-Link erstellen“ als Plus neben „Links“ verschoben.
 - Plus neben „Reviewer“ hinzugefügt, das eine Person über einen eigenen Review-Link einlädt.
+- „Auf anderen Review-Link setzen“ und „Von diesem Link nehmen“ hinzugefügt.
+- Reviewer in der Navigation mit Initialen gezeigt; unter einem Link öffnet ein Klick ihre Rechte darauf.
+
+### Geändert
+- „Review-Link erstellen“ als Plus neben „Links“ verschoben.
 - Review-Links nach ihrem Inhalt benannt.
 - E-Mail-Adresse auf einen Reviewer pro Projekt beschränkt.
-- Eigene Rechte eines Reviewers auf die einzelnen Links verlegt.
-- Persönliche Links auf die Review-Links ihres Reviewers beschränkt.
-- Reviewer in der Navigation mit Initialen gezeigt; unter einem Link öffnen sie ihre Rechte darauf.
+- Jedem Persönlichen Link einen eigenen Schlüssel gegeben, der nur seinen Review-Link öffnet. Persönliche Links, die 0.9.2 für einen nie geöffneten Link verschickt hat, funktionieren nicht mehr; den Reviewer dort erneut auf den Link setzen.
+- Eigene Rechte eines Reviewers auf die einzelnen Review-Links verlegt.
+- Alle Reviewer des Projekts gelistet, mit oder ohne Link.
+- Name und Adresse eines Reviewers auf mehreren Links nur noch durch das einladende Mitglied änderbar gemacht.
 - Projekt-Links in Review-Links umbenannt.
+
+### Behoben
+- Beim Selbstbenennen gesagt, ob der Name oder die Adresse schon vergeben ist.
+- Abgelaufene Review-Links in der Navigation wie pausierte behandelt.
 
 ## 0.9.2 – 2026-10-22
 

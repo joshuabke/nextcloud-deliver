@@ -2,7 +2,7 @@
 import { t } from '@nextcloud/l10n'
 import { ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import ShareLinkItem from './ShareLinkItem.vue'
+import ReviewLinkItem from './ReviewLinkItem.vue'
 import { createReviewLink, listReviewLinks } from '../api.js'
 import { useBusy } from '../composables/busy.js'
 
@@ -12,9 +12,13 @@ const props = defineProps({
 	projectId: { type: Number, required: true },
 	/** One Asset of it; null for the whole Project */
 	assetId: { type: Number, default: null },
+	/** Its name, for the title of a link that shows it alone */
+	assetName: { type: String, default: null },
 })
 
 const links = ref([])
+/** The Project's Reviewers, for inviting on a link */
+const reviewers = ref([])
 const { busy, error, run } = useBusy()
 
 /**
@@ -26,10 +30,11 @@ const shows = (link) => props.assetId === null || link.assetIds === null || link
 watch(() => [props.projectId, props.assetId], ([projectId, assetId]) => {
 	links.value = []
 	run(async () => {
-		const found = (await listReviewLinks(projectId)).links
+		const found = await listReviewLinks(projectId)
 		// The sidebar may have moved on to another node meanwhile
 		if (props.projectId === projectId && props.assetId === assetId) {
-			links.value = found.filter(shows)
+			links.value = found.links.filter(shows)
+			reviewers.value = found.reviewers
 		}
 	})
 }, { immediate: true })
@@ -61,10 +66,12 @@ function drop(id) {
 		<p v-if="links.length === 0 && !busy" class="deliver-links__hint">
 			{{ t('deliver', 'No link yet.') }}
 		</p>
-		<ShareLinkItem
+		<ReviewLinkItem
 			v-for="link in links"
 			:key="link.id"
-			:share="link"
+			:link="link"
+			:people="reviewers"
+			:assets="assetId === null ? [] : [{ id: assetId, name: assetName }]"
 			@update="replace"
 			@deleted="drop" />
 		<p v-if="error" class="deliver-links__error">

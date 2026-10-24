@@ -2,17 +2,27 @@
 
 ## Unreleased
 
-- Suggest contacts from the Member's address books when inviting a Reviewer.
+### Added
+- Suggest the Project's Reviewers and the Member's contacts, with their pictures, when inviting a Reviewer.
 - Add "Save to Contacts" to a Reviewer's menu.
 - Add Deliver settings with the address book Reviewers are saved to.
-- Move "Create Review Link" to a plus next to "Links".
 - Add a plus next to "Reviewers" that invites one person on a Review Link of their own.
+- Put a Reviewer on another Review Link, or take them off one.
+- Show Reviewers with their initials in the navigation; under a link, open their rights on it.
+
+### Changed
+- Move "Create Review Link" to a plus next to "Links".
 - Title Review Links by what they show.
 - Make each email address one Reviewer per Project.
-- Move a Reviewer's own rights to each link they are on.
-- Open a Personal Link only through the Review Links its Reviewer is on.
-- Show Reviewers with their initials in the navigation; under a link, open their rights on it.
+- Give each Personal Link a key of its own, which opens only its Review Link. Personal Links that 0.9.2 mailed for a link the Reviewer never opened stop working; put them on that link again.
+- Move a Reviewer's own rights to each Review Link they are on.
+- List every Reviewer of the Project, on a link or not.
+- Leave name and address of a Reviewer on several links to the Member who invited them.
 - Rename Project Links to Review Links.
+
+### Fixed
+- Say whether the name or the address is taken when a Reviewer names themselves.
+- Treat expired Review Links as paused in the navigation.
 
 ## 0.9.2 – 2026-10-22
 

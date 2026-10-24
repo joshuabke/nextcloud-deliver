@@ -12,6 +12,19 @@ class ReviewLinkMapper extends Mapper {
 		parent::__construct($db, 'deliver_review_links', ReviewLinkRecord::class);
 	}
 
+	/**
+	 * Deletes a link with all that goes by its token: its activity, and the
+	 * Reviewers' places on it with their keys and rights there. The Reviewers
+	 * stay, as do their Comments (ADR 0014).
+	 */
+	public function forget(ReviewLinkRecord $link): void {
+		foreach (['deliver_link_activity', 'deliver_reviewer_links'] as $table) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->delete($table)->where($qb->expr()->eq('token', $qb->createNamedParameter($link->getToken())))->executeStatement();
+		}
+		$this->delete($link);
+	}
+
 	public function findByToken(string $token): ?ReviewLinkRecord {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')->from($this->getTableName())

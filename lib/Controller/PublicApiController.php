@@ -23,6 +23,7 @@ use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\AnonRateLimit;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\Attribute\PublicPage;
+use OCP\AppFramework\Http\Attribute\UserRateLimit;
 use OCP\AppFramework\Http\FileDisplayResponse;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\Response;
@@ -81,7 +82,7 @@ class PublicApiController extends PublicShareController {
 			if (!$member) {
 				$this->links->record($link, LinkActivityMapper::VIEWED, $reviewer, $version);
 			}
-			$flags = ($member ? ['canComment' => false] : []) + $this->flags($link, $reviewer);
+			$flags = ($member ? ['canComment' => false] : []) + $this->links->flagsFor($link, $reviewer);
 			return [
 				'versionId' => $version->getId(),
 				'flags' => $flags,
@@ -107,7 +108,7 @@ class PublicApiController extends PublicShareController {
 	public function assets(): Response {
 		return $this->guard(function () {
 			$link = $this->link();
-			$canDownload = $this->flags($link, $this->reviewer())['canDownload'];
+			$canDownload = $this->links->flagsFor($link, $this->reviewer())['canDownload'];
 			$result = [];
 			foreach ($link->assets() as ['asset' => $asset, 'versions' => $versions]) {
 				$newest = $versions[0];
@@ -145,7 +146,7 @@ class PublicApiController extends PublicShareController {
 		try {
 			$link = $this->link();
 			$reviewer = $this->reviewer();
-			if (!$this->flags($link, $reviewer)['canDownload']) {
+			if (!$this->links->flagsFor($link, $reviewer)['canDownload']) {
 				return new Response(Http::STATUS_NOT_FOUND);
 			}
 			$zip = new ZipResponse($this->request, $link->title() !== '' ? $link->title() : 'download');
@@ -192,7 +193,7 @@ class PublicApiController extends PublicShareController {
 				return RangeFileResponse::ofSimpleFile($this->media->file($version, $kind), $this->request->getHeader('Range'));
 			}
 			$file = $link->originalFile($version);
-			$canDownload = $this->flags($link, $this->reviewer())['canDownload'];
+			$canDownload = $this->links->flagsFor($link, $this->reviewer())['canDownload'];
 			if ($file === null || !$this->mayPlayOriginal($version, $canDownload)) {
 				return new Response(Http::STATUS_NOT_FOUND);
 			}
@@ -238,6 +239,7 @@ class PublicApiController extends PublicShareController {
 	#[PublicPage]
 	#[NoCSRFRequired]
 	#[AnonRateLimit(limit: 10, period: 3600)]
+	#[UserRateLimit(limit: 10, period: 3600)]
 	public function claim(string $name, ?string $email = null, ?bool $mailReplies = null, ?bool $mailComments = null, ?bool $mailVersions = null, ?string $language = null): Response {
 		return $this->guard(function () use ($name, $email, $mailReplies, $mailComments, $mailVersions, $language) {
 			$link = $this->link();
@@ -249,24 +251,25 @@ class PublicApiController extends PublicShareController {
 			// an address is no secret, and the key is their identity (ADR 0014)
 			$returning = $this->links->returning($link, $email);
 			if ($returning !== null) {
-				if (!$this->mail->welcome($returning, $link->personalLink($returning), $language)) {
+				// The Personal Link through this link goes to their mailbox only; they are on it once it went out
+				$key = $this->reviewers->keyOn($returning, $link->token()) ?? $this->reviewers->newKey();
+				if (!$this->mail->welcome($returning, $link->personalLink($key), $language)) {
 					throw $this->links->addressTaken((string)$email);
 				}
-				// The Personal Link mailed for this link has to open it: they are on it from now on, and only once it went out
-				$this->reviewers->cameBy($returning, $link->token());
+				$this->reviewers->putOn($returning, $link->token(), $key);
 				return new JSONResponse(['returning' => true, 'mailed' => true, 'email' => $returning->getEmail()], Http::STATUS_ACCEPTED);
 			}
 			$this->links->assertNameFree($link, $name, reviewersToo: false);
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
 			$reviewer = $this->reviewers->claim($link, $name, $email, $wishes, $language);
-			$this->reviewers->cameBy($reviewer, $link->token());
-			$mailed = $this->mail->welcome($reviewer, $link->personalLink($reviewer), $language);
+			$key = $this->reviewers->putOn($reviewer, $link->token());
+			$mailed = $this->mail->welcome($reviewer, $link->personalLink($key), $language);
 			// A JSONResponse, because a DataResponse loses its cookies on the way out
 			$response = new JSONResponse(
-				$this->reviewers->serialize($reviewer) + ['link' => $link->personalLink($reviewer), 'mailed' => $mailed],
+				$this->reviewers->serialize($reviewer) + ['key' => $key, 'link' => $link->personalLink($key), 'mailed' => $mailed],
 				Http::STATUS_CREATED,
 			);
-			$this->rememberReviewer($response, $reviewer->getSecretKey());
+			$this->rememberReviewer($response, $key);
 			return $response;
 		});
 	}
@@ -280,19 +283,28 @@ class PublicApiController extends PublicShareController {
 	public function settings(?string $name = null, ?string $email = null, ?bool $mailReplies = null, ?bool $mailComments = null, ?bool $mailVersions = null, ?string $language = null): Response {
 		return $this->guard(function () use ($name, $email, $mailReplies, $mailComments, $mailVersions, $language) {
 			$reviewer = $this->reviewer() ?? throw new AccessDeniedException('Give a name first');
+			$renamed = $name !== null && trim($name) !== $reviewer->getName();
+			$readdressed = $email !== null && mb_strtolower(trim($email)) !== mb_strtolower((string)$reviewer->getEmail());
+			// Mails carry the Personal Links of every link a Reviewer is on: on more than one, only the Member who
+			// invited them changes who they are and where those go (ADR 0014)
+			if (($renamed || $readdressed) && $this->reviewers->linkCount($reviewer) > 1) {
+				throw $this->links->identityLocked();
+			}
 			if ($name !== null) {
 				$this->links->assertRenameFree($reviewer, $name, reviewersToo: false);
 			}
-			$this->links->assertAddressFree($reviewer, $email);
 			$before = mb_strtolower((string)$reviewer->getEmail());
 			$changed = $email !== null && mb_strtolower(trim($email)) !== $before;
 			if ($changed) {
-				// A new address is mailed, so it has a limit of its own, as naming oneself does
+				// A new address is mailed, so it has a limit of its own, as naming oneself does,
+				// counted before the address is checked, so that trying addresses costs as much as mailing them
 				$this->limiter->registerAnonRequest('deliver-reviewer-address', 10, 3600, $this->request->getRemoteAddress());
 			}
+			$this->links->assertAddressFree($reviewer, $email);
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
 			$reviewer = $this->reviewers->updateSettings($reviewer, $email, $wishes, $name, $language);
-			$mailed = $changed && $this->mail->welcome($reviewer, $this->link()->personalLink($reviewer), $language);
+			$key = $this->reviewers->keyOn($reviewer, $this->getToken()) ?? throw new AccessDeniedException('Give a name first');
+			$mailed = $changed && $this->mail->welcome($reviewer, $this->link()->personalLink($key), $language);
 			return $this->reviewers->serialize($reviewer) + ['mailed' => $mailed];
 		});
 	}
@@ -420,21 +432,13 @@ class PublicApiController extends PublicShareController {
 		return $reviewer === null
 			// A logged-in visitor gets their display name offered (story 58)
 			? ['type' => 'unnamed', 'name' => $this->userSession->getUser()?->getDisplayName() ?? '']
-			: ['type' => 'reviewer', 'id' => $reviewer->getId(), 'name' => $reviewer->getName(), 'email' => $reviewer->getEmail(), 'mail' => $reviewer->mailWishes()];
+			// On several links, only the Member who invited them changes name and address (ADR 0014)
+			: ['type' => 'reviewer', 'id' => $reviewer->getId(), 'name' => $reviewer->getName(), 'email' => $reviewer->getEmail(), 'mail' => $reviewer->mailWishes(), 'severalLinks' => $this->reviewers->linkCount($reviewer) > 1];
 	}
 
 	private function reviewer(): ?Reviewer {
 		$key = $this->request->getCookie(self::cookieName($this->getToken())) ?? $this->request->getParam('r');
 		return $this->reviewers->byKey(is_string($key) ? $key : null, $this->link());
-	}
-
-	/**
-	 * The link's review flags, with the Reviewer's own rights over them
-	 *
-	 * @return array<string, mixed>
-	 */
-	private function flags(ReviewLink $link, ?Reviewer $reviewer): array {
-		return $this->links->flagsFor($link, $reviewer);
 	}
 
 	/** The logged-in user can open the file of each of these Versions, and previews them rather than reviewing (story 59) */
@@ -448,7 +452,7 @@ class PublicApiController extends PublicShareController {
 			return Viewer::unnamed(false, $link->flags()['allowOlder']);
 		}
 		$reviewer = $this->reviewer();
-		$flags = $this->flags($link, $reviewer);
+		$flags = $this->links->flagsFor($link, $reviewer);
 		return $reviewer === null
 			? Viewer::unnamed($flags['canComment'], $flags['allowOlder'])
 			: Viewer::reviewer($reviewer->getId(), $flags['canComment'], $flags['allowOlder']);

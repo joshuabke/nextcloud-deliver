@@ -9,7 +9,6 @@ use OCA\Deliver\Db\Asset;
 use OCA\Deliver\Db\AssetMapper;
 use OCA\Deliver\Db\AttachmentMapper;
 use OCA\Deliver\Db\CommentMapper;
-use OCA\Deliver\Db\LinkActivityMapper;
 use OCA\Deliver\Db\MuteMapper;
 use OCA\Deliver\Db\Project;
 use OCA\Deliver\Db\ProjectMapper;
@@ -60,7 +59,6 @@ class StackService {
 		private IDBConnection $db,
 		private AttachmentStore $attachmentFiles,
 		private ReviewLinkMapper $linkRecords,
-		private LinkActivityMapper $activity,
 	) {
 	}
 
@@ -365,8 +363,7 @@ class StackService {
 		$this->removed->deleteByProject($project->getId());
 		// Its Review Links go with it (ADR 0010)
 		foreach ($this->linkRecords->findAllOf($project->getId()) as $link) {
-			$this->activity->deleteByToken($link->getToken());
-			$this->linkRecords->delete($link);
+			$this->linkRecords->forget($link);
 		}
 		$this->projects->delete($project);
 	}

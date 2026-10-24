@@ -160,7 +160,7 @@ class ReviewLinkTest extends TestCase {
 		$this->change($link['id'], ['review' => false]);
 		$paused = $this->nc->ocs('GET', "/projects/{$this->projectId}/links")['data'];
 		self::assertSame(['Kim'], array_column($paused['reviewers'], 'name'), 'pausing the link keeps its Reviewers in reach');
-		self::assertSame([], $paused['reviewers'][0]['links'], 'but no Personal Link goes through a paused one');
+		self::assertSame([[$link['token'], null]], array_map(static fn (array $each) => [$each['token'], $each['url']], $paused['reviewers'][0]['links']), 'but no Personal Link goes through a paused one; their rights on it stay in reach');
 	}
 
 	public function testAReviewerBelongsToTheProjectOfTheirLink(): void {

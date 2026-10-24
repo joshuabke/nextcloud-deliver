@@ -145,9 +145,9 @@ class ReviewLink {
 		return $reviewer->getOwnerUid() === $this->ownerUid() && $reviewer->getProjectId() === $this->projectId();
 	}
 
-	/** The share URL plus the Reviewer's key: whoever opens it is that Reviewer */
-	public function personalLink(Reviewer $reviewer): string {
-		return $this->url() . '?r=' . rawurlencode((string)$reviewer->getSecretKey());
+	/** The link's URL plus the key of a Reviewer's Personal Link through it: whoever opens it is that Reviewer here */
+	public function personalLink(string $key): string {
+		return $this->url() . '?r=' . rawurlencode($key);
 	}
 
 	/**

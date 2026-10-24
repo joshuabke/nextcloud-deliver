@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Listener;
 
-use OCA\Deliver\Db\LinkActivityMapper;
 use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\ReviewerMapper;
 use OCA\Deliver\Db\ReviewLinkMapper;
@@ -30,7 +29,6 @@ class UserDeletedListener implements IEventListener {
 	public function __construct(
 		private ProjectMapper $projects,
 		private ReviewLinkMapper $linkRecords,
-		private LinkActivityMapper $activity,
 		private ReviewerMapper $reviewerMapper,
 		private ReviewerService $reviewers,
 		private StackService $stacks,
@@ -58,8 +56,7 @@ class UserDeletedListener implements IEventListener {
 			}
 		}
 		foreach ($this->linkRecords->findByOwner($uid) as $link) {
-			$this->activity->deleteByToken($link->getToken());
-			$this->linkRecords->delete($link);
+			$this->linkRecords->forget($link);
 		}
 		foreach ($this->reviewerMapper->findByOwners([$uid]) as $reviewer) {
 			$this->reviewers->remove($reviewer);

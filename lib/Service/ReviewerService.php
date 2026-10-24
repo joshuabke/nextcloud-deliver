@@ -40,7 +40,6 @@ class ReviewerService {
 		$reviewer->setProjectId($link->projectId());
 		$reviewer->setName(self::name($name));
 		$reviewer->setEmail($email);
-		$reviewer->setSecretKey($this->random->generate(self::KEY_LENGTH, ISecureRandom::CHAR_ALPHANUMERIC));
 		$reviewer->setCreatedAt($this->time->getTime());
 		$reviewer->setLanguage(in_array($language, self::LANGUAGES, true) ? $language : null);
 		self::wish($reviewer, $mail);
@@ -82,22 +81,54 @@ class ReviewerService {
 		return $this->updateSettings($reviewer, $email, $mail);
 	}
 
-	/** A new key: the old Personal Links stop working, the Reviewer keeps their Comments */
-	public function renewKey(Reviewer $reviewer): Reviewer {
-		$reviewer->setSecretKey($this->random->generate(self::KEY_LENGTH, ISecureRandom::CHAR_ALPHANUMERIC));
-		return $this->reviewers->update($reviewer);
+	/** New keys on every link they are on: the old Personal Links stop working, the Reviewer keeps their Comments */
+	public function renewKeys(Reviewer $reviewer): Reviewer {
+		foreach (array_keys($this->reviewers->keysByLink([$reviewer->getId()])[$reviewer->getId()] ?? []) as $token) {
+			$this->reviewers->setKeyOn($reviewer->getId(), (string)$token, $this->newKey());
+		}
+		return $reviewer;
 	}
 
 	/** No Personal Link names them any more and they leave every list; their Comments keep their name */
 	public function remove(Reviewer $reviewer): void {
-		$reviewer->setSecretKey(null);
+		$reviewer->setRemovedAt($this->time->getTime());
 		$this->reviewers->update($reviewer);
 		$this->reviewers->deleteLinks([$reviewer->getId()]);
 	}
 
-	/** Remembers the Review Link the Reviewer was invited through or came in by */
-	public function cameBy(Reviewer $reviewer, string $token): void {
-		$this->reviewers->recordLink($reviewer->getId(), $token, $this->time->getTime());
+	/**
+	 * Puts the Reviewer on a link, invited through it or named there (ADR 0014)
+	 *
+	 * @param ?string $key the key of their Personal Link through it, a new one if not given
+	 * @return string the key of their Personal Link through it, the one they have if they are on it already
+	 */
+	public function putOn(Reviewer $reviewer, string $token, ?string $key = null): string {
+		return $this->reviewers->putOn($reviewer->getId(), $token, $key ?? $this->newKey(), $this->time->getTime());
+	}
+
+	/** A new key for the Reviewer's Personal Link through this link: the old one stops working */
+	public function setKeyOn(Reviewer $reviewer, string $token, string $key): void {
+		$this->reviewers->setKeyOn($reviewer->getId(), $token, $key);
+	}
+
+	/** How many links the Reviewer is on */
+	public function linkCount(Reviewer $reviewer): int {
+		return count($this->reviewers->keysByLink([$reviewer->getId()])[$reviewer->getId()] ?? []);
+	}
+
+	/** Takes the Reviewer off one link; their Personal Link through it stops working */
+	public function takeOff(Reviewer $reviewer, string $token): void {
+		$this->reviewers->takeOff($reviewer->getId(), $token);
+	}
+
+	/** A key for a Personal Link: whoever has it is that Reviewer on that link */
+	public function newKey(): string {
+		return $this->random->generate(self::KEY_LENGTH, ISecureRandom::CHAR_ALPHANUMERIC);
+	}
+
+	/** The key of the Reviewer's Personal Link through this link, null when they are not on it */
+	public function keyOn(Reviewer $reviewer, string $token): ?string {
+		return $this->reviewers->keyOn($reviewer->getId(), $token);
 	}
 
 	/** @throws InvalidRequestException the name is empty */
@@ -136,13 +167,13 @@ class ReviewerService {
 		return $this->reviewers->find($id) ?? throw new NotFoundException('Reviewer not found');
 	}
 
-	/** The Reviewer with this key, if they are on this link (ADR 0014) */
+	/** The Reviewer whose Personal Link through this link carries this key (ADR 0014) */
 	public function byKey(?string $key, ReviewLink $link): ?Reviewer {
 		if ($key === null || $key === '') {
 			return null;
 		}
-		$reviewer = $this->reviewers->findByKey($key);
-		return $reviewer !== null && $link->takes($reviewer) && $this->reviewers->isOn($reviewer->getId(), $link->token()) ? $reviewer : null;
+		$reviewer = $this->reviewers->findOnLink($link->token(), $key);
+		return $reviewer !== null && $link->takes($reviewer) ? $reviewer : null;
 	}
 
 	public function serialize(Reviewer $reviewer): array {
@@ -150,7 +181,6 @@ class ReviewerService {
 			'id' => $reviewer->getId(),
 			'name' => $reviewer->getName(),
 			'email' => $reviewer->getEmail(),
-			'key' => $reviewer->getSecretKey(),
 			'mail' => $reviewer->mailWishes(),
 		];
 	}

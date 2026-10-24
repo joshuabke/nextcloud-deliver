@@ -57,6 +57,8 @@ return [
 		['name' => 'reviewer_api#destroy', 'url' => '/api/v1/reviewers/{id}', 'verb' => 'DELETE'],
 		['name' => 'reviewer_api#renewKey', 'url' => '/api/v1/reviewers/{id}/key', 'verb' => 'POST'],
 		['name' => 'reviewer_api#rights', 'url' => '/api/v1/reviewers/{id}/rights', 'verb' => 'PUT'],
+		['name' => 'reviewer_api#putOn', 'url' => '/api/v1/reviewers/{id}/links', 'verb' => 'POST'],
+		['name' => 'reviewer_api#takeOff', 'url' => '/api/v1/reviewers/{id}/links/{token}', 'verb' => 'DELETE'],
 		['name' => 'contacts_api#index', 'url' => '/api/v1/contacts', 'verb' => 'GET'],
 		['name' => 'reviewer_api#saveContact', 'url' => '/api/v1/reviewers/{id}/contact', 'verb' => 'POST'],
 		['name' => 'settings_api#show', 'url' => '/api/v1/settings', 'verb' => 'GET'],

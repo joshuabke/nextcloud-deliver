@@ -17,6 +17,7 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import PersonAvatar from './PersonAvatar.vue'
 import { errorMessage, forgetReviewer, updateReviewer } from '../api.js'
 import { confirmRemoval } from '../confirm.js'
+import { conflictMessage } from '../lib/conflict.js'
 import { baseLanguage, chooseLanguage } from '../lib/language.js'
 
 // The Reviewer's own menu, as on Frame.io: their name and address, what to mail, the language, and the end of the session
@@ -72,7 +73,8 @@ async function save(change) {
 		}
 	} catch (e) {
 		name.value = props.reviewer.name
-		showError(e?.response?.status === 409 ? t('deliver', 'Someone in this review is already called "{name}".', { name: change.name ?? props.reviewer.name }) : errorMessage(e))
+		// What is taken, the name or the address, in the page's language
+		showError(conflictMessage(e, { name: change.name ?? props.reviewer.name, email: change.email }) ?? errorMessage(e))
 	}
 }
 
@@ -126,7 +128,19 @@ async function end() {
 			<PersonAvatar v-if="reviewer" :author="{ type: 'reviewer', id: reviewer.id, name: reviewer.name }" :size="32" />
 			<NcIconSvgWrapper v-else :svg="accountIcon" />
 		</template>
-		<template v-if="reviewer">
+		<!-- On several links, only the Member who invited them changes name and address (ADR 0014) -->
+		<template v-if="reviewer?.severalLinks">
+			<NcActionText>
+				<template #icon>
+					<NcIconSvgWrapper :svg="accountIcon" />
+				</template>
+				{{ reviewer.email ? `${reviewer.name} · ${reviewer.email}` : reviewer.name }}
+			</NcActionText>
+			<NcActionText>
+				{{ t('deliver', 'You review on several links: ask whoever invited you to change your name or address.') }}
+			</NcActionText>
+		</template>
+		<template v-if="reviewer && !reviewer.severalLinks">
 			<NcActionInput
 				v-model="name"
 				:label="t('deliver', 'Name')"
@@ -145,6 +159,8 @@ async function end() {
 					<NcIconSvgWrapper :svg="mailIcon" />
 				</template>
 			</NcActionInput>
+		</template>
+		<template v-if="reviewer">
 			<NcActionText v-if="!reviewer.email">
 				{{ t('deliver', 'With an email address, Deliver can mail you about') }}
 			</NcActionText>

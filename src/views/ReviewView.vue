@@ -25,7 +25,7 @@ import DueDateDialog from '../components/DueDateDialog.vue'
 import ExportMenu from '../components/ExportMenu.vue'
 import ImageViewer from '../components/ImageViewer.vue'
 import ReviewLayout from '../components/ReviewLayout.vue'
-import ShareLinks from '../components/ShareLinks.vue'
+import ReviewLinks from '../components/ReviewLinks.vue'
 import VersionPicker from '../components/VersionPicker.vue'
 import VideoPlayer from '../components/VideoPlayer.vue'
 import { errorMessage, getVersion, giveWaveform, listMembers, updateAsset } from '../api.js'
@@ -360,7 +360,7 @@ function upload(event) {
 		:name="t('deliver', 'Review Links on {name}', { name: context.asset.name })"
 		size="normal"
 		@closing="sharing = false">
-		<ShareLinks :projectId="context.project.id" :assetId="context.asset.id" />
+		<ReviewLinks :projectId="context.project.id" :assetId="context.asset.id" :assetName="context.asset.name" />
 	</NcDialog>
 </template>
 

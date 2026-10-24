@@ -15,20 +15,22 @@ import NcTextField from '@nextcloud/vue/components/NcTextField'
 import ContactField from './ContactField.vue'
 import LinkRights from './LinkRights.vue'
 import PersonalLinkRightsDialog from './PersonalLinkRightsDialog.vue'
-import { linkApi, removeReviewer } from '../api.js'
+import { linkApi, takeReviewerOff } from '../api.js'
 import { copyLink } from '../clipboard.js'
 import { useBusy } from '../composables/busy.js'
-import { confirmLinkDeletion, confirmReviewerRemoval } from '../confirm.js'
+import { confirmLinkDeletion, confirmTakeOff } from '../confirm.js'
 import { linkTitle } from '../lib/linkTitle.js'
 import { reviewerWithAddress } from '../lib/people.js'
 
 const props = defineProps({
 	/** One Review Link of the Member's, as the server lists it */
-	share: { type: Object, required: true },
+	link: { type: Object, required: true },
 	/** In the Project's link dialog: each Reviewer's settings are offered, and the dialog's own button invites */
 	inDialog: { type: Boolean, default: false },
-	/** The Project's Reviewers, to suggest and to recognise by address when inviting; without them, those of this link */
-	people: { type: Array, default: null },
+	/** The Project's Reviewers, to suggest and to recognise by address when inviting */
+	people: { type: Array, required: true },
+	/** The Assets it may show, to title a link by its one Asset */
+	assets: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['update', 'deleted'])
@@ -36,12 +38,14 @@ const emit = defineEmits(['update', 'deleted'])
 const { busy, error, run } = useBusy()
 /** The Reviewers on this link, each with their Personal Link through it and their own rights on it; null while loading */
 const reviewers = ref(null)
+/** The link's title as the navigation gives it: its label, else what it shows (story 145) */
+const title = computed(() => props.link.title ?? linkTitle(props.link, props.assets))
 /** The Reviewer whose own rights on this link are open */
 const rightsOf = ref(null)
 const inviting = ref(false)
 const name = ref('')
 const email = ref('')
-const withAddress = computed(() => (props.people ?? reviewers.value ?? []).filter((reviewer) => reviewer.email))
+const withAddress = computed(() => props.people.filter((reviewer) => reviewer.email))
 /** The Reviewer the address belongs to: this link goes to them, under their name (ADR 0014) */
 const known = computed(() => reviewerWithAddress(withAddress.value, email.value))
 /** Whether that Reviewer is on this link already, so that inviting changes nothing */
@@ -60,7 +64,7 @@ const password = ref('')
 function togglePassword(on) {
 	settingPassword.value = on
 	password.value = ''
-	if (!on && props.share.hasPassword) {
+	if (!on && props.link.hasPassword) {
 		setFlags({ password: '' })
 	}
 }
@@ -79,7 +83,7 @@ async function savePassword() {
  */
 function toggleExpiry(on) {
 	settingExpiry.value = on
-	if (!on && props.share.expireDate) {
+	if (!on && props.link.expireDate) {
 		setFlags({ expireDate: '' })
 	}
 }
@@ -88,44 +92,46 @@ function toggleExpiry(on) {
  * @param {object} flags - what to change: review, canComment, allowOlder, watermark; password and expireDate, empty to remove
  */
 function setFlags(flags) {
-	return run(async () => emit('update', await linkApi(props.share).update(flags)))
+	return run(async () => emit('update', await linkApi(props.link).update(flags)))
 }
 
 /** Deletes the link: it stops working for everyone, Personal Links through it too */
 async function remove() {
 	if (await confirmLinkDeletion()) {
 		await run(async () => {
-			await linkApi(props.share).remove()
-			emit('deleted', props.share.id)
+			await linkApi(props.link).remove()
+			emit('deleted', props.link.id)
 		})
 	}
 }
 
 /**
+ * Takes a Reviewer off this link only; they stay the Project's, on their other links
+ *
  * @param {object} reviewer - one of the Reviewers listed
  */
-async function dropReviewer(reviewer) {
-	if (await confirmReviewerRemoval(reviewer.name)) {
+async function takeOff(reviewer) {
+	if (await confirmTakeOff(reviewer.name)) {
 		await run(async () => {
-			await removeReviewer(reviewer.id)
+			await takeReviewerOff(reviewer.id, props.link.token)
 			reviewers.value = reviewers.value.filter((each) => each.id !== reviewer.id)
 		})
 	}
 }
 
 // The Reviewers on this link show with their Personal Link through it (ADR 0014)
-watch(() => [props.share.token, props.share.review], ([, review]) => {
+watch(() => [props.link.token, props.link.review], ([, review]) => {
 	reviewers.value = null
 	if (review) {
 		run(async () => {
-			reviewers.value = await linkApi(props.share).reviewers()
+			reviewers.value = await linkApi(props.link).reviewers()
 		})
 	}
 }, { immediate: true })
 
 /** What Reviewers read above the Assets (story 123) */
-const description = ref(props.share.description ?? '')
-watch(() => props.share.description, (value) => {
+const description = ref(props.link.description ?? '')
+watch(() => props.link.description, (value) => {
 	description.value = value ?? ''
 })
 
@@ -140,9 +146,9 @@ defineExpose({ startInvite, inviting })
 function invite() {
 	return run(async () => {
 		const letter = sendMail.value && email.value.trim() ? { message: message.value } : null
-		const reviewer = await linkApi(props.share).invite(name.value, email.value || null, letter)
+		const reviewer = await linkApi(props.link).invite(name.value, email.value || null, letter)
 		// As the server lists them, with their rights here, and once even when they were on the link already
-		reviewers.value = await linkApi(props.share).reviewers()
+		reviewers.value = await linkApi(props.link).reviewers()
 		if (letter && reviewer.mailed) {
 			showSuccess(t('deliver', 'Personal Link mailed to {email}', { email: reviewer.email }))
 		} else if (letter) {
@@ -160,12 +166,12 @@ function invite() {
 <template>
 	<div class="deliver-link">
 		<div class="deliver-link__head">
-			<span class="deliver-link__title" :title="share.url">{{ share.label || share.url }}</span>
+			<span class="deliver-link__title" :title="link.url">{{ title }}</span>
 			<NcButton
 				variant="tertiary"
 				:aria-label="t('deliver', 'Copy link')"
 				:title="t('deliver', 'Copy link')"
-				@click="copyLink(share.url, t('deliver', 'Link copied'))">
+				@click="copyLink(link.url, t('deliver', 'Link copied'))">
 				<template #icon>
 					<NcIconSvgWrapper :svg="copyIcon" />
 				</template>
@@ -184,63 +190,63 @@ function invite() {
 		<!-- A link pauses and goes live again with its Reviewers (story 122) -->
 		<NcCheckboxRadioSwitch
 			type="switch"
-			:modelValue="share.review"
+			:modelValue="link.review"
 			:disabled="busy"
 			@update:modelValue="setFlags({ review: $event })">
 			{{ t('deliver', 'Link is live') }}
 		</NcCheckboxRadioSwitch>
-		<p v-if="!share.review" class="deliver-link__hint">
+		<p v-if="!link.review" class="deliver-link__hint">
 			{{ t('deliver', 'Paused: the link shows nothing until you switch it on again.') }}
 		</p>
 
 		<div class="deliver-link__flags">
 			<NcCheckboxRadioSwitch
-				:modelValue="share.hasPassword || settingPassword"
+				:modelValue="link.hasPassword || settingPassword"
 				:disabled="busy"
 				@update:modelValue="togglePassword">
 				{{ t('deliver', 'Password') }}
 			</NcCheckboxRadioSwitch>
-			<form v-if="share.hasPassword || settingPassword" class="deliver-link__field" @submit.prevent="savePassword">
+			<form v-if="link.hasPassword || settingPassword" class="deliver-link__field" @submit.prevent="savePassword">
 				<NcPasswordField
 					v-model="password"
-					:label="share.hasPassword ? t('deliver', 'New password') : t('deliver', 'Password')"
+					:label="link.hasPassword ? t('deliver', 'New password') : t('deliver', 'Password')"
 					autocomplete="new-password" />
 				<NcButton type="submit" :disabled="busy || !password">
 					{{ t('deliver', 'Save') }}
 				</NcButton>
 			</form>
 			<NcCheckboxRadioSwitch
-				:modelValue="Boolean(share.expireDate) || settingExpiry"
+				:modelValue="Boolean(link.expireDate) || settingExpiry"
 				:disabled="busy"
 				@update:modelValue="toggleExpiry">
 				{{ t('deliver', 'Expiry date') }}
 			</NcCheckboxRadioSwitch>
 			<input
-				v-if="share.expireDate || settingExpiry"
+				v-if="link.expireDate || settingExpiry"
 				class="deliver-link__date"
 				type="date"
-				:value="share.expireDate ?? ''"
+				:value="link.expireDate ?? ''"
 				:disabled="busy"
 				:aria-label="t('deliver', 'Expiry date')"
 				@change="$event.target.value && setFlags({ expireDate: $event.target.value })">
 		</div>
 
-		<template v-if="share.review">
-			<p v-if="!share.hasPassword" class="deliver-link__hint">
+		<template v-if="link.review">
+			<p v-if="!link.hasPassword" class="deliver-link__hint">
 				{{ t('deliver', 'This link has no password. Anyone it reaches can review.') }}
 			</p>
-			<p v-if="share.canMail === false" class="deliver-link__hint">
+			<p v-if="link.canMail === false" class="deliver-link__hint">
 				{{ t('deliver', 'This Nextcloud sends no email, so Reviewers are not mailed when someone replies to them.') }}
 			</p>
 			<div class="deliver-link__flags">
-				<LinkRights :flags="share" :disabled="busy" @change="setFlags" />
+				<LinkRights :flags="link" :disabled="busy" @change="setFlags" />
 				<NcTextArea
 					v-model="description"
 					class="deliver-link__description"
 					:label="t('deliver', 'Description for Reviewers')"
 					:disabled="busy"
 					resize="vertical"
-					@blur="description !== (share.description ?? '') && setFlags({ description })" />
+					@blur="description !== (link.description ?? '') && setFlags({ description })" />
 			</div>
 
 			<div class="deliver-link__reviewers">
@@ -250,14 +256,14 @@ function invite() {
 				<ul v-else-if="reviewers">
 					<li v-for="reviewer in reviewers" :key="reviewer.id" class="deliver-link__reviewer">
 						<span class="deliver-link__name">{{ reviewer.name }}</span>
-						<NcButton variant="tertiary" @click="copyLink(reviewer.link, t('deliver', 'Personal Link copied'))">
+						<NcButton v-if="link.live" variant="tertiary" @click="copyLink(reviewer.link, t('deliver', 'Personal Link copied'))">
 							{{ t('deliver', 'Copy Personal Link') }}
 						</NcButton>
 						<NcButton
 							variant="tertiary"
-							:aria-label="t('deliver', 'Remove {name}', { name: reviewer.name })"
-							:title="t('deliver', 'Remove {name}', { name: reviewer.name })"
-							@click="dropReviewer(reviewer)">
+							:aria-label="t('deliver', 'Take {name} off this link', { name: reviewer.name })"
+							:title="t('deliver', 'Take {name} off this link', { name: reviewer.name })"
+							@click="takeOff(reviewer)">
 							<template #icon>
 								<NcIconSvgWrapper :svg="removeIcon" />
 							</template>
@@ -296,7 +302,7 @@ function invite() {
 					<p v-else-if="known" class="deliver-link__hint">
 						{{ t('deliver', '{name} reviews this Project already and gets this link too.', { name: known.name }) }}
 					</p>
-					<template v-if="email.trim() && share.canMail">
+					<template v-if="email.trim() && link.canMail">
 						<NcCheckboxRadioSwitch v-model="sendMail">
 							{{ t('deliver', 'Mail them their Personal Link') }}
 						</NcCheckboxRadioSwitch>
@@ -323,7 +329,7 @@ function invite() {
 		<PersonalLinkRightsDialog
 			v-if="rightsOf"
 			:reviewer="rightsOf"
-			:share="{ ...share, title: share.title ?? linkTitle(share, []) }"
+			:link="{ ...link, title }"
 			:rights="rightsOf.rights"
 			@changed="(rights) => rightsOf.rights = rights"
 			@close="rightsOf = null" />

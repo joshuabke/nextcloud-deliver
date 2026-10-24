@@ -27,6 +27,7 @@ import VideoPlayer from '../components/VideoPlayer.vue'
 import { claimReviewer, errorMessage, getPublicContext, listPublicAssets } from '../api.js'
 import { usePanelOpen } from '../composables/panel.js'
 import { useReview } from '../composables/review.js'
+import { conflictMessage } from '../lib/conflict.js'
 import { addressOf } from '../lib/language.js'
 import { useCommentsStore } from '../store/comments.js'
 
@@ -98,7 +99,7 @@ watch(reviewerName, (now, before) => {
 	}
 })
 
-/** Reloads what the share shows of this Version, for instance once its Proxy is ready */
+/** Reloads what the link shows of this Version, for instance once its Proxy is ready */
 async function reload() {
 	context.value = await getPublicContext({ versionId: current.value })
 	// A Member's preview of a Version names no Reviewer, even where they review another Version as one
@@ -138,8 +139,8 @@ async function claim({ name, email, mail }) {
 		reviewer.value = claimed
 		await store.reload()
 	} catch (e) {
-		// The server answers in the browser's language, the page may speak another
-		error.value = e?.response?.status === 409 ? t('deliver', 'Someone in this review is already called "{name}".', { name }) : errorMessage(e)
+		// What is taken, the name or the address, in the page's language
+		error.value = conflictMessage(e, { name, email }) ?? errorMessage(e)
 	}
 }
 </script>

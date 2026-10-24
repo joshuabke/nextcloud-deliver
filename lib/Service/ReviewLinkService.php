@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace OCA\Deliver\Service;
 
 use OCA\Deliver\Db\AssetMapper;
-use OCA\Deliver\Db\LinkActivityMapper;
 use OCA\Deliver\Db\ReviewLinkMapper;
 use OCA\Deliver\Db\ReviewLinkRecord;
 use OCP\AppFramework\Utility\ITimeFactory;
@@ -23,7 +22,6 @@ class ReviewLinkService {
 
 	public function __construct(
 		private ReviewLinkMapper $linkRecords,
-		private LinkActivityMapper $activity,
 		private ProjectService $projects,
 		private AssetMapper $assets,
 		private ReviewLinks $reviewLinks,
@@ -106,8 +104,7 @@ class ReviewLinkService {
 	/** Deletes the link; its Reviewers stay the Member's, their Comments stay */
 	public function delete(string $uid, int $id): void {
 		$link = $this->own($uid, $id);
-		$this->activity->deleteByToken($link->getToken());
-		$this->linkRecords->delete($link);
+		$this->linkRecords->forget($link);
 	}
 
 	/** @return list<array<string, mixed>> the Member's links on a Project, or on No Project for 0, for its navigation */
@@ -137,6 +134,8 @@ class ReviewLinkService {
 			'description' => $link->getDescription(),
 			'hasPassword' => $link->getPasswordHash() !== null,
 			'expireDate' => $link->getExpireDate(),
+			// Opens for Reviewers: not paused and not expired
+			'live' => $reviewLink->isLive(),
 			'assetIds' => $link->pickedAssets(),
 			// Whether Reviewers can be mailed about Replies at all (story 66)
 			'canMail' => ReviewerMail::configured($this->config),

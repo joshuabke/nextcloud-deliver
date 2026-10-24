@@ -17,11 +17,14 @@ class ReviewerMapper extends Mapper {
 		parent::__construct($db, 'deliver_reviewers', Reviewer::class);
 	}
 
-	/** The key of a Personal Link identifies its Reviewer */
-	public function findByKey(string $secretKey): ?Reviewer {
+	/** The Reviewer whose Personal Link through this link carries this key; removed ones never */
+	public function findOnLink(string $token, string $key): ?Reviewer {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('*')->from($this->getTableName())
-			->where($qb->expr()->eq('secret_key', $qb->createNamedParameter($secretKey)));
+		$qb->select('r.*')->from($this->getTableName(), 'r')
+			->innerJoin('r', 'deliver_reviewer_links', 'l', $qb->expr()->eq('l.reviewer_id', 'r.id'))
+			->where($qb->expr()->eq('l.token', $qb->createNamedParameter($token)))
+			->andWhere($qb->expr()->eq('l.secret_key', $qb->createNamedParameter($key)))
+			->andWhere($qb->expr()->isNull('r.removed_at'));
 		return $this->findEntities($qb)[0] ?? null;
 	}
 
@@ -36,17 +39,23 @@ class ReviewerMapper extends Mapper {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')->from($this->getTableName())
 			->where($qb->expr()->in('owner_uid', $qb->createNamedParameter($uids, IQueryBuilder::PARAM_STR_ARRAY)))
-			->andWhere($qb->expr()->isNotNull('secret_key'))
+			->andWhere($qb->expr()->isNull('removed_at'))
 			->orderBy('created_at')->addOrderBy('id');
 		return $this->findEntities($qb);
 	}
 
-	/** Remembers that the Reviewer was invited through or came in by this link, by its token; once is enough */
-	public function recordLink(int $reviewerId, string $token, int $at): void {
+	/**
+	 * Puts the Reviewer on this link with the key of their Personal Link
+	 * through it; once is enough
+	 *
+	 * @return string the key of their Personal Link through it, the one they have if they are on it already
+	 */
+	public function putOn(int $reviewerId, string $token, string $key, int $at): string {
 		$qb = $this->db->getQueryBuilder();
 		$qb->insert('deliver_reviewer_links')->values([
 			'reviewer_id' => $qb->createNamedParameter($reviewerId),
 			'token' => $qb->createNamedParameter($token),
+			'secret_key' => $qb->createNamedParameter($key),
 			'created_at' => $qb->createNamedParameter($at),
 		]);
 		try {
@@ -55,12 +64,58 @@ class ReviewerMapper extends Mapper {
 			if ($e->getReason() !== DbException::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
 				throw $e;
 			}
+			return $this->keyOn($reviewerId, $token) ?? throw $e;
 		}
+		return $key;
+	}
+
+	/** The key of the Reviewer's Personal Link through this link, null when they are not on it */
+	public function keyOn(int $reviewerId, string $token): ?string {
+		return $this->keysByLink([$reviewerId])[$reviewerId][$token] ?? null;
 	}
 
 	/**
 	 * @param list<int> $reviewerIds
-	 * @return array<string, list<int>> link token → the Reviewers who came by it
+	 * @return array<int, array<string, string>> reviewer id → token → the key of their Personal Link through it
+	 */
+	public function keysByLink(array $reviewerIds): array {
+		if ($reviewerIds === []) {
+			return [];
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('reviewer_id', 'token', 'secret_key')->from('deliver_reviewer_links')
+			->where($qb->expr()->in('reviewer_id', $qb->createNamedParameter($reviewerIds, IQueryBuilder::PARAM_INT_ARRAY)));
+		$result = $qb->executeQuery();
+		$keys = [];
+		foreach ($result->fetchAll() as $row) {
+			$keys[(int)$row['reviewer_id']][(string)$row['token']] = (string)$row['secret_key'];
+		}
+		$result->closeCursor();
+		return $keys;
+	}
+
+	/** A new key for the Reviewer's Personal Link through this link */
+	public function setKeyOn(int $reviewerId, string $token, string $key): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update('deliver_reviewer_links')
+			->set('secret_key', $qb->createNamedParameter($key))
+			->where($qb->expr()->eq('reviewer_id', $qb->createNamedParameter($reviewerId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('token', $qb->createNamedParameter($token)))
+			->executeStatement();
+	}
+
+	/** Takes the Reviewer off one link; their Personal Link through it stops working */
+	public function takeOff(int $reviewerId, string $token): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete('deliver_reviewer_links')
+			->where($qb->expr()->eq('reviewer_id', $qb->createNamedParameter($reviewerId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('token', $qb->createNamedParameter($token)))
+			->executeStatement();
+	}
+
+	/**
+	 * @param list<int> $reviewerIds
+	 * @return array<string, list<int>> link token → the Reviewers on it
 	 */
 	public function reviewersByLink(array $reviewerIds): array {
 		if ($reviewerIds === []) {
@@ -84,14 +139,14 @@ class ReviewerMapper extends Mapper {
 		$qb->select('*')->from($this->getTableName())
 			->where($qb->expr()->eq('owner_uid', $qb->createNamedParameter($ownerUid)))
 			->andWhere($qb->expr()->eq($qb->func()->lower('email'), $qb->createNamedParameter(mb_strtolower($email))))
-			->andWhere($qb->expr()->isNotNull('secret_key'))
+			->andWhere($qb->expr()->isNull('removed_at'))
 			->orderBy('created_at')->addOrderBy('id');
 		return $this->findEntities($qb);
 	}
 
 	/**
 	 * @param list<string> $tokens
-	 * @return list<string> the names of the Reviewers who came by these links, removed ones and the one excepted left out
+	 * @return list<string> the names of the Reviewers on these links, removed ones and the one excepted left out
 	 */
 	public function namesByLinks(array $tokens, ?int $exceptId): array {
 		if ($tokens === []) {
@@ -101,7 +156,7 @@ class ReviewerMapper extends Mapper {
 		$qb->selectDistinct('r.name')->from($this->getTableName(), 'r')
 			->innerJoin('r', 'deliver_reviewer_links', 'l', $qb->expr()->eq('l.reviewer_id', 'r.id'))
 			->where($qb->expr()->in('l.token', $qb->createNamedParameter($tokens, IQueryBuilder::PARAM_STR_ARRAY)))
-			->andWhere($qb->expr()->isNotNull('r.secret_key'));
+			->andWhere($qb->expr()->isNull('r.removed_at'));
 		if ($exceptId !== null) {
 			$qb->andWhere($qb->expr()->neq('r.id', $qb->createNamedParameter($exceptId, IQueryBuilder::PARAM_INT)));
 		}
@@ -116,7 +171,7 @@ class ReviewerMapper extends Mapper {
 
 	/**
 	 * @param list<int> $reviewerIds
-	 * @return array<int, array<string, array{canComment: ?bool, allowOlder: ?bool, watermark: ?bool}>> reviewer id → token → their own rights there, for the links they came by
+	 * @return array<int, array<string, array{canComment: ?bool, allowOlder: ?bool, watermark: ?bool}>> reviewer id → token → their own rights there, for the links they are on
 	 */
 	public function rightsByLink(array $reviewerIds): array {
 		if ($reviewerIds === []) {
@@ -137,18 +192,13 @@ class ReviewerMapper extends Mapper {
 		return $rights;
 	}
 
-	/** Whether the Reviewer is on the link: invited through it or came by it, so that their Personal Link opens it (ADR 0014) */
-	public function isOn(int $reviewerId, string $token): bool {
-		return $this->rightsOn($reviewerId, $token) !== null;
-	}
-
-	/** @return ?array{canComment: ?bool, allowOlder: ?bool, watermark: ?bool} their own rights on the link, null when they never came by it */
+	/** @return ?array{canComment: ?bool, allowOlder: ?bool, watermark: ?bool} their own rights on the link, null when they are not on it */
 	public function rightsOn(int $reviewerId, string $token): ?array {
 		return $this->rightsByLink([$reviewerId])[$reviewerId][$token] ?? null;
 	}
 
 	/**
-	 * The Reviewer's own rights on a link they came by
+	 * The Reviewer's own rights on a link they are on
 	 *
 	 * @param array{canComment?: ?bool, allowOlder?: ?bool, watermark?: ?bool} $rights null or left out: the link decides
 	 */

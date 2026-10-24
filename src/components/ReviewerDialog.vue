@@ -1,18 +1,20 @@
 <script setup>
+import takeOffIcon from '@mdi/svg/svg/account-remove-outline.svg?raw'
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import PersonalLinkRightsDialog from './PersonalLinkRightsDialog.vue'
-import { renewReviewerKey, updateReviewerAsMember } from '../api.js'
+import { putReviewerOn, renewReviewerKey, takeReviewerOff, updateReviewerAsMember } from '../api.js'
 import { copyLink } from '../clipboard.js'
 import { useBusy } from '../composables/busy.js'
-import { confirmRemoval } from '../confirm.js'
+import { confirmRemoval, confirmTakeOff } from '../confirm.js'
 
 const props = defineProps({
 	/** A Reviewer of the Project, with their Personal Link and own rights through each link they are on */
@@ -27,7 +29,7 @@ const emit = defineEmits(['changed', 'close', 'remove'])
 const name = ref(props.reviewer.name)
 const email = ref(props.reviewer.email ?? '')
 const mail = ref({ ...props.reviewer.mail })
-/** The Personal Link whose rights are open, {personal, share}: one of reviewer.links and the link it goes through */
+/** The Personal Link whose rights are open, {personal, reviewLink}: one of reviewer.links and the link it goes through */
 const openRights = ref(null)
 
 const WISHES = [
@@ -37,6 +39,39 @@ const WISHES = [
 ]
 const { busy, error, run } = useBusy()
 watch(error, (message) => message && showError(message))
+
+/** The Project's links they are not on, to put them on one (story 55) */
+const otherLinks = computed(() => props.links.filter((reviewLink) => !props.reviewer.links.some((personal) => personal.token === reviewLink.token)))
+
+/**
+ * Takes them off one link, paused or not; they stay on their others
+ *
+ * @param {{token: string}} personal - one of reviewer.links
+ */
+async function takeOff(personal) {
+	if (await confirmTakeOff(props.reviewer.name)) {
+		await run(async () => {
+			await takeReviewerOff(props.reviewer.id, personal.token)
+			emit('changed')
+		})
+	}
+}
+
+/**
+ * Puts them on another link with a Personal Link of its own, and copies it
+ *
+ * @param {{token: string}} reviewLink - one of otherLinks
+ */
+function putOn(reviewLink) {
+	return run(async () => {
+		const { link } = await putReviewerOn(props.reviewer.id, reviewLink.token)
+		// Through a paused or expired link it would open nothing yet
+		if (reviewLink.live) {
+			await copyLink(link, t('deliver', 'Personal Link copied'))
+		}
+		emit('changed')
+	})
+}
 
 /** Name, address and mail wishes, as a Member sets them for the Reviewer */
 function save() {
@@ -100,27 +135,52 @@ async function renew() {
 			</p>
 			<ul>
 				<li v-for="personal in reviewer.links" :key="personal.token" class="deliver-reviewer__link">
-					<span>{{ links.find((share) => share.token === personal.token)?.title }}</span>
+					<span>{{ links.find((reviewLink) => reviewLink.token === personal.token)?.title }}</span>
 					<!-- Their own rights on this link (ADR 0014) -->
 					<NcButton
 						variant="tertiary"
 						:aria-label="t('deliver', 'Rights of {name} on this link', { name: reviewer.name })"
 						:title="t('deliver', 'Rights of {name} on this link', { name: reviewer.name })"
-						@click="openRights = { personal, share: links.find((share) => share.token === personal.token) }">
+						@click="openRights = { personal, reviewLink: links.find((reviewLink) => reviewLink.token === personal.token) }">
 						<template #icon>
 							<NcIconSvgWrapper :svg="settingsIcon" />
 						</template>
 					</NcButton>
-					<NcButton variant="tertiary" @click="copyLink(personal.url, t('deliver', 'Personal Link copied'))">
+					<NcButton
+						variant="tertiary"
+						:aria-label="t('deliver', 'Take {name} off this link', { name: reviewer.name })"
+						:title="t('deliver', 'Take {name} off this link', { name: reviewer.name })"
+						@click="takeOff(personal)">
+						<template #icon>
+							<NcIconSvgWrapper :svg="takeOffIcon" />
+						</template>
+					</NcButton>
+					<!-- None through a paused or expired link -->
+					<NcButton
+						v-if="personal.url"
+						variant="tertiary"
+						@click="copyLink(personal.url, t('deliver', 'Personal Link copied'))">
 						{{ t('deliver', 'Copy') }}
 					</NcButton>
 				</li>
 			</ul>
+			<p v-if="reviewer.links.length === 0" class="deliver-reviewer__hint">
+				{{ t('deliver', '{name} is on no Review Link.', { name: reviewer.name }) }}
+			</p>
+			<NcSelect
+				v-if="canWrite && otherLinks.length"
+				:modelValue="null"
+				:options="otherLinks"
+				label="title"
+				:clearable="false"
+				:disabled="busy"
+				:inputLabel="t('deliver', 'Put on another Review Link')"
+				@update:modelValue="(reviewLink) => reviewLink && putOn(reviewLink)" />
 		</div>
 		<PersonalLinkRightsDialog
 			v-if="openRights"
 			:reviewer="reviewer"
-			:share="openRights.share"
+			:link="openRights.reviewLink"
 			:rights="openRights.personal.rights"
 			@changed="(rights) => openRights.personal.rights = rights"
 			@close="openRights = null" />

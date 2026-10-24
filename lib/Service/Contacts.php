@@ -123,6 +123,7 @@ class Contacts {
 	private function target(): ?IAddressBook {
 		$books = $this->writable();
 		$picked = $this->config->getValueString((string)$this->userId, Application::APP_ID, self::SETTING);
+		$default = null;
 		foreach ($books as $book) {
 			if ($book->getUri() === 'contacts' && !$book->isShared()) {
 				$default = $book;

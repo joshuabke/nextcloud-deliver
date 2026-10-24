@@ -53,3 +53,17 @@ export function confirmReviewerRemoval(name) {
 		t('deliver', 'Remove Reviewer'),
 	)
 }
+
+/**
+ * Asks before a Reviewer is taken off one link.
+ *
+ * @param {string} name - the Reviewer's name
+ * @return {Promise<boolean>} whether the person confirmed
+ */
+export function confirmTakeOff(name) {
+	return confirmRemoval(
+		t('deliver', 'Take {name} off this link?', { name }),
+		t('deliver', 'Their Personal Link through it stops working. They stay on their other links, and their Comments stay theirs.'),
+		t('deliver', 'Take off'),
+	)
+}
