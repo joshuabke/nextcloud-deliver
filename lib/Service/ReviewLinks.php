@@ -130,13 +130,20 @@ class ReviewLinks {
 	 * @return list<array<string, mixed>>
 	 */
 	public function reviewersOf(ReviewLink $link): array {
-		$reviewers = array_values(array_filter($this->reviewerMapper->findByOwners([$link->ownerUid()]), $link->takes(...)));
-		$rights = $this->reviewerMapper->rightsByLink(array_map(static fn (Reviewer $reviewer) => $reviewer->getId(), $reviewers));
+		$rights = $this->reviewerMapper->rightsByLink(array_map(
+			static fn (Reviewer $reviewer) => $reviewer->getId(),
+			array_filter($this->reviewerMapper->findByOwners([$link->ownerUid()]), $link->takes(...)),
+		));
+		// Those on this link, whose Personal Link opens it (ADR 0014)
+		$reviewers = array_values(array_filter(
+			$this->reviewerMapper->findByOwners([$link->ownerUid()]),
+			static fn (Reviewer $reviewer) => isset($rights[$reviewer->getId()][$link->token()]),
+		));
 		return array_map(
 			fn (Reviewer $reviewer) => $this->reviewers->serialize($reviewer) + [
 				'link' => $link->personalLink($reviewer),
-				// Their own rights here, null when they never came by this link (ADR 0014)
-				'rights' => $rights[$reviewer->getId()][$link->token()] ?? null,
+				// Their own rights here (ADR 0014)
+				'rights' => $rights[$reviewer->getId()][$link->token()],
 			],
 			$reviewers,
 		);
@@ -317,19 +324,25 @@ class ReviewLinks {
 		return [
 			'reviewers' => array_map(fn (Reviewer $reviewer) => $this->reviewers->serialize($reviewer) + [
 				'inContacts' => $reviewer->getInContacts(),
-				'links' => array_map(
-					static fn (string $token, string $url) => [
-						'token' => $token,
-						'url' => $url . '?r=' . rawurlencode((string)$reviewer->getSecretKey()),
-						// Their own rights there, null on a link they never came by (ADR 0014)
-						'rights' => $rights[$reviewer->getId()][$token] ?? null,
-					],
-					array_keys($urls),
-					array_values($urls),
-				),
+				'links' => self::personalLinks($reviewer, $urls, $rights[$reviewer->getId()] ?? []),
 			], $reviewers),
 			'cameBy' => $cameBy,
 		];
+	}
+
+	/**
+	 * A Personal Link through each live link the Reviewer is on, with their own rights there (ADR 0014)
+	 *
+	 * @param array<string, string> $urls token → URL of the live links
+	 * @param array<string, array<string, ?bool>> $rights token → their own rights, for each link they are on
+	 * @return list<array{token: string, url: string, rights: array<string, ?bool>}>
+	 */
+	private static function personalLinks(Reviewer $reviewer, array $urls, array $rights): array {
+		$links = [];
+		foreach (array_intersect_key($urls, $rights) as $token => $url) {
+			$links[] = ['token' => (string)$token, 'url' => $url . '?r=' . rawurlencode((string)$reviewer->getSecretKey()), 'rights' => $rights[$token]];
+		}
+		return $links;
 	}
 
 	/**
@@ -343,7 +356,7 @@ class ReviewLinks {
 		foreach ($this->projectLinks->findByProject($version->getProjectId(), $reviewer->getOwnerUid()) as $each) {
 			$link = $this->of($each);
 			try {
-				if ($link->isLive() && $link->takes($reviewer) && $link->version($version) === $version) {
+				if ($link->isLive() && $link->takes($reviewer) && $this->reviewerMapper->isOn($reviewer->getId(), $link->token()) && $link->version($version) === $version) {
 					$token = $link->token();
 					break;
 				}

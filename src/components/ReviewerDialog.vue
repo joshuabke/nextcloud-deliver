@@ -101,7 +101,7 @@ async function renew() {
 			<ul>
 				<li v-for="personal in reviewer.links" :key="personal.token" class="deliver-reviewer__link">
 					<span>{{ links.find((share) => share.token === personal.token)?.title }}</span>
-					<!-- Their own rights, on a link they came by (ADR 0014) -->
+					<!-- Their own rights on this link (ADR 0014) -->
 					<NcButton
 						v-if="canWrite && personal.rights"
 						variant="tertiary"

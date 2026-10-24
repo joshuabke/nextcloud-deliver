@@ -137,6 +137,11 @@ class ReviewerMapper extends Mapper {
 		return $rights;
 	}
 
+	/** Whether the Reviewer is on the link: invited through it or came by it, so that their Personal Link opens it (ADR 0014) */
+	public function isOn(int $reviewerId, string $token): bool {
+		return $this->rightsOn($reviewerId, $token) !== null;
+	}
+
 	/** @return ?array{canComment: ?bool, allowOlder: ?bool, watermark: ?bool} their own rights on the link, null when they never came by it */
 	public function rightsOn(int $reviewerId, string $token): ?array {
 		return $this->rightsByLink([$reviewerId])[$reviewerId][$token] ?? null;

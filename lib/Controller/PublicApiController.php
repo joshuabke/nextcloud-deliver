@@ -251,6 +251,8 @@ class PublicApiController extends PublicShareController {
 			// an address is no secret, and the key opens every link of the Member on the Project (ADR 0014)
 			$returning = $this->links->returning($link, $email);
 			if ($returning !== null) {
+				// The Personal Link mailed for this link has to open it, so they are on it from now on (ADR 0014)
+				$this->reviewers->cameBy($returning, $link->token());
 				if (!$this->mail->welcome($returning, $link->personalLink($returning), $language)) {
 					throw $this->links->addressTaken((string)$email);
 				}

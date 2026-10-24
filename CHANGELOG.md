@@ -9,7 +9,8 @@
 - Add a plus next to "Reviewers" that invites one person on a Project Link of their own.
 - Title Project Links by what they show.
 - Make each email address one Reviewer per Project.
-- Move a Reviewer's own rights to each link they came by.
+- Move a Reviewer's own rights to each link they are on.
+- Open a Personal Link only through the Review Links its Reviewer is on.
 
 ## 0.9.2 – 2026-10-22
 

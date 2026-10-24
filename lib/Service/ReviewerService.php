@@ -136,13 +136,13 @@ class ReviewerService {
 		return $this->reviewers->find($id) ?? throw new NotFoundException('Reviewer not found');
 	}
 
-	/** The Reviewer with this key, if they come by this link */
+	/** The Reviewer with this key, if they are on this link (ADR 0014) */
 	public function byKey(?string $key, ReviewLink $link): ?Reviewer {
 		if ($key === null || $key === '') {
 			return null;
 		}
 		$reviewer = $this->reviewers->findByKey($key);
-		return $reviewer !== null && $link->takes($reviewer) ? $reviewer : null;
+		return $reviewer !== null && $link->takes($reviewer) && $this->reviewers->isOn($reviewer->getId(), $link->token()) ? $reviewer : null;
 	}
 
 	public function serialize(Reviewer $reviewer): array {

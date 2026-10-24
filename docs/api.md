@@ -35,15 +35,15 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | PUT | `/comments/{id}` `{body}` | Edit one's own Comment |
 | DELETE | `/comments/{id}` | Remove a Comment, with its Replies |
 | PUT | `/comments/{id}/resolved` `{resolved}` | Resolve or unresolve, needs write access |
-| GET | `/projects/{id}/links` | `{links, reviewers, canMail}`: my Project Links of the Project, or of No Project for id 0, and my Reviewers who came by any of them, each with a Personal Link through every live one, keyed by token, with their own `rights` there (null on a link they never came by), and `inContacts` (null without an address) |
+| GET | `/projects/{id}/links` | `{links, reviewers, canMail}`: my Project Links of the Project, or of No Project for id 0, and my Reviewers on any of them, each with a Personal Link and their own `rights` through each live one they are on, keyed by token, and `inContacts` (null without an address) |
 | POST | `/projects/{id}/links` `{assetIds}` | A Project Link (ADRs 0010 and 0011), live and showing the whole Project, or only the Assets given; on No Project (id 0) `assetIds` is required |
 | POST | `/projects/{id}/invitations` `{name, email, sendMail, message, assetIds, canComment, allowOlder, watermark, canDownload, latestOnly}` | Invite one person on a Project Link of their own, the whole Project or the Assets given (required on No Project); `{link, reviewer}`, and no link is left when the invitation is refused |
 | PUT | `/links/{id}` `{review, canComment, allowOlder, watermark, canDownload, latestOnly, label, description, password, expireDate, assetIds}` | Change a Project Link; `''` removes password, expiry or description, `assetIds: null` shows the whole Project again (not on No Project); `review: false` pauses it |
 | DELETE | `/links/{id}` | Delete a Project Link |
-| GET/POST | `/links/{id}/reviewers` | Its Reviewers with Personal Links and their own `rights` on it; invite one `{name, email}`, an address the Project knows giving that Reviewer this link too |
+| GET/POST | `/links/{id}/reviewers` | The Reviewers on it, with their Personal Links and their own `rights` on it; invite one `{name, email}`, an address the Project knows giving that Reviewer this link too |
 | GET | `/links/{id}/activity` | Who opened the link, watched or downloaded which Version, newest first |
 | PUT | `/reviewers/{id}` `{name, email, mailReplies, mailComments, mailVersions}` | Edit a Reviewer of mine; 409 for an address another Reviewer of the Project has |
-| PUT | `/reviewers/{id}/rights` `{token, rights: {canComment, allowOlder, watermark}}` | Their own rights on one link they came by, null each to leave it to the link; 404 for a link they never came by |
+| PUT | `/reviewers/{id}/rights` `{token, rights: {canComment, allowOlder, watermark}}` | Their own rights on one link they are on, null each to leave it to the link; 404 for a link they are not on |
 | POST | `/reviewers/{id}/key` | A new Personal Link; the old ones stop working |
 | DELETE | `/reviewers/{id}` | Remove a Reviewer: their Personal Links stop working, their Comments stay |
 | POST | `/reviewers/{id}/contact` | Save a Reviewer to my address book: 201 `{saved: true}`, or 200 `{saved: false}` when the address is in one of my address books already |

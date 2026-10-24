@@ -10,6 +10,7 @@
 - Projekt-Links nach ihrem Inhalt benannt.
 - E-Mail-Adresse auf einen Reviewer pro Projekt beschränkt.
 - Eigene Rechte eines Reviewers auf die einzelnen Links verlegt.
+- Persönliche Links auf die Review-Links ihres Reviewers beschränkt.
 
 ## 0.9.2 – 2026-10-22
 

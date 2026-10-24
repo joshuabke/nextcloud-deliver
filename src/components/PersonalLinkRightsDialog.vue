@@ -7,7 +7,7 @@ import { setReviewerRights } from '../api.js'
 import { useBusy } from '../composables/busy.js'
 
 /**
- * A Reviewer's own rights on one Review Link they came by, over the link's
+ * A Reviewer's own rights on one Review Link they are on, over the link's
  * (ADR 0014). Each change is saved at once, as the link's own switches are.
  */
 const props = defineProps({

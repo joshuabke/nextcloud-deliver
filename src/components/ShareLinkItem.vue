@@ -257,7 +257,7 @@ function invite() {
 								<NcIconSvgWrapper :svg="removeIcon" />
 							</template>
 						</NcButton>
-						<!-- Their own rights on this link, once they came by it (ADR 0014) -->
+						<!-- Their own rights on this link (ADR 0014) -->
 						<NcButton
 							v-if="reviewer.rights"
 							variant="tertiary"
