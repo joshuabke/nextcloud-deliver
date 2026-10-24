@@ -12,6 +12,7 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcPasswordField from '@nextcloud/vue/components/NcPasswordField'
 import NcTextArea from '@nextcloud/vue/components/NcTextArea'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
+import ContactField from './ContactField.vue'
 import { linkApi, removeReviewer } from '../api.js'
 import { copyLink } from '../clipboard.js'
 import { useBusy } from '../composables/busy.js'
@@ -294,7 +295,7 @@ function invite() {
 
 				<form v-if="inviting" class="deliver-link__invite" @submit.prevent="invite">
 					<div class="deliver-link__invite-row">
-						<NcTextField v-model="name" :label="t('deliver', 'Name')" />
+						<ContactField v-model="name" :label="t('deliver', 'Name')" @pick="(contact) => email = contact.email" />
 						<NcTextField v-model="email" type="email" :label="t('deliver', 'Email (optional)')" />
 						<NcButton type="submit" variant="primary" :disabled="busy || !name.trim()">
 							{{ t('deliver', 'Invite') }}

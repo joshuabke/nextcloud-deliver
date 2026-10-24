@@ -6,9 +6,12 @@ namespace OCA\Deliver\Controller;
 
 use OCA\Deliver\Db\Reviewer;
 use OCA\Deliver\Service\AccessDeniedException;
+use OCA\Deliver\Service\Contacts;
 use OCA\Deliver\Service\ReviewerService;
 use OCA\Deliver\Service\ReviewLinks;
+use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\Http\Response;
 use OCP\AppFramework\OCSController;
 use OCP\IRequest;
@@ -22,6 +25,7 @@ class ReviewerApiController extends OCSController {
 		IRequest $request,
 		private ReviewerService $reviewers,
 		private ReviewLinks $links,
+		private Contacts $contacts,
 		private ?string $userId,
 	) {
 		parent::__construct($appName, $request);
@@ -42,7 +46,18 @@ class ReviewerApiController extends OCSController {
 			$reviewer = $this->own($id);
 			$this->links->assertRenameFree($reviewer, $name);
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
-			return $this->reviewers->serialize($this->reviewers->update($reviewer, $name, $email, $wishes, $rights));
+			$reviewer = $this->reviewers->update($reviewer, $name, $email, $wishes, $rights);
+			$this->contacts->checkContacts([$reviewer]);
+			return $this->reviewers->serialize($reviewer);
+		});
+	}
+
+	/** Saves the Reviewer's name and address to the Member's Contacts, unless the address is there already (#66) */
+	#[NoAdminRequired]
+	public function saveContact(int $id): Response {
+		return $this->guard(function () use ($id) {
+			$saved = $this->contacts->save($this->own($id));
+			return new DataResponse(['saved' => $saved], $saved ? Http::STATUS_CREATED : Http::STATUS_OK);
 		});
 	}
 

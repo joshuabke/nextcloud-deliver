@@ -35,7 +35,7 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | PUT | `/comments/{id}` `{body}` | Edit one's own Comment |
 | DELETE | `/comments/{id}` | Remove a Comment, with its Replies |
 | PUT | `/comments/{id}/resolved` `{resolved}` | Resolve or unresolve, needs write access |
-| GET | `/projects/{id}/links` | `{links, reviewers}`: my Project Links of the Project, or of No Project for id 0, and my Reviewers who came by any of them, each with a Personal Link through every live one, keyed by token |
+| GET | `/projects/{id}/links` | `{links, reviewers}`: my Project Links of the Project, or of No Project for id 0, and my Reviewers who came by any of them, each with a Personal Link through every live one, keyed by token, and `inContacts` (null without an address) |
 | POST | `/projects/{id}/links` `{assetIds}` | A Project Link (ADRs 0010 and 0011), live and showing the whole Project, or only the Assets given; on No Project (id 0) `assetIds` is required |
 | PUT | `/links/{id}` `{review, canComment, allowOlder, watermark, canDownload, latestOnly, label, description, password, expireDate, assetIds}` | Change a Project Link; `''` removes password, expiry or description, `assetIds: null` shows the whole Project again (not on No Project); `review: false` pauses it |
 | DELETE | `/links/{id}` | Delete a Project Link |
@@ -44,6 +44,9 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | PUT | `/reviewers/{id}` `{name, email, mailReplies, mailComments, mailVersions, rights}` | Edit a Reviewer of mine, with their own rights over the link's |
 | POST | `/reviewers/{id}/key` | A new Personal Link; the old ones stop working |
 | DELETE | `/reviewers/{id}` | Remove a Reviewer: their Personal Links stop working, their Comments stay |
+| POST | `/reviewers/{id}/contact` | Save a Reviewer to my address book: 201 `{saved: true}`, or 200 `{saved: false}` when the address is in one of my address books already |
+| GET | `/contacts?search=` | People of my own and shared address books whose name or address matches, `{name, email, photo}` per address, `photo` the CardDAV URL of their picture or null; never the instance's users |
+| GET/PUT | `/settings` `{addressBook}` | My Deliver settings: the address book Reviewers are saved to, of `addressBooks` I can write to |
 
 Rights follow each Version's file (ADR 0009): read access views and comments, write access manages. Missing write access answers 403; a request that clashes with the current state (a nested Folder Project, a taken Version Number, an older Version closed for Comments) answers 409.
 

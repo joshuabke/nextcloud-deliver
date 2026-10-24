@@ -61,7 +61,12 @@ class ReviewerService {
 		if (in_array($language, self::LANGUAGES, true)) {
 			$reviewer->setLanguage($language);
 		}
-		$reviewer->setEmail(self::email($email));
+		$email = self::email($email);
+		if (mb_strtolower((string)$email) !== mb_strtolower((string)$reviewer->getEmail())) {
+			// Checked again on the Member's next list of them (#66)
+			$reviewer->setInContacts(null);
+		}
+		$reviewer->setEmail($email);
 		self::wish($reviewer, $mail);
 		return $this->reviewers->update($reviewer);
 	}

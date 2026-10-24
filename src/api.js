@@ -34,6 +34,11 @@ export const listMembers = (versionId) => axios.get(url(`/versions/${versionId}/
 export const updateReviewerAsMember = (id, fields) => axios.put(url(`/reviewers/${id}`), fields).then(data)
 export const renewReviewerKey = (id) => axios.post(url(`/reviewers/${id}/key`)).then(data)
 export const removeReviewer = (id) => axios.delete(url(`/reviewers/${id}`)).then(data)
+// Whether the Reviewer went into the Member's Contacts or was there already (#66)
+export const saveReviewerContact = (id) => axios.post(url(`/reviewers/${id}/contact`)).then(data)
+export const searchContacts = (search) => axios.get(url('/contacts'), { params: { search } }).then(data)
+export const getSettings = () => axios.get(url('/settings')).then(data)
+export const updateSettings = (settings) => axios.put(url('/settings'), settings).then(data)
 export const muteProject = (id, muted) => axios.put(url(`/projects/${id}/mute`), { muted }).then(data)
 
 export const getVersion = (id) => axios.get(url(`/versions/${id}`)).then(data)

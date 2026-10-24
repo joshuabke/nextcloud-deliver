@@ -515,6 +515,44 @@ test.describe('Review view', () => {
 		await expect(reviewer.locator('.deliver-comment').filter({ hasText: 'from the client' })).toContainText('Mara')
 		await visitor.close()
 	})
+
+	test('a Member invites a Reviewer picked from their contacts', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const card = `/remote.php/dav/addressbooks/users/${USER}/contacts/deliver-e2e-${randomBytes(4).toString('hex')}.vcf`
+		const vcard = 'BEGIN:VCARD\r\nVERSION:3.0\r\nUID:deliver-e2e-zoe\r\nFN:Zoe Quill\r\n'
+			+ 'EMAIL;TYPE=WORK:zoe@studio.test\r\nEMAIL;TYPE=HOME:zoe@home.test\r\nEND:VCARD\r\n'
+		expect((await api.fetch(card, { method: 'PUT', data: vcard, headers: { 'Content-Type': 'text/vcard' } })).status()).toBe(201)
+		await api.post(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`)
+
+		try {
+			await page.goto(`/apps/deliver/projects/${projectId}`)
+			await page.locator('.app-navigation').getByText('Project Link').first().click()
+			await page.getByRole('button', { name: 'Invite a Reviewer' }).click()
+			const name = page.getByRole('combobox', { name: 'Name' })
+			await name.pressSequentially('Zo')
+			// One row per address; the arrow keys move, Enter picks
+			await expect(page.getByRole('option')).toHaveCount(2)
+			await name.press('ArrowDown')
+			await name.press('Enter')
+			await expect(page.getByRole('listbox')).toHaveCount(0)
+			await expect(name).toHaveValue('Zoe Quill')
+			await expect(page.getByLabel('Email (optional)')).toHaveValue('zoe@home.test')
+			await page.getByRole('button', { name: 'Invite', exact: true }).click()
+			await expect(page.locator('.deliver-link__reviewer').filter({ hasText: 'Zoe Quill' })).toBeVisible()
+			await page.keyboard.press('Escape')
+
+			// Already a contact: nothing to save
+			const zoe = page.locator('.app-navigation li').filter({ hasText: 'Zoe Quill' }).last()
+			await zoe.hover()
+			await zoe.getByRole('button', { name: 'Actions' }).click()
+			await expect(page.getByRole('menuitem', { name: 'In your contacts' })).toBeDisabled()
+		} finally {
+			const cleanup = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth })
+			await cleanup.fetch(card, { method: 'DELETE' })
+			await cleanup.dispose()
+			await api.dispose()
+		}
+	})
 })
 
 /**
