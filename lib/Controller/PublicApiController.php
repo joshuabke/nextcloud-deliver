@@ -76,10 +76,8 @@ class PublicApiController extends PublicShareController {
 			$stack = $link->assets()[$version->getAssetId()] ?? null;
 			// A Member previews the Version read only, never as the Reviewer whose key this browser carries (story 59)
 			$member = $this->member($version);
+			// A key opens only a link its Reviewer is on already (ADR 0014)
 			$reviewer = $member ? null : $this->reviewer();
-			if ($reviewer !== null) {
-				$this->reviewers->cameBy($reviewer, $link->token());
-			}
 			if (!$member) {
 				$this->links->record($link, LinkActivityMapper::VIEWED, $reviewer, $version);
 			}
@@ -248,14 +246,14 @@ class PublicApiController extends PublicShareController {
 				throw new AccessDeniedException('Members review in Deliver itself');
 			}
 			// An address the Project knows leads back to that Reviewer, but only through their mailbox:
-			// an address is no secret, and the key opens every link of the Member on the Project (ADR 0014)
+			// an address is no secret, and the key is their identity (ADR 0014)
 			$returning = $this->links->returning($link, $email);
 			if ($returning !== null) {
-				// The Personal Link mailed for this link has to open it, so they are on it from now on (ADR 0014)
-				$this->reviewers->cameBy($returning, $link->token());
 				if (!$this->mail->welcome($returning, $link->personalLink($returning), $language)) {
 					throw $this->links->addressTaken((string)$email);
 				}
+				// The Personal Link mailed for this link has to open it: they are on it from now on, and only once it went out
+				$this->reviewers->cameBy($returning, $link->token());
 				return new JSONResponse(['returning' => true, 'mailed' => true, 'email' => $returning->getEmail()], Http::STATUS_ACCEPTED);
 			}
 			$this->links->assertNameFree($link, $name, reviewersToo: false);

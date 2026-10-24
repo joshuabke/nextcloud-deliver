@@ -27,21 +27,25 @@ const props = defineProps({
 	share: { type: Object, required: true },
 	/** In the Project's link dialog: each Reviewer's settings are offered, and the dialog's own button invites */
 	inDialog: { type: Boolean, default: false },
+	/** The Project's Reviewers, to suggest and to recognise by address when inviting; without them, those of this link */
+	people: { type: Array, default: null },
 })
 
 const emit = defineEmits(['update', 'deleted'])
 
 const { busy, error, run } = useBusy()
-/** The Member's Reviewers, each with their Personal Link through this link; null while loading */
+/** The Reviewers on this link, each with their Personal Link through it and their own rights on it; null while loading */
 const reviewers = ref(null)
 /** The Reviewer whose own rights on this link are open */
 const rightsOf = ref(null)
 const inviting = ref(false)
 const name = ref('')
 const email = ref('')
-const withAddress = computed(() => (reviewers.value ?? []).filter((reviewer) => reviewer.email))
+const withAddress = computed(() => (props.people ?? reviewers.value ?? []).filter((reviewer) => reviewer.email))
 /** The Reviewer the address belongs to: this link goes to them, under their name (ADR 0014) */
 const known = computed(() => reviewerWithAddress(withAddress.value, email.value))
+/** Whether that Reviewer is on this link already, so that inviting changes nothing */
+const knownHere = computed(() => known.value && (reviewers.value ?? []).some((reviewer) => reviewer.id === known.value.id))
 /** Whether the invited Reviewer gets their Personal Link by mail, under the Member's own message */
 const sendMail = ref(false)
 const message = ref('')
@@ -109,7 +113,7 @@ async function dropReviewer(reviewer) {
 	}
 }
 
-// Every Reviewer shows with their Personal Link through this link (story 55)
+// The Reviewers on this link show with their Personal Link through it (ADR 0014)
 watch(() => [props.share.token, props.share.review], ([, review]) => {
 	reviewers.value = null
 	if (review) {
@@ -137,7 +141,8 @@ function invite() {
 	return run(async () => {
 		const letter = sendMail.value && email.value.trim() ? { message: message.value } : null
 		const reviewer = await linkApi(props.share).invite(name.value, email.value || null, letter)
-		reviewers.value = [...(reviewers.value ?? []), reviewer]
+		// As the server lists them, with their rights here, and once even when they were on the link already
+		reviewers.value = await linkApi(props.share).reviewers()
 		if (letter && reviewer.mailed) {
 			showSuccess(t('deliver', 'Personal Link mailed to {email}', { email: reviewer.email }))
 		} else if (letter) {
@@ -259,7 +264,6 @@ function invite() {
 						</NcButton>
 						<!-- Their own rights on this link (ADR 0014) -->
 						<NcButton
-							v-if="reviewer.rights"
 							variant="tertiary"
 							:aria-label="t('deliver', 'Rights of {name} on this link', { name: reviewer.name })"
 							:title="t('deliver', 'Rights of {name} on this link', { name: reviewer.name })"
@@ -286,8 +290,11 @@ function invite() {
 							{{ t('deliver', 'Invite') }}
 						</NcButton>
 					</div>
-					<p v-if="known" class="deliver-link__hint">
-						{{ t('deliver', '{name} reviews this Project already; the new link is added to them.', { name: known.name }) }}
+					<p v-if="knownHere" class="deliver-link__hint">
+						{{ t('deliver', '{name} is on this link already.', { name: known.name }) }}
+					</p>
+					<p v-else-if="known" class="deliver-link__hint">
+						{{ t('deliver', '{name} reviews this Project already and gets this link too.', { name: known.name }) }}
 					</p>
 					<template v-if="email.trim() && share.canMail">
 						<NcCheckboxRadioSwitch v-model="sendMail">

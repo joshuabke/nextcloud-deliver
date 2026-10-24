@@ -31,3 +31,10 @@ describe('the Reviewer an address belongs to', () => {
 		expect(reviewerWithAddress(reviewers, '')).toBeUndefined()
 	})
 })
+
+describe('people to suggest, with Reviewers who share an address from before (ADR 0014)', () => {
+	it('offers each address once', () => {
+		const twins = [{ name: 'Leon Green', email: 'leon@example.com' }, { name: 'Leon', email: 'LEON@example.com' }]
+		expect(peopleToSuggest('leon', twins, []).map((each) => each.name)).toEqual(['Leon Green'])
+	})
+})

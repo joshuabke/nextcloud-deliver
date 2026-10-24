@@ -39,7 +39,7 @@ const route = useRoute()
 const router = useRouter()
 /** My Project Links on this Project, paused ones too */
 const links = ref([])
-/** The Project's Reviewers, each once, with their Personal Link through every review link */
+/** The Project's Reviewers on any of these links, each once, with their Personal Link and own rights through each link they are on */
 const reviewers = ref([])
 /** The link whose settings are open */
 const editing = ref(null)
@@ -310,7 +310,7 @@ function personalLink(reviewer) {
 				:reviewer="openRights.reviewer"
 				:share="openRights.share"
 				:rights="personalLinkOn(openRights.reviewer, openRights.share).rights"
-				@changed="load()"
+				@changed="(rights) => personalLinkOn(openRights.reviewer, openRights.share).rights = rights"
 				@close="openRights = null" />
 			<InviteDialog
 				v-if="invitingOpen"
@@ -325,6 +325,7 @@ function personalLink(reviewer) {
 				v-if="editing"
 				:share="editing"
 				:assets="project?.assets ?? []"
+				:people="reviewers"
 				@update="replace"
 				@deleted="closeEditing"
 				@close="closeEditing" />

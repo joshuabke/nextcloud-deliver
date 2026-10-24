@@ -14,6 +14,8 @@ const props = defineProps({
 	share: { type: Object, required: true },
 	/** The Project's Assets, or those of No Project, to pick from */
 	assets: { type: Array, default: () => [] },
+	/** The Project's Reviewers, for inviting on this link */
+	people: { type: Array, default: null },
 })
 
 const emit = defineEmits(['update', 'close', 'deleted'])
@@ -48,6 +50,7 @@ async function pick(assetIds) {
 		<ShareLinkItem
 			ref="item"
 			:share="share"
+			:people="people"
 			inDialog
 			@update="emit('update', $event)"
 			@deleted="emit('deleted')" />

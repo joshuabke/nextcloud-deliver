@@ -11,8 +11,16 @@
 export function peopleToSuggest(typed, reviewers, contacts) {
 	const term = typed.trim().toLowerCase()
 	const photos = new Map(contacts.map((contact) => [contact.email.toLowerCase(), contact.photo]))
-	const matching = reviewers.filter((person) => person.name.toLowerCase().includes(term) || person.email.toLowerCase().includes(term))
-	const known = new Set(matching.map((person) => person.email.toLowerCase()))
+	const known = new Set()
+	// Two Reviewers may share an address from before ADR 0014; it is offered once
+	const matching = reviewers.filter((person) => {
+		const address = person.email.toLowerCase()
+		const offered = !known.has(address) && (person.name.toLowerCase().includes(term) || address.includes(term))
+		if (offered) {
+			known.add(address)
+		}
+		return offered
+	})
 	return [
 		...matching.map((person) => ({ ...person, photo: photos.get(person.email.toLowerCase()) ?? null, reviewer: true })),
 		...contacts.filter((contact) => !known.has(contact.email.toLowerCase())).map((contact) => ({ ...contact, reviewer: false })),

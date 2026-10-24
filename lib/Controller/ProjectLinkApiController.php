@@ -42,9 +42,9 @@ class ProjectLinkApiController extends OCSController {
 	}
 
 	/**
-	 * My links on a Project, or on No Project for 0, and my Reviewers who came
-	 * by any of them, paused or not, each with their Personal Link through
-	 * every live one, for its navigation (story 100)
+	 * My links on a Project, or on No Project for 0, and my Reviewers on any of
+	 * them, paused or not, each with their Personal Link and own rights through
+	 * each live one they are on, for its navigation (story 100, ADR 0014)
 	 */
 	#[NoAdminRequired]
 	public function index(int $id): Response {

@@ -15,7 +15,7 @@ import { useBusy } from '../composables/busy.js'
 import { confirmRemoval } from '../confirm.js'
 
 const props = defineProps({
-	/** A Reviewer of the Project, with their Personal Link through each review link */
+	/** A Reviewer of the Project, with their Personal Link and own rights through each link they are on */
 	reviewer: { type: Object, required: true },
 	/** The Project's Project Links with the title the navigation gives them, to name each Personal Link */
 	links: { type: Array, required: true },
@@ -103,7 +103,6 @@ async function renew() {
 					<span>{{ links.find((share) => share.token === personal.token)?.title }}</span>
 					<!-- Their own rights on this link (ADR 0014) -->
 					<NcButton
-						v-if="canWrite && personal.rights"
 						variant="tertiary"
 						:aria-label="t('deliver', 'Rights of {name} on this link', { name: reviewer.name })"
 						:title="t('deliver', 'Rights of {name} on this link', { name: reviewer.name })"
@@ -123,7 +122,7 @@ async function renew() {
 			:reviewer="reviewer"
 			:share="openRights.share"
 			:rights="openRights.personal.rights"
-			@changed="emit('changed')"
+			@changed="(rights) => openRights.personal.rights = rights"
 			@close="openRights = null" />
 		<template v-if="canWrite" #actions>
 			<NcButton variant="tertiary" :disabled="busy" @click="emit('remove')">
