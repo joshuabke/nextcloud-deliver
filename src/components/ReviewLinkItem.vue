@@ -27,8 +27,8 @@ const props = defineProps({
 	link: { type: Object, required: true },
 	/** In the Project's link dialog: each Reviewer's settings are offered, and the dialog's own button invites */
 	inDialog: { type: Boolean, default: false },
-	/** The Project's Reviewers, to suggest and to recognise by address when inviting; without them, those of this link */
-	people: { type: Array, default: null },
+	/** The Project's Reviewers, to suggest and to recognise by address when inviting */
+	people: { type: Array, required: true },
 	/** The Assets it may show, to title a link by its one Asset */
 	assets: { type: Array, default: () => [] },
 })
@@ -45,7 +45,7 @@ const rightsOf = ref(null)
 const inviting = ref(false)
 const name = ref('')
 const email = ref('')
-const withAddress = computed(() => (props.people ?? reviewers.value ?? []).filter((reviewer) => reviewer.email))
+const withAddress = computed(() => props.people.filter((reviewer) => reviewer.email))
 /** The Reviewer the address belongs to: this link goes to them, under their name (ADR 0014) */
 const known = computed(() => reviewerWithAddress(withAddress.value, email.value))
 /** Whether that Reviewer is on this link already, so that inviting changes nothing */
@@ -256,7 +256,7 @@ function invite() {
 				<ul v-else-if="reviewers">
 					<li v-for="reviewer in reviewers" :key="reviewer.id" class="deliver-link__reviewer">
 						<span class="deliver-link__name">{{ reviewer.name }}</span>
-						<NcButton variant="tertiary" @click="copyLink(reviewer.link, t('deliver', 'Personal Link copied'))">
+						<NcButton v-if="link.live" variant="tertiary" @click="copyLink(reviewer.link, t('deliver', 'Personal Link copied'))">
 							{{ t('deliver', 'Copy Personal Link') }}
 						</NcButton>
 						<NcButton

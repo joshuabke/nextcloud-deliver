@@ -240,6 +240,57 @@ class ReviewerTest extends TestCase {
 		self::assertSame([['Noa', []]], array_map(static fn (array $each) => [$each['name'], $each['links']], $listed['reviewers']), 'a Reviewer of the Project without a link');
 	}
 
+	public function testOnSeveralLinksOnlyTheMemberChangesWhoAReviewerIs(): void {
+		$run = bin2hex(random_bytes(4));
+		$jane = "jane-$run@example.test";
+		$asJane = $this->reviewer();
+		$claimed = $asJane->call('POST', '/api/reviewer', ['name' => 'Jane Doe', 'email' => $jane]);
+		self::assertSame(201, $claimed['status'], json_encode($claimed['data']));
+		self::assertSame(200, $asJane->call('PUT', '/api/reviewer', ['email' => "jane.doe-$run@example.test"])['status'], 'on one link, they change it themselves');
+		$asJane->call('PUT', '/api/reviewer', ['email' => $jane]);
+
+		// Invited on a second link, what they are is the Member's to change: mails carry the keys of both
+		$final = $this->nc->ocs('POST', "/projects/{$this->projectId}/links")['data'];
+		$this->nc->ocs('POST', "/links/{$final['id']}/reviewers", ['name' => 'Jane Doe', 'email' => $jane]);
+		$context = $asJane->call('GET', "/api/context?versionId={$this->versionId}")['data']['me'];
+		self::assertTrue($context['severalLinks']);
+		$moved = $asJane->call('PUT', '/api/reviewer', ['email' => "someone-else-$run@example.test"]);
+		self::assertSame([409, 'identityLocked'], [$moved['status'], $moved['data']['reason']]);
+		self::assertSame(409, $asJane->call('PUT', '/api/reviewer', ['name' => 'Not Jane'])['status']);
+		self::assertSame(200, $asJane->call('PUT', '/api/reviewer', ['email' => $jane, 'mailVersions' => true])['status'], 'what is mailed stays theirs');
+		self::assertSame(200, $this->nc->ocs('PUT', "/reviewers/{$claimed['data']['id']}", ['name' => 'Jane Doe', 'email' => "jane.doe-$run@example.test"])['status'], 'the Member changes it');
+	}
+
+	public function testInvitingAgainOnTheSameLinkHandsOutANewKey(): void {
+		$run = bin2hex(random_bytes(4));
+		$jane = "jane-$run@example.test";
+		$claimed = $this->reviewer()->call('POST', '/api/reviewer', ['name' => 'Jane Doe', 'email' => $jane]);
+		$invited = $this->nc->ocs('POST', "/links/{$this->linkId}/reviewers", ['name' => 'Jane Doe', 'email' => $jane])['data'];
+		self::assertSame($claimed['data']['id'], $invited['id']);
+		self::assertNotSame($claimed['data']['key'], $invited['key']);
+		$me = fn (string $key) => $this->reviewer()->call('GET', "/api/context?versionId={$this->versionId}&r=$key")['data']['me']['type'];
+		self::assertSame(['unnamed', 'reviewer'], [$me($claimed['data']['key']), $me($invited['key'])], 'whoever named themselves with the address before keeps none of it');
+	}
+
+	public function testPuttingOnAndRightsAreChecked(): void {
+		$kim = $this->nc->ocs('POST', "/links/{$this->linkId}/reviewers", ['name' => 'Kim'])['data'];
+		$rights = fn (mixed $given) => $this->nc->ocs('PUT', "/reviewers/{$kim['id']}/rights", ['token' => $this->token, 'rights' => $given])['status'];
+		self::assertSame([400, 400, 200], [$rights('no'), $rights(['canComment' => 'maybe']), $rights(['canComment' => 'false'])]);
+		self::assertFalse($this->nc->ocs('GET', "/links/{$this->linkId}/reviewers")['data'][0]['rights']['canComment'], '"false" is no');
+
+		$other = 'deliver-test-' . bin2hex(random_bytes(4));
+		$this->nc->mkdir($other);
+		$this->nc->put("$other/promo.mp4", 'not really a video');
+		$otherId = $this->nc->ocs('POST', '/projects', ['folderId' => $this->nc->fileId($other)])['data']['id'];
+		try {
+			$elsewhere = $this->nc->ocs('POST', "/projects/$otherId/links")['data'];
+			self::assertSame(404, $this->nc->ocs('POST', "/reviewers/{$kim['id']}/links", ['token' => $elsewhere['token']])['status'], 'never on a link of another Project');
+		} finally {
+			$this->nc->ocs('DELETE', "/projects/$otherId");
+			$this->nc->delete($other);
+		}
+	}
+
 	public function testANameIsTakenAcrossTheMembersOfAProject(): void {
 		$uid = 'deliver-colleague-' . bin2hex(random_bytes(4));
 		$password = 'Deliver-' . bin2hex(random_bytes(8));

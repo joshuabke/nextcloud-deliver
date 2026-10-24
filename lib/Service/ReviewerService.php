@@ -106,6 +106,16 @@ class ReviewerService {
 		return $this->reviewers->putOn($reviewer->getId(), $token, $key ?? $this->newKey(), $this->time->getTime());
 	}
 
+	/** A new key for the Reviewer's Personal Link through this link: the old one stops working */
+	public function setKeyOn(Reviewer $reviewer, string $token, string $key): void {
+		$this->reviewers->setKeyOn($reviewer->getId(), $token, $key);
+	}
+
+	/** How many links the Reviewer is on */
+	public function linkCount(Reviewer $reviewer): int {
+		return count($this->reviewers->keysByLink([$reviewer->getId()])[$reviewer->getId()] ?? []);
+	}
+
 	/** Takes the Reviewer off one link; their Personal Link through it stops working */
 	public function takeOff(Reviewer $reviewer, string $token): void {
 		$this->reviewers->takeOff($reviewer->getId(), $token);

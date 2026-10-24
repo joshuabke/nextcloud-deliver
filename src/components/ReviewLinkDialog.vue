@@ -15,7 +15,7 @@ const props = defineProps({
 	/** The Project's Assets, or those of No Project, to pick from */
 	assets: { type: Array, default: () => [] },
 	/** The Project's Reviewers, for inviting on this link */
-	people: { type: Array, default: null },
+	people: { type: Array, required: true },
 })
 
 const emit = defineEmits(['update', 'close', 'deleted'])

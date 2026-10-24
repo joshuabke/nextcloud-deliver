@@ -14,9 +14,10 @@
 - Move "Create Review Link" to a plus next to "Links".
 - Title Review Links by what they show.
 - Make each email address one Reviewer per Project.
-- Give each Personal Link a key of its own, which opens only its Review Link.
+- Give each Personal Link a key of its own, which opens only its Review Link. Personal Links that 0.9.2 mailed for a link the Reviewer never opened stop working; put them on that link again.
 - Move a Reviewer's own rights to each Review Link they are on.
 - List every Reviewer of the Project, on a link or not.
+- Leave name and address of a Reviewer on several links to the Member who invited them.
 - Rename Project Links to Review Links.
 
 ### Fixed

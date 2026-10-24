@@ -21,6 +21,8 @@ A key per link keeps an address from being a way in. Nothing checks the address 
 
 - The migrations copy each Reviewer's own rights to every link they were on, so that nothing changes on those, and put them on every link the activity shows they opened, so that nobody loses a link they used; a link they never opened no longer opens for them. Each of those links takes the key the Reviewer had, so every Personal Link sent before keeps working; links they are put on from then on get keys of their own. A removed Reviewer is marked as such instead of by a missing key.
 - Deleting a link takes everyone off it, with their keys and rights there; the Reviewers and their Comments stay.
+- Mails to a Reviewer carry the Personal Link of whichever of their links shows what they are about, so on more than one link a Reviewer cannot change their own name or address; the Member does, in their dialog. Otherwise whoever holds one key could send the others to another mailbox.
+- An invitation on a link the Reviewer is on already gives that link a new key, so that whoever named themselves there with the address keeps none of it.
 - Two Reviewers who share an address from before stay as they are; the rule holds for every new invitation, naming and change of address.
 - A new Reviewer still needs a name nobody in the review has when a Member invites them (story 53); an invitation with a known address adds a link to that Reviewer instead, under the name they have. Reviewers who name themselves may still share a name, told apart by their colour.
 - An existing Reviewer keeps an address they share with another from before; only a change to an address someone else has is refused.

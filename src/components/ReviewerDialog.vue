@@ -1,4 +1,5 @@
 <script setup>
+import takeOffIcon from '@mdi/svg/svg/account-remove-outline.svg?raw'
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
@@ -10,10 +11,10 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import PersonalLinkRightsDialog from './PersonalLinkRightsDialog.vue'
-import { putReviewerOn, renewReviewerKey, updateReviewerAsMember } from '../api.js'
+import { putReviewerOn, renewReviewerKey, takeReviewerOff, updateReviewerAsMember } from '../api.js'
 import { copyLink } from '../clipboard.js'
 import { useBusy } from '../composables/busy.js'
-import { confirmRemoval } from '../confirm.js'
+import { confirmRemoval, confirmTakeOff } from '../confirm.js'
 
 const props = defineProps({
 	/** A Reviewer of the Project, with their Personal Link and own rights through each link they are on */
@@ -43,6 +44,20 @@ watch(error, (message) => message && showError(message))
 const otherLinks = computed(() => props.links.filter((reviewLink) => !props.reviewer.links.some((personal) => personal.token === reviewLink.token)))
 
 /**
+ * Takes them off one link, paused or not; they stay on their others
+ *
+ * @param {{token: string}} personal - one of reviewer.links
+ */
+async function takeOff(personal) {
+	if (await confirmTakeOff(props.reviewer.name)) {
+		await run(async () => {
+			await takeReviewerOff(props.reviewer.id, personal.token)
+			emit('changed')
+		})
+	}
+}
+
+/**
  * Puts them on another link with a Personal Link of its own, and copies it
  *
  * @param {{token: string}} reviewLink - one of otherLinks
@@ -50,7 +65,10 @@ const otherLinks = computed(() => props.links.filter((reviewLink) => !props.revi
 function putOn(reviewLink) {
 	return run(async () => {
 		const { link } = await putReviewerOn(props.reviewer.id, reviewLink.token)
-		await copyLink(link, t('deliver', 'Personal Link copied'))
+		// Through a paused or expired link it would open nothing yet
+		if (reviewLink.live) {
+			await copyLink(link, t('deliver', 'Personal Link copied'))
+		}
 		emit('changed')
 	})
 }
@@ -126,6 +144,15 @@ async function renew() {
 						@click="openRights = { personal, reviewLink: links.find((reviewLink) => reviewLink.token === personal.token) }">
 						<template #icon>
 							<NcIconSvgWrapper :svg="settingsIcon" />
+						</template>
+					</NcButton>
+					<NcButton
+						variant="tertiary"
+						:aria-label="t('deliver', 'Take {name} off this link', { name: reviewer.name })"
+						:title="t('deliver', 'Take {name} off this link', { name: reviewer.name })"
+						@click="takeOff(personal)">
+						<template #icon>
+							<NcIconSvgWrapper :svg="takeOffIcon" />
 						</template>
 					</NcButton>
 					<!-- None through a paused or expired link -->

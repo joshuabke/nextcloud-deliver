@@ -67,7 +67,7 @@ async function load(id = props.id) {
 	if (props.id === id) {
 		links.value = found.links.map((link) => ({ ...link, title: linkTitle(link, project.value?.assets ?? []) }))
 		reviewers.value = found.reviewers
-		canMail.value = found.canMail ?? false
+		canMail.value = found.canMail
 		person.value = person.value && (byId.value.get(person.value.id) ?? null)
 	}
 }
@@ -236,7 +236,7 @@ function personalLink(reviewer) {
 					:key="reviewer.id"
 					:name="reviewer.name"
 					:inlineActions="1"
-					@click="personalLinkOn(reviewer, link) ? openRights = { reviewer, link } : person = reviewer">
+					@click="openRights = { reviewer, link }">
 					<template #icon>
 						<PersonAvatar :author="{ type: 'reviewer', id: reviewer.id, name: reviewer.name }" :size="24" />
 					</template>

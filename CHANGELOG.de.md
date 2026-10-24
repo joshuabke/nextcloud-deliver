@@ -7,16 +7,17 @@
 - „In Kontakte speichern“ im Menü eines Reviewers hinzugefügt.
 - Deliver-Einstellungen mit dem Adressbuch für gespeicherte Reviewer hinzugefügt.
 - Plus neben „Reviewer“ hinzugefügt, das eine Person über einen eigenen Review-Link einlädt.
-- Reviewer auf einen weiteren Review-Link setzen oder von einem nehmen hinzugefügt.
-- Reviewer in der Navigation mit Initialen gezeigt; unter einem Link öffnen sie ihre Rechte darauf.
+- „Auf anderen Review-Link setzen“ und „Von diesem Link nehmen“ hinzugefügt.
+- Reviewer in der Navigation mit Initialen gezeigt; unter einem Link öffnet ein Klick ihre Rechte darauf.
 
 ### Geändert
 - „Review-Link erstellen“ als Plus neben „Links“ verschoben.
 - Review-Links nach ihrem Inhalt benannt.
 - E-Mail-Adresse auf einen Reviewer pro Projekt beschränkt.
-- Jedem Persönlichen Link einen eigenen Schlüssel gegeben, der nur seinen Review-Link öffnet.
+- Jedem Persönlichen Link einen eigenen Schlüssel gegeben, der nur seinen Review-Link öffnet. Persönliche Links, die 0.9.2 für einen nie geöffneten Link verschickt hat, funktionieren nicht mehr; den Reviewer dort erneut auf den Link setzen.
 - Eigene Rechte eines Reviewers auf die einzelnen Review-Links verlegt.
 - Alle Reviewer des Projekts gelistet, mit oder ohne Link.
+- Name und Adresse eines Reviewers auf mehreren Links nur noch durch das einladende Mitglied änderbar gemacht.
 - Projekt-Links in Review-Links umbenannt.
 
 ### Behoben

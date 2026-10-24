@@ -283,6 +283,13 @@ class PublicApiController extends PublicShareController {
 	public function settings(?string $name = null, ?string $email = null, ?bool $mailReplies = null, ?bool $mailComments = null, ?bool $mailVersions = null, ?string $language = null): Response {
 		return $this->guard(function () use ($name, $email, $mailReplies, $mailComments, $mailVersions, $language) {
 			$reviewer = $this->reviewer() ?? throw new AccessDeniedException('Give a name first');
+			$renamed = $name !== null && trim($name) !== $reviewer->getName();
+			$readdressed = $email !== null && mb_strtolower(trim($email)) !== mb_strtolower((string)$reviewer->getEmail());
+			// Mails carry the Personal Links of every link a Reviewer is on: on more than one, only the Member who
+			// invited them changes who they are and where those go (ADR 0014)
+			if (($renamed || $readdressed) && $this->reviewers->linkCount($reviewer) > 1) {
+				throw $this->links->identityLocked();
+			}
 			if ($name !== null) {
 				$this->links->assertRenameFree($reviewer, $name, reviewersToo: false);
 			}
@@ -296,7 +303,8 @@ class PublicApiController extends PublicShareController {
 			$this->links->assertAddressFree($reviewer, $email);
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
 			$reviewer = $this->reviewers->updateSettings($reviewer, $email, $wishes, $name, $language);
-			$mailed = $changed && $this->mail->welcome($reviewer, $this->link()->personalLink((string)$this->reviewers->keyOn($reviewer, $this->getToken())), $language);
+			$key = $this->reviewers->keyOn($reviewer, $this->getToken()) ?? throw new AccessDeniedException('Give a name first');
+			$mailed = $changed && $this->mail->welcome($reviewer, $this->link()->personalLink($key), $language);
 			return $this->reviewers->serialize($reviewer) + ['mailed' => $mailed];
 		});
 	}
@@ -424,7 +432,8 @@ class PublicApiController extends PublicShareController {
 		return $reviewer === null
 			// A logged-in visitor gets their display name offered (story 58)
 			? ['type' => 'unnamed', 'name' => $this->userSession->getUser()?->getDisplayName() ?? '']
-			: ['type' => 'reviewer', 'id' => $reviewer->getId(), 'name' => $reviewer->getName(), 'email' => $reviewer->getEmail(), 'mail' => $reviewer->mailWishes()];
+			// On several links, only the Member who invited them changes name and address (ADR 0014)
+			: ['type' => 'reviewer', 'id' => $reviewer->getId(), 'name' => $reviewer->getName(), 'email' => $reviewer->getEmail(), 'mail' => $reviewer->mailWishes(), 'severalLinks' => $this->reviewers->linkCount($reviewer) > 1];
 	}
 
 	private function reviewer(): ?Reviewer {

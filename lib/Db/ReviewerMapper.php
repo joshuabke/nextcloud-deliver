@@ -192,11 +192,6 @@ class ReviewerMapper extends Mapper {
 		return $rights;
 	}
 
-	/** Whether the Reviewer is on the link: invited through it, put on it or named there (ADR 0014) */
-	public function isOn(int $reviewerId, string $token): bool {
-		return $this->rightsOn($reviewerId, $token) !== null;
-	}
-
 	/** @return ?array{canComment: ?bool, allowOlder: ?bool, watermark: ?bool} their own rights on the link, null when they are not on it */
 	public function rightsOn(int $reviewerId, string $token): ?array {
 		return $this->rightsByLink([$reviewerId])[$reviewerId][$token] ?? null;

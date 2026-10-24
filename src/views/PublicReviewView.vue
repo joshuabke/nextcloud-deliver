@@ -27,6 +27,7 @@ import VideoPlayer from '../components/VideoPlayer.vue'
 import { claimReviewer, errorMessage, getPublicContext, listPublicAssets } from '../api.js'
 import { usePanelOpen } from '../composables/panel.js'
 import { useReview } from '../composables/review.js'
+import { conflictMessage } from '../lib/conflict.js'
 import { addressOf } from '../lib/language.js'
 import { useCommentsStore } from '../store/comments.js'
 
@@ -138,9 +139,8 @@ async function claim({ name, email, mail }) {
 		reviewer.value = claimed
 		await store.reload()
 	} catch (e) {
-		// The server answers in the browser's language, the page may speak another
-		// The server says what is taken, the name or the address
-		error.value = errorMessage(e)
+		// What is taken, the name or the address, in the page's language
+		error.value = conflictMessage(e, { name, email }) ?? errorMessage(e)
 	}
 }
 </script>

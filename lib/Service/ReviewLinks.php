@@ -162,8 +162,15 @@ class ReviewLinks {
 			$this->assertNameFree($link, $name);
 			$reviewer = $this->reviewers->claim($link, $name, $email);
 		}
-		// A key of its own, which only this invitation hands out (ADR 0014)
-		return [$reviewer, $this->reviewers->putOn($reviewer, $link->token())];
+		// A key of its own, which only this invitation hands out (ADR 0014): new on a link they are on already,
+		// so that whoever named themselves there with the address before keeps none of it
+		$key = $this->reviewers->newKey();
+		if ($this->reviewers->keyOn($reviewer, $link->token()) === null) {
+			$this->reviewers->putOn($reviewer, $link->token(), $key);
+		} else {
+			$this->reviewers->setKeyOn($reviewer, $link->token(), $key);
+		}
+		return [$reviewer, $key];
 	}
 
 	/**
@@ -290,12 +297,17 @@ class ReviewLinks {
 
 	/** The refusal of an address another Reviewer of the Project has */
 	public function addressTaken(string $email): ProjectConflictException {
-		return new ProjectConflictException($this->l->t('Someone in this review already has the address %s.', [trim($email)]));
+		return new ProjectConflictException($this->l->t('Someone in this review already has the address %s.', [trim($email)]), 'address');
+	}
+
+	/** The refusal of a Reviewer on several links who changes their own name or address */
+	public function identityLocked(): ProjectConflictException {
+		return new ProjectConflictException($this->l->t('You review on several links: ask whoever invited you to change your name or address.'), 'identityLocked');
 	}
 
 	/** The refusal of a name someone in the review already goes by */
 	public function nameTaken(string $name): ProjectConflictException {
-		return new ProjectConflictException($this->l->t('Someone in this review is already called "%s".', [trim($name)]));
+		return new ProjectConflictException($this->l->t('Someone in this review is already called "%s".', [trim($name)]), 'name');
 	}
 
 	/** A name as it is stored (ReviewerService), without case */

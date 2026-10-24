@@ -80,11 +80,14 @@ class PublicController extends AuthPublicShareController {
 		$reviewer = null;
 		if (!$member) {
 			$key = $this->request->getParam('r');
-			if (is_string($key) && $key !== '') {
-				$this->rememberReviewer($response, $key);
+			$reviewer = $this->reviewers->byKey(is_string($key) ? $key : null, $link);
+			if ($reviewer !== null) {
+				$this->rememberReviewer($response, (string)$key);
+			} else {
+				// A key that opens nothing here leaves the Reviewer this browser knows as they are
+				$cookie = $this->request->getCookie(self::cookieName($this->getToken()));
+				$reviewer = $this->reviewers->byKey(is_string($cookie) ? $cookie : null, $link);
 			}
-			$cookie = $this->request->getCookie(self::cookieName($this->getToken()));
-			$reviewer = $this->reviewers->byKey(is_string($key) && $key !== '' ? $key : (is_string($cookie) ? $cookie : null), $link);
 			$this->links->record($link, LinkActivityMapper::OPENED, $reviewer);
 		}
 

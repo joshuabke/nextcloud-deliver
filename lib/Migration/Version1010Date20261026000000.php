@@ -15,11 +15,14 @@ use OCP\Migration\SimpleMigrationStep;
 /**
  * Each Personal Link has a key of its own (ADR 0014), kept with the Reviewer
  * on that link. Every link a Reviewer opened, as the activity of the links
- * remembers, has them on it, and each of their links takes the key they had,
- * so that every Personal Link sent before still works. A key is unique per
- * link: a Reviewer from before keeps one key on all of theirs.
+ * remembers, has them on it with the rights of their own they have on their
+ * other links, and each of their links takes the key they had, so that the
+ * Personal Links they used still work. A Reviewer from before keeps one key
+ * on all of theirs; Version1012 makes a key unique per link once all are set.
  */
 class Version1010Date20261026000000 extends SimpleMigrationStep {
+	private const RIGHTS = ['can_comment', 'allow_older', 'watermark'];
+
 	public function __construct(
 		private IDBConnection $db,
 	) {
@@ -33,11 +36,15 @@ class Version1010Date20261026000000 extends SimpleMigrationStep {
 			return null;
 		}
 		$table->addColumn('secret_key', Types::STRING, ['notnull' => false, 'length' => 64]);
-		$table->addUniqueIndex(['token', 'secret_key'], 'deliver_revlink_key_uniq');
 		return $schema;
 	}
 
 	public function postSchemaChange(IOutput $output, Closure $schemaClosure, array $options): void {
+		/** @var ISchemaWrapper $schema */
+		$schema = $schemaClosure();
+		if (!$schema->getTable('deliver_reviewers')->hasColumn('secret_key')) {
+			return;
+		}
 		$reviewers = [];
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('id', 'owner_uid', 'project_id', 'secret_key')->from('deliver_reviewers')->where($qb->expr()->isNotNull('secret_key'));
@@ -57,12 +64,15 @@ class Version1010Date20261026000000 extends SimpleMigrationStep {
 		}
 		$result->closeCursor();
 
+		// Where they are already, and the rights of their own they have there: Version1006 gave each of their links the same
 		$on = [];
+		$rights = [];
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('reviewer_id', 'token')->from('deliver_reviewer_links');
+		$qb->select('reviewer_id', 'token', ...self::RIGHTS)->from('deliver_reviewer_links');
 		$result = $qb->executeQuery();
 		while (($row = $result->fetch()) !== false) {
 			$on[(int)$row['reviewer_id'] . ' ' . $row['token']] = true;
+			$rights[(int)$row['reviewer_id']] ??= array_intersect_key($row, array_flip(self::RIGHTS));
 		}
 		$result->closeCursor();
 
@@ -77,8 +87,9 @@ class Version1010Date20261026000000 extends SimpleMigrationStep {
 		$insert->insert('deliver_reviewer_links')->values([
 			'reviewer_id' => $insert->createParameter('reviewer'),
 			'token' => $insert->createParameter('token'),
+			'secret_key' => $insert->createParameter('key'),
 			'created_at' => $insert->createParameter('at'),
-		]);
+		] + array_combine(self::RIGHTS, array_map(static fn (string $right) => $insert->createParameter($right), self::RIGHTS)));
 		while (($row = $result->fetch()) !== false) {
 			$reviewer = $reviewers[(int)$row['reviewer_id']] ?? null;
 			$link = $links[(string)$row['token']] ?? null;
@@ -88,8 +99,14 @@ class Version1010Date20261026000000 extends SimpleMigrationStep {
 			}
 			$insert->setParameter('reviewer', (int)$row['reviewer_id'], IQueryBuilder::PARAM_INT)
 				->setParameter('token', (string)$row['token'])
-				->setParameter('at', (int)$row['first'], IQueryBuilder::PARAM_INT)
-				->executeStatement();
+				->setParameter('key', (string)$reviewer['secret_key'])
+				->setParameter('at', (int)$row['first'], IQueryBuilder::PARAM_INT);
+			foreach (self::RIGHTS as $right) {
+				$value = $rights[(int)$row['reviewer_id']][$right] ?? null;
+				$insert->setParameter($right, $value === null ? null : (bool)$value, $value === null ? IQueryBuilder::PARAM_NULL : IQueryBuilder::PARAM_BOOL);
+			}
+			$insert->executeStatement();
+			$on[(int)$row['reviewer_id'] . ' ' . $row['token']] = true;
 		}
 		$result->closeCursor();
 
