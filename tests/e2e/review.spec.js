@@ -526,6 +526,8 @@ test.describe('Review view', () => {
 		const vcard = `BEGIN:VCARD\r\nVERSION:3.0\r\nUID:${uid}\r\nFN:${zoeName}\r\n`
 			+ 'EMAIL;TYPE=WORK:zoe@studio.test\r\nEMAIL;TYPE=HOME:zoe@home.test\r\nEND:VCARD\r\n'
 		expect((await api.fetch(card, { method: 'PUT', data: vcard, headers: { 'Content-Type': 'text/vcard' } })).status()).toBe(201)
+		// A link of the Project to put Zoe on later
+		await api.post(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`)
 
 		try {
 			await page.goto(`/apps/deliver/projects/${projectId}`)
@@ -575,7 +577,34 @@ test.describe('Review view', () => {
 
 			// Under the link, a click opens their rights on that very link
 			await page.locator('.app-navigation').getByText(zoeName).first().click()
-			await expect(page.getByRole('dialog', { name: `${zoeName} on “Whole Project”` })).toBeVisible()
+			const nested = page.getByRole('dialog', { name: `${zoeName} on “Whole Project”` })
+			await expect(nested).toBeVisible()
+			await nested.getByRole('button', { name: 'Close' }).click()
+			await expect(nested).toHaveCount(0)
+
+			// Put on another link of the Project from their dialog, with a Personal Link of its own (story 55)
+			const zoeLinks = async () => {
+				const now = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`)).json()
+				return now.ocs.data.reviewers.find((each) => each.id === zoeId).links.map((each) => each.token)
+			}
+			await zoe.getByText(zoeName).click()
+			const again = page.getByRole('dialog', { name: zoeName })
+			await expect(again.getByLabel('Name', { exact: true })).toBeFocused()
+			await again.getByRole('combobox', { name: 'Put on another Review Link' }).click()
+			await page.getByRole('option').first().click()
+			await expect.poll(async () => (await zoeLinks()).length).toBe(2)
+			await again.getByRole('button', { name: 'Close' }).click()
+			await expect(again).toHaveCount(0)
+
+			// And taken off that one in its settings; the link of their own stays
+			const other = (await zoeLinks()).find((token) => token !== theirs.token)
+			const linkItem = page.locator('.app-navigation li').filter({ has: page.locator('ul li', { hasText: zoeName }) }).first()
+			await linkItem.locator('.app-navigation-entry__name').first().click()
+			const settings = page.getByRole('dialog').first()
+			await settings.locator('.deliver-link__reviewer').filter({ hasText: zoeName }).getByRole('button', { name: `Take ${zoeName} off this link` }).click()
+			await page.getByRole('button', { name: 'Take off' }).click()
+			await expect.poll(zoeLinks).toEqual([theirs.token])
+			expect(other).not.toBe(theirs.token)
 		} finally {
 			const cleanup = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth })
 			await cleanup.fetch(card, { method: 'DELETE' })
