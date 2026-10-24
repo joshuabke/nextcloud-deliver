@@ -12,7 +12,7 @@ use OCP\Migration\IOutput;
 use OCP\Migration\SimpleMigrationStep;
 
 /**
- * Review Links are Review Links now, in the glossary and in the schema. The
+ * Project Links are Review Links now, in the glossary and in the schema. The
  * links move to a table of that name, in their order; nothing refers to a
  * link's id (Reviewers and activity go by its token), so the new table gives
  * its own. Version1009 drops the old table.
@@ -62,8 +62,18 @@ class Version1008Date20261025000000 extends SimpleMigrationStep {
 		if (!$schema->hasTable('deliver_project_links')) {
 			return;
 		}
-		// In the database itself, so that every column keeps its type on every database
-		$columns = implode(', ', self::COLUMNS);
+		// Copied once: a second run would collide on the tokens
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id')->from('deliver_review_links')->setMaxResults(1);
+		$result = $qb->executeQuery();
+		$copied = $result->fetchOne() !== false;
+		$result->closeCursor();
+		if ($copied) {
+			return;
+		}
+		// In the database itself, so that every column keeps its type on every database;
+		// quoted, as Oracle would otherwise look for the names in upper case
+		$columns = implode(', ', array_map(static fn (string $column) => "`$column`", self::COLUMNS));
 		$this->db->executeStatement("INSERT INTO `*PREFIX*deliver_review_links` ($columns) SELECT $columns FROM `*PREFIX*deliver_project_links` ORDER BY `id`");
 	}
 }

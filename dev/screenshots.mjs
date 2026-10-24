@@ -167,7 +167,7 @@ async function seed() {
 	await ocs(await leo.put(`${API}/versions/${asset('TOS_0030_bridge').versions[0].id}/approval?format=json`, { data: { status: 'approved' } }))
 	await comment(leo, asset('TOS_0090_scope').versions[0], { inFrame: 60, body: 'Scope reticle flickers for two frames.' })
 
-	// A Project Link for the client, and her own Personal Link
+	// A Review Link for the client, and her own Personal Link
 	const link = await ocs(await sarah.post(`${API}/projects/${project.id}/links?format=json`))
 	const reviewer = await ocs(await sarah.post(`${API}/links/${link.id}/reviewers?format=json`, { data: { name: 'Ines Visser' } }))
 	const client = await request.newContext({ baseURL: URL })

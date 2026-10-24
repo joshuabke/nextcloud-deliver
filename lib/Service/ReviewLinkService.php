@@ -17,12 +17,12 @@ use OCP\Security\Events\ValidatePasswordPolicyEvent;
 use OCP\Security\IHasher;
 use OCP\Security\ISecureRandom;
 
-/** A Member's Review Links (ADR 0010, 0011): made, changed and removed by the Member who made them */
+/** A Member's Review Links (ADR 0010, 0011): made, changed and removed by the Member who made them; what goes on behind a token is ReviewLinks' */
 class ReviewLinkService {
 	private const TOKEN_LENGTH = 20;
 
 	public function __construct(
-		private ReviewLinkMapper $links,
+		private ReviewLinkMapper $linkRecords,
 		private LinkActivityMapper $activity,
 		private ProjectService $projects,
 		private AssetMapper $assets,
@@ -64,7 +64,7 @@ class ReviewLinkService {
 		$link->setCanDownload(true);
 		$link->setLatestOnly(false);
 		$link->setCreatedAt($this->time->getTime());
-		return $this->serialize($this->links->insert($link));
+		return $this->serialize($this->linkRecords->insert($link));
 	}
 
 	/**
@@ -100,19 +100,19 @@ class ReviewLinkService {
 			}
 			$link->setAssetIds($picked);
 		}
-		return $this->serialize($this->links->update($link));
+		return $this->serialize($this->linkRecords->update($link));
 	}
 
 	/** Deletes the link; its Reviewers stay the Member's, their Comments stay */
 	public function delete(string $uid, int $id): void {
 		$link = $this->own($uid, $id);
 		$this->activity->deleteByToken($link->getToken());
-		$this->links->delete($link);
+		$this->linkRecords->delete($link);
 	}
 
 	/** @return list<array<string, mixed>> the Member's links on a Project, or on No Project for 0, for its navigation */
 	public function listFor(string $uid, int $projectId): array {
-		$links = $this->links->findByProject($projectId === ProjectService::NONE ? null : $projectId, $uid);
+		$links = $this->linkRecords->findByProject($projectId === ProjectService::NONE ? null : $projectId, $uid);
 		return array_map(fn (ReviewLinkRecord $link) => $this->serialize($link), $links);
 	}
 
@@ -148,7 +148,7 @@ class ReviewLinkService {
 	 * @throws AccessDeniedException another Member's link
 	 */
 	private function own(string $uid, int $id): ReviewLinkRecord {
-		$link = $this->links->find($id) ?? throw new NotFoundException('Link not found');
+		$link = $this->linkRecords->find($id) ?? throw new NotFoundException('Link not found');
 		if ($link->getOwnerUid() !== $uid) {
 			throw new AccessDeniedException('Only the Member who made a link changes it');
 		}
@@ -158,7 +158,7 @@ class ReviewLinkService {
 	private function newToken(): string {
 		do {
 			$token = $this->random->generate(self::TOKEN_LENGTH, ISecureRandom::CHAR_HUMAN_READABLE);
-		} while ($this->links->findByToken($token) !== null);
+		} while ($this->linkRecords->findByToken($token) !== null);
 		return $token;
 	}
 

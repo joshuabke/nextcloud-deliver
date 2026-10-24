@@ -14,7 +14,6 @@
 - Reviewer in der Navigation mit Initialen gezeigt; unter einem Link öffnen sie ihre Rechte darauf.
 - Projekt-Links in Review-Links umbenannt.
 
-
 ## 0.9.2 – 2026-10-22
 
 - Reviewer gehören zum Projekt des Links, über den sie kamen: die Einstellungen eines Links zeigen nur sie, und ihr Persönlicher Link und ihre Mails bleiben in diesem Projekt. Wer schon mehrere Projekte reviewt hat, behält das erste; für die anderen lädst du sie neu ein.

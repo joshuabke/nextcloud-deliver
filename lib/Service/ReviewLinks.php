@@ -24,7 +24,8 @@ use OCP\Security\IHasher;
 
 /**
  * Finds the Review Link behind a token (ADR 0011) and what goes with it:
- * Versions behind it, Reviewers who came by it, and its activity.
+ * Versions behind it, the Reviewers on it, and its activity. Making,
+ * changing and removing a link is ReviewLinkService's.
  */
 class ReviewLinks {
 	public function __construct(

@@ -12,7 +12,7 @@ return [
 		['name' => 'media#show', 'url' => '/versions/{id}/media/{kind}', 'verb' => 'GET'],
 		['name' => 'export#download', 'url' => '/versions/{id}/export/{format}', 'verb' => 'GET'],
 		['name' => 'export#liveSet', 'url' => '/versions/{id}/export/ableton', 'verb' => 'POST'],
-		// Behind a Project Link. The {token} parameter lets the public-share
+		// Behind a Review Link. The {token} parameter lets the public-share
 		// middleware check the link's password and expiry (ADR 0011).
 		['name' => 'Public#showShare', 'url' => '/s/{token}', 'verb' => 'GET'],
 		['name' => 'Public#showVersion', 'url' => '/s/{token}/versions/{versionId}', 'verb' => 'GET'],

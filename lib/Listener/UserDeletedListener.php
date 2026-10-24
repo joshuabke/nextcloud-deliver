@@ -29,7 +29,7 @@ use OCP\User\Events\UserDeletedEvent;
 class UserDeletedListener implements IEventListener {
 	public function __construct(
 		private ProjectMapper $projects,
-		private ReviewLinkMapper $links,
+		private ReviewLinkMapper $linkRecords,
 		private LinkActivityMapper $activity,
 		private ReviewerMapper $reviewerMapper,
 		private ReviewerService $reviewers,
@@ -57,9 +57,9 @@ class UserDeletedListener implements IEventListener {
 				$this->projects->update($project);
 			}
 		}
-		foreach ($this->links->findByOwner($uid) as $link) {
+		foreach ($this->linkRecords->findByOwner($uid) as $link) {
 			$this->activity->deleteByToken($link->getToken());
-			$this->links->delete($link);
+			$this->linkRecords->delete($link);
 		}
 		foreach ($this->reviewerMapper->findByOwners([$uid]) as $reviewer) {
 			$this->reviewers->remove($reviewer);
