@@ -10,7 +10,7 @@ A Reviewer now belongs to the Member and to one Project: the Project of the link
 
 ## Considered Options
 
-- Reviewers from Nextcloud's contacts, invited on any Project from the Member's address book: the better long-term answer, as one person is then the same everywhere they are invited, but it needs a contacts integration first. Until it exists, a Reviewer stays within one Project.
+- Reviewers from Nextcloud's contacts, invited on any Project from the Member's address book: the better long-term answer, as one person is then the same everywhere they are invited, but it needs a contacts integration first. Until it exists, a Reviewer stays within one Project. Contacts came as a source of name and address only (#66): a Reviewer invited from them is still one of the Project, and one identity across Projects waits until after 1.0, together with Project-wide Reviewers and links (#48).
 - Only hiding other Projects' Reviewers from the lists: the Personal Link and the mails would still reach across Projects.
 
 ## Consequences
