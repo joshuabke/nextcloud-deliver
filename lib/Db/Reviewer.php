@@ -7,7 +7,7 @@ namespace OCA\Deliver\Db;
 use OCP\AppFramework\Db\Entity;
 
 /**
- * Someone who reaches a Version through a Project Link instead of Files
+ * Someone who reaches a Version through a Review Link instead of Files
  * permissions. The secret key is their identity: a Personal Link carries it,
  * so the same person is the same author on any device, forever.
  *
@@ -35,7 +35,7 @@ use OCP\AppFramework\Db\Entity;
  * @method void setCreatedAt(int $createdAt)
  */
 class Reviewer extends Entity {
-	/** The Member they belong to: who invited them, or whose Project Link they named themselves on */
+	/** The Member they belong to: who invited them, or whose Review Link they named themselves on */
 	protected string $ownerUid = '';
 	/** The Project whose links they come by (ADR 0013); null for the Member's links on No Project */
 	protected ?int $projectId = null;

@@ -17,7 +17,7 @@ const router = createRouter({
 		{ path: '/', component: ProjectListView },
 		{
 			path: '/projects/:id',
-			// Only the Project view has an app navigation: its folders and Project Links
+			// Only the Project view has an app navigation: its folders and Review Links
 			components: { default: ProjectView, navigation: ProjectNavigation },
 			props: { default: (route) => ({ id: Number(route.params.id) }), navigation: (route) => ({ id: Number(route.params.id) }) },
 		},

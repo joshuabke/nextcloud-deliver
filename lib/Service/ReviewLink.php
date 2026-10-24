@@ -7,9 +7,9 @@ namespace OCA\Deliver\Service;
 use OCA\Deliver\Db\Asset;
 use OCA\Deliver\Db\AssetMapper;
 use OCA\Deliver\Db\Project;
-use OCA\Deliver\Db\ProjectLink;
 use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\Reviewer;
+use OCA\Deliver\Db\ReviewLinkRecord;
 use OCA\Deliver\Db\Version;
 use OCA\Deliver\Db\VersionMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -36,7 +36,7 @@ class ReviewLink {
 	private array $files = [];
 
 	public function __construct(
-		public readonly ProjectLink $link,
+		public readonly ReviewLinkRecord $link,
 		private ProjectMapper $projects,
 		private AssetMapper $assets,
 		private VersionMapper $versions,

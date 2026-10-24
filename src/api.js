@@ -10,7 +10,7 @@ import { decodeWaveform } from './lib/waveform.js'
 let publicBase = null
 
 /**
- * Sends every following call through a Project Link instead of the OCS API.
+ * Sends every following call through a Review Link instead of the OCS API.
  *
  * @param {string} token - the link's token
  */
@@ -38,7 +38,7 @@ export const renewReviewerKey = (id) => axios.post(url(`/reviewers/${id}/key`)).
 export const removeReviewer = (id) => axios.delete(url(`/reviewers/${id}`)).then(data)
 // Whether the Reviewer went into the Member's Contacts or was there already (#66)
 export const saveReviewerContact = (id) => axios.post(url(`/reviewers/${id}/contact`)).then(data)
-// One person on a Project Link of their own: {name, email, sendMail, message, assetIds} and the link's rights (story 145)
+// One person on a Review Link of their own: {name, email, sendMail, message, assetIds} and the link's rights (story 145)
 export const inviteToProject = (projectId, fields) => axios.post(url(`/projects/${projectId}/invitations`), fields).then(data)
 export const searchContacts = (search) => axios.get(url('/contacts'), { params: { search } }).then(data)
 export const getSettings = () => axios.get(url('/settings')).then(data)
@@ -90,7 +90,7 @@ export function attachFile(id, file) {
 
 /**
  * @param {number} id - an attachment
- * @return {string} where the browser gets it, through the Project Link on the public page
+ * @return {string} where the browser gets it, through the Review Link on the public page
  */
 export function attachmentUrl(id) {
 	return publicBase === null
@@ -139,14 +139,14 @@ export function handInWaveform(file, asset) {
 }
 export const markSeen = (versionId, at) => axios.post(url(`/versions/${versionId}/seen`), { at }).then(data)
 
-// Project Links (ADR 0010, 0011): a whole Project or picked Assets; on No Project (id 0) picked Assets of it
-export const listProjectLinks = (projectId) => axios.get(url(`/projects/${projectId}/links`)).then(data)
-export const createProjectLink = (projectId, assetIds = null) => axios.post(url(`/projects/${projectId}/links`), { assetIds }).then(data)
+// Review Links (ADR 0010, 0011): a whole Project or picked Assets; on No Project (id 0) picked Assets of it
+export const listReviewLinks = (projectId) => axios.get(url(`/projects/${projectId}/links`)).then(data)
+export const createReviewLink = (projectId, assetIds = null) => axios.post(url(`/projects/${projectId}/links`), { assetIds }).then(data)
 
 /**
  * What a link's settings, Reviewers and activity go through
  *
- * @param {{id: number}} link - a Project Link
+ * @param {{id: number}} link - a Review Link
  * @return {{update: (fields: object) => Promise<object>, remove: () => Promise<void>, reviewers: () => Promise<object[]>, invite: (name: string, email: ?string, letter: ?{message: string}) => Promise<object>, activity: () => Promise<object[]>}}
  */
 export function linkApi(link) {

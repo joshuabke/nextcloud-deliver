@@ -9,7 +9,7 @@ let shareToken = null
 
 /**
  * Reviewers have no session, so their previews come through the link's own
- * endpoint instead of the one for Members; a Project Link has no Nextcloud
+ * endpoint instead of the one for Members; a Review Link has no Nextcloud
  * share to ask (ADR 0010).
  *
  * @param {string} token - the token of the public page

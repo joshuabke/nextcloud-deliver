@@ -6,11 +6,11 @@ namespace OCA\Deliver\Service;
 
 use OCA\Deliver\Db\AssetMapper;
 use OCA\Deliver\Db\LinkActivityMapper;
-use OCA\Deliver\Db\ProjectLink;
-use OCA\Deliver\Db\ProjectLinkMapper;
 use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\Reviewer;
 use OCA\Deliver\Db\ReviewerMapper;
+use OCA\Deliver\Db\ReviewLinkMapper;
+use OCA\Deliver\Db\ReviewLinkRecord;
 use OCA\Deliver\Db\Version;
 use OCA\Deliver\Db\VersionMapper;
 use OCP\AppFramework\Utility\ITimeFactory;
@@ -24,11 +24,12 @@ use OCP\Security\IHasher;
 
 /**
  * Finds the Review Link behind a token (ADR 0011) and what goes with it:
- * Versions behind it, Reviewers who came by it, and its activity.
+ * Versions behind it, the Reviewers on it, and its activity. Making,
+ * changing and removing a link is ReviewLinkService's.
  */
 class ReviewLinks {
 	public function __construct(
-		private ProjectLinkMapper $projectLinks,
+		private ReviewLinkMapper $linkRecords,
 		private ProjectMapper $projects,
 		private AssetMapper $assets,
 		private VersionMapper $versions,
@@ -49,10 +50,10 @@ class ReviewLinks {
 
 	/** @throws NotFoundException no link with this token */
 	public function byToken(string $token): ReviewLink {
-		return $this->of($this->projectLinks->findByToken($token) ?? throw new NotFoundException('Link not found'));
+		return $this->of($this->linkRecords->findByToken($token) ?? throw new NotFoundException('Link not found'));
 	}
 
-	public function of(ProjectLink $link): ReviewLink {
+	public function of(ReviewLinkRecord $link): ReviewLink {
 		return new ReviewLink($link, $this->projects, $this->assets, $this->versions, $this->root, $this->hasher, $this->urls, $this->time);
 	}
 
@@ -203,7 +204,7 @@ class ReviewLinks {
 		$fileIds = array_map(static fn (Version $version) => $version->getFileId(), array_merge([], ...array_column($link->assets(), 'versions')));
 		$uids = array_unique(array_merge([$link->ownerUid()], ...array_map($this->members->of(...), array_unique($fileIds))));
 		$tokens = !$reviewersToo ? [] : ($link->projectId() === null ? [$link->token()]
-			: array_map(static fn (ProjectLink $each) => $each->getToken(), $this->projectLinks->findAllOf($link->projectId())));
+			: array_map(static fn (ReviewLinkRecord $each) => $each->getToken(), $this->linkRecords->findAllOf($link->projectId())));
 		$names = [
 			...array_map(fn (string $uid) => $this->users->getDisplayName($uid) ?? $uid, $uids),
 			...($reviewersToo ? $this->reviewerMapper->namesByLinks($tokens, $except?->getId()) : []),
@@ -353,7 +354,7 @@ class ReviewLinks {
 	public function reviewLinkFor(Version $version, Reviewer $reviewer): ?string {
 		$token = null;
 		$on = $this->reviewerMapper->rightsByLink([$reviewer->getId()])[$reviewer->getId()] ?? [];
-		foreach ($this->projectLinks->findByProject($version->getProjectId(), $reviewer->getOwnerUid()) as $each) {
+		foreach ($this->linkRecords->findByProject($version->getProjectId(), $reviewer->getOwnerUid()) as $each) {
 			$link = $this->of($each);
 			try {
 				if ($link->isLive() && $link->takes($reviewer) && isset($on[$link->token()]) && $link->version($version) === $version) {

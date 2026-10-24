@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace OCA\Deliver\Tests\Integration;
 
 /**
- * A Reviewer's side of a Project Link: no account, no Nextcloud session, just the
+ * A Reviewer's side of a Review Link: no account, no Nextcloud session, just the
  * token, whatever the link allows, and a cookie that remembers who they are.
  */
 class PublicClient {

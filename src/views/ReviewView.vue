@@ -57,7 +57,7 @@ const uploads = useUploadsStore()
 const fileInput = ref(null)
 /** The phone's date picker for a first Due Date; once set, the date in the bar changes it */
 const pickingDue = ref(false)
-/** The Project Links of this Version's Asset, in a dialog */
+/** The Review Links of this Version's Asset, in a dialog */
 const sharing = ref(false)
 /** Who can be mentioned in this Project */
 const members = ref([])

@@ -28,7 +28,7 @@ export function confirmProjectRemoval() {
 }
 
 /**
- * Asks before a Project Link is deleted.
+ * Asks before a Review Link is deleted.
  *
  * @return {Promise<boolean>} whether the person confirmed
  */

@@ -90,7 +90,7 @@ class ContactsTest extends TestCase {
 		return array_combine(array_column($reviewers, 'name'), array_column($reviewers, 'inContacts'));
 	}
 
-	/** @return array<string, mixed> the new Project Link */
+	/** @return array<string, mixed> the new Review Link */
 	private function link(): array {
 		return $this->nc->ocs('POST', "/projects/{$this->projectId}/links")['data'];
 	}

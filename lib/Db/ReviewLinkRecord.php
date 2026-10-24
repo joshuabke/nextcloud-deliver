@@ -7,8 +7,9 @@ namespace OCA\Deliver\Db;
 use OCP\AppFramework\Db\Entity;
 
 /**
- * A review link of Deliver's own for a Project (ADR 0010): the whole Project
- * or picked Assets, with password, expiry, pause and rights of its own.
+ * A Review Link as stored (ADR 0010): the whole Project or picked Assets,
+ * with password, expiry, pause and rights of its own. ReviewLink is the same
+ * link as a request sees it; "Record" keeps the two apart.
  *
  * @method ?int getProjectId()
  * @method void setProjectId(?int $projectId)
@@ -41,7 +42,7 @@ use OCP\AppFramework\Db\Entity;
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
  */
-class ProjectLink extends Entity {
+class ReviewLinkRecord extends Entity {
 	protected ?int $projectId = null;
 	protected ?string $ownerUid = null;
 	protected ?string $token = null;

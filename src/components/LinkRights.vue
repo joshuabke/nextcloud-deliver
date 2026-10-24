@@ -2,7 +2,7 @@
 import { t } from '@nextcloud/l10n'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 
-/** A Project Link's rights for its Reviewers (stories 51, 121), for its settings and for an invitation */
+/** A Review Link's rights for its Reviewers (stories 51, 121), for its settings and for an invitation */
 defineProps({
 	/** canComment, watermark, allowOlder, latestOnly, canDownload */
 	flags: { type: Object, required: true },

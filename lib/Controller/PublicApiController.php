@@ -37,7 +37,7 @@ use OCP\IUserSession;
 use OCP\Security\RateLimiting\ILimiter;
 
 /**
- * The API behind a Project Link. Token, password and expiry are checked by
+ * The API behind a Review Link. Token, password and expiry are checked by
  * the framework before an action runs (ADR 0011); what is left here is who
  * the Reviewer is and what the link's flags allow.
  */
@@ -213,7 +213,7 @@ class PublicApiController extends PublicShareController {
 
 	/**
 	 * The still of a file behind the link, as Nextcloud renders it, for the
-	 * grid; a Project Link has no share of Nextcloud's to ask for it.
+	 * grid; a Review Link has no share of Nextcloud's to ask for it.
 	 */
 	#[PublicPage]
 	#[NoCSRFRequired]

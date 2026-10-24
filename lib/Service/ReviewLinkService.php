@@ -6,8 +6,8 @@ namespace OCA\Deliver\Service;
 
 use OCA\Deliver\Db\AssetMapper;
 use OCA\Deliver\Db\LinkActivityMapper;
-use OCA\Deliver\Db\ProjectLink;
-use OCA\Deliver\Db\ProjectLinkMapper;
+use OCA\Deliver\Db\ReviewLinkMapper;
+use OCA\Deliver\Db\ReviewLinkRecord;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\EventDispatcher\IEventDispatcher;
 use OCP\Files\NotFoundException;
@@ -17,12 +17,12 @@ use OCP\Security\Events\ValidatePasswordPolicyEvent;
 use OCP\Security\IHasher;
 use OCP\Security\ISecureRandom;
 
-/** A Member's Project Links (ADR 0010, 0011): made, changed and removed by the Member who made them */
-class ProjectLinkService {
+/** A Member's Review Links (ADR 0010, 0011): made, changed and removed by the Member who made them; what goes on behind a token is ReviewLinks' */
+class ReviewLinkService {
 	private const TOKEN_LENGTH = 20;
 
 	public function __construct(
-		private ProjectLinkMapper $links,
+		private ReviewLinkMapper $linkRecords,
 		private LinkActivityMapper $activity,
 		private ProjectService $projects,
 		private AssetMapper $assets,
@@ -44,7 +44,7 @@ class ProjectLinkService {
 	 * @throws InvalidRequestException a link on No Project without Assets
 	 */
 	public function create(string $uid, int $projectId, ?array $assetIds = null): array {
-		$link = new ProjectLink();
+		$link = new ReviewLinkRecord();
 		if ($projectId === ProjectService::NONE) {
 			$link->setProjectId(null);
 		} else {
@@ -64,7 +64,7 @@ class ProjectLinkService {
 		$link->setCanDownload(true);
 		$link->setLatestOnly(false);
 		$link->setCreatedAt($this->time->getTime());
-		return $this->serialize($this->links->insert($link));
+		return $this->serialize($this->linkRecords->insert($link));
 	}
 
 	/**
@@ -100,20 +100,20 @@ class ProjectLinkService {
 			}
 			$link->setAssetIds($picked);
 		}
-		return $this->serialize($this->links->update($link));
+		return $this->serialize($this->linkRecords->update($link));
 	}
 
 	/** Deletes the link; its Reviewers stay the Member's, their Comments stay */
 	public function delete(string $uid, int $id): void {
 		$link = $this->own($uid, $id);
 		$this->activity->deleteByToken($link->getToken());
-		$this->links->delete($link);
+		$this->linkRecords->delete($link);
 	}
 
 	/** @return list<array<string, mixed>> the Member's links on a Project, or on No Project for 0, for its navigation */
 	public function listFor(string $uid, int $projectId): array {
-		$links = $this->links->findByProject($projectId === ProjectService::NONE ? null : $projectId, $uid);
-		return array_map(fn (ProjectLink $link) => $this->serialize($link), $links);
+		$links = $this->linkRecords->findByProject($projectId === ProjectService::NONE ? null : $projectId, $uid);
+		return array_map(fn (ReviewLinkRecord $link) => $this->serialize($link), $links);
 	}
 
 	/**
@@ -125,7 +125,7 @@ class ProjectLinkService {
 		return $this->reviewLinks->of($this->own($uid, $id));
 	}
 
-	public function serialize(ProjectLink $link): array {
+	public function serialize(ReviewLinkRecord $link): array {
 		$reviewLink = $this->reviewLinks->of($link);
 		return [
 			'id' => $link->getId(),
@@ -147,8 +147,8 @@ class ProjectLinkService {
 	 * @throws NotFoundException no such link
 	 * @throws AccessDeniedException another Member's link
 	 */
-	private function own(string $uid, int $id): ProjectLink {
-		$link = $this->links->find($id) ?? throw new NotFoundException('Link not found');
+	private function own(string $uid, int $id): ReviewLinkRecord {
+		$link = $this->linkRecords->find($id) ?? throw new NotFoundException('Link not found');
 		if ($link->getOwnerUid() !== $uid) {
 			throw new AccessDeniedException('Only the Member who made a link changes it');
 		}
@@ -158,7 +158,7 @@ class ProjectLinkService {
 	private function newToken(): string {
 		do {
 			$token = $this->random->generate(self::TOKEN_LENGTH, ISecureRandom::CHAR_HUMAN_READABLE);
-		} while ($this->links->findByToken($token) !== null);
+		} while ($this->linkRecords->findByToken($token) !== null);
 		return $token;
 	}
 
@@ -191,7 +191,7 @@ class ProjectLinkService {
 	}
 
 	/** The picked Assets of the link's Project, or of No Project, as JSON; null for all of it */
-	private function picked(ProjectLink $link, mixed $assetIds): ?string {
+	private function picked(ReviewLinkRecord $link, mixed $assetIds): ?string {
 		if (!is_array($assetIds) || $assetIds === []) {
 			return null;
 		}
