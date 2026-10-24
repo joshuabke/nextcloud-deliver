@@ -1,5 +1,4 @@
 <script setup>
-import reviewerIcon from '@mdi/svg/svg/account-outline.svg?raw'
 import contactIcon from '@mdi/svg/svg/account-plus-outline.svg?raw'
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import copyIcon from '@mdi/svg/svg/content-copy.svg?raw'
@@ -10,7 +9,7 @@ import pausedIcon from '@mdi/svg/svg/link-variant-off.svg?raw'
 import pickedIcon from '@mdi/svg/svg/playlist-check.svg?raw'
 import addIcon from '@mdi/svg/svg/plus.svg?raw'
 import { showError, showSuccess } from '@nextcloud/dialogs'
-import { n, t } from '@nextcloud/l10n'
+import { t } from '@nextcloud/l10n'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -19,6 +18,8 @@ import NcAppNavigationCaption from '@nextcloud/vue/components/NcAppNavigationCap
 import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import InviteDialog from '../components/InviteDialog.vue'
+import PersonalLinkRightsDialog from '../components/PersonalLinkRightsDialog.vue'
+import PersonAvatar from '../components/PersonAvatar.vue'
 import ReviewerDialog from '../components/ReviewerDialog.vue'
 import SettingsDialog from '../components/SettingsDialog.vue'
 import ShareLinkDialog from '../components/ShareLinkDialog.vue'
@@ -26,6 +27,7 @@ import { createProjectLink, errorMessage, listProjectLinks, removeReviewer, save
 import { copyLink } from '../clipboard.js'
 import { confirmReviewerRemoval } from '../confirm.js'
 import { folderTree } from '../lib/folders.js'
+import { linkTitle } from '../lib/linkTitle.js'
 import { useProjectsStore } from '../store/projects.js'
 
 const props = defineProps({
@@ -37,12 +39,14 @@ const route = useRoute()
 const router = useRouter()
 /** My Project Links on this Project, paused ones too */
 const links = ref([])
-/** The Project's Reviewers, each once, with their Personal Link through every review link */
+/** The Project's Reviewers on any of these links, each once, with their Personal Link and own rights through each link they are on */
 const reviewers = ref([])
 /** The link whose settings are open */
 const editing = ref(null)
 /** The Reviewer whose settings are open */
 const person = ref(null)
+/** A Reviewer's own rights on one link, opened from under that link: {reviewer, share} */
+const openRights = ref(null)
 /** Whether the Deliver settings are open */
 const settingsOpen = ref(false)
 /** Whether the dialog that invites someone on a link of their own is open (story 145) */
@@ -61,26 +65,11 @@ const byId = computed(() => new Map(reviewers.value.map((reviewer) => [reviewer.
 async function load(id = props.id) {
 	const found = await listProjectLinks(id).catch(() => ({ links: [], reviewers: [] }))
 	if (props.id === id) {
-		links.value = found.links.map((link) => ({ ...link, title: titleOf(link) }))
+		links.value = found.links.map((link) => ({ ...link, title: linkTitle(link, project.value?.assets ?? []) }))
 		reviewers.value = found.reviewers
 		canMail.value = found.canMail ?? false
 		person.value = person.value && (byId.value.get(person.value.id) ?? null)
 	}
-}
-
-/**
- * @param {object} link - a Project Link
- * @return {string} its label, else what it shows: the whole Project, its one Asset, or how many (story 145)
- */
-function titleOf(link) {
-	if (link.label) {
-		return link.label
-	}
-	if (link.assetIds === null) {
-		return t('deliver', 'Whole Project')
-	}
-	const only = link.assetIds.length === 1 ? project.value?.assets.find((asset) => asset.id === link.assetIds[0]) : null
-	return only?.name ?? n('deliver', '%n Asset', '%n Assets', link.assetIds.length)
 }
 
 /**
@@ -162,14 +151,12 @@ function closeEditing() {
 }
 
 /**
- * From a link's settings to a Reviewer's: one dialog at a time
- *
- * @param {number} id - the Reviewer
+ * @param {object} reviewer - a Reviewer
+ * @param {object} share - a link they are on
+ * @return {object|undefined} their Personal Link through it, with their own rights there; none while it is paused
  */
-async function openPerson(id) {
-	editing.value = null
-	await load()
-	person.value = byId.value.get(id) ?? null
+function personalLinkOn(reviewer, share) {
+	return reviewer.links.find((each) => each.token === share.token)
 }
 
 /**
@@ -244,14 +231,26 @@ function personalLink(reviewer) {
 						{{ t('deliver', 'Copy link') }}
 					</NcActionButton>
 				</template>
-				<!-- Who was invited through this link or came in by it -->
+				<!-- Who is on this link; a click opens their rights on it, their Personal Link through it is one click away -->
 				<NcAppNavigationItem
 					v-for="reviewer in share.reviewerIds.map((id) => byId.get(id)).filter(Boolean)"
 					:key="reviewer.id"
 					:name="reviewer.name"
-					@click="person = reviewer">
+					:inlineActions="1"
+					@click="personalLinkOn(reviewer, share) ? openRights = { reviewer, share } : person = reviewer">
 					<template #icon>
-						<NcIconSvgWrapper :svg="reviewerIcon" />
+						<PersonAvatar :author="{ type: 'reviewer', id: reviewer.id, name: reviewer.name }" :size="24" />
+					</template>
+					<template #actions>
+						<NcActionButton
+							v-if="personalLinkOn(reviewer, share)"
+							:aria-label="t('deliver', 'Copy Personal Link')"
+							@click="copyLink(personalLinkOn(reviewer, share).url, t('deliver', 'Personal Link copied'))">
+							<template #icon>
+								<NcIconSvgWrapper :svg="copyIcon" />
+							</template>
+							{{ t('deliver', 'Copy Personal Link') }}
+						</NcActionButton>
 					</template>
 				</NcAppNavigationItem>
 			</NcAppNavigationItem>
@@ -278,7 +277,7 @@ function personalLink(reviewer) {
 					:inlineActions="1"
 					@click="person = reviewer">
 					<template #icon>
-						<NcIconSvgWrapper :svg="reviewerIcon" />
+						<PersonAvatar :author="{ type: 'reviewer', id: reviewer.id, name: reviewer.name }" :size="24" />
 					</template>
 					<template #actions>
 						<NcActionButton v-if="personalLink(reviewer)" :aria-label="t('deliver', 'Copy Personal Link')" @click="copyLink(personalLink(reviewer), t('deliver', 'Link copied'))">
@@ -306,11 +305,19 @@ function personalLink(reviewer) {
 				</NcAppNavigationItem>
 			</ul>
 			<SettingsDialog v-if="settingsOpen" @close="settingsOpen = false" />
+			<PersonalLinkRightsDialog
+				v-if="openRights && personalLinkOn(openRights.reviewer, openRights.share)"
+				:reviewer="openRights.reviewer"
+				:share="openRights.share"
+				:rights="personalLinkOn(openRights.reviewer, openRights.share).rights"
+				@changed="(rights) => personalLinkOn(openRights.reviewer, openRights.share).rights = rights"
+				@close="openRights = null" />
 			<InviteDialog
 				v-if="invitingOpen"
 				:projectId="id"
 				:assets="project?.assets ?? []"
 				:canMail="canMail"
+				:reviewers="reviewers"
 				@invited="load()"
 				@close="invitingOpen = false" />
 			<!-- The dialogs render over the page; they only live here -->
@@ -318,8 +325,8 @@ function personalLink(reviewer) {
 				v-if="editing"
 				:share="editing"
 				:assets="project?.assets ?? []"
+				:people="reviewers"
 				@update="replace"
-				@person="openPerson"
 				@deleted="closeEditing"
 				@close="closeEditing" />
 			<ReviewerDialog

@@ -518,8 +518,12 @@ test.describe('Review view', () => {
 
 	test('a Member invites someone from their contacts on a link of their own', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
-		const card = `/remote.php/dav/addressbooks/users/${USER}/contacts/deliver-e2e-${randomBytes(4).toString('hex')}.vcf`
-		const vcard = 'BEGIN:VCARD\r\nVERSION:3.0\r\nUID:deliver-e2e-zoe\r\nFN:Zoe Quill\r\n'
+		// The test user keeps their address book between runs: a name of this run's own
+		const run = randomBytes(3).toString('hex')
+		const zoeName = `Zoe Quill ${run}`
+		const uid = `deliver-e2e-${run}`
+		const card = `/remote.php/dav/addressbooks/users/${USER}/contacts/${uid}.vcf`
+		const vcard = `BEGIN:VCARD\r\nVERSION:3.0\r\nUID:${uid}\r\nFN:${zoeName}\r\n`
 			+ 'EMAIL;TYPE=WORK:zoe@studio.test\r\nEMAIL;TYPE=HOME:zoe@home.test\r\nEND:VCARD\r\n'
 		expect((await api.fetch(card, { method: 'PUT', data: vcard, headers: { 'Content-Type': 'text/vcard' } })).status()).toBe(201)
 
@@ -528,13 +532,13 @@ test.describe('Review view', () => {
 			await page.locator('.app-navigation').getByRole('button', { name: 'Invite a Reviewer' }).click()
 			const dialog = page.getByRole('dialog', { name: 'Invite a Reviewer' })
 			const name = dialog.getByRole('combobox', { name: 'Name' })
-			await name.pressSequentially('Zo')
+			await name.pressSequentially(run)
 			// One row per address; the arrow keys move, Enter picks
 			await expect(page.getByRole('option')).toHaveCount(2)
 			await name.press('ArrowDown')
 			await name.press('Enter')
 			await expect(page.getByRole('listbox')).toHaveCount(0)
-			await expect(name).toHaveValue('Zoe Quill')
+			await expect(name).toHaveValue(zoeName)
 			await expect(dialog.getByLabel('Email (optional)')).toHaveValue('zoe@home.test')
 			await dialog.getByText('Reviewers may download the original').click()
 			await dialog.getByRole('button', { name: 'Invite', exact: true }).click()
@@ -542,21 +546,42 @@ test.describe('Review view', () => {
 
 			// A link of their own, titled by what it shows, with them under it
 			const listed = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`)).json()
-			const zoeId = listed.ocs.data.reviewers.find((each) => each.name === 'Zoe Quill').id
+			const zoeId = listed.ocs.data.reviewers.find((each) => each.name === zoeName).id
 			const theirs = listed.ocs.data.links.find((link) => link.reviewerIds.includes(zoeId))
 			expect([theirs.reviewerIds, theirs.assetIds, theirs.canDownload]).toEqual([[zoeId], null, false])
 
 			// Already a contact: nothing to save
-			const zoe = page.locator('.app-navigation li').filter({ hasText: 'Zoe Quill' }).last()
+			const zoe = page.locator('.app-navigation li').filter({ hasText: zoeName }).last()
 			await zoe.hover()
 			await zoe.getByRole('button', { name: 'Actions' }).click()
 			await expect(page.getByRole('menuitem', { name: 'In your contacts' })).toBeDisabled()
-		} finally {
 			await page.keyboard.press('Escape')
+
+			// Rights of their own on that link, from the gear at it in their dialog (ADR 0014)
+			await zoe.getByText(zoeName).click()
+			const person = page.getByRole('dialog', { name: zoeName })
+			await person.getByRole('button', { name: `Rights of ${zoeName} on this link` }).click()
+			const rights = page.getByRole('dialog', { name: `${zoeName} on “Whole Project”` })
+			await rights.getByRole('radiogroup', { name: 'Comment', exact: true }).getByText('No', { exact: true }).click()
+			await expect.poll(async () => {
+				const now = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`)).json()
+				return now.ocs.data.reviewers.find((each) => each.id === zoeId).links.find((each) => each.token === theirs.token).rights.canComment
+			}).toBe(false)
+			// One dialog at a time, by its own close button
+			await rights.getByRole('button', { name: 'Close' }).click()
+			await expect(rights).toHaveCount(0)
+			await person.getByRole('button', { name: 'Close' }).click()
+			await expect(person).toHaveCount(0)
+
+			// Under the link, a click opens their rights on that very link
+			await page.locator('.app-navigation').getByText(zoeName).first().click()
+			await expect(page.getByRole('dialog', { name: `${zoeName} on “Whole Project”` })).toBeVisible()
+		} finally {
 			const cleanup = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth })
 			await cleanup.fetch(card, { method: 'DELETE' })
 			await cleanup.dispose()
 			await api.dispose()
+			await page.keyboard.press('Escape').catch(() => {})
 		}
 	})
 })

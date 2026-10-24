@@ -27,12 +27,6 @@ use OCP\AppFramework\Db\Entity;
  * @method void setMailComments(?bool $mailComments)
  * @method ?bool getMailVersions()
  * @method void setMailVersions(?bool $mailVersions)
- * @method ?bool getCanComment()
- * @method void setCanComment(?bool $canComment)
- * @method ?bool getAllowOlder()
- * @method void setAllowOlder(?bool $allowOlder)
- * @method ?bool getWatermark()
- * @method void setWatermark(?bool $watermark)
  * @method ?string getLanguage()
  * @method void setLanguage(?string $language)
  * @method ?bool getInContacts()
@@ -55,10 +49,6 @@ class Reviewer extends Entity {
 	protected ?bool $mailVersions = null;
 	/** de or en, for the mails to them; null leaves it to the request that sends one */
 	protected ?string $language = null;
-	/** Their own rights; null leaves it to the Project Link they come by */
-	protected ?bool $canComment = null;
-	protected ?bool $allowOlder = null;
-	protected ?bool $watermark = null;
 	/** Whether their address is in one of the Member's address books (#66); null until checked */
 	protected ?bool $inContacts = null;
 
@@ -68,28 +58,7 @@ class Reviewer extends Entity {
 		$this->addType('mailReplies', 'boolean');
 		$this->addType('mailComments', 'boolean');
 		$this->addType('mailVersions', 'boolean');
-		$this->addType('canComment', 'boolean');
-		$this->addType('allowOlder', 'boolean');
-		$this->addType('watermark', 'boolean');
 		$this->addType('inContacts', 'boolean');
-	}
-
-	/** @return array{canComment: ?bool, allowOlder: ?bool, watermark: ?bool} their own rights, null where the link decides */
-	public function rights(): array {
-		return ['canComment' => $this->getCanComment(), 'allowOlder' => $this->getAllowOlder(), 'watermark' => $this->getWatermark()];
-	}
-
-	/**
-	 * @param array<string, mixed> $flags a Project Link's review flags
-	 * @return array<string, mixed> the flags as they hold for this Reviewer
-	 */
-	public function over(array $flags): array {
-		foreach ($this->rights() as $right => $value) {
-			if ($value !== null) {
-				$flags[$right] = $value;
-			}
-		}
-		return $flags;
 	}
 
 	/** @return array{replies: bool, comments: bool, versions: bool} what to mail, the defaults filled in */

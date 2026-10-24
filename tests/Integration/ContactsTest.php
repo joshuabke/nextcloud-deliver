@@ -121,7 +121,8 @@ class ContactsTest extends TestCase {
 
 		self::assertSame(400, $this->save($noa)['status'], 'nobody without an address');
 
-		$this->nc->ocs('PUT', "/reviewers/$noa", ['name' => 'Noa', 'email' => 'kim@studio.test']);
+		$this->contact('Noa Novak', ['noa@studio.test']);
+		$this->nc->ocs('PUT', "/reviewers/$noa", ['name' => 'Noa', 'email' => 'noa@studio.test']);
 		self::assertTrue($this->inContacts()['Noa'], 'an address the Member gives is checked');
 	}
 

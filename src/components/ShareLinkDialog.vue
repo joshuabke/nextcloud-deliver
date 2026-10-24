@@ -7,15 +7,18 @@ import AssetPicker from './AssetPicker.vue'
 import LinkActivityDialog from './LinkActivityDialog.vue'
 import ShareLinkItem from './ShareLinkItem.vue'
 import { errorMessage, linkApi } from '../api.js'
+import { linkTitle } from '../lib/linkTitle.js'
 
 const props = defineProps({
 	/** A Project Link as the Project's navigation lists it */
 	share: { type: Object, required: true },
 	/** The Project's Assets, or those of No Project, to pick from */
 	assets: { type: Array, default: () => [] },
+	/** The Project's Reviewers, for inviting on this link */
+	people: { type: Array, default: null },
 })
 
-const emit = defineEmits(['update', 'person', 'close', 'deleted'])
+const emit = defineEmits(['update', 'close', 'deleted'])
 
 const item = ref(null)
 /** A link on No Project shows picked Assets only, never all of it */
@@ -41,15 +44,15 @@ async function pick(assetIds) {
 
 <template>
 	<NcDialog
-		:name="share.label || share.title || t('deliver', 'Project Link')"
+		:name="share.title ?? linkTitle(share, assets)"
 		size="normal"
 		@closing="emit('close')">
 		<ShareLinkItem
 			ref="item"
 			:share="share"
+			:people="people"
 			inDialog
 			@update="emit('update', $event)"
-			@person="emit('person', $event)"
 			@deleted="emit('deleted')" />
 		<section class="deliver-link-dialog__section">
 			<h3>{{ t('deliver', 'What the link shows') }}</h3>

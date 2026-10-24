@@ -103,7 +103,7 @@ class ReviewLinkTest extends TestCase {
 		$other = $otherBrowser->call('POST', '/api/reviewer', ['name' => 'Mara', 'email' => "other-$run@example.test"]);
 		self::assertSame(201, $other['status']);
 		self::assertNotSame($first['id'], $other['data']['id']);
-		self::assertSame(409, $otherBrowser->call('PUT', '/api/reviewer', ['email' => ucfirst($mara)])['status'], 'never two Reviewers of one name and address');
+		self::assertSame(409, $otherBrowser->call('PUT', '/api/reviewer', ['email' => ucfirst($mara)])['status'], 'never two Reviewers of one address');
 		self::assertNotSame($first['id'], $claim('Mara')['data']['id'], 'without an address, nobody becomes someone else');
 
 		$elsewhere = $this->nc->ocs('POST', "/projects/{$this->projectId}/links")['data'];
@@ -133,8 +133,10 @@ class ReviewLinkTest extends TestCase {
 		$asReviewer->call('PUT', '/api/reviewer', ['name' => 'Kim Kunde', 'email' => $kim]);
 		self::assertSame('Kim Kunde', $asReviewer->call('PUT', '/api/reviewer', ['email' => $kim])['data']['name'], 'no name keeps it');
 
-		// This browser knows them through a second link of the Project too
-		$second = $this->nc->ocs('POST', "/projects/{$this->projectId}/links")['data']['token'];
+		// This browser knows them through a second link of the Project they are on too
+		$secondLink = $this->nc->ocs('POST', "/projects/{$this->projectId}/links")['data'];
+		$second = $secondLink['token'];
+		$this->nc->ocs('POST', "/links/{$secondLink['id']}/reviewers", ['name' => 'Kim', 'email' => $kim]);
 		self::assertSame(200, $asReviewer->through($second)->raw("?r=$key")['status']);
 		self::assertSame('reviewer', $asReviewer->through($second)->call('GET', '/api/context?versionId=' . $this->versionId)['data']['me']['type']);
 		self::assertSame(200, $asReviewer->call('DELETE', '/api/reviewer')['status']);
@@ -142,6 +144,50 @@ class ReviewLinkTest extends TestCase {
 		self::assertSame('unnamed', $me()['type'], 'this browser forgot them');
 		self::assertSame('unnamed', $asReviewer->through($second)->call('GET', '/api/context?versionId=' . $this->versionId)['data']['me']['type'], 'through every link');
 		self::assertSame(['reviewer', 'Kim Kunde'], [$me("&r=$key")['type'], $me("&r=$key")['name']], 'their Personal Link still works');
+	}
+
+	public function testAnAddressIsOneReviewerInAProject(): void {
+		$run = bin2hex(random_bytes(4));
+		$leon = "leon-$run@example.test";
+		$invite = fn (int $linkId, string $name, ?string $email) => $this->nc->ocs('POST', "/links/$linkId/reviewers", ['name' => $name, 'email' => $email])['data'];
+		$first = $invite($this->linkId, 'Leon Green', $leon);
+		$still = $this->nc->ocs('POST', "/projects/{$this->projectId}/links")['data'];
+
+		$again = $invite($still['id'], 'Leon', strtoupper($leon));
+		self::assertSame([$first['id'], 'Leon Green'], [$again['id'], $again['name']], 'an invitation with a known address gives them the link too, under the name they have');
+		self::assertStringContainsString($still['token'] . '?r=' . $first['key'], $again['link']);
+		$listed = $this->nc->ocs('GET', "/projects/{$this->projectId}/links")['data'];
+		self::assertSame(['Leon Green'], array_column($listed['reviewers'], 'name'), 'listed once');
+		self::assertSame([[$first['id']], [$first['id']]], array_column($listed['links'], 'reviewerIds'), 'under both links');
+
+		$named = $this->reviewer()->call('POST', '/api/reviewer', ['name' => 'L. Green', 'email' => $leon]);
+		self::assertSame([202, true], [$named['status'], $named['data']['mailed']], 'naming oneself with a known address, under any name, mails that Reviewer their Personal Link');
+
+		$mo = $invite($this->linkId, 'Mo', "mo-$run@example.test");
+		$taken = $this->nc->ocs('PUT', "/reviewers/{$mo['id']}", ['name' => 'Mo', 'email' => $leon]);
+		self::assertSame([409, "Someone in this review already has the address $leon."], [$taken['status'], $taken['data']['message']], 'a Member cannot give one address to two Reviewers');
+		$asMo = $this->reviewer();
+		$asMo->raw('?r=' . $mo['key']);
+		self::assertSame(409, $asMo->call('PUT', '/api/reviewer', ['email' => $leon])['status'], 'nor can a Reviewer take one');
+	}
+
+	public function testAPersonalLinkOpensOnlyTheLinksTheReviewerIsOn(): void {
+		$run = bin2hex(random_bytes(4));
+		$kim = $this->nc->ocs('POST', "/links/{$this->linkId}/reviewers", ['name' => 'Kim', 'email' => "kim-$run@example.test"])['data'];
+		$other = $this->nc->ocs('POST', "/projects/{$this->projectId}/links")['data'];
+		$me = fn (PublicClient $client) => $client->call('GET', "/api/context?versionId={$this->versionId}&r={$kim['key']}")['data']['me']['type'];
+
+		self::assertSame('reviewer', $me($this->reviewer()));
+		$elsewhere = $this->reviewer()->through($other['token']);
+		self::assertSame('unnamed', $me($elsewhere), 'not through a link of the Project they are not on');
+		$listed = $this->nc->ocs('GET', "/projects/{$this->projectId}/links")['data'];
+		self::assertSame([$this->token], array_column($listed['reviewers'][0]['links'], 'token'), 'their Personal Links are those of their links');
+		self::assertSame([], $this->nc->ocs('GET', "/links/{$other['id']}/reviewers")['data'], 'nor does the other link list them');
+
+		$named = $elsewhere->call('POST', '/api/reviewer', ['name' => 'Kim N.', 'email' => "kim-$run@example.test"]);
+		self::assertSame([202, true], [$named['status'], $named['data']['mailed']], 'naming themselves there mails them the Personal Link for it');
+		self::assertSame('reviewer', $me($this->reviewer()->through($other['token'])), 'which then opens it');
+		self::assertSame([[$kim['id']], [$kim['id']]], array_column($this->nc->ocs('GET', "/projects/{$this->projectId}/links")['data']['links'], 'reviewerIds'));
 	}
 
 	public function testANameIsTakenAcrossTheMembersOfAProject(): void {
@@ -229,13 +275,13 @@ class ReviewLinkTest extends TestCase {
 		$context = $asJo->call('GET', "/api/context?versionId={$this->versionId}&r={$invited['data']['key']}");
 		self::assertSame(['reviewer', 'Jo'], [$context['data']['me']['type'], $context['data']['me']['name']], 'identified from the first click');
 
-		// The link is replaced; Jo keeps the identity through the new one
+		// The link is replaced; inviting Jo's address there gives Jo, the same Reviewer, a Personal Link through it (ADR 0014)
 		$replacement = $this->nc->ocs('POST', "/projects/{$this->projectId}/links");
 		self::assertSame(201, $replacement['status']);
-		$listed = $this->nc->ocs('GET', "/links/{$replacement['data']['id']}/reviewers");
-		self::assertSame(200, $listed['status'], json_encode($listed['data']));
-		$jo = array_values(array_filter($listed['data'], static fn (array $each) => $each['name'] === 'Jo'))[0];
-		self::assertStringContainsString("/s/{$replacement['data']['token']}?r=", $jo['link']);
+		self::assertSame([], $this->nc->ocs('GET', "/links/{$replacement['data']['id']}/reviewers")['data'], 'nobody is on the new link yet');
+		$reissued = $this->nc->ocs('POST', "/links/{$replacement['data']['id']}/reviewers", ['name' => 'Jo', 'email' => 'jo@example.test'])['data'];
+		self::assertSame($invited['data']['id'], $reissued['id']);
+		self::assertStringEndsWith("/s/{$replacement['data']['token']}?r={$invited['data']['key']}", $reissued['link']);
 	}
 
 	public function testAMemberPreviewsTheLinkButReviewsInTheApp(): void {
@@ -320,24 +366,38 @@ class ReviewLinkTest extends TestCase {
 		self::assertSame(404, $this->reviewer()->call('GET', '/api/assets')['status'], 'the link stops working for everyone');
 	}
 
-	public function testAReviewersOwnRightsGoOverThoseOfTheLink(): void {
-		$invited = $this->nc->ocs('POST', "/links/{$this->linkId}/reviewers", ['name' => 'Kim']);
-		$key = $invited['data']['key'];
-		$asKim = $this->reviewer();
-		$post = fn () => $asKim->call('POST', "/api/versions/{$this->versionId}/comments?r=$key", ['inFrame' => 1, 'body' => 'hi'])['status'];
-		$rights = fn (array $rights) => $this->nc->ocs('PUT', "/reviewers/{$invited['data']['id']}", ['name' => 'Kim', 'rights' => $rights]);
+	public function testAReviewersOwnRightsGoOverThoseOfEachLinkTheyComeBy(): void {
+		$invited = $this->nc->ocs('POST', "/links/{$this->linkId}/reviewers", ['name' => 'Kim', 'email' => 'kim@example.test']);
+		['id' => $kim, 'key' => $key] = $invited['data'];
+		$other = $this->nc->ocs('POST', "/projects/{$this->projectId}/links")['data'];
+		self::assertSame($kim, $this->nc->ocs('POST', "/links/{$other['id']}/reviewers", ['name' => 'Kim', 'email' => 'kim@example.test'])['data']['id']);
+		$unused = $this->nc->ocs('POST', "/projects/{$this->projectId}/links")['data'];
 
-		self::assertSame(201, $post(), 'the link lets Reviewers comment');
-		self::assertSame([false, null], [$rights(['canComment' => false])['data']['rights']['canComment'], $rights(['canComment' => false])['data']['rights']['watermark']]);
-		self::assertSame(403, $post(), 'Kim may not, whatever the link says');
+		$asKim = $this->reviewer();
+		$post = fn (PublicClient $through) => $through->call('POST', "/api/versions/{$this->versionId}/comments?r=$key", ['inFrame' => 1, 'body' => 'hi'])['status'];
+		$rights = fn (string $token, array $rights) => $this->nc->ocs('PUT', "/reviewers/$kim/rights", ['token' => $token, 'rights' => $rights]);
+
+		self::assertSame(201, $post($asKim), 'the link lets Reviewers comment');
+		$set = $rights($this->token, ['canComment' => false]);
+		self::assertSame([200, ['canComment' => false, 'allowOlder' => null, 'watermark' => null]], [$set['status'], $set['data']]);
+		self::assertSame(403, $post($asKim), 'Kim may not on this link, whatever it says');
 		self::assertFalse($asKim->call('GET', "/api/context?versionId={$this->versionId}&r=$key")['data']['flags']['canComment']);
+		self::assertSame(201, $post($asKim->through($other['token'])), 'but on their other link, that link decides');
+
+		$listed = $this->nc->ocs('GET', "/projects/{$this->projectId}/links")['data']['reviewers'][0]['links'];
+		self::assertSame(
+			[$this->token => ['canComment' => false, 'allowOlder' => null, 'watermark' => null], $other['token'] => ['canComment' => null, 'allowOlder' => null, 'watermark' => null]],
+			array_column($listed, 'rights', 'token'),
+			'rights of their own on each of their links; a link they are not on is none of theirs',
+		);
+		self::assertSame(404, $rights($unused['token'], ['canComment' => true])['status'], 'nor can any be set there');
 
 		$this->setFlags(['canComment' => false]);
-		$rights(['canComment' => true, 'watermark' => true]);
-		self::assertSame(201, $post(), 'Kim may, though the link does not let anyone else');
+		$rights($this->token, ['canComment' => true, 'watermark' => true]);
+		self::assertSame(201, $post($asKim), 'Kim may, though the link does not let anyone else');
 		self::assertTrue($asKim->call('GET', "/api/context?versionId={$this->versionId}&r=$key")['data']['flags']['watermark']);
 
-		$rights([]);
-		self::assertSame(403, $post(), 'without rights of their own, the link decides again');
+		$rights($this->token, []);
+		self::assertSame(403, $post($asKim), 'without rights of their own, the link decides again');
 	}
 }

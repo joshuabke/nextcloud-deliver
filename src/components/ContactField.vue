@@ -1,8 +1,10 @@
 <script setup>
+import { t } from '@nextcloud/l10n'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import NcListItemIcon from '@nextcloud/vue/components/NcListItemIcon'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { searchContacts } from '../api.js'
+import { peopleToSuggest } from '../lib/people.js'
 
 /**
  * A name field that suggests people from the Member's address books as they
@@ -13,6 +15,8 @@ const name = defineModel({ type: String, required: true })
 const props = defineProps({
 	label: { type: String, required: true },
 	disabled: { type: Boolean, default: false },
+	/** The Project's Reviewers with an address, {name, email}, offered first and marked as such */
+	people: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['pick'])
 
@@ -35,7 +39,7 @@ watch(name, (typed) => {
 	searching = setTimeout(async () => {
 		const found = await searchContacts(typed).catch(() => [])
 		if (name.value === typed) {
-			suggestions.value = found
+			suggestions.value = peopleToSuggest(typed, props.people, found)
 			active.value = 0
 		}
 	}, 250)
@@ -162,7 +166,7 @@ function onKey(event) {
 					@mousedown.prevent="pick(contact)">
 					<NcListItemIcon
 						:name="contact.name"
-						:subname="contact.email"
+						:subname="contact.reviewer ? t('deliver', 'Reviewer · {email}', { email: contact.email }) : contact.email"
 						:search="name"
 						:url="contact.photo ?? undefined"
 						:avatarSize="32"

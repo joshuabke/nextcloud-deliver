@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Controller;
 
+use OCA\Deliver\Db\Reviewer;
 use OCA\Deliver\Service\Contacts;
 use OCA\Deliver\Service\ProjectLinkService;
 use OCA\Deliver\Service\ProjectService;
@@ -41,9 +42,9 @@ class ProjectLinkApiController extends OCSController {
 	}
 
 	/**
-	 * My links on a Project, or on No Project for 0, and my Reviewers who came
-	 * by any of them, paused or not, each with their Personal Link through
-	 * every live one, for its navigation (story 100)
+	 * My links on a Project, or on No Project for 0, and my Reviewers on any of
+	 * them, paused or not, each with their Personal Link and own rights through
+	 * each live one they are on, for its navigation (story 100, ADR 0014)
 	 */
 	#[NoAdminRequired]
 	public function index(int $id): Response {
@@ -87,10 +88,10 @@ class ProjectLinkApiController extends OCSController {
 	/** A Member invites a Reviewer and, when asked, mails them their Personal Link with a message of their own */
 	#[NoAdminRequired]
 	public function invite(int $id, string $name, ?string $email = null, bool $sendMail = false, ?string $message = null): Response {
-		return $this->guard(
-			fn () => $this->inviteThrough($this->projectLinks->ownLink((string)$this->userId, $id), $name, $email, $sendMail, $message),
-			Http::STATUS_CREATED,
-		);
+		return $this->guard(function () use ($id, $name, $email, $sendMail, $message) {
+			$link = $this->projectLinks->ownLink((string)$this->userId, $id);
+			return $this->welcome($link, $this->links->invite($link, $name, $email), $sendMail, $message);
+		}, Http::STATUS_CREATED);
 	}
 
 	/**
@@ -107,18 +108,19 @@ class ProjectLinkApiController extends OCSController {
 			$linkId = $this->projectLinks->create($uid, $id, $assetIds)['id'];
 			try {
 				$link = $this->projectLinks->update($uid, $linkId, array_intersect_key($this->request->getParams(), array_flip(ReviewLink::FLAGS)));
-				$reviewer = $this->inviteThrough($this->projectLinks->ownLink($uid, $linkId), $name, $email, $sendMail, $message);
+				$reviewLink = $this->projectLinks->ownLink($uid, $linkId);
+				$reviewer = $this->links->invite($reviewLink, $name, $email);
 			} catch (\Throwable $e) {
 				$this->projectLinks->delete($uid, $linkId);
 				throw $e;
 			}
-			return ['link' => $link, 'reviewer' => $reviewer];
+			// Invited: what follows only tells them, and never takes the link back
+			return ['link' => $link, 'reviewer' => $this->welcome($reviewLink, $reviewer, $sendMail, $message)];
 		}, Http::STATUS_CREATED);
 	}
 
-	/** @return array<string, mixed> the new Reviewer with their Personal Link, mailed to them when asked */
-	private function inviteThrough(ReviewLink $link, string $name, ?string $email, bool $sendMail, ?string $message): array {
-		$reviewer = $this->links->invite($link, $name, $email);
+	/** @return array<string, mixed> the invited Reviewer with their Personal Link, mailed to them when asked */
+	private function welcome(ReviewLink $link, Reviewer $reviewer, bool $sendMail, ?string $message): array {
 		$this->contacts->checkContacts([$reviewer]);
 		$personalLink = $link->personalLink($reviewer);
 		$member = $this->userSession->getUser();

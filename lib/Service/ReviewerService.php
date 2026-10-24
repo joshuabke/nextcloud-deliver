@@ -72,26 +72,14 @@ class ReviewerService {
 	}
 
 	/**
-	 * A Member edits a Reviewer: name, address, what they want mailed and,
-	 * when given, their own rights over those of the link (null: the link decides).
+	 * A Member edits a Reviewer: name, address and what they want mailed
 	 *
 	 * @param array{replies?: ?bool, comments?: ?bool, versions?: ?bool} $mail
-	 * @param array{canComment?: ?bool, allowOlder?: ?bool, watermark?: ?bool}|null $rights
 	 * @throws InvalidRequestException the name is empty or the email is not one
 	 */
-	public function update(Reviewer $reviewer, string $name, ?string $email, array $mail, ?array $rights = null): Reviewer {
+	public function update(Reviewer $reviewer, string $name, ?string $email, array $mail): Reviewer {
 		$reviewer->setName(self::name($name));
-		if ($rights !== null) {
-			$reviewer->setCanComment(self::right($rights, 'canComment'));
-			$reviewer->setAllowOlder(self::right($rights, 'allowOlder'));
-			$reviewer->setWatermark(self::right($rights, 'watermark'));
-		}
 		return $this->updateSettings($reviewer, $email, $mail);
-	}
-
-	/** @param array<string, mixed> $rights */
-	private static function right(array $rights, string $key): ?bool {
-		return isset($rights[$key]) ? (bool)$rights[$key] : null;
 	}
 
 	/** A new key: the old Personal Links stop working, the Reviewer keeps their Comments */
@@ -148,13 +136,13 @@ class ReviewerService {
 		return $this->reviewers->find($id) ?? throw new NotFoundException('Reviewer not found');
 	}
 
-	/** The Reviewer with this key, if they come by this link */
+	/** The Reviewer with this key, if they are on this link (ADR 0014) */
 	public function byKey(?string $key, ReviewLink $link): ?Reviewer {
 		if ($key === null || $key === '') {
 			return null;
 		}
 		$reviewer = $this->reviewers->findByKey($key);
-		return $reviewer !== null && $link->takes($reviewer) ? $reviewer : null;
+		return $reviewer !== null && $link->takes($reviewer) && $this->reviewers->isOn($reviewer->getId(), $link->token()) ? $reviewer : null;
 	}
 
 	public function serialize(Reviewer $reviewer): array {
@@ -164,7 +152,6 @@ class ReviewerService {
 			'email' => $reviewer->getEmail(),
 			'key' => $reviewer->getSecretKey(),
 			'mail' => $reviewer->mailWishes(),
-			'rights' => $reviewer->rights(),
 		];
 	}
 }

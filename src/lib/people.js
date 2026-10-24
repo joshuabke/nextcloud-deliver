@@ -1,0 +1,40 @@
+/**
+ * Whom the invite form's name field suggests (stories 142, 145): the
+ * Project's Reviewers who match first, as giving one of them another link is
+ * the usual case, then the Member's contacts, each address once (ADR 0014).
+ *
+ * @param {string} typed - what the name field holds
+ * @param {Array<{name: string, email: string}>} reviewers - the Project's Reviewers with an address
+ * @param {Array<{name: string, email: string, photo: ?string}>} contacts - the contacts the server found
+ * @return {Array<{name: string, email: string, photo: ?string, reviewer: boolean}>} the rows to offer
+ */
+export function peopleToSuggest(typed, reviewers, contacts) {
+	const term = typed.trim().toLowerCase()
+	const photos = new Map(contacts.map((contact) => [contact.email.toLowerCase(), contact.photo]))
+	const known = new Set()
+	// Two Reviewers may share an address from before ADR 0014; it is offered once
+	const matching = reviewers.filter((person) => {
+		const address = person.email.toLowerCase()
+		const offered = !known.has(address) && (person.name.toLowerCase().includes(term) || address.includes(term))
+		if (offered) {
+			known.add(address)
+		}
+		return offered
+	})
+	return [
+		...matching.map((person) => ({ ...person, photo: photos.get(person.email.toLowerCase()) ?? null, reviewer: true })),
+		...contacts.filter((contact) => !known.has(contact.email.toLowerCase())).map((contact) => ({ ...contact, reviewer: false })),
+	]
+}
+
+/**
+ * The Reviewer an address belongs to, whatever its case: inviting it gives them one more link (ADR 0014)
+ *
+ * @param {Array<{name: string, email: ?string}>} reviewers - the Project's Reviewers
+ * @param {string} email - the address typed
+ * @return {{name: string, email: string}|undefined} the Reviewer with that address
+ */
+export function reviewerWithAddress(reviewers, email) {
+	const address = email.trim().toLowerCase()
+	return address === '' ? undefined : reviewers.find((reviewer) => reviewer.email?.toLowerCase() === address)
+}
