@@ -6,20 +6,20 @@ namespace OCA\Deliver\Db;
 
 use OCP\IDBConnection;
 
-/** @template-extends Mapper<ProjectLink> */
-class ProjectLinkMapper extends Mapper {
+/** @template-extends Mapper<ReviewLinkRecord> */
+class ReviewLinkMapper extends Mapper {
 	public function __construct(IDBConnection $db) {
-		parent::__construct($db, 'deliver_project_links', ProjectLink::class);
+		parent::__construct($db, 'deliver_review_links', ReviewLinkRecord::class);
 	}
 
-	public function findByToken(string $token): ?ProjectLink {
+	public function findByToken(string $token): ?ReviewLinkRecord {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')->from($this->getTableName())
 			->where($qb->expr()->eq('token', $qb->createNamedParameter($token)));
 		return $this->findEntities($qb)[0] ?? null;
 	}
 
-	/** @return ProjectLink[] every Member's links on a Project */
+	/** @return ReviewLinkRecord[] every Member's links on a Project */
 	public function findAllOf(int $projectId): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')->from($this->getTableName())
@@ -27,7 +27,7 @@ class ProjectLinkMapper extends Mapper {
 		return $this->findEntities($qb);
 	}
 
-	/** @return ProjectLink[] every link a Member made */
+	/** @return ReviewLinkRecord[] every link a Member made */
 	public function findByOwner(string $ownerUid): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')->from($this->getTableName())
@@ -35,7 +35,7 @@ class ProjectLinkMapper extends Mapper {
 		return $this->findEntities($qb);
 	}
 
-	/** @return ProjectLink[] a Member's links on a Project, or to Assets of No Project for null, oldest first */
+	/** @return ReviewLinkRecord[] a Member's links on a Project, or to Assets of No Project for null, oldest first */
 	public function findByProject(?int $projectId, string $ownerUid): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')->from($this->getTableName())

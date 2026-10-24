@@ -35,11 +35,11 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | PUT | `/comments/{id}` `{body}` | Edit one's own Comment |
 | DELETE | `/comments/{id}` | Remove a Comment, with its Replies |
 | PUT | `/comments/{id}/resolved` `{resolved}` | Resolve or unresolve, needs write access |
-| GET | `/projects/{id}/links` | `{links, reviewers, canMail}`: my Project Links of the Project, or of No Project for id 0, and my Reviewers on any of them, each with a Personal Link and their own `rights` through each live one they are on, keyed by token, and `inContacts` (null without an address) |
-| POST | `/projects/{id}/links` `{assetIds}` | A Project Link (ADRs 0010 and 0011), live and showing the whole Project, or only the Assets given; on No Project (id 0) `assetIds` is required |
-| POST | `/projects/{id}/invitations` `{name, email, sendMail, message, assetIds, canComment, allowOlder, watermark, canDownload, latestOnly}` | Invite one person on a Project Link of their own, the whole Project or the Assets given (required on No Project); `{link, reviewer}`, and no link is left when the invitation is refused |
-| PUT | `/links/{id}` `{review, canComment, allowOlder, watermark, canDownload, latestOnly, label, description, password, expireDate, assetIds}` | Change a Project Link; `''` removes password, expiry or description, `assetIds: null` shows the whole Project again (not on No Project); `review: false` pauses it |
-| DELETE | `/links/{id}` | Delete a Project Link |
+| GET | `/projects/{id}/links` | `{links, reviewers, canMail}`: my Review Links of the Project, or of No Project for id 0, and my Reviewers on any of them, each with a Personal Link and their own `rights` through each live one they are on, keyed by token, and `inContacts` (null without an address) |
+| POST | `/projects/{id}/links` `{assetIds}` | A Review Link (ADRs 0010 and 0011), live and showing the whole Project, or only the Assets given; on No Project (id 0) `assetIds` is required |
+| POST | `/projects/{id}/invitations` `{name, email, sendMail, message, assetIds, canComment, allowOlder, watermark, canDownload, latestOnly}` | Invite one person on a Review Link of their own, the whole Project or the Assets given (required on No Project); `{link, reviewer}`, and no link is left when the invitation is refused |
+| PUT | `/links/{id}` `{review, canComment, allowOlder, watermark, canDownload, latestOnly, label, description, password, expireDate, assetIds}` | Change a Review Link; `''` removes password, expiry or description, `assetIds: null` shows the whole Project again (not on No Project); `review: false` pauses it |
+| DELETE | `/links/{id}` | Delete a Review Link |
 | GET/POST | `/links/{id}/reviewers` | The Reviewers on it, with their Personal Links and their own `rights` on it; invite one `{name, email}`, an address the Project knows giving that Reviewer this link too |
 | GET | `/links/{id}/activity` | Who opened the link, watched or downloaded which Version, newest first |
 | PUT | `/reviewers/{id}` `{name, email, mailReplies, mailComments, mailVersions}` | Edit a Reviewer of mine; 409 for an address another Reviewer of the Project has |
@@ -52,9 +52,9 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 
 Rights follow each Version's file (ADR 0009): read access views and comments, write access manages. Missing write access answers 403; a request that clashes with the current state (a nested Folder Project, a taken Version Number, an older Version closed for Comments) answers 409.
 
-A Personal Link is the Project Link's URL plus the Reviewer's key, `/s/{token}?r={key}`. Opening it stores the key in a cookie for that link, so the browser keeps the identity.
+A Personal Link is the Review Link's URL plus the Reviewer's key, `/s/{token}?r={key}`. Opening it stores the key in a cookie for that link, so the browser keeps the identity.
 
-Reviewers never touch OCS. Their surface hangs off the token of a Project Link, needs no account, and is checked by the public-share middleware before Deliver sees it:
+Reviewers never touch OCS. Their surface hangs off the token of a Review Link, needs no account, and is checked by the public-share middleware before Deliver sees it:
 
 | Method | Path | Purpose |
 | --- | --- | --- |

@@ -22,7 +22,7 @@ use OCP\IDBConnection;
  * paths, which the admin panel says before it is shared.
  */
 class SupportReport {
-	private const TABLES = ['projects', 'assets', 'versions', 'comments', 'reviewers', 'project_links', 'jobs'];
+	private const TABLES = ['projects', 'assets', 'versions', 'comments', 'reviewers', 'review_links', 'jobs'];
 
 	public function __construct(
 		private PipelineSettings $settings,

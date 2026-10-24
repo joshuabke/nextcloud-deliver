@@ -23,7 +23,7 @@ import { linkTitle } from '../lib/linkTitle.js'
 import { reviewerWithAddress } from '../lib/people.js'
 
 const props = defineProps({
-	/** One Project Link of the Member's, as the server lists it */
+	/** One Review Link of the Member's, as the server lists it */
 	share: { type: Object, required: true },
 	/** In the Project's link dialog: each Reviewer's settings are offered, and the dialog's own button invites */
 	inDialog: { type: Boolean, default: false },

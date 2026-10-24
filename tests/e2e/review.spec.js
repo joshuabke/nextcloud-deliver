@@ -488,7 +488,7 @@ test.describe('Review view', () => {
 		await guest.close()
 	})
 
-	test('a Reviewer names themselves and comments through a Project Link', async ({ playwright }) => {
+	test('a Reviewer names themselves and comments through a Review Link', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		const link = (await (await api.post(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`)).json()).ocs.data
 		// Only the newest Version takes Comments on this link

@@ -24,10 +24,11 @@
 	<issueHandlers>
 		<!-- Deliver runs on PHP 8.2, which has no #[Override] -->
 		<MissingOverrideAttribute errorLevel="suppress" />
-		<!-- The migration's tables come from Doctrine, which OCP only names in docblocks -->
+		<!-- The migrations' tables and schema come from Doctrine, which OCP only names in docblocks -->
 		<UndefinedDocblockClass>
 			<errorLevel type="suppress">
 				<referencedClass name="Doctrine\DBAL\Schema\Table" />
+				<referencedClass name="Doctrine\DBAL\Schema\Schema" />
 			</errorLevel>
 		</UndefinedDocblockClass>
 	</issueHandlers>

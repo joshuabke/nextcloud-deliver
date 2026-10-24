@@ -13,7 +13,7 @@
 - 🎯 **Comments on the Frame** or a Range, with Drawings, Replies, Reactions, Mentions and Attachments
 - 🗂️ **Versions** stack by name (`…_v1`, `…_v2`) and compare side by side or under a wipe
 - ✅ **Sign-off** with Approvals, Due Dates and reminders
-- 🔗 **Clients without accounts** on Project Links: password, expiry, Watermark, downloads, and who watched what
+- 🔗 **Clients without accounts** on Review Links: password, expiry, Watermark, downloads, and who watched what
 - ⬆️ **Uploads in Deliver** that resume after an interruption, run in the background and show the processing until it is done
 - 🎬 **Back into the edit** export comments as markers for:
   - Video: DaVinci Resolve (EDL), Premiere Pro (FCP7 XML), Final Cut Pro (FCPXML), CSV

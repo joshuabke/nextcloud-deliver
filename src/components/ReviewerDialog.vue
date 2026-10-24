@@ -17,7 +17,7 @@ import { confirmRemoval } from '../confirm.js'
 const props = defineProps({
 	/** A Reviewer of the Project, with their Personal Link and own rights through each link they are on */
 	reviewer: { type: Object, required: true },
-	/** The Project's Project Links with the title the navigation gives them, to name each Personal Link */
+	/** The Project's Review Links with the title the navigation gives them, to name each Personal Link */
 	links: { type: Array, required: true },
 	canWrite: { type: Boolean, default: false },
 })

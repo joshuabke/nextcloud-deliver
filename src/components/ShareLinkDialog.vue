@@ -10,7 +10,7 @@ import { errorMessage, linkApi } from '../api.js'
 import { linkTitle } from '../lib/linkTitle.js'
 
 const props = defineProps({
-	/** A Project Link as the Project's navigation lists it */
+	/** A Review Link as the Project's navigation lists it */
 	share: { type: Object, required: true },
 	/** The Project's Assets, or those of No Project, to pick from */
 	assets: { type: Array, default: () => [] },

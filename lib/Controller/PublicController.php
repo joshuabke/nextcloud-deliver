@@ -23,7 +23,7 @@ use OCP\IURLGenerator;
 use OCP\IUserSession;
 use OCP\Util;
 
-/** The review page behind a Project Link (ADR 0011) */
+/** The review page behind a Review Link (ADR 0011) */
 class PublicController extends AuthPublicShareController {
 	use ReviewLinkToken;
 

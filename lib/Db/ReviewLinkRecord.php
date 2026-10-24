@@ -41,7 +41,7 @@ use OCP\AppFramework\Db\Entity;
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
  */
-class ProjectLink extends Entity {
+class ReviewLinkRecord extends Entity {
 	protected ?int $projectId = null;
 	protected ?string $ownerUid = null;
 	protected ?string $token = null;

@@ -16,7 +16,7 @@ import { useBusy } from '../composables/busy.js'
 import { reviewerWithAddress } from '../lib/people.js'
 
 /**
- * Invites one person on a Project Link of their own: who, what they see and
+ * Invites one person on a Review Link of their own: who, what they see and
  * what they may do (story 145). Password and expiry wait for the link's settings.
  */
 const props = defineProps({

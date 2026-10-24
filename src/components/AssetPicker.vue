@@ -4,7 +4,7 @@ import { computed } from 'vue'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 
 /**
- * What a Project Link shows: the whole Project, or only the Assets picked
+ * What a Review Link shows: the whole Project, or only the Assets picked
  * (story 120). On No Project only picked Assets, at least one.
  */
 const props = defineProps({

@@ -12,10 +12,10 @@ use OCA\Deliver\Db\CommentMapper;
 use OCA\Deliver\Db\LinkActivityMapper;
 use OCA\Deliver\Db\MuteMapper;
 use OCA\Deliver\Db\Project;
-use OCA\Deliver\Db\ProjectLinkMapper;
 use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\ReactionMapper;
 use OCA\Deliver\Db\RemovedMapper;
+use OCA\Deliver\Db\ReviewLinkMapper;
 use OCA\Deliver\Db\SeenMapper;
 use OCA\Deliver\Db\Version;
 use OCA\Deliver\Db\VersionMapper;
@@ -59,7 +59,7 @@ class StackService {
 		private ITimeFactory $time,
 		private IDBConnection $db,
 		private AttachmentStore $attachmentFiles,
-		private ProjectLinkMapper $projectLinks,
+		private ReviewLinkMapper $linkRecords,
 		private LinkActivityMapper $activity,
 	) {
 	}
@@ -363,10 +363,10 @@ class StackService {
 		$this->versions->release($project->getId());
 		$this->mutes->deleteByProject($project->getId());
 		$this->removed->deleteByProject($project->getId());
-		// Its Project Links go with it (ADR 0010)
-		foreach ($this->projectLinks->findAllOf($project->getId()) as $link) {
+		// Its Review Links go with it (ADR 0010)
+		foreach ($this->linkRecords->findAllOf($project->getId()) as $link) {
 			$this->activity->deleteByToken($link->getToken());
-			$this->projectLinks->delete($link);
+			$this->linkRecords->delete($link);
 		}
 		$this->projects->delete($project);
 	}

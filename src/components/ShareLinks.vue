@@ -3,10 +3,10 @@ import { t } from '@nextcloud/l10n'
 import { ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import ShareLinkItem from './ShareLinkItem.vue'
-import { createProjectLink, listProjectLinks } from '../api.js'
+import { createReviewLink, listReviewLinks } from '../api.js'
 import { useBusy } from '../composables/busy.js'
 
-// The Project Links that show a Project or one of its Assets, in the Files sidebar and in the Review view
+// The Review Links that show a Project or one of its Assets, in the Files sidebar and in the Review view
 const props = defineProps({
 	/** The Project, 0 for No Project */
 	projectId: { type: Number, required: true },
@@ -18,7 +18,7 @@ const links = ref([])
 const { busy, error, run } = useBusy()
 
 /**
- * @param {object} link - a Project Link
+ * @param {object} link - a Review Link
  * @return {boolean} whether it shows the Asset, or is about the whole Project
  */
 const shows = (link) => props.assetId === null || link.assetIds === null || link.assetIds.includes(props.assetId)
@@ -26,7 +26,7 @@ const shows = (link) => props.assetId === null || link.assetIds === null || link
 watch(() => [props.projectId, props.assetId], ([projectId, assetId]) => {
 	links.value = []
 	run(async () => {
-		const found = (await listProjectLinks(projectId)).links
+		const found = (await listReviewLinks(projectId)).links
 		// The sidebar may have moved on to another node meanwhile
 		if (props.projectId === projectId && props.assetId === assetId) {
 			links.value = found.filter(shows)
@@ -37,7 +37,7 @@ watch(() => [props.projectId, props.assetId], ([projectId, assetId]) => {
 /** A new link, live, on the Asset alone or on the whole Project (stories 45, 120) */
 function addLink() {
 	return run(async () => {
-		links.value = [...links.value, await createProjectLink(props.projectId, props.assetId === null ? null : [props.assetId])]
+		links.value = [...links.value, await createReviewLink(props.projectId, props.assetId === null ? null : [props.assetId])]
 	})
 }
 

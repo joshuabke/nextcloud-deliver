@@ -6,12 +6,14 @@
 - Add "Save to Contacts" to a Reviewer's menu.
 - Add Deliver settings with the address book Reviewers are saved to.
 - Move "Create Review Link" to a plus next to "Links".
-- Add a plus next to "Reviewers" that invites one person on a Project Link of their own.
-- Title Project Links by what they show.
+- Add a plus next to "Reviewers" that invites one person on a Review Link of their own.
+- Title Review Links by what they show.
 - Make each email address one Reviewer per Project.
 - Move a Reviewer's own rights to each link they are on.
 - Open a Personal Link only through the Review Links its Reviewer is on.
 - Show Reviewers with their initials in the navigation; under a link, open their rights on it.
+- Rename Project Links to Review Links.
+
 
 ## 0.9.2 – 2026-10-22
 

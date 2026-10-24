@@ -73,7 +73,7 @@ A Member of the Version named in a Comment with `@`, who is notified even from a
 _Avoid_: Tag, ping
 
 **Watermark**:
-The Reviewer's name and the date, repeated across the picture on a Project Link that asks for it. An overlay in the player, not burned into the media.
+The Reviewer's name and the date, repeated across the picture on a Review Link that asks for it. An overlay in the player, not burned into the media.
 _Avoid_: Stamp, overlay (alone)
 
 **Due Date**:
@@ -99,15 +99,15 @@ A Nextcloud user who can open a Version's file through Files permissions; read a
 _Avoid_: Owner (except for the file's actual owner), collaborator, team
 
 **Reviewer**:
-Anyone who reaches a Version through a Project Link instead of Files permissions, identified by a self-given name (prefilled from their account if they happen to be logged in). A Reviewer belongs to the Member and the Project of the link they came by; the same person on another Project is another Reviewer there. An email address is one Reviewer per Project: inviting it again puts them on another link, each with rights of their own over the link's, and their Personal Link opens only the links they are on (ADR 0014); and naming oneself with it mails that Reviewer their Personal Link. Two Reviewers may share a name and are told apart by the colour of their avatar. Reviewers only ever touch their own Comments.
+Anyone who reaches a Version through a Review Link instead of Files permissions, identified by a self-given name (prefilled from their account if they happen to be logged in). A Reviewer belongs to the Member and the Project of the link they came by; the same person on another Project is another Reviewer there. An email address is one Reviewer per Project: inviting it again puts them on another link, each with rights of their own over the link's, and their Personal Link opens only the links they are on (ADR 0014); and naming oneself with it mails that Reviewer their Personal Link. Two Reviewers may share a name and are told apart by the colour of their avatar. Reviewers only ever touch their own Comments.
 _Avoid_: Guest, anonymous user, client, external user
 
-**Project Link**:
+**Review Link**:
 The only review link (ADR 0010, 0011): Deliver makes it for a Project and it shows the whole Project, growing as Assets join, or the Assets the Member picks, with its own password, expiry, pause switch and rights. Made on No Project, it shows only Assets of No Project that the Member picks, at least one; an Asset leaves it once it joins a Project. It shows only files its Member may share, and goes with its Project.
-_Avoid_: Project share, collection link, Share Link (a Nextcloud link made in Files shows files and is never a review surface)
+_Avoid_: Project Link (it need not show the whole Project), Project share, collection link, Share Link (a Nextcloud link made in Files shows files and is never a review surface)
 
 **Personal Link**:
-A Project Link URL carrying a Reviewer's own key, so that whoever opens it is that Reviewer, forever, on any device. Issued by a Member as an invitation, or mailed or shown to a Reviewer after they name themselves.
+A Review Link URL carrying a Reviewer's own key, so that whoever opens it is that Reviewer, forever, on any device. Issued by a Member as an invitation, or mailed or shown to a Reviewer after they name themselves.
 _Avoid_: Invite link, magic link, session (a browser remembering a Reviewer is their session, which they end from their menu; the Personal Link outlives it)
 
 **Unseen**:
@@ -174,7 +174,7 @@ The German translation (`l10n/de` with "du", `l10n/de_DE` with "Sie") uses these
 | Frame, Range | Frame, Bereich |
 | Resolved (and its opposite) | Erledigt (Offen) |
 | Member, Reviewer | Mitglied, Reviewer |
-| Project Link, Personal Link | Projekt-Link, Persönlicher Link |
+| Review Link, Personal Link | Review-Link, Persönlicher Link |
 | Unseen | Ungesehen |
 | Proxy, Thumbnail Strip, Waveform | Proxy, Vorschauleiste, Wellenform |
 | Processing | Verarbeitung (on cards „Wird verarbeitet“) |

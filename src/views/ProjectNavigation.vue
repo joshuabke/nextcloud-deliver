@@ -23,7 +23,7 @@ import PersonAvatar from '../components/PersonAvatar.vue'
 import ReviewerDialog from '../components/ReviewerDialog.vue'
 import SettingsDialog from '../components/SettingsDialog.vue'
 import ShareLinkDialog from '../components/ShareLinkDialog.vue'
-import { createProjectLink, errorMessage, listProjectLinks, removeReviewer, saveReviewerContact } from '../api.js'
+import { createReviewLink, errorMessage, listReviewLinks, removeReviewer, saveReviewerContact } from '../api.js'
 import { copyLink } from '../clipboard.js'
 import { confirmReviewerRemoval } from '../confirm.js'
 import { folderTree } from '../lib/folders.js'
@@ -37,7 +37,7 @@ const props = defineProps({
 const store = useProjectsStore()
 const route = useRoute()
 const router = useRouter()
-/** My Project Links on this Project, paused ones too */
+/** My Review Links on this Project, paused ones too */
 const links = ref([])
 /** The Project's Reviewers on any of these links, each once, with their Personal Link and own rights through each link they are on */
 const reviewers = ref([])
@@ -63,7 +63,7 @@ const byId = computed(() => new Map(reviewers.value.map((reviewer) => [reviewer.
  * @param {number} id - the Project
  */
 async function load(id = props.id) {
-	const found = await listProjectLinks(id).catch(() => ({ links: [], reviewers: [] }))
+	const found = await listReviewLinks(id).catch(() => ({ links: [], reviewers: [] }))
 	if (props.id === id) {
 		links.value = found.links.map((link) => ({ ...link, title: linkTitle(link, project.value?.assets ?? []) }))
 		reviewers.value = found.reviewers
@@ -73,7 +73,7 @@ async function load(id = props.id) {
 }
 
 /**
- * @param {object} link - a Project Link
+ * @param {object} link - a Review Link
  * @return {string} whether it is paused or shows all or picked Assets
  */
 function iconOf(link) {
@@ -85,10 +85,10 @@ watch(() => props.id, (id) => {
 	load(id)
 }, { immediate: true })
 
-/** A new Project Link showing the whole Project, live, its settings open (stories 45, 120) */
+/** A new Review Link showing the whole Project, live, its settings open (stories 45, 120) */
 async function createLink() {
 	try {
-		const created = await createProjectLink(props.id)
+		const created = await createReviewLink(props.id)
 		await load()
 		editing.value = links.value.find((share) => share.token === created.token) ?? null
 	} catch (e) {

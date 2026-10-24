@@ -44,7 +44,7 @@ const props = defineProps({
 	/** How time is shown: { fps, mode, startFrame, dropFrame } */
 	clock: { type: Object, required: true },
 	canComment: { type: Boolean, default: false },
-	/** Text shown across the picture on a Project Link that asks for it (story 94) */
+	/** Text shown across the picture on a Review Link that asks for it (story 94) */
 	watermark: { type: String, default: null },
 	/** Whether the pointer draws on the picture (story 89) */
 	drawing: { type: Boolean, default: false },
