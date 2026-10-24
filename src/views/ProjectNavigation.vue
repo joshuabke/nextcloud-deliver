@@ -1,5 +1,4 @@
 <script setup>
-import reviewerIcon from '@mdi/svg/svg/account-outline.svg?raw'
 import contactIcon from '@mdi/svg/svg/account-plus-outline.svg?raw'
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import copyIcon from '@mdi/svg/svg/content-copy.svg?raw'
@@ -19,6 +18,8 @@ import NcAppNavigationCaption from '@nextcloud/vue/components/NcAppNavigationCap
 import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import InviteDialog from '../components/InviteDialog.vue'
+import PersonalLinkRightsDialog from '../components/PersonalLinkRightsDialog.vue'
+import PersonAvatar from '../components/PersonAvatar.vue'
 import ReviewerDialog from '../components/ReviewerDialog.vue'
 import SettingsDialog from '../components/SettingsDialog.vue'
 import ShareLinkDialog from '../components/ShareLinkDialog.vue'
@@ -44,6 +45,8 @@ const reviewers = ref([])
 const editing = ref(null)
 /** The Reviewer whose settings are open */
 const person = ref(null)
+/** A Reviewer's own rights on one link, opened from under that link: {reviewer, share} */
+const openRights = ref(null)
 /** Whether the Deliver settings are open */
 const settingsOpen = ref(false)
 /** Whether the dialog that invites someone on a link of their own is open (story 145) */
@@ -149,6 +152,15 @@ function closeEditing() {
 
 /**
  * @param {object} reviewer - a Reviewer
+ * @param {object} share - a link they are on
+ * @return {object|undefined} their Personal Link through it, with their own rights there; none while it is paused
+ */
+function personalLinkOn(reviewer, share) {
+	return reviewer.links.find((each) => each.token === share.token)
+}
+
+/**
+ * @param {object} reviewer - a Reviewer
  * @return {string} their Personal Link through the first live link
  */
 function personalLink(reviewer) {
@@ -219,14 +231,26 @@ function personalLink(reviewer) {
 						{{ t('deliver', 'Copy link') }}
 					</NcActionButton>
 				</template>
-				<!-- Who was invited through this link or came in by it -->
+				<!-- Who is on this link; a click opens their rights on it, their Personal Link through it is one click away -->
 				<NcAppNavigationItem
 					v-for="reviewer in share.reviewerIds.map((id) => byId.get(id)).filter(Boolean)"
 					:key="reviewer.id"
 					:name="reviewer.name"
-					@click="person = reviewer">
+					:inlineActions="1"
+					@click="personalLinkOn(reviewer, share) ? openRights = { reviewer, share } : person = reviewer">
 					<template #icon>
-						<NcIconSvgWrapper :svg="reviewerIcon" />
+						<PersonAvatar :author="{ type: 'reviewer', id: reviewer.id, name: reviewer.name }" :size="24" />
+					</template>
+					<template #actions>
+						<NcActionButton
+							v-if="personalLinkOn(reviewer, share)"
+							:aria-label="t('deliver', 'Copy Personal Link')"
+							@click="copyLink(personalLinkOn(reviewer, share).url, t('deliver', 'Personal Link copied'))">
+							<template #icon>
+								<NcIconSvgWrapper :svg="copyIcon" />
+							</template>
+							{{ t('deliver', 'Copy Personal Link') }}
+						</NcActionButton>
 					</template>
 				</NcAppNavigationItem>
 			</NcAppNavigationItem>
@@ -253,7 +277,7 @@ function personalLink(reviewer) {
 					:inlineActions="1"
 					@click="person = reviewer">
 					<template #icon>
-						<NcIconSvgWrapper :svg="reviewerIcon" />
+						<PersonAvatar :author="{ type: 'reviewer', id: reviewer.id, name: reviewer.name }" :size="24" />
 					</template>
 					<template #actions>
 						<NcActionButton v-if="personalLink(reviewer)" :aria-label="t('deliver', 'Copy Personal Link')" @click="copyLink(personalLink(reviewer), t('deliver', 'Link copied'))">
@@ -281,6 +305,13 @@ function personalLink(reviewer) {
 				</NcAppNavigationItem>
 			</ul>
 			<SettingsDialog v-if="settingsOpen" @close="settingsOpen = false" />
+			<PersonalLinkRightsDialog
+				v-if="openRights && personalLinkOn(openRights.reviewer, openRights.share)"
+				:reviewer="openRights.reviewer"
+				:share="openRights.share"
+				:rights="personalLinkOn(openRights.reviewer, openRights.share).rights"
+				@changed="load()"
+				@close="openRights = null" />
 			<InviteDialog
 				v-if="invitingOpen"
 				:projectId="id"

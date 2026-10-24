@@ -570,6 +570,12 @@ test.describe('Review view', () => {
 				const now = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`)).json()
 				return now.ocs.data.reviewers.find((each) => each.id === zoeId).links.find((each) => each.token === theirs.token).rights.canComment
 			}).toBe(false)
+			await page.keyboard.press('Escape')
+			await page.keyboard.press('Escape')
+
+			// Under the link, a click opens their rights on that very link
+			await page.locator('.app-navigation').getByText(zoeName).first().click()
+			await expect(page.getByRole('dialog', { name: `${zoeName} on “Whole Project”` })).toBeVisible()
 		} finally {
 			const cleanup = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth })
 			await cleanup.fetch(card, { method: 'DELETE' })

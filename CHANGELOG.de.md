@@ -11,6 +11,7 @@
 - E-Mail-Adresse auf einen Reviewer pro Projekt beschränkt.
 - Eigene Rechte eines Reviewers auf die einzelnen Links verlegt.
 - Persönliche Links auf die Review-Links ihres Reviewers beschränkt.
+- Reviewer in der Navigation mit Initialen gezeigt; unter einem Link öffnen sie ihre Rechte darauf.
 
 ## 0.9.2 – 2026-10-22
 
