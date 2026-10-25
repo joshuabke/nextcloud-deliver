@@ -24,7 +24,7 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | POST | `/versions/{id}/regenerate` | Delete the Version's derived media and queue it again |
 | POST | `/versions/{id}/waveform` `{peaks, durationFrames}` | Hand in a Waveform (1 to 2000 peaks from 0 to 1) and the duration in Frames, for audio milliseconds, also before the probe ran; 409 once the Version has one or the server is making one, which then replaces it (ADR 0012) |
 | GET | `/admin/settings` | Pipeline settings and status, admins only |
-| PUT | `/admin/settings` `{ffmpegPath, ffprobePath, maxJobs, maxHeight, thumbCap, hwEncoder, hwDevice, extraArgs, projectFolder}` | Save and test the encoder, admins only |
+| PUT | `/admin/settings` `{ffmpegPath, ffprobePath, maxJobs, maxHeight, thumbCap, hwEncoder, hwDevice, extraArgs, projectFolder, attachmentLimit}` | Save and test the encoder, admins only; `attachmentLimit` in MB per person and Version |
 | GET | `/apps/deliver/versions/{id}/export/{format}` `?unresolvedOnly=1&zeroBased=1` | The Comments as `edl` (DaVinci Resolve markers), `fcpxml` (FCP7 XML, Premiere Pro), `fcpx` (FCPXML, Final Cut Pro) or `csv`, and for audio as `wav` (embedded markers), `midi` (marker meta events) or `reaper` (Region/Marker Manager CSV); needs write access |
 | POST | `/apps/deliver/versions/{id}/export/ableton` (multipart `set`) | An Ableton Live Set back with the Comments as locators |
 | GET | `/apps/deliver/versions/{id}/media/{kind}` | Proxy, Thumbnail Strip, its index or the Waveform, with byte ranges |

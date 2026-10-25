@@ -8,6 +8,7 @@
 - ffmpeg und ffprobe auf lokale Dateien in den Formaten beschränkt, die Deliver aufnimmt.
 - Playlists (M3U, PLS) vom Review ausgenommen.
 - Ableton Live Sets abgelehnt, die entpackt größer als 100 MB sind.
+- Anhänge auf zusammen 20 MB je Person und Version begrenzt, einstellbar in den Admin-Einstellungen.
 
 ### Behoben
 - Version für Mitglieder geschlossen, die ihre Datei nicht öffnen können, auch wenn sie eine andere Version des Stapels öffnen.

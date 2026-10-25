@@ -81,7 +81,7 @@ The calendar day an Asset should be through by. The Members of its newest Versio
 _Avoid_: Deadline
 
 **Attachment**:
-A file added to a Comment, up to five of 25 MB. It lives in Deliver's app data, not in Files, is never an Asset, and goes with its Comment.
+A file added to a Comment, up to five; one person's on one Version add up to 20 MB unless an admin sets another limit. It lives in Deliver's app data, not in Files, is never an Asset, and goes with its Comment.
 _Avoid_: Upload, file (alone)
 
 **Reaction**:

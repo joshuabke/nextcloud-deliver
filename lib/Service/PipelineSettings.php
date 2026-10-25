@@ -27,6 +27,8 @@ class PipelineSettings {
 		'extraArgs' => ['extra_args', 'string', ''],
 		// Where a new Project's folder goes in each Member's Files, unless they pick another place (story 98)
 		'projectFolder' => ['project_folder', 'string', '/Deliver'],
+		// What one person may attach on one Version in all, in MB (story 92)
+		'attachmentLimit' => ['attachment_mb', 'int', CommentService::ATTACHMENT_MB],
 	];
 
 	public function __construct(
@@ -89,6 +91,7 @@ class PipelineSettings {
 			'maxJobs' => [1, 16],
 			'maxHeight' => [self::MIN_HEIGHT, 2160],
 			'thumbCap' => [10, 5000],
+			'attachmentLimit' => [1, 1024],
 		};
 		if ($value < $min || $value > $max) {
 			throw new InvalidRequestException("$name runs from $min to $max");

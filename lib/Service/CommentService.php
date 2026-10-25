@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Service;
 
+use OCA\Deliver\AppInfo\Application;
 use OCA\Deliver\Db\Attachment;
 use OCA\Deliver\Db\AttachmentMapper;
 use OCA\Deliver\Db\Comment;
@@ -17,6 +18,7 @@ use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\DB\Exception as DbException;
 use OCP\Files\IMimeTypeDetector;
 use OCP\Files\NotFoundException;
+use OCP\IAppConfig;
 
 /**
  * Comments on one Version, anchored to Frames. Who may do what is decided
@@ -28,11 +30,10 @@ class CommentService {
 	public const REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '🙏'];
 	/** One emoji, skin tones, flags and joined families included; no letters, digits or markup */
 	private const EMOJI = '/^(?=.*\p{Extended_Pictographic}|.*\p{Regional_Indicator})[^\p{L}\p{N}\s<>&"\']{1,16}$/u';
-	/** Attachments per Comment, and the size of each (story 92) */
+	/** Attachments per Comment (story 92) */
 	public const MAX_ATTACHMENTS = 5;
-	public const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
-	/** What one person may attach on one Version in all, so an open link cannot fill the owner's storage */
-	public const MAX_BYTES_PER_PERSON = 100 * 1024 * 1024;
+	/** What one person may attach on one Version in all, in MB, unless the admin sets another (`attachment_mb`), so an open link cannot fill the server */
+	public const ATTACHMENT_MB = 20;
 
 	public function __construct(
 		private CommentMapper $comments,
@@ -49,6 +50,7 @@ class CommentService {
 		private LiveUpdates $live,
 		private CommentWindow $window,
 		private Members $members,
+		private IAppConfig $config,
 	) {
 	}
 
@@ -233,11 +235,9 @@ class CommentService {
 			throw new InvalidRequestException('No file arrived');
 		}
 		$size = (int)($upload['size'] ?? 0);
-		if ($size > self::MAX_ATTACHMENT_BYTES) {
-			throw new InvalidRequestException('An attachment is at most 25 MB');
-		}
-		if ($this->attachments->bytesBy($version->getId(), $viewer->uid, $viewer->reviewerId) + $size > self::MAX_BYTES_PER_PERSON) {
-			throw new InvalidRequestException('Attachments of one person on a Version add up to at most 100 MB');
+		$limit = $this->attachmentLimit();
+		if ($this->attachments->bytesBy($version->getId(), $viewer->uid, $viewer->reviewerId) + $size > $limit) {
+			throw new InvalidRequestException('Attachments of one person on a Version add up to at most ' . intdiv($limit, 1024 * 1024) . ' MB');
 		}
 		if (count($this->attachments->findByComments([$id])[$id] ?? []) >= self::MAX_ATTACHMENTS) {
 			throw new InvalidRequestException('A Comment carries at most ' . self::MAX_ATTACHMENTS . ' attachments');
@@ -269,6 +269,11 @@ class CommentService {
 		$attachment = $this->attachments->find($attachmentId) ?? throw new NotFoundException('Attachment not found');
 		$this->reach($version, $attachment->getCommentId());
 		return [$this->store->file($attachment->getCommentId(), $attachment->getId(), $attachment->getName()), $attachment];
+	}
+
+	/** In bytes, what one person may attach on one Version in all, one file included */
+	public function attachmentLimit(): int {
+		return max(1, $this->config->getValueInt(Application::APP_ID, 'attachment_mb', self::ATTACHMENT_MB)) * 1024 * 1024;
 	}
 
 	/** @throws NotFoundException no such attachment */
@@ -371,6 +376,8 @@ class CommentService {
 			'state' => $version->getState(),
 			'canWrite' => $viewer->canWrite,
 			'canComment' => ($viewer->canComment || $viewer->canCommentOnceNamed) && $this->window->open($viewer, $version),
+			// So that the Comment field refuses a file that would not fit before uploading it
+			'attachmentLimit' => $this->attachmentLimit(),
 			'seenUntil' => $seen?->getSeenUntil() ?? 0,
 			// In the same shape as a Comment's author, so the client can spot its own
 			'me' => $viewer->identity(),

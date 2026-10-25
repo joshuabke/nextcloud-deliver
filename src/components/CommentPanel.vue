@@ -69,7 +69,8 @@ const wishes = ref({ replies: true, comments: false, versions: false })
 const files = ref([])
 const fileInput = ref(null)
 const MAX_FILES = 5
-const MAX_BYTES = 25 * 1024 * 1024
+/** The attachment limit in MB, as the server counts it */
+const limitMb = computed(() => Math.floor(store.attachmentLimit / 1024 / 1024))
 
 /**
  * @param {Event} event - the file input's change
@@ -77,11 +78,11 @@ const MAX_BYTES = 25 * 1024 * 1024
 function pickFiles(event) {
 	const picked = [...event.target.files]
 	event.target.value = ''
-	const tooLarge = picked.filter((file) => file.size > MAX_BYTES)
+	const tooLarge = picked.filter((file) => file.size > store.attachmentLimit)
 	if (tooLarge.length) {
-		error.value = t('deliver', 'An attachment is at most 25 MB: {names}', { names: tooLarge.map((file) => file.name).join(', ') })
+		error.value = t('deliver', 'Attachments add up to at most {size} MB per person on a Version: {names}', { size: limitMb.value, names: tooLarge.map((file) => file.name).join(', ') })
 	}
-	files.value = [...files.value, ...picked.filter((file) => file.size <= MAX_BYTES)].slice(0, MAX_FILES)
+	files.value = [...files.value, ...picked.filter((file) => file.size <= store.attachmentLimit)].slice(0, MAX_FILES)
 }
 /** The mention being typed, and the Members it could mean */
 const typedMention = ref(null)
@@ -524,7 +525,7 @@ function claim() {
 						variant="tertiary"
 						:disabled="files.length >= MAX_FILES"
 						:aria-label="t('deliver', 'Attach files')"
-						:title="t('deliver', 'Attach files, up to five of 25 MB each')"
+						:title="t('deliver', 'Attach files: up to five, {size} MB in all', { size: limitMb })"
 						@click="fileInput.click()">
 						<template #icon>
 							<NcIconSvgWrapper :svg="attachIcon" />
