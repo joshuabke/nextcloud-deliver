@@ -437,6 +437,10 @@ class ProjectService {
 		if ($file instanceof File) {
 			return [$version, $file, $this->canWrite($file)];
 		}
+		// A file that is there but not theirs stays closed; only a Missing Version has no file to ask
+		if ($version->getState() === Version::STATE_READY) {
+			throw new NotFoundException('Version not found');
+		}
 		foreach ($this->versions->findByAsset($version->getAssetId()) as $sibling) {
 			$other = $home->getFirstNodeById($sibling->getFileId());
 			if ($other instanceof File) {
@@ -960,12 +964,10 @@ class ProjectService {
 			$stack = $versionsByAsset[$asset->getId()];
 			$versions = [];
 			$path = null;
-			$canWrite = false;
 			foreach ($stack as $version) {
 				$file = $files[$version->getId()] ?? null;
 				if ($file !== null && $path === null) {
 					$path = $this->pathOf($file, $folder, $home);
-					$canWrite = $this->canWrite($file);
 				}
 				$versions[] = [
 					'id' => $version->getId(),
@@ -1001,12 +1003,12 @@ class ProjectService {
 					) || ($version->getPlayable() === null && $version->getDerivedError() !== null),
 				];
 			}
-			if ($path === null) {
-				// Every file is Missing: who manages the Project manages the Asset, as in its own view
-				try {
-					$canWrite = $this->reachVersion($uid, $stack[0]->getId())[2];
-				} catch (NotFoundException) {
-				}
+			// Managing the Asset takes its newest Version, as writableAsset does: a Member of an older one alone only reads,
+			// and where every file is Missing, who manages the Project manages the Asset
+			try {
+				$canWrite = $this->reachVersion($uid, ($this->versions->findNewest($asset->getId()) ?? $stack[0])->getId())[2];
+			} catch (NotFoundException) {
+				$canWrite = false;
 			}
 			$result[] = [
 				'id' => $asset->getId(),

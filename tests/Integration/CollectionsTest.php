@@ -96,6 +96,22 @@ class CollectionsTest extends TestCase {
 		self::assertSame([], $this->guest->ocs('GET', '/projects/0')['data']['assets'], 'No Project lists only what the guest enabled');
 	}
 
+	public function testAVersionWhoseFileIsNotSharedStaysClosed(): void {
+		$project = $this->owner->ocs('POST', '/projects', ['name' => 'Acme spot'])['data']['id'];
+		$cut = $this->enable('clients/acme/cut.mp4', $project);
+		$this->owner->put('clients/acme/cut_v2.mp4', 'not really a video');
+		$final = $this->owner->ocs('POST', '/assets', ['fileId' => $this->owner->fileId('clients/acme/cut_v2.mp4'), 'assetId' => $cut['assetId']]);
+		self::assertSame([201, $cut['assetId']], [$final['status'], $final['data']['assetId']], json_encode($final['data']));
+		$this->owner->ocs('POST', "/versions/{$final['data']['versionId']}/comments", ['inFrame' => 1, 'body' => 'final only']);
+
+		// The guest can open the first cut of the Stack, not the second
+		$this->shareWithGuest('clients/acme/cut.mp4', 1);
+		$stack = $this->guest->ocs('GET', "/versions/{$cut['versionId']}")['data']['versions'];
+		self::assertSame([$cut['versionId']], array_column($stack, 'id'), 'the Stack shows only the Versions they can open');
+		self::assertSame(404, $this->guest->ocs('GET', "/versions/{$final['data']['versionId']}/comments")['status'], 'a file they cannot open stays closed, whatever its Stack');
+		self::assertSame(404, $this->guest->ocs('GET', "/versions/{$final['data']['versionId']}")['status']);
+	}
+
 	public function testALinkOnNoProjectShowsThePickedAssets(): void {
 		$project = $this->owner->ocs('POST', '/projects', ['name' => 'Acme spot'])['data']['id'];
 		$this->enable('clients/acme/cut.mp4', $project);

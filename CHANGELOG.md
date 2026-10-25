@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Close a Version to Members who cannot open its file, also when they open another Version of its Stack.
+
 ## 0.9.5 – 2026-10-24
 
 ### Added
