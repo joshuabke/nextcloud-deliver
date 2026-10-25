@@ -35,7 +35,7 @@ class CommentApiTest extends TestCase {
 	}
 
 	protected function tearDown(): void {
-		$this->nc->ocs('DELETE', "/projects/{$this->projectId}");
+		$this->nc->deleteProject($this->projectId);
 		foreach ($this->users as $user) {
 			$this->nc->ocsForm('DELETE', "/ocs/v2.php/cloud/users/$user");
 		}

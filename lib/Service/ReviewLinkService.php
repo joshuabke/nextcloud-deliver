@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Deliver\Service;
 
 use OCA\Deliver\Db\AssetMapper;
+use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\ReviewLinkMapper;
 use OCA\Deliver\Db\ReviewLinkRecord;
 use OCP\AppFramework\Utility\ITimeFactory;
@@ -22,6 +23,7 @@ class ReviewLinkService {
 	public function __construct(
 		private ReviewLinkMapper $linkRecords,
 		private ProjectService $projects,
+		private ProjectMapper $projectMapper,
 		private AssetMapper $assets,
 		private StackService $stacks,
 		private ReviewLinks $reviewLinks,
@@ -106,8 +108,15 @@ class ReviewLinkService {
 		$this->linkRecords->forget($link);
 	}
 
-	/** @return list<array<string, mixed>> the Member's links on a Project, or on No Project for 0, for its navigation */
+	/**
+	 * @return list<array<string, mixed>> the Member's links on a Project, or on No Project for 0, for its navigation
+	 * @throws NotFoundException a Deleted Project
+	 */
 	public function listFor(string $uid, int $projectId): array {
+		// A Deleted Project's links wait for its restore, as if it were gone (ADR 0015)
+		if ($this->projectMapper->isDeleted($projectId)) {
+			throw new NotFoundException('Project not found');
+		}
 		$links = $this->linkRecords->findByProject($projectId === ProjectService::NONE ? null : $projectId, $uid);
 		return array_map(fn (ReviewLinkRecord $link) => $this->serialize($link), $links);
 	}
@@ -145,11 +154,14 @@ class ReviewLinkService {
 	}
 
 	/**
-	 * @throws NotFoundException no such link
+	 * @throws NotFoundException no such link, or one of a Deleted Project, which waits for its restore (ADR 0015)
 	 * @throws AccessDeniedException another Member's link
 	 */
 	private function own(string $uid, int $id): ReviewLinkRecord {
-		$link = $this->linkRecords->find($id) ?? throw new NotFoundException('Link not found');
+		$link = $this->linkRecords->find($id);
+		if ($link === null || $this->projectMapper->isDeleted($link->getProjectId())) {
+			throw new NotFoundException('Link not found');
+		}
 		if ($link->getOwnerUid() !== $uid) {
 			throw new AccessDeniedException('Only the Member who made a link changes it');
 		}

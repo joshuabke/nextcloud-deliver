@@ -54,8 +54,8 @@ export const useProjectsStore = defineStore('projects', {
 				}
 			}
 		},
-		async remove(id, withAssets = false) {
-			await removeProject(id, withAssets)
+		async remove(id) {
+			await removeProject(id)
 			this.projects = this.projects.filter((each) => each.id !== id)
 			delete this.details[id]
 		},

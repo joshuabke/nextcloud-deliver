@@ -32,7 +32,7 @@ class ReviewLinkTest extends TestCase {
 	}
 
 	protected function tearDown(): void {
-		$this->nc->ocs('DELETE', "/projects/{$this->projectId}");
+		$this->nc->deleteProject($this->projectId);
 		$this->nc->delete($this->root);
 	}
 
@@ -185,7 +185,7 @@ class ReviewLinkTest extends TestCase {
 			self::assertSame(201, $named['status'], 'the same name and address make a new Reviewer there, not a mail of the old Personal Link');
 			self::assertSame(['Kim'], array_column($this->nc->ocs('GET', "/links/{$link['id']}/reviewers")['data'], 'name'), 'and leave the first Project as it was');
 		} finally {
-			$this->nc->ocs('DELETE', "/projects/$otherId");
+			$this->nc->deleteProject($otherId);
 			$this->nc->delete($other);
 		}
 	}

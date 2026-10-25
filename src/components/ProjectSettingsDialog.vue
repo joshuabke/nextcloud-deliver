@@ -33,12 +33,11 @@ function save(fields) {
 	return run(() => store.save(props.project.id, fields))
 }
 
-/** Deletes the Project with its Assets (story 148), or keeps them in No Project (story 9) */
+/** Deletes the Project: it goes to Deleted Projects (story 9) */
 async function remove() {
-	const withAssets = await confirmProjectRemoval()
-	if (withAssets !== null) {
+	if (await confirmProjectRemoval()) {
 		await run(async () => {
-			await store.remove(props.project.id, withAssets)
+			await store.remove(props.project.id)
 			emit('removed')
 		})
 	}
@@ -85,7 +84,7 @@ async function remove() {
 				variant="error"
 				:disabled="busy"
 				@click="remove">
-				{{ t('deliver', 'Remove Project') }}
+				{{ t('deliver', 'Delete Project') }}
 			</NcButton>
 			<NcButton v-if="filesUrl" :href="filesUrl">
 				{{ t('deliver', 'Open in Files') }}

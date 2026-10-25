@@ -24,3 +24,18 @@ export function conflictMessage(error, given) {
 			return null
 	}
 }
+
+/**
+ * The Deleted Project that holds a folder or file someone wants back in
+ * review: making it a Project or enabling it is refused for it (story 149).
+ *
+ * @param {object} error - the failed request
+ * @return {{id: number, name: string}|null} that Deleted Project, or null for any other failure
+ */
+export function deletedProjectOf(error) {
+	if (error?.response?.status !== 409) {
+		return null
+	}
+	const body = error.response.data?.ocs?.data ?? error.response.data
+	return body?.reason === 'deleted' ? { id: body.projectId, name: body.projectName } : null
+}

@@ -63,12 +63,12 @@ class ReviewLink {
 		return $this->link->getOwnerUid();
 	}
 
-	/** Live while not paused, through its expiry day, and while its Project is there */
+	/** Live while not paused, through its expiry day, and while its Project is there and not deleted (ADR 0015) */
 	public function isLive(): bool {
 		$expires = $this->link->getExpireDate();
 		return $this->link->getReview() === true
 			&& ($expires === null || $expires >= $this->time->getDateTime()->format('Y-m-d'))
-			&& ($this->link->getProjectId() === null || $this->project() !== null);
+			&& ($this->link->getProjectId() === null || $this->project()?->isDeleted() === false);
 	}
 
 	public function passwordHash(): ?string {

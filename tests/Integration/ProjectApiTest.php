@@ -32,7 +32,7 @@ class ProjectApiTest extends TestCase {
 
 	protected function tearDown(): void {
 		foreach (array_reverse($this->projects) as [$client, $id]) {
-			$client->ocs('DELETE', "/projects/$id");
+			$client->deleteProject($id);
 		}
 		foreach ($this->users as $user) {
 			$this->nc->ocsForm('DELETE', "/ocs/v2.php/cloud/users/$user");
@@ -111,17 +111,18 @@ class ProjectApiTest extends TestCase {
 		self::assertSame(200, $this->nc->ocs('PUT', "/projects/$projectId", ['name' => 'Showreel'])['status']);
 		self::assertSame(400, $this->nc->ocs('PUT', "/projects/$projectId", ['autoIntake' => true])['status'], 'only a Folder Project takes in a folder');
 
-		// Removing the Project keeps every Asset, in No Project
+		// Deleted, the Project is kept whole under Deleted Projects, and nobody opens it (ADR 0015)
 		$commented = $this->nc->ocs('POST', "/versions/{$intro['data']['versionId']}/comments", ['inFrame' => 1, 'body' => 'keep me']);
 		self::assertSame(201, $commented['status']);
 		self::assertSame(200, $this->nc->ocs('DELETE', "/projects/$projectId")['status']);
 		self::assertSame(404, $this->nc->ocs('GET', "/projects/$projectId")['status']);
-		self::assertContains('intro', $this->unassigned($this->nc));
-		self::assertCount(1, $this->nc->ocs('GET', "/versions/{$intro['data']['versionId']}/comments")['data']['comments'], 'with its Comments');
+		self::assertNotContains('intro', $this->unassigned($this->nc), 'its Assets do not go to No Project');
+		self::assertSame(404, $this->nc->ocs('GET', "/versions/{$intro['data']['versionId']}/comments")['status']);
+		self::assertSame(404, $this->nc->ocs('GET', "/files/$fileId/asset")['status']);
 
-		self::assertSame(200, $this->nc->ocs('DELETE', "/assets/{$intro['data']['assetId']}")['status']);
-		self::assertSame(200, $this->nc->ocs('DELETE', "/assets/{$enabled['data']['assetId']}")['status']);
-		self::assertSame([], array_intersect(['cut', 'intro'], $this->unassigned($this->nc)), 'taken out of Deliver');
+		self::assertSame(200, $this->nc->ocs('POST', "/deleted-projects/$projectId/restore")['status']);
+		self::assertSame(['cut', 'intro'], array_keys($this->stacks($this->nc, $projectId)));
+		self::assertCount(1, $this->nc->ocs('GET', "/versions/{$intro['data']['versionId']}/comments")['data']['comments'], 'restored with its Comments');
 	}
 
 	public function testAFileRemovedFromAFolderProjectStaysOutOfAutoIntake(): void {
@@ -194,49 +195,142 @@ class ProjectApiTest extends TestCase {
 		self::assertSame([], $shown($this->nc)['assets']);
 	}
 
-	public function testAProjectMadeAgainGetsItsAssetsBackFromNoProject(): void {
+	public function testAFolderOrFileOfADeletedProjectOffersItBack(): void {
 		$this->nc->put("{$this->root}/cut.mp4", 'not really a video');
 		$this->nc->put("{$this->root}/other.mp4", 'not really a video');
 		$folderId = $this->nc->fileId($this->root);
-		$ids = array_column($this->nc->ocs('GET', '/projects/' . $this->createProject($this->nc, $folderId)['id'])['data']['assets'], 'id', 'name');
-		self::assertSame(200, $this->nc->ocs('DELETE', '/projects/' . array_pop($this->projects)[1])['status']);
-		self::assertContains('cut', $this->unassigned($this->nc), 'the Assets went to No Project (story 9)');
-
-		// Made again, the folder takes them back, review data and all
 		$projectId = $this->createProject($this->nc, $folderId)['id'];
-		self::assertSame($ids, array_column($this->nc->ocs('GET', "/projects/$projectId")['data']['assets'], 'id', 'name'));
-		self::assertNotContains('cut', $this->unassigned($this->nc));
+		$ids = array_column($this->nc->ocs('GET', "/projects/$projectId")['data']['assets'], 'id', 'name');
+		self::assertSame(200, $this->nc->ocs('DELETE', "/projects/$projectId")['status']);
 
-		// A file of No Project in the folder, removed, stays out of its Auto Intake too (story 132)
+		// It holds its files: made a Project again, or enabled, the folder offers it back (story 149)
+		$again = $this->nc->ocs('POST', '/projects', ['folderId' => $folderId]);
+		self::assertSame([409, 'deleted', $projectId], [$again['status'], $again['data']['reason'] ?? null, $again['data']['projectId'] ?? null], json_encode($again['data']));
+		self::assertSame([409, 'deleted'], [($enabled = $this->nc->ocs('POST', '/assets', ['fileId' => $this->nc->fileId("{$this->root}/cut.mp4")]))['status'], $enabled['data']['reason'] ?? null]);
 		$this->nc->put("{$this->root}/loose.mp4", 'not really a video');
-		$loose = $this->nc->ocs('POST', '/assets', ['fileId' => $this->nc->fileId("{$this->root}/loose.mp4"), 'projectId' => 0]);
-		self::assertSame(200, $this->nc->ocs('DELETE', "/assets/{$loose['data']['assetId']}")['status']);
-		$shown = $this->nc->ocs('GET', "/projects/$projectId")['data'];
-		self::assertSame(['cut', 'other'], array_column($shown['assets'], 'name'));
-		self::assertSame(['loose.mp4'], array_column($shown['notEnabled'], 'name'));
+		self::assertSame(409, $this->nc->ocs('POST', '/assets', ['fileId' => $this->nc->fileId("{$this->root}/loose.mp4")])['status'], 'nor is a new file of its folder enabled elsewhere');
+		// Whoever may not change it learns only that a Project holds the file
+		$other = $this->createUser();
+		$this->nc->ocsForm('POST', '/ocs/v2.php/apps/files_sharing/api/v1/shares', ['path' => "/{$this->root}/other.mp4", 'shareType' => 0, 'shareWith' => end($this->users), 'permissions' => 3]);
+		$refused = $other->ocs('POST', '/assets', ['fileId' => $this->nc->fileId("{$this->root}/other.mp4")]);
+		self::assertSame([409, null, null], [$refused['status'], $refused['data']['reason'] ?? null, $refused['data']['projectName'] ?? null], json_encode($refused['data']));
+
+		self::assertSame(200, $this->nc->ocs('POST', "/deleted-projects/$projectId/restore")['status']);
+		self::assertSame($ids, array_intersect_key(array_column($this->nc->ocs('GET', "/projects/$projectId")['data']['assets'], 'id', 'name'), $ids), 'restored, its Assets are the same');
+
+		// Deleted for good, the folder starts afresh
+		$this->nc->ocs('DELETE', "/projects/$projectId");
+		self::assertSame(200, $this->nc->ocs('DELETE', "/deleted-projects/$projectId")['status']);
+		$fresh = $this->createProject($this->nc, $folderId)['id'];
+		$names = array_column($this->nc->ocs('GET', "/projects/$fresh")['data']['assets'], 'id', 'name');
+		self::assertSame(['cut', 'loose', 'other'], array_keys($names));
+		self::assertNotContains($ids['cut'], $names);
 	}
 
-	public function testAssetsOfARemovedProjectAreDeletedFromNoProject(): void {
-		$this->nc->put("{$this->root}/cut_v1.mp4", 'not really a video');
-		$this->nc->put("{$this->root}/cut_v2.mp4", 'not really a video');
-		$this->nc->put("{$this->root}/other.mp4", 'not really a video');
-		$this->nc->put("{$this->root}/third.mp4", 'not really a video');
+	public function testAFileInReviewElsewhereIsNotHeldByTheDeletedProjectAroundIt(): void {
+		$this->nc->put("{$this->root}/cut.mp4", 'not really a video');
+		$folderProject = $this->createProject($this->nc, $this->nc->fileId($this->root))['id'];
+		$named = $this->nc->ocs('POST', '/projects', ['name' => 'Elsewhere'])['data']['id'];
+		$this->projects[] = [$this->nc, $named];
+		$assetId = $this->nc->ocs('GET', "/projects/$folderProject")['data']['assets'][0]['id'];
+		self::assertSame(200, $this->nc->ocs('PUT', "/assets/$assetId/project", ['projectId' => $named])['status']);
+		self::assertSame(200, $this->nc->ocs('DELETE', "/projects/$folderProject")['status']);
+
+		$enabled = $this->nc->ocs('POST', '/assets', ['fileId' => $this->nc->fileId("{$this->root}/cut.mp4")]);
+		self::assertSame([201, $named], [$enabled['status'], $enabled['data']['projectId'] ?? null], json_encode($enabled['data']));
+	}
+
+	public function testADeletedProjectIsKeptWholeAndRestored(): void {
+		$this->nc->put("{$this->root}/cut.mp4", 'not really a video');
 		$projectId = $this->createProject($this->nc, $this->nc->fileId($this->root))['id'];
-		$assets = $this->nc->ocs('GET', "/projects/$projectId")['data']['assets'];
-		foreach ($assets as $asset) {
-			$this->nc->ocs('POST', "/versions/{$asset['versions'][0]['id']}/comments", ['inFrame' => 1, 'body' => 'note']);
-		}
-		self::assertSame(200, $this->nc->ocs('DELETE', '/projects/' . array_pop($this->projects)[1])['status']);
+		$versionId = $this->nc->ocs('GET', "/projects/$projectId")['data']['assets'][0]['versions'][0]['id'];
+		$link = $this->nc->ocs('POST', "/projects/$projectId/links")['data'];
+		$leon = $this->nc->ocs('POST', "/links/{$link['id']}/reviewers", ['name' => 'Leon'])['data'];
+		$visitor = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $link['token']);
+		self::assertSame(200, $visitor->call('GET', "/api/context?versionId=$versionId&r={$leon['key']}")['status']);
 
-		// Deleted from No Project one after another, as its selection does (#84)
-		foreach (array_column($assets, 'id', 'name') as $name => $id) {
-			$deleted = $this->nc->ocs('DELETE', "/assets/$id/files");
-			self::assertSame(200, $deleted['status'], "$name: " . json_encode($deleted['data']));
-		}
-		self::assertSame([], array_intersect(['cut', 'other', 'third'], $this->unassigned($this->nc)));
+		$before = time();
+		self::assertSame(200, $this->nc->ocs('DELETE', "/projects/$projectId")['status']);
+		self::assertNotContains($projectId, array_column($this->nc->ocs('GET', '/projects')['data'], 'id'), 'gone from the Project list');
+		self::assertSame(404, $visitor->call('GET', "/api/context?versionId=$versionId&r={$leon['key']}")['status'], 'its Review Links are closed');
+		$listed = array_column($this->nc->ocs('GET', '/deleted-projects')['data']['projects'], null, 'id')[$projectId] ?? null;
+		self::assertNotNull($listed, 'listed under Deleted Projects (story 148)');
+		self::assertSame([$this->root, 'admin'], [$listed['name'], $listed['deletedBy']]);
+		self::assertGreaterThanOrEqual($before, $listed['deletedAt']);
+		self::assertSame($listed['deletedAt'] + 30 * 86400, $listed['goesAt'], 'for 30 days unless the admin set otherwise');
+		self::assertSame(404, $this->createUser()->ocs('POST', "/deleted-projects/$projectId/restore")['status'], 'only whoever may change it knows of it');
+		self::assertSame(404, $this->nc->ocs('POST', "/links/{$link['id']}/reviewers", ['name' => 'Mia', 'email' => 'mia@example.com', 'sendMail' => true])['status'], 'nobody is invited meanwhile');
+		self::assertSame(404, $this->nc->ocs('GET', "/projects/$projectId/links")['status'], 'nor its links and Reviewers listed');
+
+		self::assertSame(200, $this->nc->ocs('POST', "/deleted-projects/$projectId/restore")['status']);
+		self::assertSame(200, $visitor->call('GET', "/api/context?versionId=$versionId&r={$leon['key']}")['status'], 'its Review Links as they were');
+		self::assertSame(404, $this->nc->ocs('POST', "/deleted-projects/$projectId/restore")['status'], 'once');
 	}
 
-	public function testAProjectIsDeletedWithItsAssetsAndTheFilesStay(): void {
+	public function testADeletedProjectWhoseFolderWentToTheTrashStaysWithWhoeverDeletedIt(): void {
+		$this->nc->mkdir("{$this->root}/spot");
+		$projectId = $this->createProject($this->nc, $this->nc->fileId("{$this->root}/spot"))['id'];
+		$this->nc->ocs('DELETE', "/projects/$projectId");
+		$this->nc->delete("{$this->root}/spot");
+		self::assertContains($projectId, array_column($this->nc->ocs('GET', '/deleted-projects')['data']['projects'], 'id'));
+		self::assertSame(200, $this->nc->ocs('DELETE', "/deleted-projects/$projectId")['status']);
+	}
+
+	public function testAProjectWithAnAssetTheMemberMayNotChangeIsNotDeleted(): void {
+		$this->nc->put("{$this->root}/cut.mp4", 'not really a video');
+		$asMember = $this->createUser();
+		$share = $this->nc->ocsForm('POST', '/ocs/v2.php/apps/files_sharing/api/v1/shares', ['path' => "/{$this->root}/cut.mp4", 'shareType' => 0, 'shareWith' => end($this->users), 'permissions' => 3]);
+		$named = $asMember->ocs('POST', '/projects', ['name' => 'Borrowed'])['data']['id'];
+		$this->projects[] = [$asMember, $named];
+		self::assertSame(201, $asMember->ocs('POST', '/assets', ['fileId' => $this->nc->fileId("{$this->root}/cut.mp4"), 'projectId' => $named])['status']);
+		// The file is out of their reach since
+		$this->nc->ocsForm('DELETE', "/ocs/v2.php/apps/files_sharing/api/v1/shares/{$share['data']['id']}");
+
+		$refused = $asMember->ocs('DELETE', "/projects/$named");
+		self::assertSame(403, $refused['status']);
+		self::assertStringContainsString('1 Asset you cannot open', $refused['data']['message'], 'counting the Asset');
+		self::assertStringNotContainsString('cut', $refused['data']['message'], 'whose name only whoever can open it sees');
+		self::assertSame(200, $asMember->ocs('GET', "/projects/$named")['status'], 'and nothing went');
+	}
+
+	public function testDeletedProjectsGoForGoodWhenTheirTimeIsUp(): void {
+		self::assertSame(400, $this->nc->ocs('PUT', '/admin/settings', ['deletedDays' => 0])['status'], 'a day at least');
+		$days = $this->nc->ocs('GET', '/admin/settings')['data']['settings']['deletedDays'];
+		$this->nc->put("{$this->root}/cut.mp4", 'not really a video');
+		$projectId = $this->createProject($this->nc, $this->nc->fileId($this->root))['id'];
+		$versionId = $this->nc->ocs('GET', "/projects/$projectId")['data']['assets'][0]['versions'][0]['id'];
+		$this->nc->ocs('DELETE', "/projects/$projectId");
+		try {
+			self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['deletedDays' => 2])['status']);
+			$this->inNextcloud("\\OCP\\Server::get(\\OCP\\IDBConnection::class)->executeStatement('UPDATE *PREFIX*deliver_projects SET deleted_at = deleted_at - 86400 WHERE id = $projectId');");
+			$this->inNextcloud('\\OCP\\Server::get(\\OCA\\Deliver\\Service\\ProjectService::class)->scanAll();');
+			self::assertContains($projectId, array_column($this->nc->ocs('GET', '/deleted-projects')['data']['projects'], 'id'), 'a day of two');
+
+			$this->inNextcloud("\\OCP\\Server::get(\\OCP\\IDBConnection::class)->executeStatement('UPDATE *PREFIX*deliver_projects SET deleted_at = deleted_at - 86400 WHERE id = $projectId');");
+			$this->inNextcloud('\\OCP\\Server::get(\\OCA\\Deliver\\Service\\ProjectService::class)->scanAll();');
+			self::assertNotContains($projectId, array_column($this->nc->ocs('GET', '/deleted-projects')['data']['projects'], 'id'), 'gone for good after two days');
+			self::assertSame(404, $this->nc->ocs('POST', "/deleted-projects/$projectId/restore")['status']);
+			$this->nc->ocs('POST', '/projects', ['folderId' => $this->nc->fileId($this->root)]);
+			self::assertNotContains($versionId, array_column(array_merge(...array_column($this->nc->ocs('GET', '/projects/' . $this->projectOf($this->root))['data']['assets'], 'versions')), 'id'), 'its file taken in afresh');
+		} finally {
+			$this->nc->ocs('PUT', '/admin/settings', ['deletedDays' => $days]);
+		}
+	}
+
+	/** Runs PHP inside this Nextcloud, for what no API does: the days passing */
+	private function inNextcloud(string $code): void {
+		exec('php -r ' . escapeshellarg('require "/var/www/html/lib/base.php"; \\OCP\\Server::get(\\OCP\\App\\IAppManager::class)->loadApp("deliver"); ' . $code) . ' 2>&1', $output, $status);
+		self::assertSame(0, $status, implode("\n", $output));
+	}
+
+	/** @return int the Folder Project of a folder, registered for tearDown */
+	private function projectOf(string $path): int {
+		$id = $this->nc->ocs('GET', "/folders/{$this->nc->fileId($path)}/project")['data']['id'];
+		$this->projects[] = [$this->nc, $id];
+		return $id;
+	}
+
+	public function testADeletedProjectGoesForGoodWithAllItsDataAndTheFilesStay(): void {
 		$this->nc->put("{$this->root}/cut_v1.mp4", 'not really a video');
 		$this->nc->put("{$this->root}/cut_v2.mp4", 'not really a video');
 		$this->nc->put("{$this->root}/other.mp4", 'not really a video');
@@ -247,10 +341,11 @@ class ProjectApiTest extends TestCase {
 		$link = $this->nc->ocs('POST', "/projects/$projectId/links")['data'];
 		$invited = $this->nc->ocs('POST', "/links/{$link['id']}/reviewers", ['name' => 'Leon'])['data'];
 
-		self::assertSame(200, $this->nc->ocs('DELETE', "/projects/$projectId?withAssets=1")['status']);
+		self::assertSame(200, $this->nc->ocs('DELETE', "/projects/$projectId")['status']);
+		self::assertSame(200, $this->nc->ocs('DELETE', "/deleted-projects/$projectId")['status']);
 		array_pop($this->projects);
-		self::assertSame(404, $this->nc->ocs('GET', "/projects/$projectId")['status']);
-		self::assertSame([], array_intersect(['cut', 'other'], $this->unassigned($this->nc)), 'not in No Project (story 148)');
+		self::assertSame(404, $this->nc->ocs('POST', "/deleted-projects/$projectId/restore")['status']);
+		self::assertSame([], array_intersect(['cut', 'other'], $this->unassigned($this->nc)), 'not in No Project (story 150)');
 		self::assertSame(404, $this->nc->ocs('GET', "/versions/$versionId/comments")['status'], 'its review data is gone');
 		self::assertSame(404, $this->nc->ocs('PUT', "/reviewers/{$invited['id']}", ['name' => 'Leon'])['status'], 'and its Reviewers');
 		self::assertSame($assets[0]['versions'][0]['fileId'], $this->nc->fileId("{$this->root}/cut_v2.mp4"), 'the files stay where they were');
@@ -280,7 +375,8 @@ class ProjectApiTest extends TestCase {
 		$this->projects[] = [$this->nc, $showreel];
 		self::assertSame(200, $this->nc->ocs('PUT', "/assets/{$assets['cut']['id']}/project", ['projectId' => $showreel])['status']);
 
-		self::assertSame(200, $this->nc->ocs('DELETE', "/projects/$spot?withAssets=1")['status']);
+		self::assertSame(200, $this->nc->ocs('DELETE', "/projects/$spot")['status']);
+		self::assertSame(200, $this->nc->ocs('DELETE', "/deleted-projects/$spot")['status']);
 		$this->projects = array_values(array_filter($this->projects, static fn (array $each) => $each[1] !== $spot));
 		$comments = $this->nc->ocs('GET', "/versions/$cutVersion/comments")['data']['comments'];
 		self::assertSame([['warmer', 'Mara']], array_map(static fn (array $comment) => [$comment['body'], $comment['author']['name']], $comments), 'its author stays named');
@@ -387,12 +483,7 @@ class ProjectApiTest extends TestCase {
 		self::assertSame(200, $this->nc->ocs('DELETE', "/projects/{$project['id']}")['status']);
 		self::assertSame(404, $this->nc->ocs('GET', "/projects/{$project['id']}")['status']);
 		self::assertSame(404, $this->nc->ocs('GET', "/folders/$folderId/project")['status']);
-		self::assertContains('intro', $this->unassigned($this->nc), 'its Assets wait in No Project');
-		foreach ($this->nc->ocs('GET', '/projects/0')['data']['assets'] as $asset) {
-			if (in_array($asset['name'], ['intro', 'voiceover', 'b-roll', 'cut'], true)) {
-				$this->nc->ocs('DELETE', "/assets/{$asset['id']}");
-			}
-		}
+		self::assertNotContains('intro', $this->unassigned($this->nc), 'its Assets stay with it, under Deleted Projects');
 	}
 
 	public function testReceivedShareBecomesProjectUnlessItSitsInsideOne(): void {
@@ -413,6 +504,8 @@ class ProjectApiTest extends TestCase {
 		$project = $this->createProject($asMember, $scenesId);
 		self::assertSame('scenes', $project['name'], 'a Member with write permission turns a received share into a Project');
 		self::assertSame(200, $asMember->ocs('DELETE', "/projects/{$project['id']}")['status']);
+		self::assertSame('deleted', $this->nc->ocs('POST', '/projects', ['folderId' => $rootId])['data']['reason'] ?? null, 'a Deleted Project inside is offered back');
+		self::assertSame(200, $asMember->ocs('DELETE', "/deleted-projects/{$project['id']}")['status']);
 
 		$asMember->mkdir('myproj');
 		$this->createProject($asMember, $asMember->fileId('myproj'));

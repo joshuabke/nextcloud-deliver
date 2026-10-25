@@ -29,6 +29,16 @@ class PipelineSettings {
 		'projectFolder' => ['project_folder', 'string', '/Deliver'],
 		// What one person may attach on one Version in all, in MB (story 92)
 		'attachmentLimit' => ['attachment_mb', 'int', CommentService::ATTACHMENT_MB],
+		// How long a Deleted Project is kept before it goes for good (story 151)
+		'deletedDays' => ['deleted_days', 'int', 30],
+	];
+	/** The range of each number setting */
+	private const BOUNDS = [
+		'maxJobs' => [1, 16],
+		'maxHeight' => [self::MIN_HEIGHT, 2160],
+		'thumbCap' => [10, 5000],
+		'attachmentLimit' => [1, 1024],
+		'deletedDays' => [1, 365],
 	];
 
 	public function __construct(
@@ -43,12 +53,11 @@ class PipelineSettings {
 	public function get(): array {
 		$values = [];
 		foreach (self::SETTINGS as $name => [$key, $type, $default]) {
+			// A number saved before its range, or through occ, counts as the nearest one in range
 			$values[$name] = $type === 'int'
-				? $this->config->getValueInt(Application::APP_ID, $key, $default)
+				? min(self::BOUNDS[$name][1], max(self::BOUNDS[$name][0], $this->config->getValueInt(Application::APP_ID, $key, $default)))
 				: ($this->config->getValueString(Application::APP_ID, $key) ?: $default);
 		}
-		// A lower height saved before the minimum, or through occ, counts as the minimum
-		$values['maxHeight'] = max(self::MIN_HEIGHT, $values['maxHeight']);
 		return $values + [
 			'hwEncoderOk' => $this->config->getValueBool(Application::APP_ID, 'hw_encoder_ok'),
 			'hwEncoderError' => $this->config->getValueString(Application::APP_ID, 'hw_encoder_error') ?: null,
@@ -88,12 +97,7 @@ class PipelineSettings {
 	}
 
 	private function bounded(string $name, int $value): int {
-		[$min, $max] = match ($name) {
-			'maxJobs' => [1, 16],
-			'maxHeight' => [self::MIN_HEIGHT, 2160],
-			'thumbCap' => [10, 5000],
-			'attachmentLimit' => [1, 1024],
-		};
+		[$min, $max] = self::BOUNDS[$name];
 		if ($value < $min || $value > $max) {
 			throw new InvalidRequestException("$name runs from $min to $max");
 		}

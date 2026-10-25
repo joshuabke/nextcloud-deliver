@@ -52,7 +52,12 @@ class ReviewLinks {
 
 	/** @throws NotFoundException no link with this token */
 	public function byToken(string $token): ReviewLink {
-		return $this->of($this->linkRecords->findByToken($token) ?? throw new NotFoundException('Link not found'));
+		$record = $this->linkRecords->findByToken($token);
+		// A Deleted Project's links answer as a deleted one does (ADR 0015)
+		if ($record === null || $this->projects->isDeleted($record->getProjectId())) {
+			throw new NotFoundException('Link not found');
+		}
+		return $this->of($record);
 	}
 
 	public function of(ReviewLinkRecord $link): ReviewLink {

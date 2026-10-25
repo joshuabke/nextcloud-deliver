@@ -341,6 +341,7 @@ class StackService {
 	public function purge(Version $version): void {
 		$this->media->forget($version->getId());
 		$commentIds = array_map(static fn ($comment) => $comment->getId(), $this->comments->findByVersion($version->getId()));
+		$this->notifications->versionGone($version, $commentIds);
 		$this->reactions->deleteByComments($commentIds);
 		$this->attachments->deleteByComments($commentIds);
 		foreach ($commentIds as $commentId) {
@@ -355,35 +356,23 @@ class StackService {
 	}
 
 	/**
-	 * Removes a Project; its Assets go to No Project with all their review
-	 * data, for whoever enabled each or else the Member removing it (story 9).
+	 * Deletes a Project for good with all its data: its Assets and their
+	 * review data, its Review Links and its Reviewers. The files stay where
+	 * they are, out of Deliver (story 150, ADR 0015).
 	 */
-	public function removeProject(Project $project, string $uid): void {
-		$this->assets->release($project->getId(), $uid);
-		$this->versions->release($project->getId());
-		$this->mutes->deleteByProject($project->getId());
-		$this->removed->deleteByProject($project->getId());
-		// Its Review Links go with it (ADR 0010)
-		foreach ($this->linkRecords->findAllOf($project->getId()) as $link) {
-			$this->linkRecords->forget($link);
-		}
-		$this->projects->delete($project);
-	}
-
-	/**
-	 * Deletes a Project with its Assets and all their review data, and its
-	 * Reviewers; the files stay where they are, out of Deliver (story 148).
-	 *
-	 * @param list<Asset> $assets the Project's Assets
-	 */
-	public function deleteProject(Project $project, array $assets, string $uid): void {
-		foreach ($assets as $asset) {
+	public function deleteProject(Project $project): void {
+		foreach ($this->assets->findByProject($project->getId()) as $asset) {
 			foreach ($this->versions->findByAsset($asset->getId()) as $version) {
 				$this->purge($version);
 			}
 		}
 		$this->reviewers->deleteByProject($project->getId(), $this->time->getTime());
-		$this->removeProject($project, $uid);
+		$this->mutes->deleteByProject($project->getId());
+		$this->removed->deleteByProject($project->getId());
+		foreach ($this->linkRecords->findAllOf($project->getId()) as $link) {
+			$this->linkRecords->forget($link);
+		}
+		$this->projects->delete($project);
 	}
 
 	private function nextNumber(int $assetId): int {
@@ -398,6 +387,7 @@ class StackService {
 		$asset = $this->assets->find($assetId);
 		if ($asset !== null && $this->versions->findByAsset($assetId) === []) {
 			$this->assets->delete($asset);
+			$this->notifications->assetGone($assetId);
 		}
 	}
 }

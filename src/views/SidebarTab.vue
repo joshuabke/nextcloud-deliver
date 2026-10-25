@@ -21,6 +21,7 @@ import {
 	updateProject,
 } from '../api.js'
 import { useBusy } from '../composables/busy.js'
+import { orDeletedProject } from '../composables/deletedProject.js'
 import { confirmProjectRemoval, confirmRemoval } from '../confirm.js'
 
 // The Files app also sets folder, view and active on the web component; only node is used
@@ -57,6 +58,25 @@ const appUrl = computed(() => {
 	return project.value ? generateUrl('/apps/deliver/projects/{id}', { id: project.value.id }) : null
 })
 
+/**
+ * The folder's Project or the file's Asset, as Deliver has it now
+ *
+ * @param {number} fileid - the node the sidebar is open for
+ */
+async function load(fileid) {
+	const found = await (isFolder.value ? getProjectForFolder(fileid) : getAssetForFile(fileid)).catch((e) => {
+		if (e?.response?.status === 404) {
+			return null
+		}
+		throw e
+	})
+	// The sidebar may have moved on to another node meanwhile
+	if (props.node?.fileid === fileid) {
+		project.value = isFolder.value ? found : null
+		asset.value = isFolder.value ? null : found
+	}
+}
+
 watch(() => props.node?.fileid, (fileid) => {
 	project.value = null
 	asset.value = null
@@ -66,17 +86,7 @@ watch(() => props.node?.fileid, (fileid) => {
 		return
 	}
 	run(async () => {
-		const found = await (isFolder.value ? getProjectForFolder(fileid) : getAssetForFile(fileid)).catch((e) => {
-			if (e?.response?.status === 404) {
-				return null
-			}
-			throw e
-		})
-		// The sidebar may have moved on to another node meanwhile
-		if (props.node?.fileid === fileid) {
-			project.value = isFolder.value ? found : null
-			asset.value = isFolder.value ? null : found
-		}
+		await load(fileid)
 		if (!isFolder.value && projects.value.length === 0) {
 			projects.value = await listProjects().catch(() => [])
 		}
@@ -98,10 +108,16 @@ function assign(option) {
 	})
 }
 
-/** Turns the folder into a Folder Project, with Auto Intake as switched (stories 2 and 3) */
+/** Turns the folder into a Folder Project, with Auto Intake as switched (stories 2 and 3), or brings back its Deleted Project (story 149) */
 function makeProject() {
 	return run(async () => {
-		project.value = await createProject(props.node.fileid, intake.value)
+		const made = await orDeletedProject(() => createProject(props.node.fileid, intake.value))
+		if (made) {
+			project.value = made
+		} else {
+			// Restored instead, or left as it was
+			await load(props.node.fileid)
+		}
 	})
 }
 
@@ -128,7 +144,12 @@ function setIntake(checked) {
 function toggle(checked) {
 	return run(async () => {
 		if (checked) {
-			asset.value = await enableFile(props.node.fileid)
+			const enabled = await orDeletedProject(() => enableFile(props.node.fileid))
+			if (enabled) {
+				asset.value = enabled
+			} else {
+				await load(props.node.fileid)
+			}
 		} else if (await confirmRemoval(
 			asset.value.projectId ? t('deliver', 'Remove this file from the Project?') : t('deliver', 'Remove this file from Deliver?'),
 			t('deliver', 'Its Comments and Versions are deleted. The file itself stays untouched.'),
@@ -149,12 +170,11 @@ function saveSettings(settings) {
 	})
 }
 
-/** Deletes the Project with its Assets (story 148), or keeps them in No Project (story 9) */
+/** Deletes the Project: it goes to Deleted Projects (story 9) */
 async function remove() {
-	const withAssets = await confirmProjectRemoval()
-	if (withAssets !== null) {
+	if (await confirmProjectRemoval()) {
 		await run(async () => {
-			await removeProject(project.value.id, withAssets)
+			await removeProject(project.value.id)
 			project.value = null
 		})
 	}
@@ -238,7 +258,7 @@ async function remove() {
 			:disabled="busy"
 			variant="tertiary"
 			@click="remove">
-			{{ t('deliver', 'Remove Project') }}
+			{{ t('deliver', 'Delete Project') }}
 		</NcButton>
 	</div>
 </template>
