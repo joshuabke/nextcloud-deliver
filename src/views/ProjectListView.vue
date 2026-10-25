@@ -95,10 +95,10 @@ async function save(project, fields) {
  * @param {object} project - the Project to remove
  */
 async function remove(project) {
-	const how = await confirmProjectRemoval()
-	if (how) {
+	const withAssets = await confirmProjectRemoval()
+	if (withAssets !== null) {
 		try {
-			await store.remove(project.id, how === 'delete')
+			await store.remove(project.id, withAssets)
 		} catch (e) {
 			error.value = errorMessage(e)
 		}

@@ -252,7 +252,7 @@ class ProjectApiTest extends TestCase {
 		self::assertSame(404, $this->nc->ocs('GET', "/projects/$projectId")['status']);
 		self::assertSame([], array_intersect(['cut', 'other'], $this->unassigned($this->nc)), 'not in No Project (story 148)');
 		self::assertSame(404, $this->nc->ocs('GET', "/versions/$versionId/comments")['status'], 'its review data is gone');
-		self::assertSame(403, $this->nc->ocs('PUT', "/reviewers/{$invited['id']}", ['name' => 'Leon'])['status'], 'its Reviewers are removed');
+		self::assertSame(404, $this->nc->ocs('PUT', "/reviewers/{$invited['id']}", ['name' => 'Leon'])['status'], 'and its Reviewers');
 		self::assertSame($assets[0]['versions'][0]['fileId'], $this->nc->fileId("{$this->root}/cut_v2.mp4"), 'the files stay where they were');
 
 		// Made again, the folder takes its files in afresh
@@ -260,6 +260,30 @@ class ProjectApiTest extends TestCase {
 		$fresh = $this->nc->ocs('GET', "/projects/$again")['data']['assets'];
 		self::assertSame(['cut', 'other'], array_column($fresh, 'name'));
 		self::assertSame(0, $fresh[0]['versions'][0]['comments'], 'without the old Comments');
+	}
+
+	public function testAReviewerWhoseCommentsMovedOnKeepsTheirNameWhenTheProjectIsDeleted(): void {
+		$this->nc->mkdir("{$this->root}/spot");
+		$this->nc->put("{$this->root}/spot/cut.mp4", 'not really a video');
+		$this->nc->put("{$this->root}/spot/other.mp4", 'not really a video');
+		$spot = $this->createProject($this->nc, $this->nc->fileId("{$this->root}/spot"))['id'];
+		$assets = array_column($this->nc->ocs('GET', "/projects/$spot")['data']['assets'], null, 'name');
+		$link = $this->nc->ocs('POST', "/projects/$spot/links")['data'];
+		$mara = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $link['token']);
+		$mara->call('POST', '/api/reviewer', ['name' => 'Mara']);
+		$cutVersion = $assets['cut']['versions'][0]['id'];
+		self::assertSame(201, $mara->call('POST', "/api/versions/$cutVersion/comments", ['inFrame' => 2, 'body' => 'warmer'])['status']);
+		$mara->call('POST', "/api/versions/{$assets['other']['versions'][0]['id']}/comments", ['inFrame' => 2, 'body' => 'gone with it']);
+
+		// The cut moves on to the showreel, Mara's Comment with it
+		$showreel = $this->nc->ocs('POST', '/projects', ['name' => 'Showreel ' . bin2hex(random_bytes(3))])['data']['id'];
+		$this->projects[] = [$this->nc, $showreel];
+		self::assertSame(200, $this->nc->ocs('PUT', "/assets/{$assets['cut']['id']}/project", ['projectId' => $showreel])['status']);
+
+		self::assertSame(200, $this->nc->ocs('DELETE', "/projects/$spot?withAssets=1")['status']);
+		$this->projects = array_values(array_filter($this->projects, static fn (array $each) => $each[1] !== $spot));
+		$comments = $this->nc->ocs('GET', "/versions/$cutVersion/comments")['data']['comments'];
+		self::assertSame([['warmer', 'Mara']], array_map(static fn (array $comment) => [$comment['body'], $comment['author']['name']], $comments), 'its author stays named');
 	}
 
 	public function testAFolderProjectWithoutAutoIntakeTakesFilesOneByOne(): void {

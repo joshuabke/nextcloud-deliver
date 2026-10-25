@@ -373,14 +373,16 @@ class StackService {
 	/**
 	 * Deletes a Project with its Assets and all their review data, and its
 	 * Reviewers; the files stay where they are, out of Deliver (story 148).
+	 *
+	 * @param list<Asset> $assets the Project's Assets
 	 */
-	public function deleteProject(Project $project, string $uid): void {
-		foreach ($this->assets->findByProject($project->getId()) as $asset) {
+	public function deleteProject(Project $project, array $assets, string $uid): void {
+		foreach ($assets as $asset) {
 			foreach ($this->versions->findByAsset($asset->getId()) as $version) {
 				$this->purge($version);
 			}
 		}
-		$this->reviewers->removeOf($project->getId(), $this->time->getTime());
+		$this->reviewers->deleteByProject($project->getId(), $this->time->getTime());
 		$this->removeProject($project, $uid);
 	}
 
