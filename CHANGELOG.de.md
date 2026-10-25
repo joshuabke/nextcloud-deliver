@@ -13,6 +13,8 @@
 - Version für Mitglieder geschlossen, die ihre Datei nicht öffnen können, auch wenn sie eine andere Version des Stapels öffnen.
 - Formeln aus Kommentaren und Reviewer-Namen im CSV-Export entschärft.
 - Einladen oder Umbenennen auf den Namen eines Reviewers abgelehnt, der auf keinem Link des Projekts ist.
+- Review-Link auf ein Asset auch in der Dateien-Seitenleiste eines Ordnerprojekts nach dem Asset benannt.
+- Abgelaufenen Review-Link in seinen Einstellungen als abgelaufen gezeigt.
 - Ohne Download freigegebene Dateien aus den Downloads von Review-Links und dem WAV-Export herausgehalten, und ganz von Review-Links, wo Nextcloud ihren Inhalt verbirgt.
 
 ## 0.9.5 – 2026-10-24

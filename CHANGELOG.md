@@ -13,6 +13,8 @@
 - Close a Version to Members who cannot open its file, also when they open another Version of its Stack.
 - Keep Comments and Reviewer names from starting a spreadsheet formula in the CSV export.
 - Refuse inviting or renaming a Reviewer to the name of a Reviewer who is on no link of the Project.
+- Title a Review Link on one Asset by its name in the Files sidebar of a Folder Project.
+- Show an expired Review Link as expired in its settings.
 - Keep files shared without downloads out of a Review Link's downloads and the WAV export, and off Review Links where Nextcloud hides their content.
 
 ## 0.9.5 – 2026-10-24

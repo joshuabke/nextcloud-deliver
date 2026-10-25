@@ -12,8 +12,6 @@ const props = defineProps({
 	projectId: { type: Number, required: true },
 	/** One Asset of it; null for the whole Project */
 	assetId: { type: Number, default: null },
-	/** Its name, for the title of a link that shows it alone */
-	assetName: { type: String, default: null },
 })
 
 const links = ref([])
@@ -71,7 +69,6 @@ function drop(id) {
 			:key="link.id"
 			:link="link"
 			:people="reviewers"
-			:assets="assetId === null ? [] : [{ id: assetId, name: assetName }]"
 			@update="replace"
 			@deleted="drop" />
 		<p v-if="error" class="deliver-links__error">

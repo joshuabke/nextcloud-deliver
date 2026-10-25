@@ -44,14 +44,13 @@ async function pick(assetIds) {
 
 <template>
 	<NcDialog
-		:name="link.title ?? linkTitle(link, assets)"
+		:name="link.title ?? linkTitle(link)"
 		size="normal"
 		@closing="emit('close')">
 		<ReviewLinkItem
 			ref="item"
 			:link="link"
 			:people="people"
-			:assets="assets"
 			inDialog
 			@update="emit('update', $event)"
 			@deleted="emit('deleted')" />
