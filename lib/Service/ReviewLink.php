@@ -140,10 +140,10 @@ class ReviewLink {
 		return $this->files[$version->getId()] ?? null;
 	}
 
-	/** Whether the original may leave as a file: the Member's own access can allow viewing only (a share without downloads) */
+	/** Whether the original may be downloaded here: the link allows downloads, and so does the Member's own access, which can be a share without downloads */
 	public function downloadable(Version $version): bool {
 		$file = $this->originalFile($version);
-		return $file !== null && ProjectService::downloadable($file);
+		return $this->flags()['canDownload'] && $file !== null && ProjectService::downloadable($file);
 	}
 
 	/** Whether the Reviewer comes by it: a link of their Member on their Project (ADR 0013) */
@@ -184,8 +184,8 @@ class ReviewLink {
 				continue;
 			}
 			$file = $home->getFirstNodeById($version->getFileId());
-			// What the Member may not reshare stays out, as Nextcloud would keep it out of a link of theirs
-			if ($file instanceof File && $file->isShareable()) {
+			// What the Member may not reshare, or not see, stays out, as Nextcloud would keep it out of a link of theirs
+			if ($file instanceof File && $file->isShareable() && ProjectService::viewable($file)) {
 				$files[$version->getId()] = $file;
 				$byAsset[$version->getAssetId()][] = $version;
 			}

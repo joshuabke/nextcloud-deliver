@@ -123,7 +123,8 @@ class CommentApiTest extends TestCase {
 			self::assertSame(400, $this->nc->upload("/comments/{$comment['id']}/attachments", 'big.png', str_repeat('x', 1024 * 1024 + 1))['status'], 'a file larger than the limit');
 			self::assertSame(201, $this->nc->upload("/comments/{$comment['id']}/attachments", 'half.png', str_repeat('x', 600 * 1024))['status']);
 			self::assertSame(400, $this->nc->upload("/comments/{$comment['id']}/attachments", 'more.png', str_repeat('x', 600 * 1024))['status'], 'files that add up past it');
-			self::assertSame(400, $this->nc->ocs('PUT', '/admin/settings', ['attachmentLimit' => 0])['status']);
+			self::assertSame(400, $this->nc->ocs('PUT', '/admin/settings', ['extraArgs' => '-threads 2', 'attachmentLimit' => 0])['status']);
+			self::assertSame('', $this->nc->ocs('GET', '/admin/settings')['data']['settings']['extraArgs'], 'a refused value saves none of the others');
 		} finally {
 			$this->nc->ocs('PUT', '/admin/settings', ['attachmentLimit' => 20]);
 		}

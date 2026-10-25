@@ -94,7 +94,7 @@ class PublicApiController extends PublicShareController {
 				],
 				'asset' => $stack === null ? null : ['id' => $stack['asset']->getId(), 'name' => $this->stacks->nameOf($stack['asset']), 'dueDate' => $stack['asset']->getDueDate()],
 				'versions' => $stack === null ? [] : array_map(
-					fn (Version $each) => $this->describe($link, $each, $flags['canDownload']),
+					fn (Version $each) => $this->describe($link, $each),
 					$stack['versions'],
 				),
 				'me' => $this->me($version, $member, $reviewer),
@@ -108,11 +108,10 @@ class PublicApiController extends PublicShareController {
 	public function assets(): Response {
 		return $this->guard(function () {
 			$link = $this->link();
-			$canDownload = $this->links->flagsFor($link, $this->reviewer())['canDownload'];
 			$result = [];
 			foreach ($link->assets() as ['asset' => $asset, 'versions' => $versions]) {
 				$newest = $versions[0];
-				$download = $canDownload && $link->downloadable($newest);
+				$download = $link->downloadable($newest);
 				$original = $this->mediaUrl($newest, 'original');
 				$result[] = [
 					'fileId' => $newest->getFileId(),
@@ -147,21 +146,20 @@ class PublicApiController extends PublicShareController {
 		try {
 			$link = $this->link();
 			$reviewer = $this->reviewer();
-			if (!$this->links->flagsFor($link, $reviewer)['canDownload']) {
-				return new Response(Http::STATUS_NOT_FOUND);
-			}
-			$zip = new ZipResponse($this->request, $link->title() !== '' ? $link->title() : 'download');
-			$names = [];
 			$chosen = $link->assets();
 			if ($assetIds !== '') {
 				$chosen = array_intersect_key($chosen, array_flip(array_map('intval', explode(',', $assetIds))));
 			}
-			foreach ($chosen as ['versions' => [$newest]]) {
-				$file = $link->originalFile($newest);
-				// What the Member may only view in Files stays out, as it would of a download there
-				if ($file === null || !$link->downloadable($newest)) {
-					continue;
-				}
+			// What the Member may only view in Files stays out, as it would of a download there
+			$zipped = array_filter(array_column(array_column($chosen, 'versions'), 0), $link->downloadable(...));
+			if ($zipped === []) {
+				return new Response(Http::STATUS_NOT_FOUND);
+			}
+			$zip = new ZipResponse($this->request, $link->title() !== '' ? $link->title() : 'download');
+			$names = [];
+			foreach ($zipped as $version) {
+				// downloadable() found it
+				$file = $link->originalFile($version) ?? throw new NotFoundException('Gone while zipping');
 				// Two Assets in different folders can carry the same file name
 				$name = $file->getName();
 				for ($n = 2; isset($names[$name]); $n++) {
@@ -169,8 +167,8 @@ class PublicApiController extends PublicShareController {
 				}
 				$names[$name] = true;
 				$zip->addResource($file->fopen('rb'), $name, $file->getSize(), $file->getMTime());
-				if (!$this->member($newest)) {
-					$this->links->record($link, LinkActivityMapper::DOWNLOADED, $reviewer, $newest);
+				if (!$this->member($version)) {
+					$this->links->record($link, LinkActivityMapper::DOWNLOADED, $reviewer, $version);
 				}
 			}
 			return $zip;
@@ -195,7 +193,7 @@ class PublicApiController extends PublicShareController {
 				return RangeFileResponse::ofSimpleFile($this->media->file($version, $kind), $this->request->getHeader('Range'));
 			}
 			$file = $link->originalFile($version);
-			$download = $this->links->flagsFor($link, $this->reviewer())['canDownload'] && $link->downloadable($version);
+			$download = $link->downloadable($version);
 			if ($file === null || !$this->mayPlayOriginal($version, $download)) {
 				return new Response(Http::STATUS_NOT_FOUND);
 			}
@@ -404,8 +402,8 @@ class PublicApiController extends PublicShareController {
 	}
 
 	/** A Version as the Review view shows it, with the original only where the link and the Member's access allow */
-	private function describe(ReviewLink $link, Version $version, bool $canDownload): array {
-		$download = $canDownload && $link->downloadable($version);
+	private function describe(ReviewLink $link, Version $version): array {
+		$download = $link->downloadable($version);
 		$media = $this->mediaUrl($version, '__kind__');
 		$original = $this->mediaUrl($version, 'original');
 		$url = $this->mayPlayOriginal($version, $download) ? $original : null;

@@ -94,7 +94,7 @@ final class DawMarkers {
 			$end = $marker['out'] === null ? null : self::seconds($clip, $marker['out'] + 1);
 			fputcsv($handle, [
 				$type . $counts[$type],
-				ExportService::cell(ExportService::note($marker)),
+				ExportService::note($marker),
 				$time($start),
 				$end === null ? '' : $time($end),
 				$end === null ? '' : $time($end - $start),

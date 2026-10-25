@@ -234,24 +234,27 @@ class CommentService {
 		if ($upload === null || ($upload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_string($upload['tmp_name'] ?? null)) {
 			throw new InvalidRequestException('No file arrived');
 		}
-		$size = (int)($upload['size'] ?? 0);
-		$limit = $this->attachmentLimit();
-		if ($this->attachments->bytesBy($version->getId(), $viewer->uid, $viewer->reviewerId) + $size > $limit) {
-			throw new InvalidRequestException('Attachments of one person on a Version add up to at most ' . intdiv($limit, 1024 * 1024) . ' MB');
-		}
-		if (count($this->attachments->findByComments([$id])[$id] ?? []) >= self::MAX_ATTACHMENTS) {
-			throw new InvalidRequestException('A Comment carries at most ' . self::MAX_ATTACHMENTS . ' attachments');
-		}
-		$content = fopen($upload['tmp_name'], 'rb') ?: throw new InvalidRequestException('The upload could not be read');
 		// Leading dots would hide the file; very long names break file systems
 		$name = mb_substr(trim(str_replace(['/', '\\', "\0"], '_', (string)($upload['name'] ?? '')), " \t\n\r."), -200) ?: 'attachment';
 		$attachment = new Attachment();
 		$attachment->setCommentId($id);
 		$attachment->setName($name);
 		$attachment->setMimeType($this->mimeTypes->detectPath($name));
-		$attachment->setSize($size);
+		$attachment->setSize((int)($upload['size'] ?? 0));
 		$attachment = $this->attachments->insert($attachment);
+		// Counted with this one in, so that uploads of the same moment cannot pass the limits together; the loser leaves no row
+		$limit = $this->attachmentLimit();
+		$refusal = match (true) {
+			count($this->attachments->findByComments([$id])[$id] ?? []) > self::MAX_ATTACHMENTS => 'A Comment carries at most ' . self::MAX_ATTACHMENTS . ' attachments',
+			$this->attachments->bytesBy($version->getId(), $viewer->uid, $viewer->reviewerId) > $limit => 'Attachments of one person on a Version add up to at most ' . intdiv($limit, 1024 * 1024) . ' MB',
+			default => null,
+		};
+		if ($refusal !== null) {
+			$this->attachments->delete($attachment);
+			throw new InvalidRequestException($refusal);
+		}
 		try {
+			$content = fopen($upload['tmp_name'], 'rb') ?: throw new InvalidRequestException('The upload could not be read');
 			// Nextcloud closes the stream once it has written it
 			$this->store->store($id, $attachment->getId(), $name, $content);
 		} catch (\Throwable $e) {

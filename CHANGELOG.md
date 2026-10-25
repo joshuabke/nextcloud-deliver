@@ -11,8 +11,8 @@
 
 ### Fixed
 - Close a Version to Members who cannot open its file, also when they open another Version of its Stack.
-- Keep Comments and Reviewer names from starting a spreadsheet formula in the CSV and REAPER exports.
-- Keep files shared without downloads from leaving through a Review Link or a WAV export.
+- Keep Comments and Reviewer names from starting a spreadsheet formula in the CSV export.
+- Keep files shared without downloads out of a Review Link's downloads and the WAV export, and off Review Links where Nextcloud hides their content.
 
 ## 0.9.5 – 2026-10-24
 

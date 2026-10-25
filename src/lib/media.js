@@ -4,12 +4,14 @@
  */
 
 const STILL = /^image\/(png|jpeg|webp|gif|avif)$/
+/** Playlists, which Nextcloud files under audio but which only point at other files (Reviewable on the server) */
+const PLAYLISTS = ['audio/mpegurl', 'audio/x-mpegurl', 'audio/x-scpls']
 
 /**
  * @param {string|undefined} mimeType - a file's type
  * @return {boolean} whether Deliver reviews it: video, audio or a still
  */
-export const reviewable = (mimeType) => /^(video|audio)\//.test(mimeType ?? '') || STILL.test(mimeType ?? '')
+export const reviewable = (mimeType) => (/^(video|audio)\//.test(mimeType ?? '') && !PLAYLISTS.includes(mimeType)) || STILL.test(mimeType ?? '')
 
 /**
  * A Version Stack holds one kind only: a cut as .mov stacks on one as .mp4,

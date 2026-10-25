@@ -64,16 +64,17 @@ class PipelineSettings {
 	 * @throws InvalidRequestException a value out of range
 	 */
 	public function save(array $changes): array {
+		// Every value is checked before any is saved, so that a refused one leaves the others as they were
+		$checked = [];
 		foreach ($changes as $name => $value) {
-			if ($value === null || !isset(self::SETTINGS[$name])) {
-				continue;
+			if ($value !== null && isset(self::SETTINGS[$name])) {
+				$checked[$name] = self::SETTINGS[$name][1] === 'int' ? $this->bounded($name, (int)$value) : $this->checked($name, trim((string)$value));
 			}
-			[$key, $type] = self::SETTINGS[$name];
-			if ($type === 'int') {
-				$this->config->setValueInt(Application::APP_ID, $key, $this->bounded($name, (int)$value));
-			} else {
-				$this->config->setValueString(Application::APP_ID, $key, $this->checked($name, trim((string)$value)));
-			}
+		}
+		foreach ($checked as $name => $value) {
+			is_int($value)
+				? $this->config->setValueInt(Application::APP_ID, self::SETTINGS[$name][0], $value)
+				: $this->config->setValueString(Application::APP_ID, self::SETTINGS[$name][0], $value);
 		}
 		$this->testEncoder();
 		return $this->get();

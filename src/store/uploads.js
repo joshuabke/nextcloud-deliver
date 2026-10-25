@@ -5,7 +5,7 @@ import { t } from '@nextcloud/l10n'
 import { generateRemoteUrl } from '@nextcloud/router'
 import { defineStore } from 'pinia'
 import { decodeInTurn, enableFile, errorMessage, getVersion, giveAudioWaveform, regenerateVersion } from '../api.js'
-import { mediaKind } from '../lib/media.js'
+import { mediaKind, reviewable } from '../lib/media.js'
 import { current, HEARTBEAT, sameFile, uploadFile } from '../lib/upload.js'
 import { ACTIVE, mergeBoard, totals } from '../lib/uploadBoard.js'
 import { settled } from '../lib/uploadStatus.js'
@@ -190,7 +190,8 @@ export const useUploadsStore = defineStore('uploads', {
 					file,
 					onDone,
 				}
-				if (!/^(video|audio|image)\//.test(file.type)) {
+				// Pictures of other types upload too, into Files; video and audio only as Deliver takes them, playlists not
+				if (!reviewable(file.type) && !file.type.startsWith('image/')) {
 					Object.assign(item, { status: 'failed', error: t('deliver', 'Only video, audio and image files are uploaded.'), file: null })
 				} else if (kind && theirs && theirs !== kind) {
 					// Checked before the upload: a file of another kind would land in the folder as an Asset of its own

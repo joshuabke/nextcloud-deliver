@@ -23,6 +23,7 @@ import CommentItem from './CommentItem.vue'
 import { errorMessage } from '../api.js'
 import { useBusy } from '../composables/busy.js'
 import { sheet } from '../composables/panel.js'
+import { fitting } from '../lib/attachments.js'
 import { insertMention, mentionAt } from '../lib/mentions.js'
 import { formatRange } from '../lib/timecode.js'
 import { useCommentsStore } from '../store/comments.js'
@@ -78,11 +79,14 @@ const limitMb = computed(() => Math.floor(store.attachmentLimit / 1024 / 1024))
 function pickFiles(event) {
 	const picked = [...event.target.files]
 	event.target.value = ''
-	const tooLarge = picked.filter((file) => file.size > store.attachmentLimit)
-	if (tooLarge.length) {
-		error.value = t('deliver', 'Attachments add up to at most {size} MB per person on a Version: {names}', { size: limitMb.value, names: tooLarge.map((file) => file.name).join(', ') })
+	// The server counts all of one person's attachments on the Version, those already sent and those waiting here
+	const used = [...store.comments.filter((comment) => store.mine(comment)).flatMap((comment) => comment.attachments ?? []), ...files.value]
+		.reduce((sum, file) => sum + file.size, 0)
+	const { fit, left } = fitting(picked.slice(0, MAX_FILES - files.value.length), used, store.attachmentLimit)
+	if (left.length) {
+		error.value = t('deliver', 'Attachments add up to at most {size} MB per person on a Version: {names}', { size: limitMb.value, names: left.map((file) => file.name).join(', ') })
 	}
-	files.value = [...files.value, ...picked.filter((file) => file.size <= store.attachmentLimit)].slice(0, MAX_FILES)
+	files.value = [...files.value, ...fit]
 }
 /** The mention being typed, and the Members it could mean */
 const typedMention = ref(null)

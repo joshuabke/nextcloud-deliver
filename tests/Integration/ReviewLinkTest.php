@@ -251,10 +251,24 @@ class ReviewLinkTest extends TestCase {
 			$visitor = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $created['data']['token']);
 			$listed = $visitor->call('GET', '/api/assets')['data'];
 			self::assertSame([['cut', null]], array_map(static fn (array $asset) => [$asset['name'], $asset['downloadUrl']], $listed), 'shown, but never as a download');
-			self::assertStringNotContainsString('cut.mp4', $visitor->raw('/download')['body'], 'nor in the ZIP');
+			self::assertSame(404, $visitor->raw('/download')['status'], 'nor in a ZIP');
+			preg_match('/id="initial-state-deliver-link" value="([^"]+)"/', $visitor->raw('')['body'], $state);
+			self::assertNull(json_decode(base64_decode($state[1]), true)['downloadAll'], 'and the page offers none');
+
+			// Where the admin allows no viewing without download, Nextcloud hides the content, and so does the link
+			$this->viewWithoutDownload(false);
+			self::assertSame([], $visitor->call('GET', '/api/assets')['data']);
+			self::assertSame(404, $visitor->raw("/media/{$listed[0]['newestId']}/original")['status']);
 		} finally {
+			$this->viewWithoutDownload(true);
 			$this->nc->ocsForm('DELETE', "/ocs/v2.php/cloud/users/$uid");
 		}
+	}
+
+	/** Nextcloud's switch for viewing a share without downloads; through the API, as occ would miss the web server's cache */
+	private function viewWithoutDownload(bool $allowed): void {
+		$set = $this->nc->ocsForm('POST', '/ocs/v2.php/apps/provisioning_api/api/v1/config/apps/core/shareapi_allow_view_without_download', ['value' => $allowed ? 'true' : 'false']);
+		self::assertSame(200, $set['status'], json_encode($set['data']));
 	}
 
 	public function testALinkShowsOnlyWhatItsMemberMayShare(): void {
