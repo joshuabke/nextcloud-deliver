@@ -16,7 +16,7 @@ Since a Project no longer has one folder whose permissions it could borrow, acce
 ## Consequences
 
 - A Project shows each person only the Assets whose files they can open, and appears in their list as soon as they can open one of them; a Folder Project also appears to whoever can reach its folder. A Folder Project's settings follow write access to the folder; any other Project's name, settings and removal belong to the Member who made it.
-- Removing a Project never deletes review data: its Assets go to No Project. Deleting a file for good still purges its Version (ADR 0002).
+- Removing a Project never deletes review data: its Assets go to No Project. Deleting a file for good still purges its Version (ADR 0002). Superseded by ADR 0015: a deleted Project is kept whole for a while, then deleted for good with all its data.
 - A file is one Version at most, in one Project or none. Auto Intake takes in only files no Project holds; a file that moves keeps its Project, wherever it goes.
 - Notifications, Mentions and live updates reach the people who can open the Version's file; muting stays per Project, with one more mute for No Project.
 - Reviewers belong to the Member who invited them, and a Personal Link works through every Project Link of that Member (ADR 0011). Superseded by ADR 0013: they belong to one Project as well.

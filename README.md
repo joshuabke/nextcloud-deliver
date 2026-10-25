@@ -74,6 +74,7 @@ Additions or corrections are welcome as issues or pull requests!
 | MagentaCLOUD | ❌ | ❌ | ❌ | 2026-10 (by AI) | Proprietary Telekom Nextcloud fork; closed ecosystem, no App Store or shell |
 ## Documentation
 
+- [Using Deliver](docs/manual.md): how Deliver works with Files, Deleted Projects
 - [Running Deliver](docs/admin.md): requirements, the derived-media pipeline, hardware encoders, live updates
 - [Developing Deliver](docs/development.md): the dev instance, tests, packaging and releases
 - [API](docs/api.md): the OCS API and the Reviewer's surface
