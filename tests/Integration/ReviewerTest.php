@@ -240,6 +240,22 @@ class ReviewerTest extends TestCase {
 		self::assertSame([['Noa', []]], array_map(static fn (array $each) => [$each['name'], $each['links']], $listed['reviewers']), 'a Reviewer of the Project without a link');
 	}
 
+	public function testAReviewerOnNoLinkKeepsTheirName(): void {
+		$leon = $this->nc->ocs('POST', "/links/{$this->linkId}/reviewers", ['name' => 'Leon'])['data'];
+		$this->nc->ocs('DELETE', "/reviewers/{$leon['id']}/links/{$this->token}");
+		$other = $this->nc->ocs('POST', "/projects/{$this->projectId}/links")['data'];
+
+		self::assertSame(409, $this->nc->ocs('POST', "/links/{$other['id']}/reviewers", ['name' => 'leon'])['status'], 'the Project knows a Leon, on a link or not');
+		$kim = $this->nc->ocs('POST', "/links/{$other['id']}/reviewers", ['name' => 'Kim'])['data'];
+		self::assertSame(409, $this->nc->ocs('PUT', "/reviewers/{$kim['id']}", ['name' => 'Leon'])['status'], 'nor renamed to it');
+		self::assertSame(409, $this->nc->ocs('PUT', "/reviewers/{$leon['id']}", ['name' => 'Kim'])['status'], 'nor is one on no link renamed to a name taken');
+
+		// On no link, no review sees the name; back on one, a Member's name does not come along
+		$member = $this->nc->ocsForm('GET', '/ocs/v2.php/cloud/user')['data']['displayname'];
+		self::assertSame(200, $this->nc->ocs('PUT', "/reviewers/{$leon['id']}", ['name' => $member])['status']);
+		self::assertSame(409, $this->nc->ocs('POST', "/reviewers/{$leon['id']}/links", ['token' => $this->token])['status']);
+	}
+
 	public function testOnSeveralLinksOnlyTheMemberChangesWhoAReviewerIs(): void {
 		$run = bin2hex(random_bytes(4));
 		$jane = "jane-$run@example.test";

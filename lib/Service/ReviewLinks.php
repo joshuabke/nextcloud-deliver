@@ -174,8 +174,8 @@ class ReviewLinks {
 	}
 
 	/**
-	 * Refuses a Reviewer's new name that someone already has in a review the
-	 * Reviewer is on; the name they have stays theirs. Renaming themselves,
+	 * Refuses a Reviewer's new name that another Reviewer of their Project or
+	 * a Member in a review they are on already has; the name they have stays theirs. Renaming themselves,
 	 * a Reviewer only keeps clear of the Members' names, as on naming oneself.
 	 *
 	 * @throws ProjectConflictException
@@ -183,6 +183,10 @@ class ReviewLinks {
 	public function assertRenameFree(Reviewer $reviewer, string $name, bool $reviewersToo = true): void {
 		if (self::normal($name) === self::normal((string)$reviewer->getName())) {
 			return;
+		}
+		// Their Project's Reviewers, also when they are on no link themselves
+		if ($reviewersToo && in_array(self::normal($name), array_map(self::normal(...), $this->reviewerMapper->namesIn($reviewer->getProjectId(), $reviewer->getOwnerUid(), $reviewer->getId())), true)) {
+			throw $this->nameTaken($name);
 		}
 		$reviews = [];
 		foreach (array_keys($this->reviewerMapper->reviewersByLink([$reviewer->getId()])) as $token) {
@@ -195,16 +199,16 @@ class ReviewLinks {
 			$reviews[$link->projectId() ?? $token] ??= $link;
 		}
 		foreach ($reviews as $link) {
-			$this->assertNameFree($link, $name, $reviewer, $reviewersToo);
+			$this->assertNameFree($link, $name, reviewersToo: false);
 		}
 	}
 
 	/**
 	 * Refuses a name someone in the review already goes by: a Member of what
-	 * the link shows and, unless left out, a Reviewer on any Member's
-	 * link of its Project (of this link alone, for a file in No Project),
-	 * other than the one named (stories 53, 54). Case and surrounding spaces
-	 * do not count.
+	 * the link shows and, unless left out, any Member's Reviewer of its
+	 * Project, on a link or not (the Member's own on No Project), other than
+	 * the one named (stories 53, 54, #75). Case and surrounding spaces do not
+	 * count.
 	 * ponytail: checked before the insert, not locked; two claims of one name in the same instant both pass
 	 *
 	 * @param bool $reviewersToo false where Reviewers may share a name, told apart by their colour (naming oneself, as on Frame.io)
@@ -213,11 +217,9 @@ class ReviewLinks {
 	public function assertNameFree(ReviewLink $link, string $name, ?Reviewer $except = null, bool $reviewersToo = true): void {
 		$fileIds = array_map(static fn (Version $version) => $version->getFileId(), array_merge([], ...array_column($link->assets(), 'versions')));
 		$uids = array_unique(array_merge([$link->ownerUid()], ...array_map($this->members->of(...), array_unique($fileIds))));
-		$tokens = !$reviewersToo ? [] : ($link->projectId() === null ? [$link->token()]
-			: array_map(static fn (ReviewLinkRecord $each) => $each->getToken(), $this->linkRecords->findAllOf($link->projectId())));
 		$names = [
 			...array_map(fn (string $uid) => $this->users->getDisplayName($uid) ?? $uid, $uids),
-			...($reviewersToo ? $this->reviewerMapper->namesByLinks($tokens, $except?->getId()) : []),
+			...($reviewersToo ? $this->reviewerMapper->namesIn($link->projectId(), $link->ownerUid(), $except?->getId()) : []),
 		];
 		if (in_array(self::normal($name), array_map(self::normal(...), $names), true)) {
 			throw $this->nameTaken($name);
