@@ -11,8 +11,12 @@ final class Reviewable {
 	/** Stills browsers show as they are (story 95) */
 	public const IMAGES = '#^image/(png|jpeg|webp|gif|avif)$#';
 
+	/** Playlists, which Nextcloud files under audio but which only point at other files */
+	private const PLAYLISTS = ['audio/mpegurl', 'audio/x-mpegurl', 'audio/x-scpls'];
+
 	public static function file(Node $node): bool {
-		return preg_match('#^(video|audio)/#', $node->getMimeType()) === 1 || self::image($node->getMimeType());
+		$mimeType = $node->getMimeType();
+		return (preg_match('#^(video|audio)/#', $mimeType) === 1 && !in_array($mimeType, self::PLAYLISTS, true)) || self::image($mimeType);
 	}
 
 	public static function image(string $mimeType): bool {

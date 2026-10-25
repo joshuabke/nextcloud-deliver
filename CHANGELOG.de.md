@@ -5,6 +5,9 @@
 ### Geändert
 - Auf Review-Links ohne Downloads einen Proxy statt des Originals abgespielt, auch für Audio, und für Standbilder ein gerendertes Bild; nur ein Server ohne ffmpeg spielt dort das Original.
 - In den Einstellungen eines Review-Links erklärt, was „ohne Downloads“ und das Wasserzeichen bewirken.
+- ffmpeg und ffprobe auf lokale Dateien in den Formaten beschränkt, die Deliver aufnimmt.
+- Playlists (M3U, PLS) vom Review ausgenommen.
+- Ableton Live Sets abgelehnt, die entpackt größer als 100 MB sind.
 
 ### Behoben
 - Version für Mitglieder geschlossen, die ihre Datei nicht öffnen können, auch wenn sie eine andere Version des Stapels öffnen.

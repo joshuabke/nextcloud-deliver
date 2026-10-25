@@ -37,7 +37,7 @@ class WavExport {
 			copy($source, $wav);
 		} else {
 			$result = $this->ffmpeg->run($this->ffmpeg->ffmpeg(), [
-				'-y', '-nostdin', '-v', 'error', '-i', $source,
+				'-y', '-nostdin', '-v', 'error', ...Ffmpeg::input($source),
 				'-map', '0:a:0', '-c:a', 'pcm_s24le', '-f', 'wav', $wav,
 			]);
 			if ($result['code'] !== 0) {

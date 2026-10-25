@@ -273,7 +273,7 @@ class DerivedMedia {
 		if (!$version->getHasVideo()) {
 			// Audio gets one only to stand in for an original a link keeps back: AAC, which every browser plays
 			$this->store($version, 'proxy', fn (string $output) => $this->ffmpeg([
-				'-i', $path,
+				...Ffmpeg::input($path),
 				'-map', '0:a:0', '-c:a', 'aac', '-b:a', '256k',
 				'-movflags', '+faststart',
 				'-f', 'mp4', $output,
@@ -299,7 +299,7 @@ class DerivedMedia {
 		$args = $this->encoder->args($encoder, $this->maxHeight(), $num && $den ? (int)round($num / $den) : 25);
 		return [
 			...$args['input'],
-			'-i', $path,
+			...Ffmpeg::input($path),
 			'-map', '0:v:0', '-map', '0:a:0?',
 			'-vf', $args['filter'],
 			...($num && $den ? ['-r', "$num/$den"] : []),
@@ -337,7 +337,7 @@ class DerivedMedia {
 		$rows = (int)ceil($count / $columns);
 
 		$this->store($version, 'thumbs', fn (string $output) => $this->ffmpeg([
-			'-i', $path,
+			...Ffmpeg::input($path),
 			'-vf', "fps=1/$every,scale=" . self::THUMB_WIDTH . ":-2,tile={$columns}x{$rows}",
 			'-frames:v', '1',
 			'-f', 'webp', $output,
@@ -357,7 +357,7 @@ class DerivedMedia {
 		$pcm = tempnam(sys_get_temp_dir(), 'deliver-') ?: throw new \RuntimeException('No temporary file for the Waveform');
 		try {
 			$this->ffmpeg([
-				'-i', $path,
+				...Ffmpeg::input($path),
 				'-map', '0:a:0', '-ac', '1', '-ar', '8000',
 				'-c:a', 'pcm_s16le', '-f', 's16le', $pcm,
 			]);

@@ -13,6 +13,24 @@ use Psr\Log\LoggerInterface;
  * ffmpeg is optional (ADR 0003): a missing binary is a failed run, not an exception.
  */
 class Ffmpeg {
+	/**
+	 * The demuxers of the video and audio formats Deliver takes, by ffmpeg's
+	 * names. Playlists and other formats that refer to further files or URLs
+	 * are not among them, so a file never makes ffmpeg read anything but itself.
+	 */
+	private const FORMATS = 'mov,matroska,avi,mxf,mpegts,mpeg,mpegvideo,flv,asf,ogg,wav,w64,mp3,flac,aac,aiff,caf,dv,gxf,m4v,h264,hevc,mjpeg,'
+		. 'wv,ape,amr,ac3,eac3,dts,truehd,au,nut,ivf,yuv4mpegpipe,obu,vc1,rm,dsf,iff,tta,tak,mpc,mpc8,xwma';
+
+	/**
+	 * A file from Files as ffmpeg's or ffprobe's input: a local file in one of
+	 * the formats Deliver takes, and nothing it might point to
+	 *
+	 * @return list<string>
+	 */
+	public static function input(string $path): array {
+		return ['-protocol_whitelist', 'file', '-format_whitelist', self::FORMATS, '-i', $path];
+	}
+
 	public function __construct(
 		private IAppConfig $config,
 		private LoggerInterface $logger,
