@@ -149,11 +149,12 @@ function saveSettings(settings) {
 	})
 }
 
-/** Removes the Project with all its review data (story 9) */
+/** Deletes the Project with its Assets (story 148), or keeps them in No Project (story 9) */
 async function remove() {
-	if (await confirmProjectRemoval()) {
+	const how = await confirmProjectRemoval()
+	if (how) {
 		await run(async () => {
-			await removeProject(project.value.id)
+			await removeProject(project.value.id, how === 'delete')
 			project.value = null
 		})
 	}

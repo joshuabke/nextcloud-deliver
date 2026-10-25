@@ -15,16 +15,19 @@ export function confirmRemoval(title, text, confirm) {
 }
 
 /**
- * Asks before a Project goes with all its review data (story 9).
+ * Asks before a Project goes: deleted with its Assets and their review data
+ * (story 148), or its Assets kept in No Project (story 9).
  *
- * @return {Promise<boolean>} whether the person confirmed
+ * @return {Promise<?string>} 'delete', 'keep', or null when the person cancelled
  */
-export function confirmProjectRemoval() {
-	return confirmRemoval(
-		t('deliver', 'Remove Project?'),
-		t('deliver', 'Its Assets keep their Comments and go to No Project. The files stay untouched.'),
-		t('deliver', 'Remove Project'),
-	)
+export async function confirmProjectRemoval() {
+	const answer = await spawnDialog(ConfirmDialog, {
+		name: t('deliver', 'Remove Project?'),
+		message: t('deliver', 'Delete it with its Comments, Versions and Review Links, or keep its Assets with their Comments in No Project. The files stay untouched either way.'),
+		confirm: t('deliver', 'Delete Project'),
+		other: t('deliver', 'Keep in No Project'),
+	})
+	return answer === true ? 'delete' : (answer === 'other' ? 'keep' : null)
 }
 
 /**

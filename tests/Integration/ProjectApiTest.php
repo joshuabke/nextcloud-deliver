@@ -216,6 +216,52 @@ class ProjectApiTest extends TestCase {
 		self::assertSame(['loose.mp4'], array_column($shown['notEnabled'], 'name'));
 	}
 
+	public function testAssetsOfARemovedProjectAreDeletedFromNoProject(): void {
+		$this->nc->put("{$this->root}/cut_v1.mp4", 'not really a video');
+		$this->nc->put("{$this->root}/cut_v2.mp4", 'not really a video');
+		$this->nc->put("{$this->root}/other.mp4", 'not really a video');
+		$this->nc->put("{$this->root}/third.mp4", 'not really a video');
+		$projectId = $this->createProject($this->nc, $this->nc->fileId($this->root))['id'];
+		$assets = $this->nc->ocs('GET', "/projects/$projectId")['data']['assets'];
+		foreach ($assets as $asset) {
+			$this->nc->ocs('POST', "/versions/{$asset['versions'][0]['id']}/comments", ['inFrame' => 1, 'body' => 'note']);
+		}
+		self::assertSame(200, $this->nc->ocs('DELETE', '/projects/' . array_pop($this->projects)[1])['status']);
+
+		// Deleted from No Project one after another, as its selection does (#84)
+		foreach (array_column($assets, 'id', 'name') as $name => $id) {
+			$deleted = $this->nc->ocs('DELETE', "/assets/$id/files");
+			self::assertSame(200, $deleted['status'], "$name: " . json_encode($deleted['data']));
+		}
+		self::assertSame([], array_intersect(['cut', 'other', 'third'], $this->unassigned($this->nc)));
+	}
+
+	public function testAProjectIsDeletedWithItsAssetsAndTheFilesStay(): void {
+		$this->nc->put("{$this->root}/cut_v1.mp4", 'not really a video');
+		$this->nc->put("{$this->root}/cut_v2.mp4", 'not really a video');
+		$this->nc->put("{$this->root}/other.mp4", 'not really a video');
+		$projectId = $this->createProject($this->nc, $this->nc->fileId($this->root))['id'];
+		$assets = $this->nc->ocs('GET', "/projects/$projectId")['data']['assets'];
+		$versionId = $assets[0]['versions'][0]['id'];
+		$this->nc->ocs('POST', "/versions/$versionId/comments", ['inFrame' => 1, 'body' => 'note']);
+		$link = $this->nc->ocs('POST', "/projects/$projectId/links")['data'];
+		$invited = $this->nc->ocs('POST', "/links/{$link['id']}/reviewers", ['name' => 'Leon'])['data'];
+
+		self::assertSame(200, $this->nc->ocs('DELETE', "/projects/$projectId?withAssets=1")['status']);
+		array_pop($this->projects);
+		self::assertSame(404, $this->nc->ocs('GET', "/projects/$projectId")['status']);
+		self::assertSame([], array_intersect(['cut', 'other'], $this->unassigned($this->nc)), 'not in No Project (story 148)');
+		self::assertSame(404, $this->nc->ocs('GET', "/versions/$versionId/comments")['status'], 'its review data is gone');
+		self::assertSame(403, $this->nc->ocs('PUT', "/reviewers/{$invited['id']}", ['name' => 'Leon'])['status'], 'its Reviewers are removed');
+		self::assertSame($assets[0]['versions'][0]['fileId'], $this->nc->fileId("{$this->root}/cut_v2.mp4"), 'the files stay where they were');
+
+		// Made again, the folder takes its files in afresh
+		$again = $this->createProject($this->nc, $this->nc->fileId($this->root))['id'];
+		$fresh = $this->nc->ocs('GET', "/projects/$again")['data']['assets'];
+		self::assertSame(['cut', 'other'], array_column($fresh, 'name'));
+		self::assertSame(0, $fresh[0]['versions'][0]['comments'], 'without the old Comments');
+	}
+
 	public function testAFolderProjectWithoutAutoIntakeTakesFilesOneByOne(): void {
 		$this->nc->mkdir("{$this->root}/scenes");
 		$this->nc->put("{$this->root}/cut.mp4", 'not really a video');

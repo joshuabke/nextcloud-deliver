@@ -23,7 +23,7 @@ Deliver becomes a proper Nextcloud app, rebuilt from scratch, in which media fil
 6. As a Member, I want a Project to show its folder tree with every enabled file as an Asset, so that subfolders keep their meaning.
 7. As a Member, I want a Project to have a default frame rate, so that undetectable videos still get frame-accurate Comments and audio can be read in the Project's timecode.
 8. As a Member, I want a Project to have a timecode display setting (SMPTE, frames, seconds), so that every viewer sees the format my team works in.
-9. As a Member, I want to remove a Project after a confirmation, its Assets going to No Project with their review data and coming back when its folder becomes a Project again, so that reorganising never loses Comments.
+9. As a Member, I want to remove a Project after a confirmation, its Assets going to No Project with their review data and coming back when its folder becomes a Project again, so that reorganising never loses Comments; deleting it with its Assets instead is story 148.
 10. As a Member, I want a folder inside a Folder Project to be refused as a new Folder Project, so that Auto Intake never fights over a file.
 11. As a Member, I want a Folder Project whose folder was deleted to lose its folder and Auto Intake but keep its Assets, so that trash restore and a new home keep my comments.
 
@@ -221,6 +221,10 @@ Issue #66. Contacts only fill in a Reviewer's name and address; the Reviewer sta
 145. As a Member, I want a plus next to "Reviewers" in the Project's navigation that invites one person on a Review Link of their own: their name (suggested from my contacts) and address, their Personal Link mailed under my message or copied, the whole Project or the Assets I pick (always picked on No Project), and the link's rights, so that sending a cut to one more person is one dialog; a link without a label is titled by what it shows (the whole Project, its one Asset, or how many), its Reviewers listed under it.
 146. As a Member, I want each email address to be one Reviewer of the Project, an invitation with a known address giving them one more link, and to set their own rights on each link they are on from a gear at it, in their dialog and in the link's settings, or by clicking them where the navigation lists them under that link, next to which their Personal Link through it is copied, each Reviewer shown with their initials, so that Leon can comment only on the newest Version through the Project's link and on every Version through the link to one still (ADR 0014).
 147. As a Member, I want each Personal Link to carry a key of its own, a Reviewer to be put on another link of the Project or taken off one from their dialog and from the link's settings, and every Reviewer of the Project listed, on a link or not, so that inviting an address never hands a link to whoever typed that address on another link, and anyone can be brought back to a review (ADR 0014).
+
+### Removing Projects
+
+148. As a Member, I want to delete a Project together with its Assets, their Versions, Comments and Review Links and its Reviewers, the files left where they are and out of Deliver, offered first when I remove a Project and next to keeping its Assets in No Project, so that a finished job leaves nothing behind in Deliver without touching a file.
 
 ## Implementation Decisions
 

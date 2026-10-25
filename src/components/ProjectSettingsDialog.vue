@@ -33,11 +33,12 @@ function save(fields) {
 	return run(() => store.save(props.project.id, fields))
 }
 
-/** Removes the Project with all its review data (story 9) */
+/** Deletes the Project with its Assets (story 148), or keeps them in No Project (story 9) */
 async function remove() {
-	if (await confirmProjectRemoval()) {
+	const how = await confirmProjectRemoval()
+	if (how) {
 		await run(async () => {
-			await store.remove(props.project.id)
+			await store.remove(props.project.id, how === 'delete')
 			emit('removed')
 		})
 	}

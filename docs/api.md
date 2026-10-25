@@ -10,7 +10,7 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | GET | `/projects/{id}` | Project with the Assets the user can open; Auto Intake looks at the folder first. `/projects/0` is the user's No Project |
 | PUT | `/projects/{id}` `{autoIntake, allowOlder, fpsNum, fpsDen, timecodeMode, name}` | Project settings, each field optional; `autoIntake` only for a Folder Project, `name` only for any other |
 | PUT | `/projects/{id}/mute` `{muted}` | Mute or unmute the Project's notifications for oneself; 0 mutes No Project |
-| DELETE | `/projects/{id}` | Remove the Project; its Assets go to No Project, files stay untouched |
+| DELETE | `/projects/{id}` `?withAssets=1` | Remove the Project; its Assets go to No Project, or with `withAssets` are deleted with it and their review data and Reviewers; files stay untouched either way |
 | GET | `/files/{fileId}/asset` | The Asset of a file with its Project, or 404; `waveformFromBrowser` says the browser that uploaded the audio should decode its Waveform and hand it in (no ffmpeg, no Waveform yet, no WAV) |
 | POST | `/assets` `{fileId, projectId, assetId}` | Enable one media file for review: into the Project given, 0 for No Project, or without one the Folder Project above it, else No Project; with `assetId`, as the next Version of that Asset of the same kind of media, a file already in review moving over |
 | PUT | `/assets/{id}/project` `{projectId}` | Put an Asset into another Project, or 0 for No Project; no file moves |

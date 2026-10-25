@@ -14,6 +14,7 @@ use OCA\Deliver\Db\Project;
 use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\ReactionMapper;
 use OCA\Deliver\Db\RemovedMapper;
+use OCA\Deliver\Db\ReviewerMapper;
 use OCA\Deliver\Db\ReviewLinkMapper;
 use OCA\Deliver\Db\SeenMapper;
 use OCA\Deliver\Db\Version;
@@ -59,6 +60,7 @@ class StackService {
 		private IDBConnection $db,
 		private AttachmentStore $attachmentFiles,
 		private ReviewLinkMapper $linkRecords,
+		private ReviewerMapper $reviewers,
 	) {
 	}
 
@@ -366,6 +368,20 @@ class StackService {
 			$this->linkRecords->forget($link);
 		}
 		$this->projects->delete($project);
+	}
+
+	/**
+	 * Deletes a Project with its Assets and all their review data, and its
+	 * Reviewers; the files stay where they are, out of Deliver (story 148).
+	 */
+	public function deleteProject(Project $project, string $uid): void {
+		foreach ($this->assets->findByProject($project->getId()) as $asset) {
+			foreach ($this->versions->findByAsset($asset->getId()) as $version) {
+				$this->purge($version);
+			}
+		}
+		$this->reviewers->removeOf($project->getId(), $this->time->getTime());
+		$this->removeProject($project, $uid);
 	}
 
 	private function nextNumber(int $assetId): int {

@@ -90,14 +90,15 @@ async function save(project, fields) {
 }
 
 /**
- * Removes the Project with all its review data, after asking (story 9)
+ * Deletes the Project with its Assets (story 148), or keeps them in No Project (story 9), after asking
  *
  * @param {object} project - the Project to remove
  */
 async function remove(project) {
-	if (await confirmProjectRemoval()) {
+	const how = await confirmProjectRemoval()
+	if (how) {
 		try {
-			await store.remove(project.id)
+			await store.remove(project.id, how === 'delete')
 		} catch (e) {
 			error.value = errorMessage(e)
 		}
