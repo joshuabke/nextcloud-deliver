@@ -34,6 +34,8 @@ class DawMarkersTest extends TestCase {
 			"#,Name,Start,End,Length\nR1,\"Mara: too loud\",0:00:02.000,0:00:03.000,0:00:01.000\nM1,\"Jo: click\",0:00:10.000,,\n",
 			DawMarkers::reaper(self::CLIP, self::MARKERS),
 		);
+		$named = [['author' => '=Mara', 'body' => 'x'] + self::MARKERS[1]];
+		self::assertStringContainsString("M1,\"'=Mara: x\"", DawMarkers::reaper(self::CLIP, $named), 'a name never starts a formula');
 	}
 
 	public function testWavChunksCountSamplesFromTheStartOfTheFile(): void {

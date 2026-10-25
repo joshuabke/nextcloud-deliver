@@ -4,6 +4,7 @@
 
 ### Behoben
 - Version für Mitglieder geschlossen, die ihre Datei nicht öffnen können, auch wenn sie eine andere Version des Stapels öffnen.
+- Formeln aus Kommentaren und Reviewer-Namen in den Exporten als CSV und für REAPER entschärft.
 
 ## 0.9.5 – 2026-10-24
 

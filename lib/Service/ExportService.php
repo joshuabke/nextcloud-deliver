@@ -360,9 +360,9 @@ class ExportService {
 				$marker['out'] ?? '',
 				self::tc($clip, $marker['in']),
 				$marker['out'] === null ? '' : self::tc($clip, $marker['out']),
-				$marker['author'],
-				$marker['body'],
-				implode("\n", array_map(static fn (array $reply) => $reply['author'] . ': ' . $reply['body'], $marker['replies'])),
+				self::cell($marker['author']),
+				self::cell($marker['body']),
+				self::cell(implode("\n", array_map(static fn (array $reply) => $reply['author'] . ': ' . $reply['body'], $marker['replies']))),
 				$marker['resolved'] ? 'yes' : 'no',
 			], ',', '"', '');
 		}
@@ -370,6 +370,14 @@ class ExportService {
 		$csv = (string)stream_get_contents($handle);
 		fclose($handle);
 		return $csv;
+	}
+
+	/**
+	 * A cell a spreadsheet would read as a formula starts with an apostrophe
+	 * instead, so that no Comment or Reviewer name runs as one when the CSV is opened
+	 */
+	public static function cell(string $text): string {
+		return preg_match('/^[=+\-@\t\r]/', $text) === 1 ? "'" . $text : $text;
 	}
 
 	private static function oneLine(string $text): string {
