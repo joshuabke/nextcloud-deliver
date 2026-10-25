@@ -3,43 +3,74 @@ name: Release
 # A tag v1.2.3 builds and signs the app, attaches it to a GitHub release and
 # publishes it in the App Store. Release steps are in docs/development.md;
 # secrets: APP_PRIVATE_KEY (deliver.key) and APPSTORE_TOKEN.
+#
+# The build runs the app's npm dependencies, without their install scripts,
+# and holds no secret; only the job after it, which runs none of them, gets
+# the signing key. Actions are pinned to commits, the comment naming the release.
 on:
   push:
     tags: ['v*']
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # No token in .git/config, where the dependencies the build runs could read it
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - name: Tag, info.xml and changelog agree
         run: |
           VERSION=${GITHUB_REF_NAME#v}
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           grep -q "<version>$VERSION</version>" appinfo/info.xml
           grep -q "^## $VERSION" CHANGELOG.md
           grep -q "^## $VERSION" CHANGELOG.de.md
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
-      - uses: shivammathur/setup-php@v2
+
+      - run: make package
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: deliver
+          path: build/deliver
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # For the changelog only; nothing of the repository runs here
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: deliver
+          path: build/deliver
+
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: '8.3'
           coverage: none
-
-      - run: make package
 
       # appinfo/signature.json covers every file, so nothing may change after this
       - name: Sign the code
         env:
           APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
         run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           printf '%s\n' "$APP_PRIVATE_KEY" > "$RUNNER_TEMP/deliver.key"
           curl -fsSL -o "$RUNNER_TEMP/deliver.crt" https://raw.githubusercontent.com/nextcloud/app-certificate-requests/master/deliver/deliver.crt
           # occ signs without an installed instance

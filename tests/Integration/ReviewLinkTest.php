@@ -233,6 +233,44 @@ class ReviewLinkTest extends TestCase {
 		self::assertSame(404, $visitor->raw('/download')['status']);
 	}
 
+	public function testAFileSharedWithoutDownloadsNeverLeavesThroughALink(): void {
+		$uid = 'deliver-guest-' . bin2hex(random_bytes(4));
+		$password = 'Deliver-' . bin2hex(random_bytes(8));
+		$this->nc->ocsForm('POST', '/ocs/v2.php/cloud/users', ['userid' => $uid, 'password' => $password]);
+		$guest = $this->nc->withUser($uid, $password);
+		try {
+			// Read and reshare, but view only
+			$shared = $this->nc->ocsForm('POST', '/ocs/v2.php/apps/files_sharing/api/v1/shares', [
+				'path' => "/{$this->root}/cut.mp4", 'shareType' => 0, 'shareWith' => $uid, 'permissions' => 17,
+				'attributes' => json_encode([['scope' => 'permissions', 'key' => 'download', 'value' => false]]),
+			]);
+			self::assertSame(200, $shared['status'], json_encode($shared['data']));
+			$created = $guest->ocs('POST', "/projects/{$this->projectId}/links");
+			self::assertSame(201, $created['status'], json_encode($created['data']));
+			self::assertTrue($created['data']['canDownload']);
+			$visitor = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $created['data']['token']);
+			$listed = $visitor->call('GET', '/api/assets')['data'];
+			self::assertSame([['cut', null]], array_map(static fn (array $asset) => [$asset['name'], $asset['downloadUrl']], $listed), 'shown, but never as a download');
+			self::assertSame(404, $visitor->raw('/download')['status'], 'nor in a ZIP');
+			preg_match('/id="initial-state-deliver-link" value="([^"]+)"/', $visitor->raw('')['body'], $state);
+			self::assertNull(json_decode(base64_decode($state[1]), true)['downloadAll'], 'and the page offers none');
+
+			// Where the admin allows no viewing without download, Nextcloud hides the content, and so does the link
+			$this->viewWithoutDownload(false);
+			self::assertSame([], $visitor->call('GET', '/api/assets')['data']);
+			self::assertSame(404, $visitor->raw("/media/{$listed[0]['newestId']}/original")['status']);
+		} finally {
+			$this->viewWithoutDownload(true);
+			$this->nc->ocsForm('DELETE', "/ocs/v2.php/cloud/users/$uid");
+		}
+	}
+
+	/** Nextcloud's switch for viewing a share without downloads; through the API, as occ would miss the web server's cache */
+	private function viewWithoutDownload(bool $allowed): void {
+		$set = $this->nc->ocsForm('POST', '/ocs/v2.php/apps/provisioning_api/api/v1/config/apps/core/shareapi_allow_view_without_download', ['value' => $allowed ? 'true' : 'false']);
+		self::assertSame(200, $set['status'], json_encode($set['data']));
+	}
+
 	public function testALinkShowsOnlyWhatItsMemberMayShare(): void {
 		$uid = 'deliver-guest-' . bin2hex(random_bytes(4));
 		$password = 'Deliver-' . bin2hex(random_bytes(8));

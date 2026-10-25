@@ -34,6 +34,8 @@ export const useCommentsStore = defineStore('comments', {
 		seenUntil: 0,
 		/** Who approved or requested changes: [{ author, status, updatedAt }] */
 		approvals: [],
+		/** What one person may attach on this Version in all, in bytes, as the server says (story 92) */
+		attachmentLimit: 20 * 1024 * 1024,
 		/**
 		 * Server time of the last answer, and the `since` of the next poll.
 		 * Inclusive, because timestamps count whole seconds: "newer than"
@@ -111,6 +113,7 @@ export const useCommentsStore = defineStore('comments', {
 			this.me = answer.me
 			this.seenUntil = answer.seenUntil
 			this.approvals = answer.approvals
+			this.attachmentLimit = answer.attachmentLimit
 			this.now = answer.now
 			this.onScreen()
 		},

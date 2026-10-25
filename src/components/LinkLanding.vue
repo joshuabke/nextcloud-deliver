@@ -20,6 +20,8 @@ const props = defineProps({
 const emit = defineEmits(['open'])
 
 const isAudio = (asset) => asset.mimeType?.startsWith('audio/')
+/** What can go into a ZIP: a file shared without downloads shows but never downloads */
+const downloadable = computed(() => props.assets.filter((asset) => asset.downloadUrl))
 
 /** Assets picked for one ZIP, as on Frame.io */
 const selected = reactive(new Set())
@@ -63,9 +65,9 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 				</div>
 				<div class="deliver-landing__actions">
 					<NcButton
-						v-if="link.downloadAll && selected.size < assets.length"
+						v-if="link.downloadAll && selected.size < downloadable.length"
 						variant="tertiary"
-						@click="assets.forEach((asset) => selected.add(asset.assetId))">
+						@click="downloadable.forEach((asset) => selected.add(asset.assetId))">
 						{{ t('deliver', 'Select all') }}
 					</NcButton>
 					<!-- The Reviewer's own menu -->
@@ -108,7 +110,7 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 							</span>
 						</button>
 						<input
-							v-if="link.downloadAll"
+							v-if="link.downloadAll && asset.downloadUrl"
 							type="checkbox"
 							class="deliver-landing__pick"
 							:class="{ 'deliver-landing__pick--shown': selected.size > 0 }"

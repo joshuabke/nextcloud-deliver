@@ -5,6 +5,7 @@ describe('media kinds', () => {
 	it('reviews video, audio and the stills browsers show', () => {
 		expect(['video/mp4', 'audio/wav', 'image/png', 'image/webp'].every(reviewable)).toBe(true)
 		expect(['image/svg+xml', 'image/tiff', 'application/pdf', undefined].some(reviewable)).toBe(false)
+		expect(['audio/mpegurl', 'audio/x-mpegurl', 'audio/x-scpls'].some(reviewable), 'playlists only point at other files').toBe(false)
 	})
 
 	it('names the kind a Version Stack keeps to, and what a picker for its next Version accepts', () => {

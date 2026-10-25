@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- Say in a Review Link's settings what hiding downloads and the Watermark do.
+- Let ffmpeg and ffprobe read only local files in the formats Deliver takes.
+- Leave playlists (M3U, PLS) out of review.
+- Refuse Ableton Live Sets that unpack to more than 100 MB.
+- Limit attachments to 20 MB per person and Version in all, adjustable in the admin settings.
+
+### Fixed
+- Close a Version to Members who cannot open its file, also when they open another Version of its Stack.
+- Keep Comments and Reviewer names from starting a spreadsheet formula in the CSV export.
+- Keep files shared without downloads out of a Review Link's downloads and the WAV export, and off Review Links where Nextcloud hides their content.
+
 ## 0.9.5 – 2026-10-24
 
 ### Added

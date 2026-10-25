@@ -114,6 +114,22 @@ class CommentApiTest extends TestCase {
 		self::assertSame(400, $react($this->nc, '<b>👍</b>', true)['status']);
 	}
 
+	public function testAttachmentsKeepToTheAdminsLimit(): void {
+		self::assertSame(20, $this->nc->ocs('GET', '/admin/settings')['data']['settings']['attachmentLimit'], '20 MB per person and Version unless changed');
+		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['attachmentLimit' => 1])['status']);
+		try {
+			$comment = $this->comment($this->nc, ['inFrame' => 7, 'body' => 'like this']);
+			self::assertSame(1024 * 1024, $this->nc->ocs('GET', "/versions/{$comment['versionId']}/comments")['data']['attachmentLimit'], 'the Comment field knows it');
+			self::assertSame(400, $this->nc->upload("/comments/{$comment['id']}/attachments", 'big.png', str_repeat('x', 1024 * 1024 + 1))['status'], 'a file larger than the limit');
+			self::assertSame(201, $this->nc->upload("/comments/{$comment['id']}/attachments", 'half.png', str_repeat('x', 600 * 1024))['status']);
+			self::assertSame(400, $this->nc->upload("/comments/{$comment['id']}/attachments", 'more.png', str_repeat('x', 600 * 1024))['status'], 'files that add up past it');
+			self::assertSame(400, $this->nc->ocs('PUT', '/admin/settings', ['extraArgs' => '-threads 2', 'attachmentLimit' => 0])['status']);
+			self::assertSame('', $this->nc->ocs('GET', '/admin/settings')['data']['settings']['extraArgs'], 'a refused value saves none of the others');
+		} finally {
+			$this->nc->ocs('PUT', '/admin/settings', ['attachmentLimit' => 20]);
+		}
+	}
+
 	public function testAttachmentsLiveInAppDataNotInFiles(): void {
 		$comment = $this->comment($this->nc, ['inFrame' => 7, 'body' => 'like this']);
 		$attached = $this->nc->upload("/comments/{$comment['id']}/attachments", 'reference.png', 'not really a picture');

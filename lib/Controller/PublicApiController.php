@@ -94,7 +94,7 @@ class PublicApiController extends PublicShareController {
 				],
 				'asset' => $stack === null ? null : ['id' => $stack['asset']->getId(), 'name' => $this->stacks->nameOf($stack['asset']), 'dueDate' => $stack['asset']->getDueDate()],
 				'versions' => $stack === null ? [] : array_map(
-					fn (Version $each) => $this->describe($link, $each, $flags['canDownload']),
+					fn (Version $each) => $this->describe($link, $each),
 					$stack['versions'],
 				),
 				'me' => $this->me($version, $member, $reviewer),
@@ -108,10 +108,10 @@ class PublicApiController extends PublicShareController {
 	public function assets(): Response {
 		return $this->guard(function () {
 			$link = $this->link();
-			$canDownload = $this->links->flagsFor($link, $this->reviewer())['canDownload'];
 			$result = [];
 			foreach ($link->assets() as ['asset' => $asset, 'versions' => $versions]) {
 				$newest = $versions[0];
+				$download = $link->downloadable($newest);
 				$original = $this->mediaUrl($newest, 'original');
 				$result[] = [
 					'fileId' => $newest->getFileId(),
@@ -123,10 +123,10 @@ class PublicApiController extends PublicShareController {
 					'mimeType' => $link->originalFile($newest)?->getMimetype(),
 					'dueDate' => $asset->getDueDate(),
 					// For scrubbing on hover, and a frame of it where Nextcloud renders no still (no ffmpeg)
-					'playUrl' => $newest->getProxyState() === DerivedMedia::STATE_READY || !$this->mayPlayOriginal($newest, $canDownload)
+					'playUrl' => $newest->getProxyState() === DerivedMedia::STATE_READY || !$this->mayPlayOriginal($newest, $download)
 						? $this->mediaUrl($newest, 'proxy')
 						: $original,
-					'downloadUrl' => $canDownload ? $original . '?download=1' : null,
+					'downloadUrl' => $download ? $original . '?download=1' : null,
 				];
 			}
 			return $result;
@@ -146,20 +146,20 @@ class PublicApiController extends PublicShareController {
 		try {
 			$link = $this->link();
 			$reviewer = $this->reviewer();
-			if (!$this->links->flagsFor($link, $reviewer)['canDownload']) {
-				return new Response(Http::STATUS_NOT_FOUND);
-			}
-			$zip = new ZipResponse($this->request, $link->title() !== '' ? $link->title() : 'download');
-			$names = [];
 			$chosen = $link->assets();
 			if ($assetIds !== '') {
 				$chosen = array_intersect_key($chosen, array_flip(array_map('intval', explode(',', $assetIds))));
 			}
-			foreach ($chosen as ['versions' => [$newest]]) {
-				$file = $link->originalFile($newest);
-				if ($file === null) {
-					continue;
-				}
+			// What the Member may only view in Files stays out, as it would of a download there
+			$zipped = array_filter(array_column(array_column($chosen, 'versions'), 0), $link->downloadable(...));
+			if ($zipped === []) {
+				return new Response(Http::STATUS_NOT_FOUND);
+			}
+			$zip = new ZipResponse($this->request, $link->title() !== '' ? $link->title() : 'download');
+			$names = [];
+			foreach ($zipped as $version) {
+				// downloadable() found it
+				$file = $link->originalFile($version) ?? throw new NotFoundException('Gone while zipping');
 				// Two Assets in different folders can carry the same file name
 				$name = $file->getName();
 				for ($n = 2; isset($names[$name]); $n++) {
@@ -167,8 +167,8 @@ class PublicApiController extends PublicShareController {
 				}
 				$names[$name] = true;
 				$zip->addResource($file->fopen('rb'), $name, $file->getSize(), $file->getMTime());
-				if (!$this->member($newest)) {
-					$this->links->record($link, LinkActivityMapper::DOWNLOADED, $reviewer, $newest);
+				if (!$this->member($version)) {
+					$this->links->record($link, LinkActivityMapper::DOWNLOADED, $reviewer, $version);
 				}
 			}
 			return $zip;
@@ -193,11 +193,11 @@ class PublicApiController extends PublicShareController {
 				return RangeFileResponse::ofSimpleFile($this->media->file($version, $kind), $this->request->getHeader('Range'));
 			}
 			$file = $link->originalFile($version);
-			$canDownload = $this->links->flagsFor($link, $this->reviewer())['canDownload'];
-			if ($file === null || !$this->mayPlayOriginal($version, $canDownload)) {
+			$download = $link->downloadable($version);
+			if ($file === null || !$this->mayPlayOriginal($version, $download)) {
 				return new Response(Http::STATUS_NOT_FOUND);
 			}
-			if ($this->request->getParam('download') !== null && $canDownload) {
+			if ($this->request->getParam('download') !== null && $download) {
 				// The download button, not the player, which asks for ranges of the same file (story 124)
 				if (!$this->member($version)) {
 					$this->links->record($link, LinkActivityMapper::DOWNLOADED, $this->reviewer(), $version);
@@ -401,14 +401,15 @@ class PublicApiController extends PublicShareController {
 		});
 	}
 
-	/** A Version as the Review view shows it, with the original only where the link allows */
-	private function describe(ReviewLink $link, Version $version, bool $canDownload): array {
+	/** A Version as the Review view shows it, with the original only where the link and the Member's access allow */
+	private function describe(ReviewLink $link, Version $version): array {
+		$download = $link->downloadable($version);
 		$media = $this->mediaUrl($version, '__kind__');
 		$original = $this->mediaUrl($version, 'original');
-		$url = $this->mayPlayOriginal($version, $canDownload) ? $original : null;
+		$url = $this->mayPlayOriginal($version, $download) ? $original : null;
 		return $this->projects->describeVersion($version, $this->projects->settingsOf($version), $url, $media)
 			// Asked for as a download, so the link's activity notes it (story 124)
-			+ ['downloadUrl' => $canDownload ? $original . '?download=1' : null];
+			+ ['downloadUrl' => $download ? $original . '?download=1' : null];
 	}
 
 	private function mediaUrl(Version $version, string $kind): string {
@@ -416,8 +417,8 @@ class PublicApiController extends PublicShareController {
 	}
 
 	/** Without downloads, the original plays only while no Proxy is made for it */
-	private function mayPlayOriginal(Version $version, bool $canDownload): bool {
-		return $canDownload || in_array($version->getProxyState(), [DerivedMedia::STATE_NONE, DerivedMedia::STATE_FAILED], true);
+	private function mayPlayOriginal(Version $version, bool $download): bool {
+		return $download || in_array($version->getProxyState(), [DerivedMedia::STATE_NONE, DerivedMedia::STATE_FAILED], true);
 	}
 
 	/** Who is writing: a Member previewing the Version, the Reviewer this browser carries, or someone without a name yet */

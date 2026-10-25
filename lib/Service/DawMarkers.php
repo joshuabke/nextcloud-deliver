@@ -14,6 +14,8 @@ final class DawMarkers {
 	private const PPQ = 960;
 	/** 120 BPM, so a second is exactly two quarter notes */
 	private const MICROSECONDS_PER_QUARTER = 500000;
+	/** What an uploaded Live Set may unpack to; a real one is a few MB of XML */
+	private const MAX_LIVE_SET_BYTES = 100 * 1024 * 1024;
 
 	/**
 	 * Seconds from the session start to a Frame of the Version.
@@ -145,9 +147,9 @@ final class DawMarkers {
 	 * @throws InvalidRequestException the upload is no Live Set Deliver can read
 	 */
 	public static function ableton(string $set, array $clip, array $markers): string {
-		$xml = @gzdecode($set);
+		$xml = @gzdecode($set, self::MAX_LIVE_SET_BYTES);
 		if ($xml === false || !str_contains($xml, '<LiveSet')) {
-			throw new InvalidRequestException('This is not an Ableton Live Set (.als)');
+			throw new InvalidRequestException('This is not an Ableton Live Set (.als), or one over 100 MB unpacked');
 		}
 		if (preg_match('/<Tempo>.*?<Manual Value="([\d.]+)"/s', $xml, $tempo) !== 1) {
 			throw new InvalidRequestException('The Live Set has no tempo Deliver could find');

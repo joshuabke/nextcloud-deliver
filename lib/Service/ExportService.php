@@ -76,7 +76,7 @@ class ExportService {
 		[$mime, $ending] = self::FORMATS[$format];
 		$file = ['name' => $title . $ending, 'mime' => $mime];
 		if ($format === 'wav') {
-			return $file + ['path' => $this->wav->render($this->fileOf($version), $clip, $markers)];
+			return $file + ['path' => $this->wav->render($this->fileOf($viewer, $version), $clip, $markers)];
 		}
 		return $file + ['body' => match ($format) {
 			'edl' => self::edl($clip, $markers),
@@ -89,11 +89,19 @@ class ExportService {
 		}];
 	}
 
-	/** @throws ProjectConflictException the Version's file is gone */
-	private function fileOf(Version $version): File {
-		$file = $this->root->getFirstNodeById($version->getFileId());
+	/**
+	 * The Version's file as the Member reaches it, for an export that copies its audio
+	 *
+	 * @throws ProjectConflictException the Version's file is gone
+	 * @throws AccessDeniedException the Member may view the file but not download it
+	 */
+	private function fileOf(Viewer $viewer, Version $version): File {
+		$file = $this->root->getUserFolder((string)$viewer->uid)->getFirstNodeById($version->getFileId());
 		if (!$file instanceof File) {
 			throw new ProjectConflictException('The file of this Version is gone');
+		}
+		if (!ProjectService::downloadable($file)) {
+			throw new AccessDeniedException('This file may be viewed but not downloaded, and a WAV with markers is a copy of it');
 		}
 		return $file;
 	}
@@ -360,9 +368,9 @@ class ExportService {
 				$marker['out'] ?? '',
 				self::tc($clip, $marker['in']),
 				$marker['out'] === null ? '' : self::tc($clip, $marker['out']),
-				$marker['author'],
-				$marker['body'],
-				implode("\n", array_map(static fn (array $reply) => $reply['author'] . ': ' . $reply['body'], $marker['replies'])),
+				self::cell($marker['author']),
+				self::cell($marker['body']),
+				self::cell(implode("\n", array_map(static fn (array $reply) => $reply['author'] . ': ' . $reply['body'], $marker['replies']))),
 				$marker['resolved'] ? 'yes' : 'no',
 			], ',', '"', '');
 		}
@@ -370,6 +378,14 @@ class ExportService {
 		$csv = (string)stream_get_contents($handle);
 		fclose($handle);
 		return $csv;
+	}
+
+	/**
+	 * A cell a spreadsheet would read as a formula starts with an apostrophe
+	 * instead, so that no Comment or Reviewer name runs as one when the CSV is opened
+	 */
+	public static function cell(string $text): string {
+		return preg_match('/^[=+\-@\t\r]/', $text) === 1 ? "'" . $text : $text;
 	}
 
 	private static function oneLine(string $text): string {

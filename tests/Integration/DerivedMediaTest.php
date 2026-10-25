@@ -227,6 +227,30 @@ class DerivedMediaTest extends TestCase {
 		}
 	}
 
+	public function testDerivedMediaStaysClosedWhereNextcloudHidesTheContent(): void {
+		$version = $this->processedVersion();
+		$user = 'deliver-viewer-' . bin2hex(random_bytes(4));
+		$password = 'Viewer-' . bin2hex(random_bytes(8));
+		$this->nc->ocsForm('POST', '/ocs/v2.php/cloud/users', ['userid' => $user, 'password' => $password]);
+		try {
+			$shared = $this->nc->ocsForm('POST', '/ocs/v2.php/apps/files_sharing/api/v1/shares', [
+				'path' => "/{$this->root}/master.mov", 'shareType' => 0, 'shareWith' => $user, 'permissions' => 1,
+				'attributes' => json_encode([['scope' => 'permissions', 'key' => 'download', 'value' => false]]),
+			]);
+			self::assertSame(200, $shared['status'], json_encode($shared['data']));
+			$viewer = $this->nc->withUser($user, $password);
+			self::assertSame(200, $viewer->request('GET', $version['derived']['proxy']['url'])['status'], 'viewing without download is allowed unless the admin says otherwise');
+
+			// Through the API, as occ would miss the web server's cache of it
+			$switch = '/ocs/v2.php/apps/provisioning_api/api/v1/config/apps/core/shareapi_allow_view_without_download';
+			self::assertSame(200, $this->nc->ocsForm('POST', $switch, ['value' => 'false'])['status']);
+			self::assertSame(404, $viewer->request('GET', $version['derived']['proxy']['url'])['status'], 'the Proxy shows the content Nextcloud hides');
+		} finally {
+			$this->nc->ocsForm('POST', '/ocs/v2.php/apps/provisioning_api/api/v1/config/apps/core/shareapi_allow_view_without_download', ['value' => 'true']);
+			$this->nc->ocsForm('DELETE', "/ocs/v2.php/cloud/users/$user");
+		}
+	}
+
 	public function testALargeOriginalStaysTheDefaultAndGetsALighterProxy(): void {
 		self::assertSame(400, $this->nc->ocs('PUT', '/admin/settings', ['maxHeight' => 719])['status'], 'no Proxy below 720p');
 		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['maxHeight' => 720])['status']);

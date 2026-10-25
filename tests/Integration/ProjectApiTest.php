@@ -270,6 +270,8 @@ class ProjectApiTest extends TestCase {
 		$this->nc->put("{$this->root}/scenes/intro.mov", 'not really a video');
 		$this->nc->put("{$this->root}/scenes/voiceover.wav", 'not really audio');
 		$this->nc->put("{$this->root}/notes.txt", 'not media at all');
+		// Nextcloud files a playlist under audio, but it only points at other files
+		$this->nc->put("{$this->root}/scenes/takes.m3u8", "#EXTM3U\nvoiceover.wav\n");
 		$folderId = $this->nc->fileId($this->root);
 
 		self::assertSame(404, $this->nc->ocs('GET', "/folders/$folderId/project")['status'], 'a plain folder is no Project');

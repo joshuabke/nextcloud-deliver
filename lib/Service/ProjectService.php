@@ -23,7 +23,9 @@ use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;
 use OCP\Files\NotFoundException;
+use OCP\Files\Storage\ISharedStorage;
 use OCP\IURLGenerator;
+use OCP\Share\IShare;
 
 /**
  * Projects and their Assets as a Member sees them (ADR 0009). A Project is a
@@ -386,6 +388,20 @@ class ProjectService {
 	}
 
 	/**
+	 * A Version whose derived media the Member may see: not where Nextcloud
+	 * hides the content of the share they reach its file through.
+	 *
+	 * @throws NotFoundException the Version is gone, out of reach, or its content hidden from them
+	 */
+	public function contentOf(string $uid, int $versionId): Version {
+		[$version, $file] = $this->reachVersion($uid, $versionId);
+		if ($file !== null && !self::viewable($file)) {
+			throw new NotFoundException('Version not found');
+		}
+		return $version;
+	}
+
+	/**
 	 * Sets the Version Number, or clears the undo mark of an automatic stack
 	 * (stories 13 and 15).
 	 *
@@ -436,6 +452,10 @@ class ProjectService {
 		$file = $home->getFirstNodeById($version->getFileId());
 		if ($file instanceof File) {
 			return [$version, $file, $this->canWrite($file)];
+		}
+		// A file that is there but not theirs stays closed; only a Missing Version has no file to ask
+		if ($version->getState() === Version::STATE_READY) {
+			throw new NotFoundException('Version not found');
 		}
 		foreach ($this->versions->findByAsset($version->getAssetId()) as $sibling) {
 			$other = $home->getFirstNodeById($sibling->getFileId());
@@ -809,6 +829,26 @@ class ProjectService {
 		return ($node->getPermissions() & Constants::PERMISSION_UPDATE) !== 0;
 	}
 
+	/** Whether the file may leave as a file: a share can allow viewing but not downloading, as Files' own view-only check reads it */
+	public static function downloadable(Node $node): bool {
+		return self::shareOf($node)?->canDownload() ?? true;
+	}
+
+	/** Whether its content may be seen at all: where an admin allows no viewing without download, a share without downloads hides it, as WebDAV and previews do */
+	public static function viewable(Node $node): bool {
+		return self::shareOf($node)?->canSeeContent() ?? true;
+	}
+
+	/** The share the user reaches the node through; null for their own files */
+	private static function shareOf(Node $node): ?IShare {
+		$storage = $node->getStorage();
+		if (!$storage->instanceOfStorage(ISharedStorage::class)) {
+			return null;
+		}
+		/** @var ISharedStorage $storage */
+		return $storage->getShare();
+	}
+
 	/** @throws AccessDeniedException the node is read-only for this user */
 	public static function assertWritable(Node $node): void {
 		if (!self::canWrite($node)) {
@@ -908,7 +948,7 @@ class ProjectService {
 	 * this Member can open their files; a Missing Version comes along with
 	 * the rest of its Stack.
 	 *
-	 * @return array{0: array<int, non-empty-list<Version>>, 1: list<int>, 2: array<int, File>} the Stacks by Asset id, newest Version first; all their Version ids; the files this Member opens, by Version id
+	 * @return array{0: array<int, non-empty-list<Version>>, 1: list<int>, 2: array<int, File>, 3: array<int, Version>} the Stacks by Asset id, newest Version first; all their Version ids; the files this Member opens, by Version id; each Asset's newest Version, shown or not
 	 */
 	private function visibleStacks(?Project $project, string $uid, Folder $home): array {
 		$versions = $project === null
@@ -938,7 +978,7 @@ class ProjectService {
 				array_push($versionIds, ...array_map(static fn (Version $version) => $version->getId(), $shown));
 			}
 		}
-		return [$versionsByAsset, $versionIds, $files];
+		return [$versionsByAsset, $versionIds, $files, array_map(static fn (array $stack) => $stack[0], $byAsset)];
 	}
 
 	/**
@@ -946,11 +986,11 @@ class ProjectService {
 	 * relative to a Folder Project's folder for files inside it, and from the
 	 * Member's home with a leading slash for every other file.
 	 *
-	 * @param array{0: array<int, non-empty-list<Version>>, 1: list<int>, 2: array<int, File>} $stacks
+	 * @param array{0: array<int, non-empty-list<Version>>, 1: list<int>, 2: array<int, File>, 3: array<int, Version>} $stacks
 	 * @return list<array<string, mixed>>
 	 */
 	private function assetTree(array $stacks, ?Folder $folder, Folder $home, string $uid): array {
-		[$versionsByAsset, $versionIds, $files] = $stacks;
+		[$versionsByAsset, $versionIds, $files, $newestByAsset] = $stacks;
 		$commentCounts = $this->comments->countByVersions($versionIds);
 		$approvalCounts = $this->approvals->countByVersions($versionIds);
 		$unseen = $this->comments->countUnseenByVersions($versionIds, $uid);
@@ -960,12 +1000,10 @@ class ProjectService {
 			$stack = $versionsByAsset[$asset->getId()];
 			$versions = [];
 			$path = null;
-			$canWrite = false;
 			foreach ($stack as $version) {
 				$file = $files[$version->getId()] ?? null;
 				if ($file !== null && $path === null) {
 					$path = $this->pathOf($file, $folder, $home);
-					$canWrite = $this->canWrite($file);
 				}
 				$versions[] = [
 					'id' => $version->getId(),
@@ -1001,13 +1039,7 @@ class ProjectService {
 					) || ($version->getPlayable() === null && $version->getDerivedError() !== null),
 				];
 			}
-			if ($path === null) {
-				// Every file is Missing: who manages the Project manages the Asset, as in its own view
-				try {
-					$canWrite = $this->reachVersion($uid, $stack[0]->getId())[2];
-				} catch (NotFoundException) {
-				}
-			}
+			$canWrite = $this->managesAsset($uid, $newestByAsset[$asset->getId()], $files);
 			$result[] = [
 				'id' => $asset->getId(),
 				'name' => $this->stacks->nameOf($asset),
@@ -1029,6 +1061,25 @@ class ProjectService {
 		return $result;
 	}
 
+	/**
+	 * Managing an Asset takes its newest Version, as writableAsset does: a
+	 * Member of an older one alone only reads it, and where the newest file is
+	 * Missing, who manages the Project manages the Asset, as in its own view.
+	 *
+	 * @param array<int, File> $files the files this Member opens, by Version id
+	 */
+	private function managesAsset(string $uid, Version $newest, array $files): bool {
+		$file = $files[$newest->getId()] ?? null;
+		if ($file !== null || $newest->getState() === Version::STATE_READY) {
+			return $file !== null && self::canWrite($file);
+		}
+		try {
+			return $this->reachVersion($uid, $newest->getId())[2];
+		} catch (NotFoundException) {
+			return false;
+		}
+	}
+
 	private function pathOf(File $file, ?Folder $folder, Folder $home): string {
 		$dir = dirname($file->getPath());
 		if ($folder !== null && ($dir === $folder->getPath() || str_starts_with($dir, $folder->getPath() . '/'))) {
@@ -1042,7 +1093,7 @@ class ProjectService {
 	 * Unseen Comments, what waits for changes, the next Due Date, the latest
 	 * activity and the newest video for a picture.
 	 *
-	 * @param array{0: array<int, non-empty-list<Version>>, 1: list<int>, 2: array<int, File>} $stacks
+	 * @param array{0: array<int, non-empty-list<Version>>, 1: list<int>, 2: array<int, File>, 3: array<int, Version>} $stacks
 	 * @return array<string, mixed>
 	 */
 	private function activity(?Project $project, array $stacks, string $uid): array {

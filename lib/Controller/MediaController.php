@@ -33,7 +33,7 @@ class MediaController extends Controller {
 	#[NoCSRFRequired]
 	public function show(int $id, string $kind): Response {
 		try {
-			[, $version] = $this->projects->viewerForVersion((string)$this->userId, $id);
+			$version = $this->projects->contentOf((string)$this->userId, $id);
 			// Not generated (yet) is a 404 as well; the player falls back to the original
 			return RangeFileResponse::ofSimpleFile($this->media->file($version, $kind), $this->request->getHeader('Range'));
 		} catch (NotFoundException) {

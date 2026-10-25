@@ -33,7 +33,7 @@ class Probe {
 			'-print_format', 'json',
 			'-show_format',
 			'-show_streams',
-			$path,
+			...Ffmpeg::input($path),
 		], 120);
 		if ($result['code'] !== 0) {
 			$read = $this->container->read($path);

@@ -97,13 +97,15 @@ class PublicController extends AuthPublicShareController {
 			$this->initialState->provideInitialState('versionId', $version->getId());
 		}
 		// For the landing page of a link with several Assets (stories 123, 125)
-		$flags = $this->links->flagsFor($link, $reviewer);
 		$this->initialState->provideInitialState('link', [
 			'title' => $link->title(),
 			'description' => $link->description(),
 			// What the Reviewer's menu shows, not their key
 			'reviewer' => $reviewer === null ? null : ['id' => $reviewer->getId(), 'name' => $reviewer->getName(), 'email' => $reviewer->getEmail(), 'mail' => $reviewer->mailWishes()],
-			'downloadAll' => $flags['canDownload'] ? $this->urls->linkToRoute('deliver.PublicApi.download', ['token' => $this->getToken()]) : null,
+			// Only where something on it downloads: a share without downloads stays out of the ZIP
+			'downloadAll' => array_filter(array_column(array_column($link->assets(), 'versions'), 0), $link->downloadable(...)) !== []
+				? $this->urls->linkToRoute('deliver.PublicApi.download', ['token' => $this->getToken()])
+				: null,
 			// The landing of a Member's preview leads into the app; in the player, the context of each Version does (story 59)
 			'memberUrl' => $member && $version === null ? $this->urls->linkToRoute('deliver.page.index') : null,
 		]);

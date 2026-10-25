@@ -92,4 +92,11 @@ class ExportTest extends TestCase {
 		self::assertSame(['10', '', '01:00:00:10', '', 'Mara', 'logo | too small', '', 'yes'], $rows[1]);
 		self::assertSame(['50', '74', '01:00:02:00', '01:00:02:24', 'Mara', "longer\nplease", 'Jo: agreed', 'no'], $rows[2]);
 	}
+
+	public function testCsvCellsNeverStartAFormula(): void {
+		$marker = ['in' => 0, 'out' => null, 'author' => '=1+1', 'body' => '@SUM(A1)', 'resolved' => false, 'replies' => [['author' => '+Jo', 'body' => 'yes']]];
+		$row = str_getcsv(explode("\n", ExportService::csv(self::CLIP, [$marker]))[1], ',', '"', '');
+		self::assertSame(["'=1+1", "'@SUM(A1)", "'+Jo: yes"], array_slice($row, 4, 3));
+		self::assertSame('logo | too small', ExportService::cell('logo | too small'), 'other text stays as it is');
+	}
 }

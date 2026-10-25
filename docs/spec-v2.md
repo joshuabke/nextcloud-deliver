@@ -137,7 +137,7 @@ After 0.2.0 the feature set grows to what a hosted review tool offers (FreeFrame
 89. As a Member or Reviewer, I want to draw on the Frame I comment on (pen, arrow, box) and see the drawing whenever the player stands on that Comment, so that "this logo" needs no description.
 90. As a Member, I want to @mention another Member in a Comment and have them notified, so that the right person sees it.
 91. As a Member or Reviewer, I want to react to a Comment with an emoji, so that agreement costs no Reply.
-92. As a Member or Reviewer who may comment, I want to attach a file to a Comment, so that a reference picture or a document travels with the feedback.
+92. As a Member or Reviewer who may comment, I want to attach a file to a Comment, up to five per Comment and 20 MB of mine on a Version in all unless the admin sets another limit, so that a reference picture or a document travels with the feedback.
 93. As a Member with write access, I want to set a Due Date on an Asset and have Members reminded the day before and on the day, so that deadlines stay visible.
 94. As a Member with write access, I want a Review Link to show a Watermark with the Reviewer's name over the picture, so that a leaked screen recording names its source.
 95. As a Member or Reviewer, I want images to be Assets with Comments, drawings, Versions and comparison, so that stills and design frames get the same review.
@@ -246,7 +246,7 @@ Files is the source of truth (ADR 0002). Deliver's tables hold only review state
 - **Project mute**: per user id per project, or for No Project.
 - **Job**: kind (probe, proxy, thumbnails, waveform), version id, state, progress, attempts, stderr tail, timestamps. One table for background jobs and the optional worker; designed so an external worker can claim rows later without a schema change (ADR 0003).
 
-File identity is always the Nextcloud file id, so renames and moves are free and never change a Version's Project. A move to trash sets the Version to Missing and notifies; permanent deletion purges Version and Comments. A Folder Project whose folder is deleted becomes a plain Project. Attachments live in app data under the Comment.
+File identity is always the Nextcloud file id, so renames and moves are free and never change a Version's Project. A move to trash sets the Version to Missing and notifies; permanent deletion purges Version and Comments. A Folder Project whose folder is deleted becomes a plain Project. Attachments live in app data under the Comment; one person's on one Version add up to the admin's limit (20 MB unless changed), counted with the new file in, so that uploads at the same moment cannot pass it together.
 
 Nextcloud hands a deleted account's user id to the next account created under it, so a deleted account leaves nothing tied to its id: a Folder Project it made passes to whoever owns the folder, any other Project it made is removed as by its maker, its Review Links go and its Reviewers are removed, and its Comments, Approvals and Reactions stay, by a Deleted user that nobody can edit. A removed Reviewer stays removed.
 
@@ -268,7 +268,7 @@ Nextcloud hands a deleted account's user id to the next account created under it
 - Failed Processing is started again per Version by a Member with write access to its file through the regeneration of story 80 (`POST /versions/{id}/regenerate`, which also clears the failed jobs); without ffmpeg there is nothing to retry. Whether the server has ffmpeg reaches the app page as initial state, for the formats in the Uploads dialog.
 - Storage in `appdata_deliver/<version id>/`. Served through a range-capable streaming endpoint for both Members and Reviewers.
 - Jobs run in Nextcloud's background job system, one ffmpeg at a time by default, with the optional `occ deliver:worker` loop and `occ deliver:regenerate`.
-- Admin settings: ffmpeg path, ffprobe path, max parallel jobs, max resolution, thumbnail cap, hardware encoder with device path (probed on save), extra ffmpeg args, plus a read-only status panel.
+- Admin settings: ffmpeg path, ffprobe path, max parallel jobs, max resolution, thumbnail cap, hardware encoder with device path (probed on save), extra ffmpeg args, the default place for Project folders, the attachment limit per person and Version, plus a read-only status panel. A save checks every value before it stores any.
 
 ### Takes
 
@@ -287,7 +287,7 @@ Nextcloud hands a deleted account's user id to the next account created under it
 - Write on the file: everything above plus invite Reviewers, enable and disable files, assign them to a Project, stack and unstack (write on both files), set Version Numbers, override metadata, resolve and unresolve, delete any Comment, regenerate derived media, export.
 - Review Links: a Member makes them on a Project they see, or on No Project; a link shows only files its Member may reshare (ADR 0010), and only that Member changes or deletes it.
 - A Folder Project's name follows its folder and its settings follow write access to the folder; any other Project's name, settings and removal belong to the Member who made it.
-- Reviewer (through a live Review Link): view, comment and reply when the link allows, edit and delete own (with the same rule for Comments others replied to), download the original unless the link hides downloads. Never resolve, never see Assets the link does not show.
+- Reviewer (through a live Review Link): view, comment and reply when the link allows, edit and delete own (with the same rule for Comments others replied to), download the original unless the link hides downloads, which hides the download buttons and the ZIP while the original still plays where no Proxy is made. A file the Member may only view in Files (a share without downloads) is never a download on their links either, as Nextcloud keeps it out of their reshares; where the admin allows no viewing without download, it is not on their links at all and its derived media stays closed to them, as Nextcloud hides its content. Never resolve, never see Assets the link does not show.
 - Deliver never enforces a password of its own: it points out a review link without one, and an admin who wants the rule enforces it with Nextcloud's password policy, which applies to the passwords of Review Links as to Nextcloud's own.
 - Sharing in Files makes an ordinary Nextcloud link: Deliver adds nothing to it, no Comments, no reviewer session (ADR 0011).
 - A logged-in non-Member opening a Review Link becomes a Reviewer with the display name prefilled. A Member of a Version's file previews it on the link read only, as Reviewers see it, never as a Reviewer whose key the browser carries and without counting in the link's activity, with the way into the app view (story 59); Versions whose files they cannot open they review as a Reviewer.
@@ -341,7 +341,7 @@ CI runs php-cs-fixer, psalm, PHPUnit (unit and integration), Vitest and Playwrig
 - Digest emails.
 - Frame.io's project furniture: workspaces and roles of Deliver's own, metadata fields (status, assignee, rating, keywords), cover images, and folder management inside Deliver. Nextcloud sharing and Files do those; Approvals and Due Dates carry the status.
 - PDFs as Assets.
-- Watermarks burned into the picture (the Watermark is an overlay in the player).
+- Watermarks burned into the picture (the Watermark is an overlay in the player, and the link's settings say so).
 - Adaptive streaming, multiple Proxy renditions, 4K Proxies.
 - On phones: comparing Versions, Exports, managing Version Stacks and upload by drag and drop; they stay on larger screens.
 - External or GPU-farm transcoding workers over HTTP (job table is ready for it).
