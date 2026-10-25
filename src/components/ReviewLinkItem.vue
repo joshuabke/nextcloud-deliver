@@ -29,6 +29,8 @@ const props = defineProps({
 	inDialog: { type: Boolean, default: false },
 	/** The Project's Reviewers, to suggest and to recognise by address when inviting */
 	people: { type: Array, required: true },
+	/** Whether this Nextcloud sends mail (story 66) */
+	canMail: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['update', 'deleted'])
@@ -238,7 +240,7 @@ function invite() {
 			<p v-if="!link.hasPassword" class="deliver-link__hint">
 				{{ t('deliver', 'This link has no password. Anyone it reaches can review.') }}
 			</p>
-			<p v-if="link.canMail === false" class="deliver-link__hint">
+			<p v-if="!canMail" class="deliver-link__hint">
 				{{ t('deliver', 'This Nextcloud sends no email, so Reviewers are not mailed when someone replies to them.') }}
 			</p>
 			<div class="deliver-link__flags">
@@ -305,7 +307,7 @@ function invite() {
 					<p v-else-if="known" class="deliver-link__hint">
 						{{ t('deliver', '{name} reviews this Project already and gets this link too.', { name: known.name }) }}
 					</p>
-					<template v-if="email.trim() && link.canMail">
+					<template v-if="email.trim() && canMail">
 						<NcCheckboxRadioSwitch v-model="sendMail">
 							{{ t('deliver', 'Mail them their Personal Link') }}
 						</NcCheckboxRadioSwitch>
@@ -331,10 +333,9 @@ function invite() {
 		</p>
 		<PersonalLinkRightsDialog
 			v-if="rightsOf"
+			v-model:rights="rightsOf.rights"
 			:reviewer="rightsOf"
 			:link="{ ...link, title }"
-			:rights="rightsOf.rights"
-			@changed="(rights) => rightsOf.rights = rights"
 			@close="rightsOf = null" />
 	</div>
 </template>
