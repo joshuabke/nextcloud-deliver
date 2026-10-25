@@ -8,6 +8,7 @@
 - Leave playlists (M3U, PLS) out of review.
 - Refuse Ableton Live Sets that unpack to more than 100 MB.
 - Limit attachments to 20 MB per person and Version in all, adjustable in the admin settings.
+- Improve code readability.
 
 ### Fixed
 - Close a Version to Members who cannot open its file, also when they open another Version of its Stack.

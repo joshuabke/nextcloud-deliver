@@ -8,6 +8,7 @@
 - Playlists (M3U, PLS) vom Review ausgenommen.
 - Ableton Live Sets abgelehnt, die entpackt größer als 100 MB sind.
 - Anhänge auf zusammen 20 MB je Person und Version begrenzt, einstellbar in den Admin-Einstellungen.
+- Lesbarkeit des Codes verbessert.
 
 ### Behoben
 - Version für Mitglieder geschlossen, die ihre Datei nicht öffnen können, auch wenn sie eine andere Version des Stapels öffnen.
