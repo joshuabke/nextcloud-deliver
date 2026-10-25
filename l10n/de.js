@@ -123,7 +123,7 @@ OC.L10N.register(
 		"Invite a Reviewer": "Reviewer einladen",
 		"It goes on top of the Asset's Version Stack.": "Sie kommt oben auf den Versionsstapel des Assets.",
 		"It stops working for everyone who has it, Personal Links through it too. Comments stay.": "Er funktioniert für niemanden mehr, auch nicht als persönlicher Link. Die Kommentare bleiben erhalten.",
-		"Delete it with its Comments, Versions and Review Links, or keep its Assets with their Comments in No Project. The files stay untouched either way.": "Lösche es mit seinen Kommentaren, Versionen und Review-Links, oder behalte seine Assets mit ihren Kommentaren in „Ohne Projekt“. Die Dateien bleiben in jedem Fall unverändert.",
+		"Delete it with its Comments, Versions, Review Links and Reviewers, or keep its Assets with their Comments in No Project. The files stay untouched either way.": "Lösche es mit seinen Kommentaren, Versionen, Review-Links und Reviewern, oder behalte seine Assets mit ihren Kommentaren in „Ohne Projekt“. Die Dateien bleiben in jedem Fall unverändert.",
 		"Delete Project": "Projekt löschen",
 		"Keep in No Project": "In „Ohne Projekt“ behalten",
 		"Its Comments and Versions are deleted. The file itself stays untouched.": "Seine Kommentare und Versionen werden gelöscht. Die Datei selbst bleibt unberührt.",

@@ -194,14 +194,50 @@ class ReviewerMapper extends Mapper {
 		$qb->executeStatement();
 	}
 
-	/** Removes the Project's Reviewers, as a Member removes one; their Comments elsewhere keep their name */
-	public function removeOf(int $projectId, int $at): void {
+	/**
+	 * Deletes a Project's Reviewers with it (story 148). One whose Comments,
+	 * Reactions or Approvals live on in another Project, on an Asset moved
+	 * there, stays, removed, so that those keep their author's name.
+	 */
+	public function deleteByProject(int $projectId, int $at): void {
 		$qb = $this->db->getQueryBuilder();
-		$qb->update($this->getTableName())
-			->set('removed_at', $qb->createNamedParameter($at, IQueryBuilder::PARAM_INT))
-			->where($qb->expr()->eq('project_id', $qb->createNamedParameter($projectId, IQueryBuilder::PARAM_INT)))
-			->andWhere($qb->expr()->isNull('removed_at'))
-			->executeStatement();
+		$qb->select('id')->from($this->getTableName())
+			->where($qb->expr()->eq('project_id', $qb->createNamedParameter($projectId, IQueryBuilder::PARAM_INT)));
+		$ids = self::ids($qb);
+		$elsewhere = [];
+		foreach (array_chunk($ids, 1000) as $chunk) {
+			$this->deleteLinks($chunk);
+			foreach (['deliver_comments', 'deliver_reactions', 'deliver_approvals'] as $table) {
+				$qb = $this->db->getQueryBuilder();
+				$qb->selectDistinct('reviewer_id')->from($table)
+					->where($qb->expr()->in('reviewer_id', $qb->createNamedParameter($chunk, IQueryBuilder::PARAM_INT_ARRAY)));
+				$elsewhere = [...$elsewhere, ...self::ids($qb)];
+			}
+		}
+		foreach (array_chunk(array_values(array_diff($ids, $elsewhere)), 1000) as $chunk) {
+			foreach (['deliver_seen' => 'reviewer_id', $this->getTableName() => 'id'] as $table => $column) {
+				$qb = $this->db->getQueryBuilder();
+				$qb->delete($table)
+					->where($qb->expr()->in($column, $qb->createNamedParameter($chunk, IQueryBuilder::PARAM_INT_ARRAY)))
+					->executeStatement();
+			}
+		}
+		foreach (array_chunk(array_values(array_unique($elsewhere)), 1000) as $chunk) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->update($this->getTableName())
+				->set('removed_at', $qb->createNamedParameter($at, IQueryBuilder::PARAM_INT))
+				->where($qb->expr()->in('id', $qb->createNamedParameter($chunk, IQueryBuilder::PARAM_INT_ARRAY)))
+				->andWhere($qb->expr()->isNull('removed_at'))
+				->executeStatement();
+		}
+	}
+
+	/** @return list<int> the first column of what the query finds */
+	private static function ids(IQueryBuilder $qb): array {
+		$result = $qb->executeQuery();
+		$ids = array_map('intval', $result->fetchAll(\PDO::FETCH_COLUMN));
+		$result->closeCursor();
+		return $ids;
 	}
 
 	/** @param list<int> $reviewerIds */
