@@ -55,7 +55,7 @@ const emit = defineEmits(['change'])
 
 <style scoped>
 .deliver-link-rights__hint {
-	margin: 0 0 4px 44px;
+	margin: 0 0 4px 31px;
 	color: var(--color-text-maxcontrast);
 	font-size: var(--font-size-small, 13px);
 }
