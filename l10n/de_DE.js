@@ -215,6 +215,7 @@ OC.L10N.register(
 		"Pause": "Pause",
 		"Pause (Space)": "Pause (Leertaste)",
 		"Paused: the link shows nothing until you switch it on again.": "Pausiert: Der Link zeigt nichts, bis Sie ihn wieder einschalten.",
+		"Expired: the link shows nothing until you change or remove its expiry date.": "Abgelaufen: Der Link zeigt nichts, bis Sie sein Ablaufdatum ändern oder entfernen.",
 		"Pen": "Stift",
 		"Personal Link copied": "Persönlicher Link kopiert",
 		"Personal Link mailed to {email}": "Persönlicher Link an {email} geschickt",

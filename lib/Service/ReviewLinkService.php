@@ -24,6 +24,7 @@ class ReviewLinkService {
 		private ReviewLinkMapper $linkRecords,
 		private ProjectService $projects,
 		private AssetMapper $assets,
+		private StackService $stacks,
 		private ReviewLinks $reviewLinks,
 		private ISecureRandom $random,
 		private IHasher $hasher,
@@ -124,6 +125,9 @@ class ReviewLinkService {
 
 	public function serialize(ReviewLinkRecord $link): array {
 		$reviewLink = $this->reviewLinks->of($link);
+		$picked = $link->pickedAssets();
+		// Named only as the link shows it: an Asset the Member may not share stays out of it, name and all (ADR 0009)
+		$only = $picked !== null && count($picked) === 1 ? ($reviewLink->assets()[$picked[0]]['asset'] ?? null) : null;
 		return [
 			'id' => $link->getId(),
 			'kind' => 'project',
@@ -136,7 +140,9 @@ class ReviewLinkService {
 			'expireDate' => $link->getExpireDate(),
 			// Opens for Reviewers: not paused and not expired
 			'live' => $reviewLink->isLive(),
-			'assetIds' => $link->pickedAssets(),
+			'assetIds' => $picked,
+			// Its one Asset's name, which titles it (story 145)
+			'assetName' => $only === null ? null : $this->stacks->nameOf($only),
 			// Whether Reviewers can be mailed about Replies at all (story 66)
 			'canMail' => ReviewerMail::configured($this->config),
 		] + $reviewLink->flags();

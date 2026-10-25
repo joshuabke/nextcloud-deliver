@@ -83,7 +83,8 @@ class ReviewLinkTest extends TestCase {
 		$assets = $this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'];
 		$cut = array_column($assets, null, 'name')['cut'];
 		$teaser = array_column($assets, null, 'name')['teaser'];
-		self::assertSame([$cut['id']], $this->change($link['id'], ['assetIds' => [$cut['id']]])['assetIds']);
+		$picked = $this->change($link['id'], ['assetIds' => [$cut['id']]]);
+		self::assertSame([[$cut['id']], 'cut'], [$picked['assetIds'], $picked['assetName']], 'its one Asset names it, wherever it is listed');
 
 		$visitor = $this->visitor($link);
 		self::assertSame([$cut['id']], array_column($visitor->call('GET', '/api/assets')['data'], 'assetId'));
@@ -95,6 +96,7 @@ class ReviewLinkTest extends TestCase {
 		$this->change($link['id'], ['assetIds' => [$cut['id']]]);
 		self::assertNull($this->change($link['id'], ['assetIds' => []])['assetIds'], 'unpicking the last Asset is the whole Project again');
 		self::assertCount(2, $visitor->call('GET', '/api/assets')['data']);
+		self::assertNull($this->change($link['id'], ['assetIds' => [$cut['id'], $teaser['id']]])['assetName'], 'several are counted');
 	}
 
 	public function testPasswordExpiryAndPause(): void {

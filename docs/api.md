@@ -11,7 +11,7 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | PUT | `/projects/{id}` `{autoIntake, allowOlder, fpsNum, fpsDen, timecodeMode, name}` | Project settings, each field optional; `autoIntake` only for a Folder Project, `name` only for any other |
 | PUT | `/projects/{id}/mute` `{muted}` | Mute or unmute the Project's notifications for oneself; 0 mutes No Project |
 | DELETE | `/projects/{id}` | Remove the Project; its Assets go to No Project, files stay untouched |
-| GET | `/files/{fileId}/asset` | The Asset of a file with its Project, or 404; `assetName` titles a link that shows it alone; `waveformFromBrowser` says the browser that uploaded the audio should decode its Waveform and hand it in (no ffmpeg, no Waveform yet, no WAV) |
+| GET | `/files/{fileId}/asset` | The Asset of a file with its Project, or 404; `waveformFromBrowser` says the browser that uploaded the audio should decode its Waveform and hand it in (no ffmpeg, no Waveform yet, no WAV) |
 | POST | `/assets` `{fileId, projectId, assetId}` | Enable one media file for review: into the Project given, 0 for No Project, or without one the Folder Project above it, else No Project; with `assetId`, as the next Version of that Asset of the same kind of media, a file already in review moving over |
 | PUT | `/assets/{id}/project` `{projectId}` | Put an Asset into another Project, or 0 for No Project; no file moves |
 | DELETE | `/assets/{id}` | Take a file out of Deliver, the file stays |
@@ -35,7 +35,7 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | PUT | `/comments/{id}` `{body}` | Edit one's own Comment |
 | DELETE | `/comments/{id}` | Remove a Comment, with its Replies |
 | PUT | `/comments/{id}/resolved` `{resolved}` | Resolve or unresolve, needs write access |
-| GET | `/projects/{id}/links` | `{links, reviewers, canMail}`: my Review Links of the Project, or of No Project for id 0, each `live` when neither paused nor expired, and every Reviewer of mine on the Project, on a link or not, with `links`: for each link they are on, their own `rights` there and their Personal Link through it (`url`, null while the link is not live), and `inContacts` (null without an address) |
+| GET | `/projects/{id}/links` | `{links, reviewers, canMail}`: my Review Links of the Project, or of No Project for id 0, each `live` when neither paused nor expired and with `assetName` when it shows one Asset, and every Reviewer of mine on the Project, on a link or not, with `links`: for each link they are on, their own `rights` there and their Personal Link through it (`url`, null while the link is not live), and `inContacts` (null without an address) |
 | POST | `/projects/{id}/links` `{assetIds}` | A Review Link (ADRs 0010 and 0011), live and showing the whole Project, or only the Assets given; on No Project (id 0) `assetIds` is required |
 | POST | `/projects/{id}/invitations` `{name, email, sendMail, message, assetIds, canComment, allowOlder, watermark, canDownload, latestOnly}` | Invite one person on a Review Link of their own, the whole Project or the Assets given (required on No Project); `{link, reviewer}` with the `key` of their Personal Link through it; the new link is live, and none is left when the invitation is refused |
 | PUT | `/links/{id}` `{review, canComment, allowOlder, watermark, canDownload, latestOnly, label, description, password, expireDate, assetIds}` | Change a Review Link; `''` removes password, expiry or description, `assetIds: null` shows the whole Project again (not on No Project); `review: false` pauses it |

@@ -65,7 +65,7 @@ const byId = computed(() => new Map(reviewers.value.map((reviewer) => [reviewer.
 async function load(id = props.id) {
 	const found = await listReviewLinks(id).catch(() => ({ links: [], reviewers: [] }))
 	if (props.id === id) {
-		links.value = found.links.map((link) => ({ ...link, title: linkTitle(link, project.value?.assets ?? []) }))
+		links.value = found.links.map((link) => ({ ...link, title: linkTitle(link) }))
 		reviewers.value = found.reviewers
 		canMail.value = found.canMail
 		person.value = person.value && (byId.value.get(person.value.id) ?? null)
