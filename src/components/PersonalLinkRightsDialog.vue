@@ -18,7 +18,7 @@ const props = defineProps({
 	/** {canComment, allowOlder, watermark}, null where the link decides */
 	rights: { type: Object, required: true },
 })
-const emit = defineEmits(['changed', 'close'])
+const emit = defineEmits(['update:rights', 'close'])
 
 const RIGHTS = [
 	{ id: 'canComment', label: t('deliver', 'Comment') },
@@ -59,7 +59,7 @@ function radio(value) {
 function set(right, value) {
 	return run(async () => {
 		own.value = await setReviewerRights(props.reviewer.id, props.link.token, { ...own.value, [right]: value })
-		emit('changed', own.value)
+		emit('update:rights', own.value)
 	})
 }
 </script>

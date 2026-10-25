@@ -11,7 +11,6 @@ use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\EventDispatcher\IEventDispatcher;
 use OCP\Files\NotFoundException;
 use OCP\HintException;
-use OCP\IConfig;
 use OCP\Security\Events\ValidatePasswordPolicyEvent;
 use OCP\Security\IHasher;
 use OCP\Security\ISecureRandom;
@@ -30,7 +29,6 @@ class ReviewLinkService {
 		private IHasher $hasher,
 		private IEventDispatcher $events,
 		private ITimeFactory $time,
-		private IConfig $config,
 	) {
 	}
 
@@ -143,8 +141,6 @@ class ReviewLinkService {
 			'assetIds' => $picked,
 			// Its one Asset's name, which titles it (story 145)
 			'assetName' => $only === null ? null : $this->stacks->nameOf($only),
-			// Whether Reviewers can be mailed about Replies at all (story 66)
-			'canMail' => ReviewerMail::configured($this->config),
 		] + $reviewLink->flags();
 	}
 

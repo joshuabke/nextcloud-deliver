@@ -14,6 +14,8 @@ const props = defineProps({
 	link: { type: Object, required: true },
 	/** The Project's Assets, or those of No Project, to pick from */
 	assets: { type: Array, default: () => [] },
+	/** Whether this Nextcloud sends mail */
+	canMail: { type: Boolean, default: false },
 	/** The Project's Reviewers, for inviting on this link */
 	people: { type: Array, required: true },
 })
@@ -51,6 +53,7 @@ async function pick(assetIds) {
 			ref="item"
 			:link="link"
 			:people="people"
+			:canMail="canMail"
 			inDialog
 			@update="emit('update', $event)"
 			@deleted="emit('deleted')" />

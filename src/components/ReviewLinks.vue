@@ -17,6 +17,7 @@ const props = defineProps({
 const links = ref([])
 /** The Project's Reviewers, for inviting on a link */
 const reviewers = ref([])
+const canMail = ref(false)
 const { busy, error, run } = useBusy()
 
 /**
@@ -33,6 +34,7 @@ watch(() => [props.projectId, props.assetId], ([projectId, assetId]) => {
 		if (props.projectId === projectId && props.assetId === assetId) {
 			links.value = found.links.filter(shows)
 			reviewers.value = found.reviewers
+			canMail.value = found.canMail
 		}
 	})
 }, { immediate: true })
@@ -69,6 +71,7 @@ function drop(id) {
 			:key="link.id"
 			:link="link"
 			:people="reviewers"
+			:canMail="canMail"
 			@update="replace"
 			@deleted="drop" />
 		<p v-if="error" class="deliver-links__error">

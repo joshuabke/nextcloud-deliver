@@ -52,7 +52,9 @@ class ReviewLinkApiController extends OCSController {
 			$uid = (string)$this->userId;
 			$links = $this->linkService->listFor($uid, $id);
 			$live = array_filter($links, static fn (array $link) => $link['live']);
-			['reviewers' => $reviewers, 'on' => $on] = $this->links->reviewersBy($uid, $id === ProjectService::NONE ? null : $id, array_column($links, 'token'), array_column($live, 'url', 'token'));
+			$ofProject = $this->reviewers->ofProject($uid, $id === ProjectService::NONE ? null : $id);
+			$this->contacts->checkContacts($ofProject);
+			['reviewers' => $reviewers, 'on' => $on] = $this->links->reviewersBy($ofProject, array_column($links, 'token'), array_column($live, 'url', 'token'));
 			return [
 				'links' => array_map(static fn (array $link) => $link + ['reviewerIds' => $on[$link['token']] ?? []], $links),
 				'reviewers' => $reviewers,

@@ -4,17 +4,24 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Db;
 
+use OCA\Deliver\Service\ReviewLink;
 use OCP\DB\Exception as DbException;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 
-/** @template-extends Mapper<Reviewer> */
+/**
+ * @template-extends Mapper<Reviewer>
+ * @psalm-type Rights = array{canComment: ?bool, allowOlder: ?bool, watermark: ?bool}
+ * @psalm-type Place = array{key: string, rights: Rights}
+ */
 class ReviewerMapper extends Mapper {
-	/** The rights a Reviewer can have of their own on a link, over the link's (ADR 0014) */
-	private const RIGHTS = ['canComment' => 'can_comment', 'allowOlder' => 'allow_older', 'watermark' => 'watermark'];
-
 	public function __construct(IDBConnection $db) {
 		parent::__construct($db, 'deliver_reviewers', Reviewer::class);
+	}
+
+	/** @return array<string, string> each of a Reviewer's own rights on a link with its column: canComment, can_comment (ADR 0014) */
+	private static function rights(): array {
+		return array_combine(ReviewLink::OWN_RIGHTS, array_map(static fn (string $right) => strtolower((string)preg_replace('/[A-Z]/', '_$0', $right)), ReviewLink::OWN_RIGHTS));
 	}
 
 	/** The Reviewer whose Personal Link through this link carries this key; removed ones never */
@@ -71,27 +78,38 @@ class ReviewerMapper extends Mapper {
 
 	/** The key of the Reviewer's Personal Link through this link, null when they are not on it */
 	public function keyOn(int $reviewerId, string $token): ?string {
-		return $this->keysByLink([$reviewerId])[$reviewerId][$token] ?? null;
+		return $this->placesOfReviewer($reviewerId)[$token]['key'] ?? null;
 	}
 
 	/**
+	 * Where the Reviewers are: each link they are on, with the key of their
+	 * Personal Link through it and their own rights there (ADR 0014)
+	 *
 	 * @param list<int> $reviewerIds
-	 * @return array<int, array<string, string>> reviewer id → token → the key of their Personal Link through it
+	 * @return array<int, array<string, Place>> reviewer id → token → their place on it
 	 */
-	public function keysByLink(array $reviewerIds): array {
+	public function placesOf(array $reviewerIds): array {
 		if ($reviewerIds === []) {
 			return [];
 		}
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('reviewer_id', 'token', 'secret_key')->from('deliver_reviewer_links')
+		$qb->select('reviewer_id', 'token', 'secret_key', ...array_values(self::rights()))->from('deliver_reviewer_links')
 			->where($qb->expr()->in('reviewer_id', $qb->createNamedParameter($reviewerIds, IQueryBuilder::PARAM_INT_ARRAY)));
 		$result = $qb->executeQuery();
-		$keys = [];
+		$places = [];
 		foreach ($result->fetchAll() as $row) {
-			$keys[(int)$row['reviewer_id']][(string)$row['token']] = (string)$row['secret_key'];
+			$places[(int)$row['reviewer_id']][(string)$row['token']] = [
+				'key' => (string)$row['secret_key'],
+				'rights' => array_map(static fn (string $column) => $row[$column] === null ? null : (bool)$row[$column], self::rights()),
+			];
 		}
 		$result->closeCursor();
-		return $keys;
+		return $places;
+	}
+
+	/** @return array<string, Place> token → their place, for each link the Reviewer is on */
+	public function placesOfReviewer(int $reviewerId): array {
+		return $this->placesOf([$reviewerId])[$reviewerId] ?? [];
 	}
 
 	/** A new key for the Reviewer's Personal Link through this link */
@@ -111,26 +129,6 @@ class ReviewerMapper extends Mapper {
 			->where($qb->expr()->eq('reviewer_id', $qb->createNamedParameter($reviewerId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('token', $qb->createNamedParameter($token)))
 			->executeStatement();
-	}
-
-	/**
-	 * @param list<int> $reviewerIds
-	 * @return array<string, list<int>> link token → the Reviewers on it
-	 */
-	public function reviewersByLink(array $reviewerIds): array {
-		if ($reviewerIds === []) {
-			return [];
-		}
-		$qb = $this->db->getQueryBuilder();
-		$qb->select('reviewer_id', 'token')->from('deliver_reviewer_links')
-			->where($qb->expr()->in('reviewer_id', $qb->createNamedParameter($reviewerIds, IQueryBuilder::PARAM_INT_ARRAY)));
-		$result = $qb->executeQuery();
-		$byLink = [];
-		foreach ($result->fetchAll() as $row) {
-			$byLink[(string)$row['token']][] = (int)$row['reviewer_id'];
-		}
-		$result->closeCursor();
-		return $byLink;
 	}
 
 	/** @return Reviewer[] the Member's Reviewers with this address, whatever its case; removed ones left out */
@@ -174,46 +172,23 @@ class ReviewerMapper extends Mapper {
 		return $names;
 	}
 
-	/**
-	 * @param list<int> $reviewerIds
-	 * @return array<int, array<string, array{canComment: ?bool, allowOlder: ?bool, watermark: ?bool}>> reviewer id → token → their own rights there, for the links they are on
-	 */
-	public function rightsByLink(array $reviewerIds): array {
-		if ($reviewerIds === []) {
-			return [];
-		}
-		$qb = $this->db->getQueryBuilder();
-		$qb->select('reviewer_id', 'token', ...array_values(self::RIGHTS))->from('deliver_reviewer_links')
-			->where($qb->expr()->in('reviewer_id', $qb->createNamedParameter($reviewerIds, IQueryBuilder::PARAM_INT_ARRAY)));
-		$result = $qb->executeQuery();
-		$rights = [];
-		foreach ($result->fetchAll() as $row) {
-			$rights[(int)$row['reviewer_id']][(string)$row['token']] = array_map(
-				static fn (string $column) => $row[$column] === null ? null : (bool)$row[$column],
-				self::RIGHTS,
-			);
-		}
-		$result->closeCursor();
-		return $rights;
-	}
-
-	/** @return ?array{canComment: ?bool, allowOlder: ?bool, watermark: ?bool} their own rights on the link, null when they are not on it */
+	/** @return ?Rights their own rights on the link, null when they are not on it */
 	public function rightsOn(int $reviewerId, string $token): ?array {
-		return $this->rightsByLink([$reviewerId])[$reviewerId][$token] ?? null;
+		return $this->placesOfReviewer($reviewerId)[$token]['rights'] ?? null;
 	}
 
 	/**
 	 * The Reviewer's own rights on a link they are on
 	 *
-	 * @param array{canComment?: ?bool, allowOlder?: ?bool, watermark?: ?bool} $rights null or left out: the link decides
+	 * @param Rights $rights null: the link decides
 	 */
 	public function setRightsOn(int $reviewerId, string $token, array $rights): void {
 		$qb = $this->db->getQueryBuilder();
 		$qb->update('deliver_reviewer_links')
 			->where($qb->expr()->eq('reviewer_id', $qb->createNamedParameter($reviewerId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('token', $qb->createNamedParameter($token)));
-		foreach (self::RIGHTS as $right => $column) {
-			$value = isset($rights[$right]) ? (bool)$rights[$right] : null;
+		foreach (self::rights() as $right => $column) {
+			$value = $rights[$right];
 			$qb->set($column, $qb->createNamedParameter($value, $value === null ? IQueryBuilder::PARAM_NULL : IQueryBuilder::PARAM_BOOL));
 		}
 		$qb->executeStatement();

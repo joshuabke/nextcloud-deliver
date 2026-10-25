@@ -203,7 +203,7 @@ class NotificationTest extends TestCase {
 
 	public function testAReviewerWithAnEmailHearsOfReplies(): void {
 		$link = $this->nc->ocs('POST', "/projects/{$this->projectId}/links");
-		self::assertTrue($link['data']['canMail'], 'the dev instance mails into Mailpit');
+		self::assertTrue($this->nc->ocs('GET', "/projects/{$this->projectId}/links")['data']['canMail'], 'the dev instance mails into Mailpit');
 		$email = 'reviewer-' . bin2hex(random_bytes(4)) . '@example.test';
 		$reviewer = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $link['data']['token']);
 		$reviewer->call('POST', '/api/reviewer', ['name' => 'Mara', 'email' => $email, 'language' => 'de']);

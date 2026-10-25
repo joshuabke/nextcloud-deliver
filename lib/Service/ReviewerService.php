@@ -83,10 +83,18 @@ class ReviewerService {
 
 	/** New keys on every link they are on: the old Personal Links stop working, the Reviewer keeps their Comments */
 	public function renewKeys(Reviewer $reviewer): Reviewer {
-		foreach (array_keys($this->reviewers->keysByLink([$reviewer->getId()])[$reviewer->getId()] ?? []) as $token) {
+		foreach (array_keys($this->reviewers->placesOfReviewer($reviewer->getId())) as $token) {
 			$this->reviewers->setKeyOn($reviewer->getId(), (string)$token, $this->newKey());
 		}
 		return $reviewer;
+	}
+
+	/**
+	 * @param ?int $projectId null for No Project
+	 * @return list<Reviewer> the Member's Reviewers of the Project, on a link or not, oldest first
+	 */
+	public function ofProject(string $uid, ?int $projectId): array {
+		return array_values(array_filter($this->reviewers->findByOwners([$uid]), static fn (Reviewer $reviewer) => $reviewer->getProjectId() === $projectId));
 	}
 
 	/** No Personal Link names them any more and they leave every list; their Comments keep their name */
@@ -113,7 +121,7 @@ class ReviewerService {
 
 	/** How many links the Reviewer is on */
 	public function linkCount(Reviewer $reviewer): int {
-		return count($this->reviewers->keysByLink([$reviewer->getId()])[$reviewer->getId()] ?? []);
+		return count($this->reviewers->placesOfReviewer($reviewer->getId()));
 	}
 
 	/** Takes the Reviewer off one link; their Personal Link through it stops working */
