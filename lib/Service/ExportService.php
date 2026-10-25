@@ -76,7 +76,7 @@ class ExportService {
 		[$mime, $ending] = self::FORMATS[$format];
 		$file = ['name' => $title . $ending, 'mime' => $mime];
 		if ($format === 'wav') {
-			return $file + ['path' => $this->wav->render($this->fileOf($version), $clip, $markers)];
+			return $file + ['path' => $this->wav->render($this->fileOf($viewer, $version), $clip, $markers)];
 		}
 		return $file + ['body' => match ($format) {
 			'edl' => self::edl($clip, $markers),
@@ -89,11 +89,19 @@ class ExportService {
 		}];
 	}
 
-	/** @throws ProjectConflictException the Version's file is gone */
-	private function fileOf(Version $version): File {
-		$file = $this->root->getFirstNodeById($version->getFileId());
+	/**
+	 * The Version's file as the Member reaches it, for an export that copies its audio
+	 *
+	 * @throws ProjectConflictException the Version's file is gone
+	 * @throws AccessDeniedException the Member may view the file but not download it
+	 */
+	private function fileOf(Viewer $viewer, Version $version): File {
+		$file = $this->root->getUserFolder((string)$viewer->uid)->getFirstNodeById($version->getFileId());
 		if (!$file instanceof File) {
 			throw new ProjectConflictException('The file of this Version is gone');
+		}
+		if (!ProjectService::downloadable($file)) {
+			throw new AccessDeniedException('This file may be viewed but not downloaded, and a WAV with markers is a copy of it');
 		}
 		return $file;
 	}

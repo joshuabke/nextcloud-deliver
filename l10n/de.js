@@ -556,7 +556,9 @@ OC.L10N.register(
 		"Create a Project folder": "Projektordner anlegen",
 		"Choose a place": "Ort wählen",
 		"{percent} %, in another tab": "{percent} %, in einem anderen Tab",
-		"A folder cannot be called . or ..": "Ein Ordner kann nicht . oder .. heißen"
+		"A folder cannot be called . or ..": "Ein Ordner kann nicht . oder .. heißen",
+		"Shown over the picture in the browser to deter copies; it is not burned into the file.": "Liegt im Browser über dem Bild und schreckt vor Kopien ab; es wird nicht in die Datei eingebrannt.",
+		"Reviewers watch a Proxy instead. Without ffmpeg on the server, the original still plays in their browser, only without a download button.": "Reviewer sehen stattdessen einen Proxy. Ohne ffmpeg auf dem Server spielt ihr Browser weiter das Original, nur ohne Download-Schaltfläche."
 	},
 	"nplurals=2; plural=(n != 1);"
 );

@@ -64,9 +64,9 @@ Reviewers never touch OCS. Their surface hangs off the token of a Review Link, n
 | GET | `/apps/deliver/s/{token}/versions/{versionId}` | The review page on one Version |
 | GET | `/apps/deliver/s/{token}/api/context` | Project settings, Asset and Version Stack behind the link |
 | GET | `/apps/deliver/s/{token}/api/assets` | What the link shows, for the grid |
-| GET | `/apps/deliver/s/{token}/preview?fileId=&x=&y=` | The still of a file behind the link |
+| GET | `/apps/deliver/s/{token}/preview?fileId=&x=&y=&a=` | The still of a file behind the link, up to 2048 pixels, `a=1` keeping its aspect ratio |
 | GET | `/apps/deliver/s/{token}/download` `?assetIds=1,2` | The newest Version of every Asset the link shows, or of those given, as one ZIP, where the link allows downloads |
-| GET | `/apps/deliver/s/{token}/media/{versionId}/{kind}` | Derived media, or `original` where the link allows downloads or no Proxy is made; `?download=1` downloads it and notes that in the link's activity |
+| GET | `/apps/deliver/s/{token}/media/{versionId}/{kind}` | Derived media, or `original` where both the link and the Member's own access allow downloads, or where the server has no ffmpeg to make a Proxy (a Still then plays from `preview`); `?download=1` downloads it, only where downloads are allowed, and notes that in the link's activity |
 | POST | `/apps/deliver/s/{token}/api/reviewer` `{name, email}` | Name yourself; the answer carries the Personal Link through this link. An address the Project knows answers 202 and mails that Reviewer their Personal Link through it instead |
 | GET/POST | `/apps/deliver/s/{token}/api/versions/{id}/comments` | Read and write Comments as a Reviewer |
 | PUT/DELETE | `/apps/deliver/s/{token}/api/comments/{id}` | Change or remove one's own Comment |

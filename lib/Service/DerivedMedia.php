@@ -95,6 +95,24 @@ class DerivedMedia {
 		$this->enqueue($versionId, Job::KIND_PROBE);
 	}
 
+	/**
+	 * A Proxy that stands in for the original where a link keeps it back
+	 * (story 50): asked for here, also for a file browsers play and for audio.
+	 *
+	 * @return bool false where none can be made: without ffmpeg the original is all that plays
+	 */
+	public function standIn(Version $version): bool {
+		if (!$this->ffmpeg->available()) {
+			return false;
+		}
+		if ($version->getProxyState() === self::STATE_NONE && ($version->getHasVideo() || $version->getHasAudio())) {
+			$this->enqueue($version->getId(), Job::KIND_PROXY);
+			// So that the answer at hand already says it is on its way
+			$version->setProxyState(self::STATE_QUEUED);
+		}
+		return true;
+	}
+
 	/** Deletes the derived media of a Version and queues it again */
 	public function regenerate(int $versionId): void {
 		$this->forget($versionId);
@@ -252,6 +270,16 @@ class DerivedMedia {
 	 * average. When the hardware encoder fails, the Proxy is made in software.
 	 */
 	private function runProxy(Version $version, string $path): void {
+		if (!$version->getHasVideo()) {
+			// Audio gets one only to stand in for an original a link keeps back: AAC, which every browser plays
+			$this->store($version, 'proxy', fn (string $output) => $this->ffmpeg([
+				'-i', $path,
+				'-map', '0:a:0', '-c:a', 'aac', '-b:a', '256k',
+				'-movflags', '+faststart',
+				'-f', 'mp4', $output,
+			]));
+			return;
+		}
 		$encoder = $this->encoder->active();
 		try {
 			$this->store($version, 'proxy', fn (string $output) => $this->ffmpeg($this->proxyArgs($version, $path, $encoder, $output)));

@@ -23,6 +23,7 @@ use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;
 use OCP\Files\NotFoundException;
+use OCP\Files\Storage\ISharedStorage;
 use OCP\IURLGenerator;
 
 /**
@@ -811,6 +812,16 @@ class ProjectService {
 
 	public static function canWrite(Node $node): bool {
 		return ($node->getPermissions() & Constants::PERMISSION_UPDATE) !== 0;
+	}
+
+	/** Whether the file may leave as a file: a share can allow viewing but not downloading, as Files' own view-only check reads it */
+	public static function downloadable(Node $node): bool {
+		$storage = $node->getStorage();
+		if (!$storage->instanceOfStorage(ISharedStorage::class)) {
+			return true;
+		}
+		/** @var ISharedStorage $storage */
+		return $storage->getShare()->getAttributes()?->getAttribute('permissions', 'download') !== false;
 	}
 
 	/** @throws AccessDeniedException the node is read-only for this user */

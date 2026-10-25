@@ -140,6 +140,12 @@ class ReviewLink {
 		return $this->files[$version->getId()] ?? null;
 	}
 
+	/** Whether the original may leave as a file: the Member's own access can allow viewing only (a share without downloads) */
+	public function downloadable(Version $version): bool {
+		$file = $this->originalFile($version);
+		return $file !== null && ProjectService::downloadable($file);
+	}
+
 	/** Whether the Reviewer comes by it: a link of their Member on their Project (ADR 0013) */
 	public function takes(Reviewer $reviewer): bool {
 		return $reviewer->getOwnerUid() === $this->ownerUid() && $reviewer->getProjectId() === $this->projectId();

@@ -233,6 +233,66 @@ class ReviewLinkTest extends TestCase {
 		self::assertSame(404, $visitor->raw('/download')['status']);
 	}
 
+	public function testWithoutDownloadsTheOriginalStaysBack(): void {
+		$link = $this->link();
+		$versionId = $this->assets()['cut'];
+		$visitor = $this->visitor($link);
+		self::assertSame(200, $visitor->raw("/media/$versionId/original")['status'], 'with downloads, the original plays');
+
+		$this->change($link['id'], ['canDownload' => false]);
+		$version = $visitor->call('GET', "/api/context?versionId=$versionId")['data']['versions'][0];
+		self::assertSame([null, null], [$version['url'], $version['downloadUrl']], 'a Proxy plays instead, where ffmpeg can make one');
+		self::assertSame(404, $visitor->raw("/media/$versionId/original")['status']);
+		self::assertSame(404, $visitor->raw("/media/$versionId/original?download=1")['status']);
+
+		// Without ffmpeg there is no Proxy, so the original plays, still without a download button
+		$this->nc->ocs('PUT', '/admin/settings', ['ffmpegPath' => '/nonexistent/ffmpeg']);
+		try {
+			$version = $visitor->call('GET', "/api/context?versionId=$versionId")['data']['versions'][0];
+			self::assertNotNull($version['url']);
+			self::assertNull($version['downloadUrl']);
+			self::assertSame(200, $visitor->raw("/media/$versionId/original")['status']);
+		} finally {
+			$this->nc->ocs('PUT', '/admin/settings', ['ffmpegPath' => '']);
+		}
+	}
+
+	public function testAStillWithoutDownloadsShowsAsRendered(): void {
+		$this->nc->put("{$this->root}/frame.png", 'not really a picture');
+		$link = $this->link();
+		$versionId = $this->assets()['frame'];
+		$this->change($link['id'], ['canDownload' => false]);
+		$visitor = $this->visitor($link);
+		$url = $visitor->call('GET', "/api/context?versionId=$versionId")['data']['versions'][0]['url'];
+		self::assertStringContainsString("/s/{$link['token']}/preview?", (string)$url, 'Nextcloud\'s rendering, not the file');
+		self::assertSame(404, $visitor->raw("/media/$versionId/original")['status']);
+	}
+
+	public function testAFileSharedWithoutDownloadsNeverLeavesThroughALink(): void {
+		$uid = 'deliver-guest-' . bin2hex(random_bytes(4));
+		$password = 'Deliver-' . bin2hex(random_bytes(8));
+		$this->nc->ocsForm('POST', '/ocs/v2.php/cloud/users', ['userid' => $uid, 'password' => $password]);
+		$guest = $this->nc->withUser($uid, $password);
+		try {
+			// Read and reshare, but view only
+			$shared = $this->nc->ocsForm('POST', '/ocs/v2.php/apps/files_sharing/api/v1/shares', [
+				'path' => "/{$this->root}/cut.mp4", 'shareType' => 0, 'shareWith' => $uid, 'permissions' => 17,
+				'attributes' => json_encode([['scope' => 'permissions', 'key' => 'download', 'value' => false]]),
+			]);
+			self::assertSame(200, $shared['status'], json_encode($shared['data']));
+			$created = $guest->ocs('POST', "/projects/{$this->projectId}/links");
+			self::assertSame(201, $created['status'], json_encode($created['data']));
+			self::assertTrue($created['data']['canDownload']);
+			$visitor = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $created['data']['token']);
+			$listed = $visitor->call('GET', '/api/assets')['data'];
+			self::assertSame([['cut', null]], array_map(static fn (array $asset) => [$asset['name'], $asset['downloadUrl']], $listed), 'shown, but never as a download');
+			self::assertStringNotContainsString('cut.mp4', $visitor->raw('/download')['body'], 'nor in the ZIP');
+			self::assertSame(404, $visitor->raw("/media/{$listed[0]['newestId']}/original")['status']);
+		} finally {
+			$this->nc->ocsForm('DELETE', "/ocs/v2.php/cloud/users/$uid");
+		}
+	}
+
 	public function testALinkShowsOnlyWhatItsMemberMayShare(): void {
 		$uid = 'deliver-guest-' . bin2hex(random_bytes(4));
 		$password = 'Deliver-' . bin2hex(random_bytes(8));

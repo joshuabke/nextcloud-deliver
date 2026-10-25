@@ -11,7 +11,7 @@ For admins: what Deliver needs, what it does in the background, and how to tune 
 
 ## Derived media
 
-`ffprobe` reads the frame rate as a fraction, the start timecode and the duration in Frames; `ffmpeg` makes a Proxy for anything a browser will not play, a WebP Thumbnail Strip for the timeline and a Waveform for the audio. Everything lands in app data, never in a user folder, and is served with byte ranges so the player can seek.
+`ffprobe` reads the frame rate as a fraction, the start timecode and the duration in Frames; `ffmpeg` makes a Proxy for anything a browser will not play, and for any video or audio a Review Link shows with downloads hidden, a WebP Thumbnail Strip for the timeline and a Waveform for the audio. Everything lands in app data, never in a user folder, and is served with byte ranges so the player can seek.
 
 ```sh
 occ deliver:worker --once              # work through the queue and stop

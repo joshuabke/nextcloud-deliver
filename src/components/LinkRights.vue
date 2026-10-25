@@ -26,6 +26,9 @@ const emit = defineEmits(['change'])
 			@update:modelValue="emit('change', { watermark: $event })">
 			{{ t('deliver', 'Watermark with the Reviewer\'s name') }}
 		</NcCheckboxRadioSwitch>
+		<p v-if="flags.watermark" class="deliver-link-rights__hint">
+			{{ t('deliver', 'Shown over the picture in the browser to deter copies; it is not burned into the file.') }}
+		</p>
 		<NcCheckboxRadioSwitch
 			:modelValue="flags.allowOlder"
 			:disabled="disabled || !flags.canComment || flags.latestOnly"
@@ -44,5 +47,16 @@ const emit = defineEmits(['change'])
 			@update:modelValue="emit('change', { canDownload: $event })">
 			{{ t('deliver', 'Reviewers may download the original') }}
 		</NcCheckboxRadioSwitch>
+		<p v-if="!flags.canDownload" class="deliver-link-rights__hint">
+			{{ t('deliver', 'Reviewers watch a Proxy instead. Without ffmpeg on the server, the original still plays in their browser, only without a download button.') }}
+		</p>
 	</div>
 </template>
+
+<style scoped>
+.deliver-link-rights__hint {
+	margin: 0 0 4px 44px;
+	color: var(--color-text-maxcontrast);
+	font-size: var(--font-size-small, 13px);
+}
+</style>

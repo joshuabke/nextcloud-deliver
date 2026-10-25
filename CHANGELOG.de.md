@@ -2,9 +2,14 @@
 
 ## Unveröffentlicht
 
+### Geändert
+- Auf Review-Links ohne Downloads einen Proxy statt des Originals abgespielt, auch für Audio, und für Standbilder ein gerendertes Bild; nur ein Server ohne ffmpeg spielt dort das Original.
+- In den Einstellungen eines Review-Links erklärt, was „ohne Downloads“ und das Wasserzeichen bewirken.
+
 ### Behoben
 - Version für Mitglieder geschlossen, die ihre Datei nicht öffnen können, auch wenn sie eine andere Version des Stapels öffnen.
 - Formeln aus Kommentaren und Reviewer-Namen in den Exporten als CSV und für REAPER entschärft.
+- Ohne Download freigegebene Dateien gehen nicht mehr über Review-Links oder den WAV-Export hinaus.
 
 ## 0.9.5 – 2026-10-24
 

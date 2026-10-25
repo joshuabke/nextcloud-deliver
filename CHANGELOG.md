@@ -2,9 +2,14 @@
 
 ## Unreleased
 
+### Changed
+- Play a Proxy instead of the original on a Review Link that hides downloads, also for audio, and a rendered picture of a Still; only a server without ffmpeg plays the original there.
+- Say in a Review Link's settings what hiding downloads and the Watermark do.
+
 ### Fixed
 - Close a Version to Members who cannot open its file, also when they open another Version of its Stack.
 - Keep Comments and Reviewer names from starting a spreadsheet formula in the CSV and REAPER exports.
+- Keep files shared without downloads from leaving through a Review Link or a WAV export.
 
 ## 0.9.5 – 2026-10-24
 

@@ -13,6 +13,7 @@ use OCA\Deliver\Service\ApprovalService;
 use OCA\Deliver\Service\CommentService;
 use OCA\Deliver\Service\DerivedMedia;
 use OCA\Deliver\Service\ProjectService;
+use OCA\Deliver\Service\Reviewable;
 use OCA\Deliver\Service\ReviewerMail;
 use OCA\Deliver\Service\ReviewerService;
 use OCA\Deliver\Service\ReviewLink;
@@ -45,6 +46,9 @@ use OCP\Security\RateLimiting\ILimiter;
 class PublicApiController extends PublicShareController {
 	use GuardsErrors;
 	use ReviewLinkToken;
+
+	/** The longest edge of a rendered still: enough to review a picture whose file stays back */
+	private const STILL_SIZE = 2048;
 
 	public function __construct(
 		string $appName,
@@ -112,6 +116,7 @@ class PublicApiController extends PublicShareController {
 			$result = [];
 			foreach ($link->assets() as ['asset' => $asset, 'versions' => $versions]) {
 				$newest = $versions[0];
+				$download = $canDownload && $link->downloadable($newest);
 				$original = $this->mediaUrl($newest, 'original');
 				$result[] = [
 					'fileId' => $newest->getFileId(),
@@ -123,10 +128,10 @@ class PublicApiController extends PublicShareController {
 					'mimeType' => $link->originalFile($newest)?->getMimetype(),
 					'dueDate' => $asset->getDueDate(),
 					// For scrubbing on hover, and a frame of it where Nextcloud renders no still (no ffmpeg)
-					'playUrl' => $newest->getProxyState() === DerivedMedia::STATE_READY || !$this->mayPlayOriginal($newest, $canDownload)
+					'playUrl' => $newest->getProxyState() === DerivedMedia::STATE_READY || !$this->mayPlayOriginal($link, $newest, $download)
 						? $this->mediaUrl($newest, 'proxy')
 						: $original,
-					'downloadUrl' => $canDownload ? $original . '?download=1' : null,
+					'downloadUrl' => $download ? $original . '?download=1' : null,
 				];
 			}
 			return $result;
@@ -157,7 +162,8 @@ class PublicApiController extends PublicShareController {
 			}
 			foreach ($chosen as ['versions' => [$newest]]) {
 				$file = $link->originalFile($newest);
-				if ($file === null) {
+				// What the Member may only view in Files stays out, as it would of a download there
+				if ($file === null || !$link->downloadable($newest)) {
 					continue;
 				}
 				// Two Assets in different folders can carry the same file name
@@ -178,9 +184,9 @@ class PublicApiController extends PublicShareController {
 	}
 
 	/**
-	 * Derived media, or the original when it has to play without a Proxy.
-	 * With downloads hidden, the original is not served once a Proxy exists
-	 * or is on its way (story 50).
+	 * Derived media, or the original where it may be downloaded. With
+	 * downloads hidden, a Proxy plays instead (story 50), and the original
+	 * only where the server has no ffmpeg to make one.
 	 */
 	#[PublicPage]
 	#[NoCSRFRequired]
@@ -193,11 +199,11 @@ class PublicApiController extends PublicShareController {
 				return RangeFileResponse::ofSimpleFile($this->media->file($version, $kind), $this->request->getHeader('Range'));
 			}
 			$file = $link->originalFile($version);
-			$canDownload = $this->links->flagsFor($link, $this->reviewer())['canDownload'];
-			if ($file === null || !$this->mayPlayOriginal($version, $canDownload)) {
+			$download = $this->links->flagsFor($link, $this->reviewer())['canDownload'] && $link->downloadable($version);
+			if ($file === null || !$this->mayPlayOriginal($link, $version, $download)) {
 				return new Response(Http::STATUS_NOT_FOUND);
 			}
-			if ($this->request->getParam('download') !== null && $canDownload) {
+			if ($this->request->getParam('download') !== null && $download) {
 				// The download button, not the player, which asks for ranges of the same file (story 124)
 				if (!$this->member($version)) {
 					$this->links->record($link, LinkActivityMapper::DOWNLOADED, $this->reviewer(), $version);
@@ -214,18 +220,20 @@ class PublicApiController extends PublicShareController {
 
 	/**
 	 * The still of a file behind the link, as Nextcloud renders it, for the
-	 * grid; a Review Link has no share of Nextcloud's to ask for it.
+	 * grid and for a Still whose file the link keeps back; a Review Link has
+	 * no share of Nextcloud's to ask for it. `a` keeps the aspect ratio
+	 * instead of cropping, as Nextcloud's own preview does.
 	 */
 	#[PublicPage]
 	#[NoCSRFRequired]
-	public function preview(int $fileId, int $x = 64, int $y = 64): Response {
+	public function preview(int $fileId, int $x = 64, int $y = 64, bool $a = false): Response {
 		try {
 			$link = $this->link();
 			$file = $link->originalFile($this->links->versionForFile($link, $fileId));
 			if ($file === null) {
 				return new Response(Http::STATUS_NOT_FOUND);
 			}
-			return new FileDisplayResponse($this->previews->getPreview($file, min($x, 1024), min($y, 1024), true));
+			return new FileDisplayResponse($this->previews->getPreview($file, min($x, self::STILL_SIZE), min($y, self::STILL_SIZE), !$a));
 		} catch (NotFoundException|\InvalidArgumentException) {
 			return new Response(Http::STATUS_NOT_FOUND);
 		}
@@ -401,23 +409,39 @@ class PublicApiController extends PublicShareController {
 		});
 	}
 
-	/** A Version as the Review view shows it, with the original only where the link allows */
+	/** A Version as the Review view shows it, with the original only where it may be downloaded or nothing else plays */
 	private function describe(ReviewLink $link, Version $version, bool $canDownload): array {
+		$download = $canDownload && $link->downloadable($version);
 		$media = $this->mediaUrl($version, '__kind__');
 		$original = $this->mediaUrl($version, 'original');
-		$url = $this->mayPlayOriginal($version, $canDownload) ? $original : null;
+		$url = match (true) {
+			$this->mayPlayOriginal($link, $version, $download) => $original,
+			// A Still whose file stays back shows as Nextcloud renders it
+			$this->isStill($link, $version) => $this->urls->linkToRoute('deliver.PublicApi.preview', [
+				'token' => $this->getToken(), 'fileId' => $version->getFileId(), 'x' => self::STILL_SIZE, 'y' => self::STILL_SIZE, 'a' => 1,
+			]),
+			default => null,
+		};
 		return $this->projects->describeVersion($version, $this->projects->settingsOf($version), $url, $media)
 			// Asked for as a download, so the link's activity notes it (story 124)
-			+ ['downloadUrl' => $canDownload ? $original . '?download=1' : null];
+			+ ['downloadUrl' => $download ? $original . '?download=1' : null];
 	}
 
 	private function mediaUrl(Version $version, string $kind): string {
 		return $this->urls->linkToRoute('deliver.PublicApi.media', ['token' => $this->getToken(), 'versionId' => $version->getId(), 'kind' => $kind]);
 	}
 
-	/** Without downloads, the original plays only while no Proxy is made for it */
-	private function mayPlayOriginal(Version $version, bool $canDownload): bool {
-		return $canDownload || in_array($version->getProxyState(), [DerivedMedia::STATE_NONE, DerivedMedia::STATE_FAILED], true);
+	/**
+	 * Without downloads, video and audio play from a Proxy and a Still from
+	 * its rendered picture (story 50); only where the server cannot make a
+	 * Proxy does the original play, still without a download button.
+	 */
+	private function mayPlayOriginal(ReviewLink $link, Version $version, bool $download): bool {
+		return $download || (!$this->isStill($link, $version) && !$this->media->standIn($version));
+	}
+
+	private function isStill(ReviewLink $link, Version $version): bool {
+		return Reviewable::image((string)$link->originalFile($version)?->getMimetype());
 	}
 
 	/** Who is writing: a Member previewing the Version, the Reviewer this browser carries, or someone without a name yet */
