@@ -39,8 +39,9 @@ enable:
 occ:
 	$(OCC) $(ARGS)
 
+# Without the dependencies' install scripts: the build needs none, and the release builds this way
 build:
-	npm ci
+	npm ci --ignore-scripts
 	npm run build
 
 # PHP dev dependencies (PHPUnit) without a local PHP: vendor/ is gitignored
