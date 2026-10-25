@@ -2,6 +2,9 @@
 
 ## Unveröffentlicht
 
+### Neu
+- Projekt samt Assets und ihren Review-Daten löschen hinzugefügt; die Dateien bleiben.
+
 ### Geändert
 - In den Einstellungen eines Review-Links erklärt, was „ohne Downloads“ und das Wasserzeichen bewirken.
 - ffmpeg und ffprobe auf lokale Dateien in den Formaten beschränkt, die Deliver aufnimmt.
@@ -16,6 +19,7 @@
 - Einladen oder Umbenennen auf den Namen eines Reviewers abgelehnt, der auf keinem Link des Projekts ist.
 - Review-Link auf ein Asset auch in der Dateien-Seitenleiste eines Ordnerprojekts nach dem Asset benannt.
 - Abgelaufenen Review-Link in seinen Einstellungen als abgelaufen gezeigt.
+- Projektansicht verlassen, sobald das Projekt aus seinen Einstellungen entfernt ist.
 - Ohne Download freigegebene Dateien aus den Downloads von Review-Links und dem WAV-Export herausgehalten, und ganz von Review-Links, wo Nextcloud ihren Inhalt verbirgt.
 
 ## 0.9.5 – 2026-10-24

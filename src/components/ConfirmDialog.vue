@@ -7,6 +7,8 @@ const props = defineProps({
 	message: { type: String, required: true },
 	/** Label of the destructive button */
 	confirm: { type: String, required: true },
+	/** Label of a second, harmless way through, answered with 'other' */
+	other: { type: String, default: null },
 })
 
 // NcDialog hands a button's result only to its closing event; spawnDialog waits for close
@@ -15,6 +17,7 @@ const emit = defineEmits(['close'])
 // Spawned for one answer, so the props never change
 const buttons = [
 	{ label: t('deliver', 'Cancel') },
+	...(props.other ? [{ label: props.other, callback: () => 'other' }] : []),
 	{ label: props.confirm, variant: 'error', callback: () => true },
 ]
 </script>
@@ -25,7 +28,7 @@ const buttons = [
 		:name="name"
 		:message="message"
 		:buttons="buttons"
-		@closing="emit('close', $event === true)" />
+		@closing="emit('close', $event === true || $event === 'other' ? $event : false)" />
 </template>
 
 <style>

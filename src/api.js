@@ -28,7 +28,7 @@ export const createProject = (folderId, autoIntake = true) => axios.post(url('/p
 // A Project by name, which collects files from anywhere (ADR 0009)
 export const createNamedProject = (name) => axios.post(url('/projects'), { name }).then(data)
 export const updateProject = (id, settings) => axios.put(url(`/projects/${id}`), settings).then(data)
-export const removeProject = (id) => axios.delete(url(`/projects/${id}`))
+export const removeProject = (id, withAssets = false) => axios.delete(url(`/projects/${id}`), { params: withAssets ? { withAssets: 1 } : {} })
 // Who can be @mentioned on a Version: whoever can open its file
 export const listMembers = (versionId) => axios.get(url(`/versions/${versionId}/members`)).then(data)
 export const updateReviewerAsMember = (id, fields) => axios.put(url(`/reviewers/${id}`), fields).then(data)

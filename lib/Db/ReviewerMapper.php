@@ -194,6 +194,16 @@ class ReviewerMapper extends Mapper {
 		$qb->executeStatement();
 	}
 
+	/** Removes the Project's Reviewers, as a Member removes one; their Comments elsewhere keep their name */
+	public function removeOf(int $projectId, int $at): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('removed_at', $qb->createNamedParameter($at, IQueryBuilder::PARAM_INT))
+			->where($qb->expr()->eq('project_id', $qb->createNamedParameter($projectId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->isNull('removed_at'))
+			->executeStatement();
+	}
+
 	/** @param list<int> $reviewerIds */
 	public function deleteLinks(array $reviewerIds): void {
 		if ($reviewerIds === []) {

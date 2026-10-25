@@ -110,7 +110,13 @@ watch(() => props.id, async (id) => {
 
 // While derived media is being made, look again every ten seconds for the progress
 let recheck = null
-watch(project, (current) => {
+watch([() => props.id, project], ([id, current], [shownId, shown]) => {
+	// Removed from its settings, the Project leaves the store, and the dialog with it before it can say so;
+	// another Project not loaded yet is no removal
+	if (id === shownId && shown && !current) {
+		router.push('/')
+		return
+	}
 	// Ticked Assets that are gone since are no longer ticked
 	selected.value = selected.value.filter((id) => current?.assets.some((asset) => asset.id === id))
 	clearTimeout(recheck)
@@ -756,8 +762,7 @@ function dropped(event) {
 			<ProjectSettingsDialog
 				v-if="settingsOpen"
 				:project="project"
-				@close="settingsOpen = false"
-				@removed="router.push('/')" />
+				@close="settingsOpen = false" />
 		</template>
 	</div>
 </template>

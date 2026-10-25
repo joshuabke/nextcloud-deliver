@@ -142,9 +142,9 @@ class ProjectApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
-	public function destroy(int $id): Response {
-		return $this->guard(function () use ($id) {
-			$this->service->remove((string)$this->userId, $id);
+	public function destroy(int $id, bool $withAssets = false): Response {
+		return $this->guard(function () use ($id, $withAssets) {
+			$this->service->remove((string)$this->userId, $id, $withAssets);
 			return [];
 		});
 	}

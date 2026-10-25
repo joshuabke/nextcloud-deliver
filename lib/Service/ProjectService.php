@@ -715,13 +715,26 @@ class ProjectService {
 
 	/**
 	 * Removes a Project; its Assets go to No Project with their review data
-	 * (story 9). The files stay.
+	 * (story 9), or with $withAssets are deleted with it (story 148). The
+	 * files stay either way.
 	 *
-	 * @throws AccessDeniedException the user may not change this Project
+	 * @throws AccessDeniedException the user may not change this Project, or not remove one of its Assets
 	 */
-	public function remove(string $uid, int $id): void {
+	public function remove(string $uid, int $id, bool $withAssets = false): void {
 		[$project] = $this->editable($uid, $id);
-		$this->stacks->removeProject($project, $uid);
+		if (!$withAssets) {
+			$this->stacks->removeProject($project, $uid);
+			return;
+		}
+		// Every Asset is checked before anything goes, so a refusal leaves the Project whole
+		foreach ($this->assets->findByProject($id) as $asset) {
+			try {
+				$this->writableAsset($uid, $asset);
+			} catch (AccessDeniedException) {
+				throw new AccessDeniedException('You may not remove every Asset of this Project');
+			}
+		}
+		$this->stacks->deleteProject($project, $uid);
 	}
 
 	/**
