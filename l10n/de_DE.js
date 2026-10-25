@@ -556,11 +556,11 @@ OC.L10N.register(
 		"{percent} %, in another tab": "{percent} %, in einem anderen Tab",
 		"A folder cannot be called . or ..": "Ein Ordner kann nicht . oder .. heißen",
 		"Shown over the picture in the browser to deter copies; it is not burned into the file.": "Liegt im Browser über dem Bild und schreckt vor Kopien ab; es wird nicht in die Datei eingebrannt.",
-		"Reviewers watch a Proxy instead. Without ffmpeg on the server, the original still plays in their browser, only without a download button.": "Reviewer sehen stattdessen einen Proxy. Ohne ffmpeg auf dem Server spielt ihr Browser weiter das Original, nur ohne Download-Schaltfläche.",
 		"Attachments add up to at most {size} MB per person on a Version: {names}": "Anhänge sind je Person und Version zusammen höchstens {size} MB groß: {names}",
 		"Attach files: up to five, {size} MB in all": "Dateien anhängen: bis zu fünf, zusammen {size} MB",
 		"Attachments per person and Version, in MB": "Anhänge je Person und Version, in MB",
-		"What one person, a Reviewer too, may attach to the Comments on one Version in all.": "Wie viel eine Person, auch ein Reviewer, an die Kommentare einer Version insgesamt anhängen darf."
+		"What one person, a Reviewer too, may attach to the Comments on one Version in all.": "Wie viel eine Person, auch ein Reviewer, an die Kommentare einer Version insgesamt anhängen darf.",
+		"Hides the download buttons. Files the browser plays without a Proxy still stream as the original, so this makes copies harder but does not prevent them.": "Blendet die Download-Schaltflächen aus. Dateien, die der Browser ohne Proxy abspielt, laufen weiter als Original; das erschwert Kopien, verhindert sie aber nicht."
 	},
 	"nplurals=2; plural=(n != 1);"
 );

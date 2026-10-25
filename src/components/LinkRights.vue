@@ -48,7 +48,7 @@ const emit = defineEmits(['change'])
 			{{ t('deliver', 'Reviewers may download the original') }}
 		</NcCheckboxRadioSwitch>
 		<p v-if="!flags.canDownload" class="deliver-link-rights__hint">
-			{{ t('deliver', 'Reviewers watch a Proxy instead. Without ffmpeg on the server, the original still plays in their browser, only without a download button.') }}
+			{{ t('deliver', 'Hides the download buttons. Files the browser plays without a Proxy still stream as the original, so this makes copies harder but does not prevent them.') }}
 		</p>
 	</div>
 </template>

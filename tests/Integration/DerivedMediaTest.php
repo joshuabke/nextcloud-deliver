@@ -147,30 +147,6 @@ class DerivedMediaTest extends TestCase {
 	}
 
 	/** @return string what ffprobe says about the Proxy's video stream and title */
-	public function testALinkWithoutDownloadsPlaysAProxyOfAudioToo(): void {
-		[$code, $output] = $this->shell(sprintf('ffmpeg -loglevel error -y -f lavfi -i sine=frequency=440:duration=1 -c:a pcm_s16le -f wav %s', escapeshellarg($this->fixture)));
-		self::assertSame(0, $code, $output);
-		$this->nc->put("{$this->root}/mix.wav", (string)file_get_contents($this->fixture));
-		$versionId = $this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'][0]['versions'][0]['id'];
-		$this->drainQueue();
-		self::assertSame('none', $this->version($versionId)['derived']['proxy']['state'], 'a WAV plays as it is');
-
-		$link = $this->nc->ocs('POST', "/projects/{$this->projectId}/links")['data'];
-		$this->nc->ocs('PUT', "/links/{$link['id']}", ['canDownload' => false]);
-		$visitor = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $link['token']);
-		$shown = $visitor->call('GET', "/api/context?versionId=$versionId")['data']['versions'][0];
-		self::assertSame([null, 'queued'], [$shown['url'], $shown['derived']['proxy']['state']], 'the link asks for a Proxy instead of the original');
-		$this->drainQueue();
-
-		$proxy = $visitor->raw("/media/$versionId/proxy");
-		self::assertSame(200, $proxy['status']);
-		$copy = sys_get_temp_dir() . '/deliver-proxy-' . bin2hex(random_bytes(4)) . '.mp4';
-		file_put_contents($copy, $proxy['body']);
-		[, $probed] = $this->shell(sprintf('ffprobe -v error -show_entries stream=codec_type,codec_name -of csv=p=0 %s', escapeshellarg($copy)));
-		@unlink($copy);
-		self::assertSame('aac,audio', trim($probed), 'audio only, in a codec every browser plays');
-	}
-
 	private function probeProxy(array $version): string {
 		$proxy = $this->nc->request('GET', $version['derived']['proxy']['url']);
 		self::assertSame(200, $proxy['status']);

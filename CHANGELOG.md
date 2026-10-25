@@ -3,7 +3,6 @@
 ## Unreleased
 
 ### Changed
-- Play a Proxy instead of the original on a Review Link that hides downloads, also for audio, and a rendered picture of a Still; only a server without ffmpeg plays the original there.
 - Say in a Review Link's settings what hiding downloads and the Watermark do.
 - Let ffmpeg and ffprobe read only local files in the formats Deliver takes.
 - Leave playlists (M3U, PLS) out of review.
