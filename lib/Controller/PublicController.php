@@ -100,8 +100,8 @@ class PublicController extends AuthPublicShareController {
 		$this->initialState->provideInitialState('link', [
 			'title' => $link->title(),
 			'description' => $link->description(),
-			// What the Reviewer's menu shows, not their key
-			'reviewer' => $reviewer === null ? null : ['id' => $reviewer->getId(), 'name' => $reviewer->getName(), 'email' => $reviewer->getEmail(), 'mail' => $reviewer->mailWishes()],
+			// What the Reviewer's menu shows, their Personal Link too: this browser holds its key already (story 128)
+			'reviewer' => $reviewer === null ? null : ['id' => $reviewer->getId(), 'name' => $reviewer->getName(), 'email' => $reviewer->getEmail(), 'mail' => $reviewer->mailWishes(), 'link' => $link->personalLink((string)$this->reviewers->keyOn($reviewer, $link->token()))],
 			// Only where something on it downloads: a share without downloads stays out of the ZIP
 			'downloadAll' => array_filter(array_column(array_column($link->assets(), 'versions'), 0), $link->downloadable(...)) !== []
 				? $this->urls->linkToRoute('deliver.PublicApi.download', ['token' => $this->getToken()])

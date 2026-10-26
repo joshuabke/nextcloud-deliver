@@ -1,5 +1,6 @@
 <script setup>
 import accountIcon from '@mdi/svg/svg/account-circle-outline.svg?raw'
+import copyIcon from '@mdi/svg/svg/content-copy.svg?raw'
 import mailIcon from '@mdi/svg/svg/email-outline.svg?raw'
 import endIcon from '@mdi/svg/svg/logout.svg?raw'
 import { showError, showSuccess } from '@nextcloud/dialogs'
@@ -16,13 +17,14 @@ import NcActionText from '@nextcloud/vue/components/NcActionText'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import PersonAvatar from './PersonAvatar.vue'
 import { errorMessage, forgetReviewer, updateReviewer } from '../api.js'
+import { copyLink } from '../clipboard.js'
 import { confirmRemoval } from '../confirm.js'
 import { conflictMessage } from '../lib/conflict.js'
 import { baseLanguage, chooseLanguage } from '../lib/language.js'
 
 // The Reviewer's own menu, as on Frame.io: their name and address, what to mail, the language, and the end of the session
 const props = defineProps({
-	/** The Reviewer: { name, email, mail: { replies, comments, versions } }; null before they named themselves */
+	/** The Reviewer: { name, email, mail: { replies, comments, versions }, link }, link their Personal Link through this link; null before they named themselves */
 	reviewer: { type: Object, default: null },
 })
 
@@ -187,6 +189,13 @@ async function end() {
 		</NcActionRadio>
 		<template v-if="reviewer">
 			<NcActionSeparator />
+			<!-- To be them on another device, whenever they like (story 128) -->
+			<NcActionButton @click="copyLink(reviewer.link, t('deliver', 'Personal Link copied'))">
+				<template #icon>
+					<NcIconSvgWrapper :svg="copyIcon" />
+				</template>
+				{{ t('deliver', 'Copy Personal Link') }}
+			</NcActionButton>
 			<NcActionButton @click="end">
 				<template #icon>
 					<NcIconSvgWrapper :svg="endIcon" />

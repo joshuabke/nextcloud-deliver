@@ -86,6 +86,18 @@ class ReviewerTest extends TestCase {
 		self::assertSame(404, $asReviewer->raw('/attachments/999999999')['status']);
 	}
 
+	public function testAReviewerCopiesTheirPersonalLinkFromTheirMenu(): void {
+		$asReviewer = $this->reviewer();
+		$claimed = $asReviewer->call('POST', '/api/reviewer', ['name' => 'Mara'])['data'];
+
+		// The browser holds the key in its cookie already; the menu copies the link around it (story 128)
+		$link = $asReviewer->call('GET', '/api/context?versionId=' . $this->versionId)['data']['me']['link'];
+		self::assertSame($claimed['link'], $link);
+		$key = substr($link, strpos($link, '?r=') + 3);
+		$me = $asReviewer->otherDevice()->call('GET', "/api/context?versionId={$this->versionId}&r=$key")['data']['me'];
+		self::assertSame(['reviewer', 'Mara'], [$me['type'], $me['name']], 'and it makes them Mara on another device');
+	}
+
 	public function testNamingOneselfAsSomeoneInTheReview(): void {
 		// The Member's Reviewers outlive the test, so each run has addresses of its own
 		$run = bin2hex(random_bytes(4));

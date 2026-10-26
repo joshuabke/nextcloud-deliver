@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Copy a Reviewer's Personal Link from their menu.
+
 ## 0.9.6 – 2026-10-26
 
 ### Added

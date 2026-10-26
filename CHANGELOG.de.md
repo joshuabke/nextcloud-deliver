@@ -1,5 +1,10 @@
 # Änderungen
 
+## Unveröffentlicht
+
+### Neu
+- Persönlichen Link aus dem Menü des Reviewers kopierbar.
+
 ## 0.9.6 – 2026-10-26
 
 ### Neu
