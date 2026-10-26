@@ -77,6 +77,8 @@ class ReviewerApiController extends OCSController {
 			if (!$link->takes($reviewer)) {
 				throw new NotFoundException('Not a link of the Reviewer\'s Project');
 			}
+			// A name taken in this review meanwhile, a Member's among them, does not come along
+			$this->links->assertNameFree($link, $reviewer->getName(), $reviewer);
 			$key = $this->reviewers->putOn($reviewer, $link->token());
 			return ['key' => $key, 'link' => $link->personalLink($key)];
 		}, Http::STATUS_CREATED);

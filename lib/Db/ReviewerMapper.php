@@ -145,20 +145,25 @@ class ReviewerMapper extends Mapper {
 	}
 
 	/**
-	 * @param list<string> $tokens
-	 * @return list<string> the names of the Reviewers on these links, removed ones and the one excepted left out
+	 * The names in a review: a Project's Reviewers are every Member's, while
+	 * No Project is each Member's own, so there the Member counts (ADR 0013)
+	 *
+	 * @param ?int $projectId null for No Project
+	 * @param string $ownerUid whose No Project, when $projectId is null
+	 * @return list<string> the names of its Reviewers, on a link or not (#75); removed ones and the one excepted left out
 	 */
-	public function namesByLinks(array $tokens, ?int $exceptId): array {
-		if ($tokens === []) {
-			return [];
-		}
+	public function namesIn(?int $projectId, string $ownerUid, ?int $exceptId): array {
 		$qb = $this->db->getQueryBuilder();
-		$qb->selectDistinct('r.name')->from($this->getTableName(), 'r')
-			->innerJoin('r', 'deliver_reviewer_links', 'l', $qb->expr()->eq('l.reviewer_id', 'r.id'))
-			->where($qb->expr()->in('l.token', $qb->createNamedParameter($tokens, IQueryBuilder::PARAM_STR_ARRAY)))
-			->andWhere($qb->expr()->isNull('r.removed_at'));
+		$qb->selectDistinct('name')->from($this->getTableName())
+			->where($qb->expr()->isNull('removed_at'));
+		if ($projectId === null) {
+			$qb->andWhere($qb->expr()->isNull('project_id'))
+				->andWhere($qb->expr()->eq('owner_uid', $qb->createNamedParameter($ownerUid)));
+		} else {
+			$qb->andWhere($qb->expr()->eq('project_id', $qb->createNamedParameter($projectId, IQueryBuilder::PARAM_INT)));
+		}
 		if ($exceptId !== null) {
-			$qb->andWhere($qb->expr()->neq('r.id', $qb->createNamedParameter($exceptId, IQueryBuilder::PARAM_INT)));
+			$qb->andWhere($qb->expr()->neq('id', $qb->createNamedParameter($exceptId, IQueryBuilder::PARAM_INT)));
 		}
 		$result = $qb->executeQuery();
 		$names = [];
