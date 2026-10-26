@@ -1,5 +1,10 @@
 # Änderungen
 
+## Unveröffentlicht
+
+### Geändert
+- Projektliste mit einer Abfrage geladen, welche Versionsdateien ein Mitglied öffnen kann, statt jede Datei zu öffnen.
+
 ## 0.9.6 – 2026-10-26
 
 ### Neu
@@ -10,7 +15,6 @@
 - Projekt wird gelöscht, statt seine Assets nach „Ohne Projekt“ zu verschieben.
 - In den Einstellungen eines Review-Links erklärt, was „ohne Downloads“ und das Wasserzeichen bewirken.
 - ffmpeg und ffprobe auf lokale Dateien in den Formaten beschränkt, die Deliver aufnimmt.
-- Projektliste fragt in einer Abfrage, welche Versionsdateien ein Mitglied öffnen kann, statt jede Datei zu öffnen.
 - Playlists (M3U, PLS) vom Review ausgenommen.
 - Ableton Live Sets abgelehnt, die entpackt größer als 100 MB sind.
 - Anhänge auf zusammen 20 MB je Person und Version begrenzt, einstellbar in den Admin-Einstellungen.
