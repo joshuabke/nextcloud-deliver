@@ -142,9 +142,31 @@ class ProjectApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	/** The Project becomes a Deleted Project (ADR 0015) */
 	public function destroy(int $id): Response {
 		return $this->guard(function () use ($id) {
-			$this->service->remove((string)$this->userId, $id);
+			$this->service->delete((string)$this->userId, $id);
+			return [];
+		});
+	}
+
+	#[NoAdminRequired]
+	public function deleted(): Response {
+		return $this->guard(fn () => $this->service->listDeleted((string)$this->userId));
+	}
+
+	#[NoAdminRequired]
+	public function restore(int $id): Response {
+		return $this->guard(function () use ($id) {
+			$this->service->restore((string)$this->userId, $id);
+			return [];
+		});
+	}
+
+	#[NoAdminRequired]
+	public function deleteForGood(int $id): Response {
+		return $this->guard(function () use ($id) {
+			$this->service->deleteForGood((string)$this->userId, $id);
 			return [];
 		});
 	}

@@ -32,8 +32,8 @@ class Notifier implements INotifier {
 		if ($notification->getApp() !== Application::APP_ID) {
 			throw new UnknownNotificationException();
 		}
-		$l = $this->l10n->get(Application::APP_ID, $languageCode);
 		$p = $notification->getSubjectParameters();
+		$l = $this->l10n->get(Application::APP_ID, $languageCode);
 		$where = ['{asset}' => $p['asset'], '{number}' => $p['number']];
 		$subject = match ($notification->getSubject()) {
 			NotificationService::COMMENT => $l->t('{author} commented on {asset}, Version {number}'),

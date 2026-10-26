@@ -45,8 +45,20 @@ const reviewers = ref([])
 const editing = ref(null)
 /** The Reviewer whose settings are open */
 const person = ref(null)
-/** A Reviewer's own rights on one link, opened from under that link: {reviewer, link} */
+/** A Reviewer's own rights on one link, opened from under that link: {reviewerId, link} */
 const openRights = ref(null)
+/** The Reviewer and their place on that link, looked up afresh, so that a reload never leaves the dialog on a stale copy */
+const openPersonal = computed(() => {
+	const reviewer = openRights.value && reviewers.value.find((each) => each.id === openRights.value.reviewerId)
+	const place = reviewer && personalLinkOn(reviewer, openRights.value.link)
+	return place ? { reviewer, place } : null
+})
+// Once a reload takes the Reviewer off that link, the dialog stays closed, also when they come back on it
+watch(openPersonal, (open) => {
+	if (open === null) {
+		openRights.value = null
+	}
+})
 /** Whether the Deliver settings are open */
 const settingsOpen = ref(false)
 /** Whether the dialog that invites someone on a link of their own is open (story 145) */
@@ -65,7 +77,7 @@ const byId = computed(() => new Map(reviewers.value.map((reviewer) => [reviewer.
 async function load(id = props.id) {
 	const found = await listReviewLinks(id).catch(() => ({ links: [], reviewers: [] }))
 	if (props.id === id) {
-		links.value = found.links.map((link) => ({ ...link, title: linkTitle(link, project.value?.assets ?? []) }))
+		links.value = found.links.map((link) => ({ ...link, title: linkTitle(link) }))
 		reviewers.value = found.reviewers
 		canMail.value = found.canMail
 		person.value = person.value && (byId.value.get(person.value.id) ?? null)
@@ -236,7 +248,7 @@ function personalLink(reviewer) {
 					:key="reviewer.id"
 					:name="reviewer.name"
 					:inlineActions="1"
-					@click="openRights = { reviewer, link }">
+					@click="openRights = { reviewerId: reviewer.id, link }">
 					<template #icon>
 						<PersonAvatar :author="{ type: 'reviewer', id: reviewer.id, name: reviewer.name }" :size="24" />
 					</template>
@@ -305,11 +317,10 @@ function personalLink(reviewer) {
 			</ul>
 			<SettingsDialog v-if="settingsOpen" @close="settingsOpen = false" />
 			<PersonalLinkRightsDialog
-				v-if="openRights && personalLinkOn(openRights.reviewer, openRights.link)"
-				:reviewer="openRights.reviewer"
+				v-if="openPersonal"
+				v-model:rights="openPersonal.place.rights"
+				:reviewer="openPersonal.reviewer"
 				:link="openRights.link"
-				:rights="personalLinkOn(openRights.reviewer, openRights.link).rights"
-				@changed="(rights) => personalLinkOn(openRights.reviewer, openRights.link).rights = rights"
 				@close="openRights = null" />
 			<InviteDialog
 				v-if="invitingOpen"
@@ -325,6 +336,7 @@ function personalLink(reviewer) {
 				:link="editing"
 				:assets="project?.assets ?? []"
 				:people="reviewers"
+				:canMail="canMail"
 				@update="replace"
 				@deleted="closeEditing"
 				@close="closeEditing" />

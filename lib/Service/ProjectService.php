@@ -24,8 +24,10 @@ use OCP\Files\IRootFolder;
 use OCP\Files\Node;
 use OCP\Files\NotFoundException;
 use OCP\Files\Storage\ISharedStorage;
+use OCP\IL10N;
 use OCP\IURLGenerator;
 use OCP\Share\IShare;
+use Psr\Log\LoggerInterface;
 
 /**
  * Projects and their Assets as a Member sees them (ADR 0009). A Project is a
@@ -55,6 +57,10 @@ class ProjectService {
 		private Members $members,
 		private Authors $authors,
 		private Ffmpeg $ffmpeg,
+		private PipelineSettings $settings,
+		private NotificationService $notifications,
+		private IL10N $l,
+		private LoggerInterface $logger,
 	) {
 	}
 
@@ -70,6 +76,10 @@ class ProjectService {
 		$result = [];
 		// ponytail: opens every Version's file per Project; index access if lists get long
 		foreach ($this->projects->findAll() as $project) {
+			// Listed under Deleted Projects instead (ADR 0015)
+			if ($project->isDeleted()) {
+				continue;
+			}
 			$folder = $this->folderOf($project, $home);
 			$stacks = $this->visibleStacks($project, $uid, $home);
 			if ($folder === null && $stacks[0] === [] && $project->getOwnerUid() !== $uid) {
@@ -92,7 +102,10 @@ class ProjectService {
 
 	/** @throws NotFoundException when the user cannot reach the folder or it is no Folder Project */
 	public function getForFolder(string $uid, int $folderId): array {
-		$project = $this->projects->findByFolderId($folderId) ?? throw new NotFoundException('Folder is not a Project');
+		$project = $this->projects->findByFolderId($folderId);
+		if ($project === null || $project->isDeleted()) {
+			throw new NotFoundException('Folder is not a Project');
+		}
 		$folder = $this->folderOf($project, $this->root->getUserFolder($uid)) ?? throw new NotFoundException('Folder is not a Project');
 		return $this->serialize($project, $folder, $uid);
 	}
@@ -179,7 +192,11 @@ class ProjectService {
 			throw new ProjectConflictException('Only a folder can become a Folder Project');
 		}
 		$this->assertWritable($folder);
-		$this->assertNotNested($home, $folder);
+		$deleted = $this->projects->findByFolderId($folderId);
+		if ($deleted?->isDeleted() === true) {
+			throw $this->deletedConflict($deleted, $uid, $this->l->t('This folder is a Project already'));
+		}
+		$this->assertNotNested($uid, $folder);
 
 		$project = $this->insert($uid, $folderId, $folder->getName(), $autoIntake);
 		$this->takeFromNoProject($project, $folder, $uid);
@@ -189,11 +206,7 @@ class ProjectService {
 		return $this->serialize($project, $folder, $uid);
 	}
 
-	/**
-	 * Assets of No Project with a file in the folder join the Folder Project it
-	 * becomes, so a Project removed and made again gets its Assets back with
-	 * their review data (story 9).
-	 */
+	/** Assets of No Project with a file in the folder join the Folder Project it becomes, with their review data */
 	private function takeFromNoProject(Project $project, Folder $folder, string $uid): void {
 		$fileIds = array_map(static fn (File $file) => $file->getId(), iterator_to_array($this->mediaFiles($folder), false));
 		$assetIds = array_unique(array_map(static fn (Version $version) => $version->getAssetId(), $this->versions->findByFiles($fileIds)));
@@ -310,6 +323,7 @@ class ProjectService {
 			throw new ProjectConflictException('Only a video, audio or picture file can be enabled for review');
 		}
 		$this->assertWritable($file);
+		$this->assertNotHeld($file, $uid);
 		if ($assetId !== null) {
 			$asset = $this->assets->find($assetId) ?? throw new NotFoundException('Asset not found');
 			$this->assertSameKind($uid, $this->writableAsset($uid, $asset), $file);
@@ -321,6 +335,10 @@ class ProjectService {
 			$projectId === self::NONE => null,
 			default => $this->visible($uid, $projectId)[0],
 		};
+		// Only a file not in review yet would join the Deleted Project above it; one in review stays where it is
+		if ($project?->isDeleted() === true && $this->versions->findByFile($file->getId()) === null) {
+			throw $this->deletedConflict($project, $uid, $this->l->t('This file is inside a Project you may not change'));
+		}
 		$this->stacks->intake($project, $file, $uid);
 		return $this->assetForFile($uid, $fileId);
 	}
@@ -333,14 +351,13 @@ class ProjectService {
 	public function assetForFile(string $uid, int $fileId): array {
 		$file = $this->root->getUserFolder($uid)->getFirstNodeById($fileId);
 		$version = $file instanceof File ? $this->versions->findByFile($fileId) : null;
-		$asset = $version === null ? null : $this->assets->find($version->getAssetId());
+		$asset = $version === null || $this->projects->isDeleted($version->getProjectId()) ? null : $this->assets->find($version->getAssetId());
 		if (!$file instanceof File || $version === null || $asset === null) {
 			throw new NotFoundException('File is not enabled for review');
 		}
 		$project = $this->projectOf($asset);
 		return [
 			'assetId' => $version->getAssetId(),
-			'assetName' => $this->stacks->nameOf($asset),
 			'projectId' => $project?->getId() ?? self::NONE,
 			'projectName' => $project === null ? null : $this->nameOf($project, $this->root->getUserFolder($uid)),
 			'versionId' => $version->getId(),
@@ -448,6 +465,10 @@ class ProjectService {
 	 */
 	private function reachVersion(string $uid, int $versionId): array {
 		$version = $this->versions->find($versionId) ?? throw new NotFoundException('Version not found');
+		// Nobody opens what a Deleted Project holds (ADR 0015)
+		if ($this->projects->isDeleted($version->getProjectId())) {
+			throw new NotFoundException('Version not found');
+		}
 		$home = $this->root->getUserFolder($uid);
 		$file = $home->getFirstNodeById($version->getFileId());
 		if ($file instanceof File) {
@@ -715,23 +736,151 @@ class ProjectService {
 	}
 
 	/**
-	 * Removes a Project; its Assets go to No Project with their review data
-	 * (story 9). The files stay.
+	 * Deletes a Project: it becomes a Deleted Project, whole, until it is
+	 * restored or goes for good (ADR 0015). Refused while it holds an Asset
+	 * the Member may not change, since its data would go with the rest.
 	 *
-	 * @throws AccessDeniedException the user may not change this Project
+	 * @throws AccessDeniedException the user may not change this Project, or one of its Assets
 	 */
-	public function remove(string $uid, int $id): void {
+	public function delete(string $uid, int $id): void {
 		[$project] = $this->editable($uid, $id);
-		$this->stacks->removeProject($project, $uid);
+		$refused = [];
+		$unseen = 0;
+		foreach ($this->assets->findByProject($id) as $asset) {
+			try {
+				$this->writableAsset($uid, $asset);
+			} catch (AccessDeniedException) {
+				$refused[] = $this->stacks->nameOf($asset);
+			} catch (NotFoundException) {
+				// Named only to whoever can open them (ADR 0009)
+				$unseen++;
+			}
+		}
+		if ($unseen > 0) {
+			$refused[] = $this->l->n('%n Asset you cannot open', '%n Assets you cannot open', $unseen);
+		}
+		if ($refused !== []) {
+			throw new AccessDeniedException($this->l->t('You may not change every Asset of this Project: %s. Move them to another Project or remove them first.', [implode(', ', $refused)]));
+		}
+		$project->setDeletedAt($this->time->getTime());
+		$project->setDeletedBy($uid);
+		$this->projects->update($project);
+		foreach ($this->versions->findByProject($id) as $version) {
+			$this->notifications->versionGone($version, array_map(static fn ($comment) => $comment->getId(), $this->comments->findByVersion($version->getId())));
+		}
+		foreach ($this->assets->findByProject($id) as $asset) {
+			$this->notifications->assetGone($asset->getId());
+		}
 	}
 
 	/**
-	 * For the periodic scan: Auto Intake looks at every Folder Project's
+	 * The Deleted Projects this Member may restore: those they could change (story 148)
+	 *
+	 * @return array{projects: list<array<string, mixed>>, days: int}
+	 */
+	public function listDeleted(string $uid): array {
+		$home = $this->root->getUserFolder($uid);
+		$days = $this->keptDays();
+		$listed = [];
+		foreach (array_reverse($this->projects->findDeleted()) as $project) {
+			if (!$this->mayChangeDeleted($project, $home, $uid)) {
+				continue;
+			}
+			$listed[] = [
+				'id' => $project->getId(),
+				'name' => $this->nameOf($project, $home),
+				'deletedAt' => $project->getDeletedAt(),
+				'deletedBy' => $this->authors->of($project->getDeletedBy(), null)['name'],
+				'goesAt' => (int)$project->getDeletedAt() + $days * 86400,
+			];
+		}
+		return ['projects' => $listed, 'days' => $days];
+	}
+
+	/** Brings a Deleted Project back with everything whose file is still there, its Review Links as they were */
+	public function restore(string $uid, int $id): void {
+		$project = $this->deletedEditable($uid, $id);
+		$project->setDeletedAt(null);
+		$project->setDeletedBy(null);
+		$this->projects->update($project);
+	}
+
+	/** Deletes a Deleted Project for good, with all its data (story 150) */
+	public function deleteForGood(string $uid, int $id): void {
+		$this->stacks->deleteProject($this->deletedEditable($uid, $id));
+	}
+
+	/** Deletes for good the Deleted Projects kept for as long as the admin set (story 151) */
+	public function purgeDeleted(): void {
+		$until = $this->time->getTime() - $this->keptDays() * 86400;
+		foreach ($this->projects->findDeleted() as $project) {
+			if ((int)$project->getDeletedAt() > $until) {
+				continue;
+			}
+			// One that fails stays for the next run, and holds up neither the others nor the scan
+			try {
+				$this->stacks->deleteProject($project);
+			} catch (\Throwable $e) {
+				$this->logger->error('Could not delete the Deleted Project ' . $project->getId() . ' for good', ['exception' => $e]);
+			}
+		}
+	}
+
+	private function keptDays(): int {
+		return (int)$this->settings->get()['deletedDays'];
+	}
+
+	/**
+	 * @throws NotFoundException no such Deleted Project, or not one the user may change
+	 */
+	private function deletedEditable(string $uid, int $id): Project {
+		try {
+			$project = $this->projects->find($id);
+		} catch (DoesNotExistException) {
+			throw new NotFoundException('Project not found');
+		}
+		// Only whoever may change it knows of it
+		if (!$project->isDeleted() || !$this->mayChangeDeleted($project, $this->root->getUserFolder($uid), $uid)) {
+			throw new NotFoundException('Project not found');
+		}
+		return $project;
+	}
+
+	/**
+	 * Whoever wants a file of a Deleted Project, or its folder, back in review
+	 * is offered its restore, or deleting it for good first (story 149), if
+	 * they may change it; anyone else hears only what they are refused.
+	 */
+	private function deletedConflict(Project $project, string $uid, string $otherwise): ProjectConflictException {
+		$home = $this->root->getUserFolder($uid);
+		if (!$this->mayChangeDeleted($project, $home, $uid)) {
+			return new ProjectConflictException($otherwise);
+		}
+		$name = $this->nameOf($project, $home);
+		return new ProjectConflictException(
+			$this->l->t('This belongs to the deleted Project "%s". Restore it, or delete it for good to start afresh.', [$name]),
+			'deleted',
+			['projectId' => $project->getId(), 'projectName' => $name],
+		);
+	}
+
+	/** @throws ProjectConflictException a Deleted Project holds the file */
+	private function assertNotHeld(File $file, string $uid): void {
+		$projectId = $this->versions->findByFile($file->getId())?->getProjectId();
+		if ($this->projects->isDeleted($projectId)) {
+			throw $this->deletedConflict($this->projects->find((int)$projectId), $uid, $this->l->t('This file belongs to a Project you may not change'));
+		}
+	}
+
+	/**
+	 * For the periodic scan: Deleted Projects whose time is up go for good,
+	 * Auto Intake looks at every Folder Project's
 	 * folder, a Folder Project whose folder was deleted for good keeps its
 	 * Assets without a folder (story 11), and every Version's file is looked
 	 * at wherever it lies (stories 18 and 19).
 	 */
 	public function scanAll(): void {
+		$this->purgeDeleted();
 		foreach ($this->projects->findAll() as $project) {
 			$folderId = $project->getFolderId();
 			if ($folderId === null) {
@@ -751,7 +900,8 @@ class ProjectService {
 						$project->setName($folder->getName());
 						$this->projects->update($project);
 					}
-					if ($project->getAutoIntake()) {
+					// A Deleted Project takes nothing in (ADR 0015)
+					if ($project->getAutoIntake() && !$project->isDeleted()) {
 						$this->intakeFolder($project, $folder);
 					}
 					break;
@@ -775,6 +925,9 @@ class ProjectService {
 		} catch (DoesNotExistException) {
 			throw new NotFoundException('Project not found');
 		}
+		if ($project->isDeleted()) {
+			throw new NotFoundException('Project not found');
+		}
 		$home = $this->root->getUserFolder($uid);
 		$folder = $this->folderOf($project, $home);
 		if ($folder === null && $project->getOwnerUid() !== $uid && $this->visibleStacks($project, $uid, $home)[0] === []) {
@@ -796,6 +949,13 @@ class ProjectService {
 			throw new AccessDeniedException('Only who made a Project, or may write to its folder, changes it');
 		}
 		return [$project, $folder];
+	}
+
+	/** Who may change a Deleted Project; once its folder is out of reach, as in the trash of Files, whoever deleted it */
+	private function mayChangeDeleted(Project $project, Folder $home, string $uid): bool {
+		$folder = $this->folderOf($project, $home);
+		return $this->mayEdit($project, $folder, $uid)
+			|| ($project->getFolderId() !== null && $folder === null && $project->getDeletedBy() === $uid);
 	}
 
 	private function mayEdit(Project $project, ?Folder $folder, string $uid): bool {
@@ -862,8 +1022,8 @@ class ProjectService {
 	 * hides what is above it, and a share moved into a folder hides that folder
 	 * from its owner.
 	 */
-	private function assertNotNested(Folder $userFolder, Folder $folder): void {
-		$this->assertNotNestedIn($userFolder, $folder);
+	private function assertNotNested(string $uid, Folder $folder): void {
+		$this->assertNotNestedIn($uid, $this->root->getUserFolder($uid), $folder);
 		$owner = $folder->getOwner();
 		if ($owner === null) {
 			return;
@@ -871,14 +1031,17 @@ class ProjectService {
 		$ownerFolder = $this->root->getUserFolder($owner->getUID());
 		$owned = $ownerFolder->getFirstNodeById($folder->getId());
 		if ($owned instanceof Folder && $owned->getPath() !== $folder->getPath()) {
-			$this->assertNotNestedIn($ownerFolder, $owned);
+			$this->assertNotNestedIn($uid, $ownerFolder, $owned);
 		}
 	}
 
-	private function assertNotNestedIn(Folder $top, Folder $folder): void {
+	private function assertNotNestedIn(string $uid, Folder $top, Folder $folder): void {
 		for ($path = dirname($folder->getPath()); str_starts_with($path, $top->getPath()); $path = dirname($path)) {
-			if ($this->projects->findByFolderId($this->root->get($path)->getId()) !== null) {
-				throw new ProjectConflictException('This folder is inside a Project already');
+			$above = $this->projects->findByFolderId($this->root->get($path)->getId());
+			if ($above !== null) {
+				// A Deleted Project still holds its folder, and is offered back (story 149)
+				$refused = $this->l->t('This folder is inside a Project already');
+				throw $above->isDeleted() ? $this->deletedConflict($above, $uid, $refused) : new ProjectConflictException($refused);
 			}
 		}
 		$prefix = $folder->getPath() . '/';
@@ -886,7 +1049,8 @@ class ProjectService {
 			$otherFolderId = $other->getFolderId();
 			$node = $otherFolderId === null ? null : $top->getFirstNodeById($otherFolderId);
 			if ($node !== null && str_starts_with($node->getPath(), $prefix)) {
-				throw new ProjectConflictException('This folder contains a Project already');
+				$refused = $this->l->t('This folder contains a Project already');
+				throw $other->isDeleted() ? $this->deletedConflict($other, $uid, $refused) : new ProjectConflictException($refused);
 			}
 		}
 	}

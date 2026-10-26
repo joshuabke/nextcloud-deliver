@@ -33,7 +33,7 @@ function save(fields) {
 	return run(() => store.save(props.project.id, fields))
 }
 
-/** Removes the Project with all its review data (story 9) */
+/** Deletes the Project: it goes to Deleted Projects (story 9) */
 async function remove() {
 	if (await confirmProjectRemoval()) {
 		await run(async () => {
@@ -84,7 +84,7 @@ async function remove() {
 				variant="error"
 				:disabled="busy"
 				@click="remove">
-				{{ t('deliver', 'Remove Project') }}
+				{{ t('deliver', 'Delete Project') }}
 			</NcButton>
 			<NcButton v-if="filesUrl" :href="filesUrl">
 				{{ t('deliver', 'Open in Files') }}

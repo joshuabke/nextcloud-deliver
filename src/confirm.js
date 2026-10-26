@@ -15,16 +15,49 @@ export function confirmRemoval(title, text, confirm) {
 }
 
 /**
- * Asks before a Project goes with all its review data (story 9).
+ * Asks before a Project is deleted; it goes to Deleted Projects first (story 9, ADR 0015).
  *
  * @return {Promise<boolean>} whether the person confirmed
  */
 export function confirmProjectRemoval() {
 	return confirmRemoval(
-		t('deliver', 'Remove Project?'),
-		t('deliver', 'Its Assets keep their Comments and go to No Project. The files stay untouched.'),
-		t('deliver', 'Remove Project'),
+		t('deliver', 'Delete Project?'),
+		t('deliver', 'It goes to Deleted Projects at the end of the Project list, where it can be restored until it is deleted for good. The files stay untouched.'),
+		t('deliver', 'Delete Project'),
 	)
+}
+
+/**
+ * Asks before a Deleted Project goes for good (story 150).
+ *
+ * @param {string} name - the Project's name
+ * @return {Promise<boolean>} whether the person confirmed
+ */
+export function confirmDeleteForGood(name) {
+	return confirmRemoval(
+		t('deliver', 'Delete "{project}" for good?', { project: name }),
+		t('deliver', 'Its Assets, Comments, Approvals, Review Links and Reviewers are deleted and cannot be restored. The files stay untouched.'),
+		t('deliver', 'Delete for good'),
+	)
+}
+
+/**
+ * Offers a Deleted Project back when its folder or one of its files is wanted in review again (story 149).
+ *
+ * @param {string} name - the Deleted Project's name
+ * @return {Promise<?string>} 'restore', 'afresh' to delete it for good first, or null when the person cancelled
+ */
+export async function offerDeletedProject(name) {
+	const answer = await spawnDialog(ConfirmDialog, {
+		name: t('deliver', 'This belongs to a deleted Project'),
+		message: t('deliver', '"{project}" is under Deleted Projects. Restore it with everything it had, or delete it for good and start afresh. The files stay untouched.', { project: name }),
+		confirm: t('deliver', 'Delete for good and start afresh'),
+		other: t('deliver', 'Restore'),
+	})
+	if (answer === true) {
+		return 'afresh'
+	}
+	return answer === 'other' ? 'restore' : null
 }
 
 /**

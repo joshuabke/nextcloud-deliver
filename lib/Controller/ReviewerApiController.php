@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace OCA\Deliver\Controller;
 
 use OCA\Deliver\Db\Reviewer;
+use OCA\Deliver\Db\ReviewerMapper;
 use OCA\Deliver\Service\AccessDeniedException;
 use OCA\Deliver\Service\Contacts;
 use OCA\Deliver\Service\InvalidRequestException;
 use OCA\Deliver\Service\ReviewerService;
+use OCA\Deliver\Service\ReviewLink;
 use OCA\Deliver\Service\ReviewLinks;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -18,7 +20,11 @@ use OCP\AppFramework\OCSController;
 use OCP\Files\NotFoundException;
 use OCP\IRequest;
 
-/** A Member's Reviewers, on whichever link */
+/**
+ * A Member's Reviewers, on whichever link
+ *
+ * @psalm-import-type Rights from ReviewerMapper
+ */
 class ReviewerApiController extends OCSController {
 	use GuardsErrors;
 
@@ -91,7 +97,7 @@ class ReviewerApiController extends OCSController {
 	}
 
 	/**
-	 * @return array{canComment: ?bool, allowOlder: ?bool, watermark: ?bool}
+	 * @return Rights
 	 * @throws InvalidRequestException not an object of yes, no or null
 	 */
 	private static function rightsGiven(mixed $rights): array {
@@ -99,7 +105,7 @@ class ReviewerApiController extends OCSController {
 			throw new InvalidRequestException('Rights are an object of canComment, allowOlder and watermark');
 		}
 		$given = [];
-		foreach (['canComment', 'allowOlder', 'watermark'] as $right) {
+		foreach (ReviewLink::OWN_RIGHTS as $right) {
 			$value = $rights[$right] ?? null;
 			$given[$right] = $value === null ? null : filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
 			if ($value !== null && $given[$right] === null) {

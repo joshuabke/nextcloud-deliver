@@ -34,7 +34,7 @@ class TroubleshootingTest extends TestCase {
 		self::assertGreaterThan(0, $report['data']['counts']['versions']);
 		self::assertStringNotContainsString('secret-client', json_encode($report['data']), 'no file or Project names');
 
-		$this->nc->ocs('DELETE', "/projects/$project");
+		$this->nc->deleteProject($project);
 		$this->nc->delete($root);
 	}
 
@@ -57,7 +57,7 @@ class TroubleshootingTest extends TestCase {
 		self::assertGreaterThan(0, $retried['data']['retried']);
 		self::assertSame(0, $retried['data']['status']['states']['failed'] ?? 0, 'all of them are queued again');
 
-		$this->nc->ocs('DELETE', "/projects/$project");
+		$this->nc->deleteProject($project);
 		$this->nc->delete($root);
 	}
 
@@ -75,7 +75,7 @@ class TroubleshootingTest extends TestCase {
 		self::assertSame(200, $again['status'], json_encode($again['data']));
 		self::assertFalse($newest()['processingFailed'], 'it is queued again');
 
-		$this->nc->ocs('DELETE', "/projects/$project");
+		$this->nc->deleteProject($project);
 		$this->nc->delete($root);
 	}
 

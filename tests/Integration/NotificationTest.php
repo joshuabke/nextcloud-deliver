@@ -54,7 +54,7 @@ class NotificationTest extends TestCase {
 	}
 
 	protected function tearDown(): void {
-		$this->nc->ocs('DELETE', "/projects/{$this->projectId}");
+		$this->nc->deleteProject($this->projectId);
 		$this->admin->ocsForm('DELETE', "/ocs/v2.php/cloud/users/{$this->user}");
 		$this->admin->ocsForm('DELETE', "/ocs/v2.php/cloud/users/{$this->owner}");
 	}
@@ -91,6 +91,17 @@ class NotificationTest extends TestCase {
 		// A deleted Comment takes its notification along
 		$this->nc->ocs('DELETE', "/comments/{$comment['data']['id']}");
 		self::assertNotContains("{$this->user} commented on cut, Version 1", $this->subjects($this->nc));
+	}
+
+	public function testADeletedProjectIsQuietAndItsNotificationsGo(): void {
+		$this->member->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 5, 'body' => 'warmer please']);
+		self::assertSame(["{$this->user} commented on cut, Version 1"], $this->subjects($this->nc));
+
+		self::assertSame(200, $this->nc->ocs('DELETE', "/projects/{$this->projectId}")['status']);
+		$this->nc->delete("{$this->root}/cut.mp4");
+		self::assertSame(200, $this->nc->ocs('POST', "/deleted-projects/{$this->projectId}/restore")['status']);
+		self::assertSame([], $this->subjects($this->nc), 'what it told is dismissed, and does not come back with its restore (ADR 0015)');
+		self::assertSame([], $this->subjects($this->member), 'and nothing was told meanwhile');
 	}
 
 	public function testAMentionReachesTheMemberEvenWhenMuted(): void {
@@ -203,7 +214,7 @@ class NotificationTest extends TestCase {
 
 	public function testAReviewerWithAnEmailHearsOfReplies(): void {
 		$link = $this->nc->ocs('POST', "/projects/{$this->projectId}/links");
-		self::assertTrue($link['data']['canMail'], 'the dev instance mails into Mailpit');
+		self::assertTrue($this->nc->ocs('GET', "/projects/{$this->projectId}/links")['data']['canMail'], 'the dev instance mails into Mailpit');
 		$email = 'reviewer-' . bin2hex(random_bytes(4)) . '@example.test';
 		$reviewer = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $link['data']['token']);
 		$reviewer->call('POST', '/api/reviewer', ['name' => 'Mara', 'email' => $email, 'language' => 'de']);
@@ -235,6 +246,6 @@ class NotificationTest extends TestCase {
 		self::assertSame(200, $this->nc->ocs('PUT', "/assets/$assetId/project", ['projectId' => $other])['status']);
 		$this->nc->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 3, 'body' => 'yes, final', 'parentId' => $question['id']]);
 		self::assertSame(['Your Personal Link to the review'], $this->subjectsTo($email), 'the Reply stays in the other Project, where Mara\'s Personal Link does not open');
-		$this->nc->ocs('DELETE', "/projects/$other");
+		$this->nc->deleteProject($other);
 	}
 }

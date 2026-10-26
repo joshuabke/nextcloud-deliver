@@ -18,6 +18,10 @@ _Avoid_: Project folder (for the Project itself)
 Where the Assets that belong to no Project wait, listed for the Member who enabled them.
 _Avoid_: Inbox, unsorted, loose files
 
+**Deleted Project**:
+A Project a Member deleted, kept under Deleted Projects for a time the admin sets (30 days unless changed), from where whoever may change it restores it with everything it had or deletes it for good. Meanwhile it still holds its files, but its Review Links are closed and nothing about it is notified.
+_Avoid_: Trashed Project, Project trash (the trash is Files')
+
 **Auto Intake**:
 A Folder Project setting that makes every media file in the folder an Asset, including files that arrive later, unless another Project already holds it or a Member removed it from review while it lay in the folder. On when a folder becomes a Project.
 _Avoid_: Watch mode, auto scan, sync

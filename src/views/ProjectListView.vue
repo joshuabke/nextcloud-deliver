@@ -22,10 +22,12 @@ import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import ContextMenu from '../components/ContextMenu.vue'
+import DeletedProjects from '../components/DeletedProjects.vue'
 import FilterBar from '../components/FilterBar.vue'
 import ProjectCard from '../components/ProjectCard.vue'
 import ProjectSettingsDialog from '../components/ProjectSettingsDialog.vue'
 import { errorMessage, makeFolder } from '../api.js'
+import { orDeletedProject } from '../composables/deletedProject.js'
 import { useQuery } from '../composables/query.js'
 import { confirmProjectRemoval } from '../confirm.js'
 import { FILTER_LABELS, PROJECT_FILTERS, projectPasses, SORT_OPTIONS, sortProjects, SORTS } from '../lib/filters.js'
@@ -37,6 +39,8 @@ const router = useRouter()
 const error = ref(null)
 /** The Project whose settings are open */
 const settings = ref(null)
+/** The Deleted Projects under the list, told when one more is deleted */
+const deleted = ref(null)
 // Every visit shows the news as they are now
 store.fetchAll()
 
@@ -72,7 +76,7 @@ function openMenu(event, project) {
 				? { label: t('deliver', 'Notify me again'), icon: unmuteIcon, action: () => save(project, { muted: false }) }
 				: { label: t('deliver', 'Mute notifications'), icon: muteIcon, action: () => save(project, { muted: true }) },
 			project.path && { label: t('deliver', 'Open in Files'), icon: filesIcon, href: generateUrl('/apps/files/') + '?' + new URLSearchParams({ dir: projectDir(project.path) }) },
-			project.canWrite && { label: t('deliver', 'Remove Project'), icon: removeIcon, danger: true, action: () => remove(project) },
+			project.canWrite && { label: t('deliver', 'Delete Project'), icon: removeIcon, danger: true, action: () => remove(project) },
 		].filter(Boolean),
 	}
 }
@@ -90,7 +94,7 @@ async function save(project, fields) {
 }
 
 /**
- * Removes the Project with all its review data, after asking (story 9)
+ * Deletes the Project after asking: it goes to Deleted Projects (story 9)
  *
  * @param {object} project - the Project to remove
  */
@@ -98,6 +102,7 @@ async function remove(project) {
 	if (await confirmProjectRemoval()) {
 		try {
 			await store.remove(project.id)
+			await deleted.value?.load()
 		} catch (e) {
 			error.value = errorMessage(e)
 		}
@@ -136,11 +141,16 @@ async function pickParent() {
 async function createNamed() {
 	error.value = null
 	try {
+		// A Deleted Project around the new folder offers itself back first (story 149)
 		const project = ownFolder.value
-			? await store.create(await makeFolder(folderPath.value))
+			? await orDeletedProject(async () => store.create(await makeFolder(folderPath.value)))
 			: await store.createNamed(naming.value)
 		naming.value = null
-		router.push(`/projects/${project.id}`)
+		if (project) {
+			router.push(`/projects/${project.id}`)
+		} else {
+			await Promise.all([store.fetchAll(), deleted.value?.load()])
+		}
 	} catch (e) {
 		error.value = errorMessage(e)
 	}
@@ -163,8 +173,13 @@ async function create() {
 		return
 	}
 	try {
-		const project = await store.create(folder.fileid)
-		router.push(`/projects/${project.id}`)
+		// A folder whose Project is deleted offers that one back first (story 149)
+		const project = await orDeletedProject(() => store.create(folder.fileid))
+		if (project) {
+			router.push(`/projects/${project.id}`)
+		} else {
+			await Promise.all([store.fetchAll(), deleted.value?.load()])
+		}
 	} catch (e) {
 		error.value = errorMessage(e)
 	}
@@ -220,6 +235,7 @@ async function create() {
 				</button>
 			</li>
 		</ul>
+		<DeletedProjects v-if="store.loaded" ref="deleted" @restored="store.fetchAll()" />
 		<NcDialog
 			v-if="naming !== null"
 			:name="t('deliver', 'New Project')"
@@ -258,7 +274,7 @@ async function create() {
 			v-if="settings"
 			:project="settings"
 			@close="settings = null"
-			@removed="settings = null" />
+			@removed="settings = null; deleted?.load()" />
 	</div>
 </template>
 

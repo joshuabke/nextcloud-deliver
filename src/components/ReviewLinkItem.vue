@@ -29,8 +29,8 @@ const props = defineProps({
 	inDialog: { type: Boolean, default: false },
 	/** The Project's Reviewers, to suggest and to recognise by address when inviting */
 	people: { type: Array, required: true },
-	/** The Assets it may show, to title a link by its one Asset */
-	assets: { type: Array, default: () => [] },
+	/** Whether this Nextcloud sends mail (story 66) */
+	canMail: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['update', 'deleted'])
@@ -39,7 +39,9 @@ const { busy, error, run } = useBusy()
 /** The Reviewers on this link, each with their Personal Link through it and their own rights on it; null while loading */
 const reviewers = ref(null)
 /** The link's title as the navigation gives it: its label, else what it shows (story 145) */
-const title = computed(() => props.link.title ?? linkTitle(props.link, props.assets))
+const title = computed(() => props.link.title ?? linkTitle(props.link))
+/** Switched on but past its expiry date: it opens for nobody (#76) */
+const expired = computed(() => props.link.review && !props.link.live && Boolean(props.link.expireDate))
 /** The Reviewer whose own rights on this link are open */
 const rightsOf = ref(null)
 const inviting = ref(false)
@@ -190,12 +192,15 @@ function invite() {
 		<!-- A link pauses and goes live again with its Reviewers (story 122) -->
 		<NcCheckboxRadioSwitch
 			type="switch"
-			:modelValue="link.review"
-			:disabled="busy"
+			:modelValue="link.review && !expired"
+			:disabled="busy || expired"
 			@update:modelValue="setFlags({ review: $event })">
 			{{ t('deliver', 'Link is live') }}
 		</NcCheckboxRadioSwitch>
-		<p v-if="!link.review" class="deliver-link__hint">
+		<p v-if="expired" class="deliver-link__hint">
+			{{ t('deliver', 'Expired: the link shows nothing until you change or remove its expiry date.') }}
+		</p>
+		<p v-else-if="!link.review" class="deliver-link__hint">
 			{{ t('deliver', 'Paused: the link shows nothing until you switch it on again.') }}
 		</p>
 
@@ -235,7 +240,7 @@ function invite() {
 			<p v-if="!link.hasPassword" class="deliver-link__hint">
 				{{ t('deliver', 'This link has no password. Anyone it reaches can review.') }}
 			</p>
-			<p v-if="link.canMail === false" class="deliver-link__hint">
+			<p v-if="!canMail" class="deliver-link__hint">
 				{{ t('deliver', 'This Nextcloud sends no email, so Reviewers are not mailed when someone replies to them.') }}
 			</p>
 			<div class="deliver-link__flags">
@@ -302,7 +307,7 @@ function invite() {
 					<p v-else-if="known" class="deliver-link__hint">
 						{{ t('deliver', '{name} reviews this Project already and gets this link too.', { name: known.name }) }}
 					</p>
-					<template v-if="email.trim() && link.canMail">
+					<template v-if="email.trim() && canMail">
 						<NcCheckboxRadioSwitch v-model="sendMail">
 							{{ t('deliver', 'Mail them their Personal Link') }}
 						</NcCheckboxRadioSwitch>
@@ -328,10 +333,9 @@ function invite() {
 		</p>
 		<PersonalLinkRightsDialog
 			v-if="rightsOf"
+			v-model:rights="rightsOf.rights"
 			:reviewer="rightsOf"
 			:link="{ ...link, title }"
-			:rights="rightsOf.rights"
-			@changed="(rights) => rightsOf.rights = rights"
 			@close="rightsOf = null" />
 	</div>
 </template>

@@ -50,6 +50,7 @@ class AdminSettingsController extends OCSController {
 		?string $extraArgs = null,
 		?string $projectFolder = null,
 		?int $attachmentLimit = null,
+		?int $deletedDays = null,
 	): Response {
 		$changes = [
 			'ffmpegPath' => $ffmpegPath,
@@ -62,6 +63,7 @@ class AdminSettingsController extends OCSController {
 			'extraArgs' => $extraArgs,
 			'projectFolder' => $projectFolder,
 			'attachmentLimit' => $attachmentLimit,
+			'deletedDays' => $deletedDays,
 		];
 		return $this->guard(fn () => ['settings' => $this->settings->save($changes), 'status' => $this->settings->status()]);
 	}

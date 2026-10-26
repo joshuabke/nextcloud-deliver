@@ -5,14 +5,17 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/projects` | The Projects the user sees: a Folder Project whose folder they reach, one they made, one with a file they can open; and No Project (`id` 0, `none`) while it holds something of theirs |
-| POST | `/projects` `{folderId, autoIntake}` or `{name}` | Turn a folder into a Folder Project, or make a Project by name |
+| POST | `/projects` `{folderId, autoIntake}` or `{name}` | Turn a folder into a Folder Project, or make a Project by name; 409 `{reason: deleted, projectId, projectName}` when a Deleted Project the user may change holds the folder, one inside it or one around it, a plain 409 for anyone else |
 | GET | `/folders/{folderId}/project` | The Folder Project of a folder, or 404 |
 | GET | `/projects/{id}` | Project with the Assets the user can open; Auto Intake looks at the folder first. `/projects/0` is the user's No Project |
 | PUT | `/projects/{id}` `{autoIntake, allowOlder, fpsNum, fpsDen, timecodeMode, name}` | Project settings, each field optional; `autoIntake` only for a Folder Project, `name` only for any other |
 | PUT | `/projects/{id}/mute` `{muted}` | Mute or unmute the Project's notifications for oneself; 0 mutes No Project |
-| DELETE | `/projects/{id}` | Remove the Project; its Assets go to No Project, files stay untouched |
-| GET | `/files/{fileId}/asset` | The Asset of a file with its Project, or 404; `assetName` titles a link that shows it alone; `waveformFromBrowser` says the browser that uploaded the audio should decode its Waveform and hand it in (no ffmpeg, no Waveform yet, no WAV) |
-| POST | `/assets` `{fileId, projectId, assetId}` | Enable one media file for review: into the Project given, 0 for No Project, or without one the Folder Project above it, else No Project; with `assetId`, as the next Version of that Asset of the same kind of media, a file already in review moving over |
+| DELETE | `/projects/{id}` | Delete the Project: it becomes a Deleted Project, whole (ADR 0015); 403 naming the Assets the user may not change but can open, and counting the others |
+| GET | `/deleted-projects` | `{projects, days}`: the Deleted Projects the user may restore, each with `name`, `deletedAt`, `deletedBy` and `goesAt`, when it is deleted for good; `days` they are kept |
+| POST | `/deleted-projects/{id}/restore` | Bring a Deleted Project back with everything whose file is still there, its Review Links as they were |
+| DELETE | `/deleted-projects/{id}` | Delete a Deleted Project for good with all its data; files stay untouched |
+| GET | `/files/{fileId}/asset` | The Asset of a file with its Project, or 404; `waveformFromBrowser` says the browser that uploaded the audio should decode its Waveform and hand it in (no ffmpeg, no Waveform yet, no WAV) |
+| POST | `/assets` `{fileId, projectId, assetId}` | Enable one media file for review: into the Project given, 0 for No Project, or without one the Folder Project above it, else No Project; 409 `{reason: deleted, projectId, projectName}` when a Deleted Project the user may change holds the file or its folder, a plain 409 for anyone else; with `assetId`, as the next Version of that Asset of the same kind of media, a file already in review moving over |
 | PUT | `/assets/{id}/project` `{projectId}` | Put an Asset into another Project, or 0 for No Project; no file moves |
 | DELETE | `/assets/{id}` | Take a file out of Deliver, the file stays |
 | DELETE | `/assets/{id}/files` | Delete an Asset with its files: they go to the trash of Files, the Asset with its review data at once |
@@ -24,7 +27,7 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | POST | `/versions/{id}/regenerate` | Delete the Version's derived media and queue it again |
 | POST | `/versions/{id}/waveform` `{peaks, durationFrames}` | Hand in a Waveform (1 to 2000 peaks from 0 to 1) and the duration in Frames, for audio milliseconds, also before the probe ran; 409 once the Version has one or the server is making one, which then replaces it (ADR 0012) |
 | GET | `/admin/settings` | Pipeline settings and status, admins only |
-| PUT | `/admin/settings` `{ffmpegPath, ffprobePath, maxJobs, maxHeight, thumbCap, hwEncoder, hwDevice, extraArgs, projectFolder, attachmentLimit}` | Save and test the encoder, admins only; `attachmentLimit` in MB per person and Version |
+| PUT | `/admin/settings` `{ffmpegPath, ffprobePath, maxJobs, maxHeight, thumbCap, hwEncoder, hwDevice, extraArgs, projectFolder, attachmentLimit, deletedDays}` | Save and test the encoder, admins only; `attachmentLimit` in MB per person and Version; `deletedDays` how long Deleted Projects are kept, 1 to 365 |
 | GET | `/apps/deliver/versions/{id}/export/{format}` `?unresolvedOnly=1&zeroBased=1` | The Comments as `edl` (DaVinci Resolve markers), `fcpxml` (FCP7 XML, Premiere Pro), `fcpx` (FCPXML, Final Cut Pro) or `csv`, and for audio as `wav` (embedded markers), `midi` (marker meta events) or `reaper` (Region/Marker Manager CSV); needs write access |
 | POST | `/apps/deliver/versions/{id}/export/ableton` (multipart `set`) | An Ableton Live Set back with the Comments as locators |
 | GET | `/apps/deliver/versions/{id}/media/{kind}` | Proxy, Thumbnail Strip, its index or the Waveform, with byte ranges |
@@ -35,7 +38,7 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | PUT | `/comments/{id}` `{body}` | Edit one's own Comment |
 | DELETE | `/comments/{id}` | Remove a Comment, with its Replies |
 | PUT | `/comments/{id}/resolved` `{resolved}` | Resolve or unresolve, needs write access |
-| GET | `/projects/{id}/links` | `{links, reviewers, canMail}`: my Review Links of the Project, or of No Project for id 0, each `live` when neither paused nor expired, and every Reviewer of mine on the Project, on a link or not, with `links`: for each link they are on, their own `rights` there and their Personal Link through it (`url`, null while the link is not live), and `inContacts` (null without an address) |
+| GET | `/projects/{id}/links` | `{links, reviewers, canMail}`: my Review Links of the Project, or of No Project for id 0, each `live` when neither paused nor expired and with `assetName` when it shows one Asset, and every Reviewer of mine on the Project, on a link or not, with `links`: for each link they are on, their own `rights` there and their Personal Link through it (`url`, null while the link is not live), and `inContacts` (null without an address); 404 for a Deleted Project |
 | POST | `/projects/{id}/links` `{assetIds}` | A Review Link (ADRs 0010 and 0011), live and showing the whole Project, or only the Assets given; on No Project (id 0) `assetIds` is required |
 | POST | `/projects/{id}/invitations` `{name, email, sendMail, message, assetIds, canComment, allowOlder, watermark, canDownload, latestOnly}` | Invite one person on a Review Link of their own, the whole Project or the Assets given (required on No Project); `{link, reviewer}` with the `key` of their Personal Link through it; the new link is live, and none is left when the invitation is refused |
 | PUT | `/links/{id}` `{review, canComment, allowOlder, watermark, canDownload, latestOnly, label, description, password, expireDate, assetIds}` | Change a Review Link; `''` removes password, expiry or description, `assetIds: null` shows the whole Project again (not on No Project); `review: false` pauses it |

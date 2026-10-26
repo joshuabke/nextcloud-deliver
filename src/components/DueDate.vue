@@ -1,7 +1,7 @@
 <script setup>
 import calendarIcon from '@mdi/svg/svg/calendar-clock.svg?raw'
 import closeIcon from '@mdi/svg/svg/close.svg?raw'
-import { getLanguage, t } from '@nextcloud/l10n'
+import { getCanonicalLocale, t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DueDateDialog from './DueDateDialog.vue'
@@ -25,7 +25,7 @@ const label = computed(() => {
 		return t('deliver', 'Due Date')
 	}
 	const named = { today: t('deliver', 'Due today'), tomorrow: t('deliver', 'Due tomorrow') }[kind.value]
-	const date = new Date(props.modelValue + 'T12:00:00').toLocaleDateString(getLanguage(), { day: 'numeric', month: 'short' })
+	const date = new Date(props.modelValue + 'T12:00:00').toLocaleDateString(getCanonicalLocale(), { day: 'numeric', month: 'short' })
 	return named ?? (kind.value === 'overdue' ? t('deliver', 'Was due {date}', { date }) : t('deliver', 'Due {date}', { date }))
 })
 

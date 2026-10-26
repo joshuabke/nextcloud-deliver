@@ -43,7 +43,7 @@ class WithoutFfmpegTest extends TestCase {
 
 	protected function tearDown(): void {
 		$this->nc->ocs('PUT', '/admin/settings', ['ffmpegPath' => '', 'ffprobePath' => '']);
-		$this->nc->ocs('DELETE', "/projects/{$this->projectId}");
+		$this->nc->deleteProject($this->projectId);
 		$this->nc->delete($this->root);
 		$this->nc->emptyTrash();
 		@unlink($this->fixture);

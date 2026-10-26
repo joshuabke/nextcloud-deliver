@@ -179,10 +179,9 @@ async function renew() {
 		</div>
 		<PersonalLinkRightsDialog
 			v-if="openRights"
+			v-model:rights="openRights.personal.rights"
 			:reviewer="reviewer"
 			:link="openRights.reviewLink"
-			:rights="openRights.personal.rights"
-			@changed="(rights) => openRights.personal.rights = rights"
 			@close="openRights = null" />
 		<template v-if="canWrite" #actions>
 			<NcButton variant="tertiary" :disabled="busy" @click="emit('remove')">

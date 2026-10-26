@@ -2,17 +2,28 @@
 
 ## Unreleased
 
+### Added
+- Keep deleted Projects under Deleted Projects, to restore or delete for good; after 30 days, or as many as the admin sets, they go for good with all their data. The files stay.
+- Offer a Deleted Project back when its folder or one of its files is wanted in review again.
+
 ### Changed
+- Delete a Project instead of moving its Assets to No Project.
 - Say in a Review Link's settings what hiding downloads and the Watermark do.
 - Let ffmpeg and ffprobe read only local files in the formats Deliver takes.
 - Leave playlists (M3U, PLS) out of review.
 - Refuse Ableton Live Sets that unpack to more than 100 MB.
 - Limit attachments to 20 MB per person and Version in all, adjustable in the admin settings.
+- Improve code readability.
 
 ### Fixed
 - Close a Version to Members who cannot open its file, also when they open another Version of its Stack.
 - Keep Comments and Reviewer names from starting a spreadsheet formula in the CSV export.
 - Refuse inviting or renaming a Reviewer to the name of a Reviewer who is on no link of the Project.
+- Title a Review Link on one Asset by its name in the Files sidebar of a Folder Project.
+- Show an expired Review Link as expired in its settings.
+- Leave the Project view once the Project is deleted from its settings.
+- Show dates for languages with a region, such as German (formal), instead of failing.
+- Dismiss notifications about a Version once it is deleted.
 - Keep files shared without downloads out of a Review Link's downloads and the WAV export, and off Review Links where Nextcloud hides their content.
 
 ## 0.9.5 – 2026-10-24

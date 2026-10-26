@@ -29,6 +29,8 @@ use OCP\Security\IHasher;
 class ReviewLink {
 	/** The switches of a link, as flags() returns them and a Member sets them */
 	public const FLAGS = ['review', 'canComment', 'allowOlder', 'watermark', 'canDownload', 'latestOnly'];
+	/** The flags a Reviewer can have their own of, on each link they are on (ADR 0014) */
+	public const OWN_RIGHTS = ['canComment', 'allowOlder', 'watermark'];
 
 	/** @var ?array<int, array{asset: Asset, versions: non-empty-list<Version>}> */
 	private ?array $stacks = null;
@@ -61,12 +63,12 @@ class ReviewLink {
 		return $this->link->getOwnerUid();
 	}
 
-	/** Live while not paused, through its expiry day, and while its Project is there */
+	/** Live while not paused, through its expiry day, and while its Project is there and not deleted (ADR 0015) */
 	public function isLive(): bool {
 		$expires = $this->link->getExpireDate();
 		return $this->link->getReview() === true
 			&& ($expires === null || $expires >= $this->time->getDateTime()->format('Y-m-d'))
-			&& ($this->link->getProjectId() === null || $this->project() !== null);
+			&& ($this->link->getProjectId() === null || $this->project()?->isDeleted() === false);
 	}
 
 	public function passwordHash(): ?string {
@@ -153,7 +155,12 @@ class ReviewLink {
 
 	/** The link's URL plus the key of a Reviewer's Personal Link through it: whoever opens it is that Reviewer here */
 	public function personalLink(string $key): string {
-		return $this->url() . '?r=' . rawurlencode($key);
+		return self::withKey($this->url(), $key);
+	}
+
+	/** A URL of the link with the key of a Reviewer's Personal Link through it */
+	public static function withKey(string $url, string $key): string {
+		return $url . '?r=' . rawurlencode($key);
 	}
 
 	/**

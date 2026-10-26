@@ -101,13 +101,4 @@ class VersionMapper extends Mapper {
 			->where($qb->expr()->eq('asset_id', $qb->createNamedParameter($assetId)))
 			->executeStatement();
 	}
-
-	/** Moves every Version of a Project into No Project, with their Assets */
-	public function release(int $projectId): void {
-		$qb = $this->db->getQueryBuilder();
-		$qb->update($this->getTableName())
-			->set('project_id', $qb->createNamedParameter(null))
-			->where($qb->expr()->eq('project_id', $qb->createNamedParameter($projectId)))
-			->executeStatement();
-	}
 }

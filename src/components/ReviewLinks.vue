@@ -12,13 +12,12 @@ const props = defineProps({
 	projectId: { type: Number, required: true },
 	/** One Asset of it; null for the whole Project */
 	assetId: { type: Number, default: null },
-	/** Its name, for the title of a link that shows it alone */
-	assetName: { type: String, default: null },
 })
 
 const links = ref([])
 /** The Project's Reviewers, for inviting on a link */
 const reviewers = ref([])
+const canMail = ref(false)
 const { busy, error, run } = useBusy()
 
 /**
@@ -35,6 +34,7 @@ watch(() => [props.projectId, props.assetId], ([projectId, assetId]) => {
 		if (props.projectId === projectId && props.assetId === assetId) {
 			links.value = found.links.filter(shows)
 			reviewers.value = found.reviewers
+			canMail.value = found.canMail
 		}
 	})
 }, { immediate: true })
@@ -71,7 +71,7 @@ function drop(id) {
 			:key="link.id"
 			:link="link"
 			:people="reviewers"
-			:assets="assetId === null ? [] : [{ id: assetId, name: assetName }]"
+			:canMail="canMail"
 			@update="replace"
 			@deleted="drop" />
 		<p v-if="error" class="deliver-links__error">

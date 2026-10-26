@@ -29,6 +29,9 @@ export const createProject = (folderId, autoIntake = true) => axios.post(url('/p
 export const createNamedProject = (name) => axios.post(url('/projects'), { name }).then(data)
 export const updateProject = (id, settings) => axios.put(url(`/projects/${id}`), settings).then(data)
 export const removeProject = (id) => axios.delete(url(`/projects/${id}`))
+export const listDeletedProjects = () => axios.get(url('/deleted-projects')).then(data)
+export const restoreProject = (id) => axios.post(url(`/deleted-projects/${id}/restore`))
+export const deleteProjectForGood = (id) => axios.delete(url(`/deleted-projects/${id}`))
 // Who can be @mentioned on a Version: whoever can open its file
 export const listMembers = (versionId) => axios.get(url(`/versions/${versionId}/members`)).then(data)
 export const updateReviewerAsMember = (id, fields) => axios.put(url(`/reviewers/${id}`), fields).then(data)

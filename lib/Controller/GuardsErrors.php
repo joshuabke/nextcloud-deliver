@@ -23,7 +23,7 @@ trait GuardsErrors {
 		} catch (AccessDeniedException $e) {
 			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_FORBIDDEN);
 		} catch (ProjectConflictException $e) {
-			return new DataResponse(['message' => $e->getMessage()] + ($e->reason === null ? [] : ['reason' => $e->reason]), Http::STATUS_CONFLICT);
+			return new DataResponse(['message' => $e->getMessage()] + ($e->reason === null ? [] : ['reason' => $e->reason]) + $e->details, Http::STATUS_CONFLICT);
 		} catch (InvalidRequestException $e) {
 			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
 		}

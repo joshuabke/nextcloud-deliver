@@ -14,6 +14,8 @@ const props = defineProps({
 	link: { type: Object, required: true },
 	/** The Project's Assets, or those of No Project, to pick from */
 	assets: { type: Array, default: () => [] },
+	/** Whether this Nextcloud sends mail */
+	canMail: { type: Boolean, default: false },
 	/** The Project's Reviewers, for inviting on this link */
 	people: { type: Array, required: true },
 })
@@ -44,14 +46,14 @@ async function pick(assetIds) {
 
 <template>
 	<NcDialog
-		:name="link.title ?? linkTitle(link, assets)"
+		:name="link.title ?? linkTitle(link)"
 		size="normal"
 		@closing="emit('close')">
 		<ReviewLinkItem
 			ref="item"
 			:link="link"
 			:people="people"
-			:assets="assets"
+			:canMail="canMail"
 			inDialog
 			@update="emit('update', $event)"
 			@deleted="emit('deleted')" />

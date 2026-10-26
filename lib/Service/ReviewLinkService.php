@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace OCA\Deliver\Service;
 
 use OCA\Deliver\Db\AssetMapper;
+use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\ReviewLinkMapper;
 use OCA\Deliver\Db\ReviewLinkRecord;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\EventDispatcher\IEventDispatcher;
 use OCP\Files\NotFoundException;
 use OCP\HintException;
-use OCP\IConfig;
 use OCP\Security\Events\ValidatePasswordPolicyEvent;
 use OCP\Security\IHasher;
 use OCP\Security\ISecureRandom;
@@ -23,13 +23,14 @@ class ReviewLinkService {
 	public function __construct(
 		private ReviewLinkMapper $linkRecords,
 		private ProjectService $projects,
+		private ProjectMapper $projectMapper,
 		private AssetMapper $assets,
+		private StackService $stacks,
 		private ReviewLinks $reviewLinks,
 		private ISecureRandom $random,
 		private IHasher $hasher,
 		private IEventDispatcher $events,
 		private ITimeFactory $time,
-		private IConfig $config,
 	) {
 	}
 
@@ -107,8 +108,15 @@ class ReviewLinkService {
 		$this->linkRecords->forget($link);
 	}
 
-	/** @return list<array<string, mixed>> the Member's links on a Project, or on No Project for 0, for its navigation */
+	/**
+	 * @return list<array<string, mixed>> the Member's links on a Project, or on No Project for 0, for its navigation
+	 * @throws NotFoundException a Deleted Project
+	 */
 	public function listFor(string $uid, int $projectId): array {
+		// A Deleted Project's links wait for its restore, as if it were gone (ADR 0015)
+		if ($this->projectMapper->isDeleted($projectId)) {
+			throw new NotFoundException('Project not found');
+		}
 		$links = $this->linkRecords->findByProject($projectId === ProjectService::NONE ? null : $projectId, $uid);
 		return array_map(fn (ReviewLinkRecord $link) => $this->serialize($link), $links);
 	}
@@ -124,6 +132,9 @@ class ReviewLinkService {
 
 	public function serialize(ReviewLinkRecord $link): array {
 		$reviewLink = $this->reviewLinks->of($link);
+		$picked = $link->pickedAssets();
+		// Named only as the link shows it: an Asset the Member may not share stays out of it, name and all (ADR 0009)
+		$only = $picked !== null && count($picked) === 1 ? ($reviewLink->assets()[$picked[0]]['asset'] ?? null) : null;
 		return [
 			'id' => $link->getId(),
 			'kind' => 'project',
@@ -136,18 +147,21 @@ class ReviewLinkService {
 			'expireDate' => $link->getExpireDate(),
 			// Opens for Reviewers: not paused and not expired
 			'live' => $reviewLink->isLive(),
-			'assetIds' => $link->pickedAssets(),
-			// Whether Reviewers can be mailed about Replies at all (story 66)
-			'canMail' => ReviewerMail::configured($this->config),
+			'assetIds' => $picked,
+			// Its one Asset's name, which titles it (story 145)
+			'assetName' => $only === null ? null : $this->stacks->nameOf($only),
 		] + $reviewLink->flags();
 	}
 
 	/**
-	 * @throws NotFoundException no such link
+	 * @throws NotFoundException no such link, or one of a Deleted Project, which waits for its restore (ADR 0015)
 	 * @throws AccessDeniedException another Member's link
 	 */
 	private function own(string $uid, int $id): ReviewLinkRecord {
-		$link = $this->linkRecords->find($id) ?? throw new NotFoundException('Link not found');
+		$link = $this->linkRecords->find($id);
+		if ($link === null || $this->projectMapper->isDeleted($link->getProjectId())) {
+			throw new NotFoundException('Link not found');
+		}
 		if ($link->getOwnerUid() !== $uid) {
 			throw new AccessDeniedException('Only the Member who made a link changes it');
 		}

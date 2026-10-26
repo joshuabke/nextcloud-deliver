@@ -77,7 +77,8 @@ class FileEventsListener implements IEventListener {
 			return;
 		}
 		$project = $this->projects->findAbove($node);
-		if ($project?->getAutoIntake() === true) {
+		// A Deleted Project takes nothing in (ADR 0015)
+		if ($project?->getAutoIntake() === true && !$project->isDeleted()) {
 			$this->stacks->intake($project, $node);
 		}
 	}
