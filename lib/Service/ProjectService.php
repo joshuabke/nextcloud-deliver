@@ -315,9 +315,12 @@ class ProjectService {
 	 * @throws NotFoundException the user cannot reach the file, the Project or the Asset
 	 * @throws AccessDeniedException the file or the Asset is read-only for the user
 	 * @throws ProjectConflictException it is not a media file
-	 * @throws InvalidRequestException the Asset holds another kind of media
+	 * @throws InvalidRequestException the Asset holds another kind of media, or an Asset is given for a new Asset
 	 */
-	public function enableFile(string $uid, int $fileId, ?int $projectId = null, ?int $assetId = null): array {
+	public function enableFile(string $uid, int $fileId, ?int $projectId = null, ?int $assetId = null, bool $newAsset = false): array {
+		if ($newAsset && $assetId !== null) {
+			throw new InvalidRequestException('A file goes onto an Asset or becomes a new one, not both');
+		}
 		$file = $this->root->getUserFolder($uid)->getFirstNodeById($fileId) ?? throw new NotFoundException('File not found');
 		if (!$file instanceof File || !Reviewable::file($file)) {
 			throw new ProjectConflictException('Only a video, audio or picture file can be enabled for review');
@@ -339,7 +342,7 @@ class ProjectService {
 		if ($project?->isDeleted() === true && $this->versions->findByFile($file->getId()) === null) {
 			throw $this->deletedConflict($project, $uid, $this->l->t('This file is inside a Project you may not change'));
 		}
-		$this->stacks->intake($project, $file, $uid);
+		$this->stacks->intake($project, $file, $uid, !$newAsset);
 		return $this->assetForFile($uid, $fileId);
 	}
 

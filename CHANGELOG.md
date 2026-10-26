@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Let `POST /assets` take `newAsset: true` to enable a file as an Asset of its own instead of stacking it by name.
+
 ## 0.9.6 – 2026-10-26
 
 ### Added
