@@ -10,6 +10,7 @@
 - Delete a Project instead of moving its Assets to No Project.
 - Say in a Review Link's settings what hiding downloads and the Watermark do.
 - Let ffmpeg and ffprobe read only local files in the formats Deliver takes.
+- Load the Project list in one query for which Version files a Member can open, instead of opening each file.
 - Leave playlists (M3U, PLS) out of review.
 - Refuse Ableton Live Sets that unpack to more than 100 MB.
 - Limit attachments to 20 MB per person and Version in all, adjustable in the admin settings.

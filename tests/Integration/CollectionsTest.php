@@ -96,6 +96,17 @@ class CollectionsTest extends TestCase {
 		self::assertSame([], $this->guest->ocs('GET', '/projects/0')['data']['assets'], 'No Project lists only what the guest enabled');
 	}
 
+	public function testAFolderTheOwnerTrashedLeavesTheGuestsList(): void {
+		$project = $this->owner->ocs('POST', '/projects', ['name' => 'Acme spot'])['data']['id'];
+		$this->enable('clients/acme/cut.mp4', $project);
+		$this->shareWithGuest('clients', 1);
+		self::assertContains($project, array_column($this->guest->ocs('GET', '/projects')['data'], 'id'));
+
+		// The list reads Nextcloud's mount cache (#64), which has to let go of the share
+		$this->owner->delete('clients');
+		self::assertNotContains($project, array_column($this->guest->ocs('GET', '/projects')['data'], 'id'), 'a file in the owner\'s trash opens for nobody else');
+	}
+
 	public function testAVersionWhoseFileIsNotSharedStaysClosed(): void {
 		$project = $this->owner->ocs('POST', '/projects', ['name' => 'Acme spot'])['data']['id'];
 		$cut = $this->enable('clients/acme/cut.mp4', $project);

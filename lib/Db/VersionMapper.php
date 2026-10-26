@@ -72,6 +72,44 @@ class VersionMapper extends Mapper {
 	}
 
 	/**
+	 * Which of these files the user can open in Files, in one query rather
+	 * than a node lookup each (#64): a file under one of the user's mounts, as
+	 * Nextcloud's mount cache holds them, below their files folder. The
+	 * mount cache is what Nextcloud itself asks first for a file by id.
+	 *
+	 * @param list<int> $fileIds
+	 * @return array<int, true> by file id
+	 */
+	public function openableFiles(string $uid, array $fileIds): array {
+		$open = [];
+		$home = '/' . $uid . '/files/';
+		foreach (array_chunk(array_values(array_unique($fileIds)), 1000) as $chunk) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->select('f.fileid', 'f.path', 'm.mount_point')->selectAlias('r.path', 'root_path')
+				->from('mounts', 'm')
+				->innerJoin('m', 'filecache', 'r', $qb->expr()->eq('r.fileid', 'm.root_id'))
+				->innerJoin('m', 'filecache', 'f', $qb->expr()->eq('f.storage', 'm.storage_id'))
+				->where($qb->expr()->eq('m.user_id', $qb->createNamedParameter($uid)))
+				->andWhere($qb->expr()->in('f.fileid', $qb->createNamedParameter($chunk, IQueryBuilder::PARAM_INT_ARRAY)));
+			$result = $qb->executeQuery();
+			foreach ($result->fetchAll() as $row) {
+				$root = (string)$row['root_path'];
+				$path = (string)$row['path'];
+				// A shared file is the root of its mount itself
+				if ($root !== '' && $path !== $root && !str_starts_with($path, $root . '/')) {
+					continue;
+				}
+				// The home mount holds the trash and old file versions too, outside files/
+				if (str_starts_with($row['mount_point'] . ltrim(substr($path, strlen($root)), '/'), $home)) {
+					$open[(int)$row['fileid']] = true;
+				}
+			}
+			$result->closeCursor();
+		}
+		return $open;
+	}
+
+	/**
 	 * @param list<int> $assetIds
 	 * @return Version[] all Versions of these Assets, newest Version Number first
 	 */
