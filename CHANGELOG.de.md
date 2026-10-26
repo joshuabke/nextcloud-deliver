@@ -3,7 +3,7 @@
 ## Unveröffentlicht
 
 ### Neu
-- Persönlichen Link aus dem Menü des Reviewers kopierbar.
+- Persönlichen Link zum Kopieren ins Menü des Reviewers aufgenommen.
 
 ## 0.9.6 – 2026-10-26
 
