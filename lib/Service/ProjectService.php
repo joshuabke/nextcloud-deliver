@@ -371,7 +371,8 @@ class ProjectService {
 			'waveformFromBrowser' => $version->getWaveformState() === DerivedMedia::STATE_NONE
 				&& str_starts_with($file->getMimeType(), 'audio/')
 				&& !self::isWav($version)
-				&& !$this->ffmpeg->available(),
+				// ffmpeg may have come since it was last probed
+				&& !$this->ffmpeg->available() && $this->ffmpeg->probe() === null,
 		];
 	}
 

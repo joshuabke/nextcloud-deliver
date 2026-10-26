@@ -1,5 +1,10 @@
 # Änderungen
 
+## Unveröffentlicht
+
+### Behoben
+- ffmpeg wird stündlich, auf der Admin-Seite und beim Start des Workers geprüft statt bei jedem Seitenaufruf.
+
 ## 0.9.6 – 2026-10-26
 
 ### Neu

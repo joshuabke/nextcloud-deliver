@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Command;
 
+use OCA\Deliver\Service\Ffmpeg;
 use OCA\Deliver\Service\JobRunner;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -14,6 +15,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 class Worker extends Command {
 	public function __construct(
 		private JobRunner $runner,
+		private Ffmpeg $ffmpeg,
 	) {
 		parent::__construct();
 	}
@@ -28,6 +30,8 @@ class Worker extends Command {
 	protected function execute(InputInterface $input, OutputInterface $output): int {
 		$name = 'occ:' . gethostname() . ':' . (int)getmypid();
 		$sleep = max(1, (int)$input->getOption('sleep'));
+		// ffmpeg may have been installed or removed since it was last probed (#56)
+		$this->ffmpeg->probe();
 		while (true) {
 			if ($this->runner->runNext($name)) {
 				$output->writeln('<info>ran a job</info>', OutputInterface::VERBOSITY_VERBOSE);

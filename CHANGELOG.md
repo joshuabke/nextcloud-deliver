@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Check for ffmpeg hourly, on the admin page and when the worker starts, instead of on every page load.
+
 ## 0.9.6 – 2026-10-26
 
 ### Added

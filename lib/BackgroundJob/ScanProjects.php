@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\BackgroundJob;
 
+use OCA\Deliver\Service\Ffmpeg;
 use OCA\Deliver\Service\ProjectService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\BackgroundJob\TimedJob;
@@ -18,6 +19,7 @@ class ScanProjects extends TimedJob {
 	public function __construct(
 		ITimeFactory $time,
 		private ProjectService $projects,
+		private Ffmpeg $ffmpeg,
 	) {
 		parent::__construct($time);
 		$this->setInterval(3600);
@@ -26,5 +28,7 @@ class ScanProjects extends TimedJob {
 
 	protected function run($argument): void {
 		$this->projects->scanAll();
+		// Whether ffmpeg is there, for pages that only read it (#56)
+		$this->ffmpeg->probe();
 	}
 }

@@ -47,11 +47,26 @@ class Ffmpeg {
 		return $this->config->getValueString(Application::APP_ID, 'ffprobe_path') ?: 'ffprobe';
 	}
 
-	private ?bool $available = null;
+	/** The first line of `ffmpeg -version` as last probed, empty when it did not run */
+	private const VERSION = 'ffmpeg_version';
 
-	/** Whether ffmpeg runs, asked once per request */
+	/** Whether ffmpeg ran when last probed, without starting it: asked on every page and poll (#56) */
 	public function available(): bool {
-		return $this->available ??= $this->version($this->ffmpeg()) !== null;
+		if (!$this->config->hasKey(Application::APP_ID, self::VERSION)) {
+			return $this->probe() !== null;
+		}
+		return $this->config->getValueString(Application::APP_ID, self::VERSION) !== '';
+	}
+
+	/**
+	 * Runs `ffmpeg -version` and keeps the answer for available(): hourly,
+	 * on the admin page, when the worker starts, and before a browser would
+	 * decode a Waveform for want of ffmpeg
+	 */
+	public function probe(): ?string {
+		$version = $this->version($this->ffmpeg());
+		$this->config->setValueString(Application::APP_ID, self::VERSION, $version ?? '');
+		return $version;
 	}
 
 	/** @return ?string the first line of `-version`, or null when the binary is not there */
