@@ -3,9 +3,11 @@
 ## Unveröffentlicht
 
 ### Neu
-- Projekt samt Assets und ihren Review-Daten löschen hinzugefügt; die Dateien bleiben.
+- Gelöschte Projekte unter „Gelöschte Projekte“ aufbewahrt, zum Wiederherstellen oder endgültigen Löschen; nach 30 Tagen oder so vielen, wie der Admin einstellt, gehen sie mit allen Daten. Die Dateien bleiben.
+- Gelöschtes Projekt wieder angeboten, wenn sein Ordner oder eine seiner Dateien wieder ins Review soll.
 
 ### Geändert
+- Projekt wird gelöscht, statt seine Assets nach „Ohne Projekt“ zu verschieben.
 - In den Einstellungen eines Review-Links erklärt, was „ohne Downloads“ und das Wasserzeichen bewirken.
 - ffmpeg und ffprobe auf lokale Dateien in den Formaten beschränkt, die Deliver aufnimmt.
 - Playlists (M3U, PLS) vom Review ausgenommen.
@@ -19,7 +21,9 @@
 - Einladen oder Umbenennen auf den Namen eines Reviewers abgelehnt, der auf keinem Link des Projekts ist.
 - Review-Link auf ein Asset auch in der Dateien-Seitenleiste eines Ordnerprojekts nach dem Asset benannt.
 - Abgelaufenen Review-Link in seinen Einstellungen als abgelaufen gezeigt.
-- Projektansicht verlassen, sobald das Projekt aus seinen Einstellungen entfernt ist.
+- Projektansicht verlassen, sobald das Projekt aus seinen Einstellungen gelöscht ist.
+- Daten auch für Sprachen mit Region angezeigt, etwa Deutsch (Sie), statt abzubrechen.
+- Benachrichtigungen über eine Version entfernt, sobald sie gelöscht ist.
 - Ohne Download freigegebene Dateien aus den Downloads von Review-Links und dem WAV-Export herausgehalten, und ganz von Review-Links, wo Nextcloud ihren Inhalt verbirgt.
 
 ## 0.9.5 – 2026-10-24

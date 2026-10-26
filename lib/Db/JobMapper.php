@@ -13,12 +13,15 @@ class JobMapper extends Mapper {
 		parent::__construct($db, 'deliver_jobs', Job::class);
 	}
 
-	/** @return Job[] the oldest waiting work first */
+	/** @return Job[] the oldest waiting work first; a Deleted Project's waits until it is restored (ADR 0015) */
 	public function findQueued(int $limit): array {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('*')->from($this->getTableName())
-			->where($qb->expr()->eq('state', $qb->createNamedParameter(Job::STATE_QUEUED)))
-			->orderBy('id')
+		$qb->select('j.*')->from($this->getTableName(), 'j')
+			->leftJoin('j', 'deliver_versions', 'v', $qb->expr()->eq('v.id', 'j.version_id'))
+			->leftJoin('v', 'deliver_projects', 'p', $qb->expr()->eq('p.id', 'v.project_id'))
+			->where($qb->expr()->eq('j.state', $qb->createNamedParameter(Job::STATE_QUEUED)))
+			->andWhere($qb->expr()->isNull('p.deleted_at'))
+			->orderBy('j.id')
 			->setMaxResults($limit);
 		return $this->findEntities($qb);
 	}

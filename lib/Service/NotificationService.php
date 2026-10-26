@@ -8,6 +8,7 @@ use OCA\Deliver\AppInfo\Application;
 use OCA\Deliver\Db\AssetMapper;
 use OCA\Deliver\Db\Comment;
 use OCA\Deliver\Db\MuteMapper;
+use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\Version;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IUserSession;
@@ -36,6 +37,7 @@ class NotificationService {
 		private Members $members,
 		private AssetMapper $assets,
 		private MuteMapper $mutes,
+		private ProjectMapper $projects,
 		private IUserSession $userSession,
 		private ITimeFactory $time,
 	) {
@@ -62,8 +64,31 @@ class NotificationService {
 
 	/** A Comment is gone, and so are the notifications about it */
 	public function commentDeleted(int $commentId): void {
+		$this->dismiss('comment', (string)$commentId);
+	}
+
+	/**
+	 * The notifications about a Version and its Comments go: the Version went
+	 * for good, or its Project was deleted, and they do not come back with its
+	 * restore (ADR 0015).
+	 *
+	 * @param list<int> $commentIds the Version's Comments
+	 */
+	public function versionGone(Version $version, array $commentIds): void {
+		$this->dismiss('version', (string)$version->getId());
+		foreach ($commentIds as $commentId) {
+			$this->dismiss('comment', (string)$commentId);
+		}
+	}
+
+	/** The reminders of an Asset's Due Date go with the Asset, or with its Project deleted */
+	public function assetGone(int $assetId): void {
+		$this->dismiss('asset', (string)$assetId);
+	}
+
+	private function dismiss(string $objectType, string $objectId): void {
 		$notification = $this->notifications->createNotification();
-		$notification->setApp(Application::APP_ID)->setObject('comment', (string)$commentId);
+		$notification->setApp(Application::APP_ID)->setObject($objectType, $objectId);
 		$this->notifications->markProcessed($notification);
 	}
 
@@ -87,7 +112,7 @@ class NotificationService {
 	/** Someone approved a Version or requested changes (story 88) */
 	public function decided(Version $version, string $status, ?string $actor, string $author): void {
 		$subject = $status === ApprovalService::APPROVED ? self::APPROVED : self::CHANGES;
-		$this->notify($version, $subject, 'approval', $version->getId() . ':' . $author, ['author' => $author], $actor);
+		$this->notify($version, $subject, 'version', (string)$version->getId(), ['author' => $author], $actor);
 	}
 
 	/** The file of a Version went to the trash (stories 18 and 63) */
@@ -112,7 +137,8 @@ class NotificationService {
 	 * @param list<string> $recipients user ids
 	 */
 	private function send(Version $version, string $subject, string $objectType, string $objectId, array $parameters, array $recipients): void {
-		if ($recipients === []) {
+		// Nothing about a Deleted Project is notified (ADR 0015)
+		if ($recipients === [] || $this->projects->isDeleted($version->getProjectId())) {
 			return;
 		}
 		$asset = $this->assets->find($version->getAssetId());

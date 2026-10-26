@@ -39,7 +39,7 @@ class WrittenAgainTest extends TestCase {
 	protected function tearDown(): void {
 		$this->nc->ocs('PUT', '/admin/settings', ['ffprobePath' => '']);
 		array_map('unlink', glob($this->fixture . '*') ?: []);
-		$this->nc->ocs('DELETE', "/projects/{$this->projectId}");
+		$this->nc->deleteProject($this->projectId);
 		$this->nc->delete($this->root);
 		$this->nc->emptyTrash();
 	}

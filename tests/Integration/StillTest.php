@@ -29,7 +29,7 @@ class StillTest extends TestCase {
 	}
 
 	protected function tearDown(): void {
-		$this->nc->ocs('DELETE', "/projects/{$this->projectId}");
+		$this->nc->deleteProject($this->projectId);
 		$this->nc->delete($this->root);
 	}
 

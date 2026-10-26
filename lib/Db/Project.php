@@ -25,6 +25,10 @@ use OCP\AppFramework\Db\Entity;
  * @method string getTimecodeMode()
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
+ * @method ?int getDeletedAt()
+ * @method void setDeletedAt(?int $deletedAt)
+ * @method ?string getDeletedBy()
+ * @method void setDeletedBy(?string $deletedBy)
  */
 class Project extends Entity {
 	/** Set for a Folder Project only (ADR 0009) */
@@ -38,13 +42,22 @@ class Project extends Entity {
 	protected int $fpsDen = 1;
 	protected string $timecodeMode = 'smpte';
 	protected int $createdAt = 0;
+	/** When and by whom it was deleted: a Deleted Project, until it goes for good (ADR 0015) */
+	protected ?int $deletedAt = null;
+	protected ?string $deletedBy = null;
 
 	public function __construct() {
 		$this->addType('folderId', 'integer');
+		$this->addType('deletedAt', 'integer');
 		$this->addType('autoIntake', 'boolean');
 		$this->addType('allowOlder', 'boolean');
 		$this->addType('fpsNum', 'integer');
 		$this->addType('fpsDen', 'integer');
 		$this->addType('createdAt', 'integer');
+	}
+
+	/** A Deleted Project (ADR 0015): nobody opens it, nothing runs for it, and it still holds its files */
+	public function isDeleted(): bool {
+		return $this->deletedAt !== null;
 	}
 }

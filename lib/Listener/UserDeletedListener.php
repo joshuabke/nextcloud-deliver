@@ -19,8 +19,8 @@ use OCP\User\Events\UserDeletedEvent;
 /**
  * Nextcloud hands a deleted account's user id to whoever is created under it
  * next, so nothing of Deliver may stay tied to it. A Folder Project passes to
- * whoever owns the folder, any other Project is removed as by its maker (its
- * Assets go to No Project), the account's links and Reviewers go, and its
+ * whoever owns the folder, any other Project is deleted for good, as nobody
+ * else could restore it (story 152), the account's links and Reviewers go, and its
  * Comments, Approvals and Reactions stay, by a Deleted user.
  *
  * @template-implements IEventListener<UserDeletedEvent>
@@ -49,7 +49,7 @@ class UserDeletedListener implements IEventListener {
 			}
 			$owner = $this->folderOwner($project->getFolderId(), $uid);
 			if ($owner === null) {
-				$this->stacks->removeProject($project, $uid);
+				$this->stacks->deleteProject($project);
 			} else {
 				$project->setOwnerUid($owner);
 				$this->projects->update($project);
@@ -65,7 +65,7 @@ class UserDeletedListener implements IEventListener {
 			$qb = $this->db->getQueryBuilder();
 			$qb->delete($table)->where($qb->expr()->eq('user_id', $qb->createNamedParameter($uid)))->executeStatement();
 		}
-		foreach (['deliver_comments' => 'user_id', 'deliver_approvals' => 'user_id', 'deliver_reactions' => 'user_id', 'deliver_assets' => 'enabled_by'] as $table => $column) {
+		foreach (['deliver_comments' => 'user_id', 'deliver_approvals' => 'user_id', 'deliver_reactions' => 'user_id', 'deliver_assets' => 'enabled_by', 'deliver_projects' => 'deleted_by'] as $table => $column) {
 			$qb = $this->db->getQueryBuilder();
 			$qb->update($table)->set($column, $qb->createNamedParameter(null))
 				->where($qb->expr()->eq($column, $qb->createNamedParameter($uid)))->executeStatement();

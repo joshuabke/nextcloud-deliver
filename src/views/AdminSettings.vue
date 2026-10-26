@@ -106,6 +106,13 @@ function save() {
 					:label="t('deliver', 'Attachments per person and Version, in MB')"
 					:helperText="t('deliver', 'What one person, a Reviewer too, may attach to the Comments on one Version in all.')" />
 				<NcTextField
+					v-model.number="settings.deletedDays"
+					type="number"
+					min="1"
+					max="365"
+					:label="t('deliver', 'Keep Deleted Projects, in days')"
+					:helperText="t('deliver', 'Then they are deleted for good with all their review data. The files stay untouched.')" />
+				<NcTextField
 					v-model="settings.projectFolder"
 					:label="t('deliver', 'Default place for Project folders')"
 					:helperText="t('deliver', 'In each user\'s Files. A new Project gets its folder there, unless the user picks another place.')" />

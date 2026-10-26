@@ -43,7 +43,7 @@ class ReviewerTest extends TestCase {
 	}
 
 	protected function tearDown(): void {
-		$this->nc->ocs('DELETE', "/projects/{$this->projectId}");
+		$this->nc->deleteProject($this->projectId);
 		$this->nc->delete($this->root);
 	}
 
@@ -302,7 +302,7 @@ class ReviewerTest extends TestCase {
 			$elsewhere = $this->nc->ocs('POST', "/projects/$otherId/links")['data'];
 			self::assertSame(404, $this->nc->ocs('POST', "/reviewers/{$kim['id']}/links", ['token' => $elsewhere['token']])['status'], 'never on a link of another Project');
 		} finally {
-			$this->nc->ocs('DELETE', "/projects/$otherId");
+			$this->nc->deleteProject($otherId);
 			$this->nc->delete($other);
 		}
 	}

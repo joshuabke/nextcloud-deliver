@@ -94,6 +94,12 @@ class NextcloudClient {
 		return $this->handle;
 	}
 
+	/** Deletes a Project for good, to clean up after a test: deleted, then out of Deleted Projects (ADR 0015) */
+	public function deleteProject(int $id): void {
+		$this->ocs('DELETE', "/projects/$id");
+		$this->ocs('DELETE', "/deleted-projects/$id");
+	}
+
 	public function withUser(string $user, string $password): self {
 		return new self($this->baseUrl, $user, $password);
 	}

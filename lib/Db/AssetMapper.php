@@ -55,31 +55,15 @@ class AssetMapper extends Mapper {
 	}
 
 	/**
-	 * Puts every Asset of a Project into No Project, for whoever enabled it,
-	 * or else the given Member.
-	 */
-	public function release(int $projectId, string $uid): void {
-		$qb = $this->db->getQueryBuilder();
-		$qb->update($this->getTableName())
-			->set('enabled_by', $qb->createNamedParameter($uid))
-			->where($qb->expr()->eq('project_id', $qb->createNamedParameter($projectId)))
-			->andWhere($qb->expr()->isNull('enabled_by'))
-			->executeStatement();
-		$qb = $this->db->getQueryBuilder();
-		$qb->update($this->getTableName())
-			->set('project_id', $qb->createNamedParameter(null))
-			->where($qb->expr()->eq('project_id', $qb->createNamedParameter($projectId)))
-			->executeStatement();
-	}
-
-	/**
 	 * @param list<string> $days YYYY-MM-DD
-	 * @return list<Asset> the Assets due on one of the days
+	 * @return list<Asset> the Assets due on one of the days, but those of a Deleted Project (ADR 0015)
 	 */
 	public function findDueOn(array $days): array {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('*')->from($this->getTableName())
-			->where($qb->expr()->in('due_date', $qb->createNamedParameter($days, IQueryBuilder::PARAM_STR_ARRAY)));
+		$qb->select('a.*')->from($this->getTableName(), 'a')
+			->leftJoin('a', 'deliver_projects', 'p', $qb->expr()->eq('p.id', 'a.project_id'))
+			->where($qb->expr()->in('a.due_date', $qb->createNamedParameter($days, IQueryBuilder::PARAM_STR_ARRAY)))
+			->andWhere($qb->expr()->isNull('p.deleted_at'));
 		return $this->findEntities($qb);
 	}
 }

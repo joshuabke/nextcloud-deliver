@@ -4,7 +4,7 @@ import previousIcon from '@mdi/svg/svg/chevron-left.svg?raw'
 import nextIcon from '@mdi/svg/svg/chevron-right.svg?raw'
 import downloadIcon from '@mdi/svg/svg/download.svg?raw'
 import { showSuccess } from '@nextcloud/dialogs'
-import { getLanguage, t } from '@nextcloud/l10n'
+import { getCanonicalLocale, t } from '@nextcloud/l10n'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -54,7 +54,7 @@ const newest = ref(null)
 /** Who watches, and when: the Reviewer's name once they gave one (story 94) */
 const watermarkText = computed(() => [
 	store.me?.type === 'reviewer' ? reviewerName.value : t('deliver', 'Guest'),
-	new Date().toLocaleDateString(getLanguage()),
+	new Date().toLocaleDateString(getCanonicalLocale()),
 ].join(' · '))
 const version = computed(() => context.value?.versions.find((each) => each.id === current.value) ?? null)
 const assetIndex = computed(() => (newest.value ?? []).findIndex((each) => each.assetId === context.value?.asset?.id))
