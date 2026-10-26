@@ -43,11 +43,19 @@ jobs:
       - run: vendor/bin/phpunit --testsuite Unit
 
   # The HTTP API and the browser flows against a real Nextcloud, the same
-  # instance `make up` starts on a developer machine
+  # instance `make up` starts on a developer machine. Waiting on that
+  # instance's answers is what takes the time, so the integration tests run
+  # in three shards and the browser tests in a job of their own, each against
+  # an instance of its own.
   integration:
+    name: integration (${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
-    # A stalled download or a browser that never answers fails here, not after six hours
-    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    # A stalled download fails here, not after six hours
+    timeout-minutes: 20
     env:
       COMPOSE: docker compose -f docker-compose.yml -f .github/compose.ci.yml
     steps:
@@ -59,7 +67,26 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run build
       - run: make up COMPOSE="$COMPOSE"
-      - run: make test-integration COMPOSE="$COMPOSE"
+      - run: make test-integration COMPOSE="$COMPOSE" SHARD=${{ matrix.shard }}/3
+      - name: Nextcloud log on failure
+        if: failure()
+        run: $COMPOSE exec -T nextcloud tail -n 100 data/nextcloud.log || true
+
+  browser:
+    runs-on: ubuntu-latest
+    # A browser that never answers fails here, not after six hours
+    timeout-minutes: 20
+    env:
+      COMPOSE: docker compose -f docker-compose.yml -f .github/compose.ci.yml
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: make up COMPOSE="$COMPOSE"
       - name: Browser tests
         run: |
           docker run -d --name chrome --network host --shm-size=1g chromedp/headless-shell
