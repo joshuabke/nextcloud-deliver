@@ -25,6 +25,7 @@
 - Show dates for languages with a region, such as German (formal), instead of failing.
 - Dismiss notifications about a Version once it is deleted.
 - Keep files shared without downloads out of a Review Link's downloads and the WAV export, and off Review Links where Nextcloud hides their content.
+- Show names with & or ' as they are instead of as HTML entities.
 
 ## 0.9.5 – 2026-10-24
 

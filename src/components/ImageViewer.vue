@@ -1,7 +1,6 @@
 <script setup>
 import fullscreenExitIcon from '@mdi/svg/svg/fullscreen-exit.svg?raw'
 import fullscreenIcon from '@mdi/svg/svg/fullscreen.svg?raw'
-import { t } from '@nextcloud/l10n'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -12,6 +11,7 @@ import { useFullscreen } from '../composables/fullscreen.js'
 import { useGestures } from '../composables/gestures.js'
 import { COLORS } from '../lib/drawing.js'
 import { actionFor } from '../lib/hotkeys.js'
+import { t } from '../lib/l10n.js'
 import { watermarkTile } from '../lib/watermark.js'
 
 // The views hand it what they hand the VideoPlayer; the clock and its events mean nothing to a still

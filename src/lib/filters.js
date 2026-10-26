@@ -1,4 +1,4 @@
-import { t } from '@nextcloud/l10n'
+import { t } from './l10n.js'
 
 /**
  * The filters of the Project view (story 99). Each looks at the newest

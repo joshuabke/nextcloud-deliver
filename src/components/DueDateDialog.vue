@@ -1,8 +1,8 @@
 <script setup>
-import { t } from '@nextcloud/l10n'
 import { ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
+import { t } from '../lib/l10n.js'
 
 const props = defineProps({
 	/** YYYY-MM-DD, or null */

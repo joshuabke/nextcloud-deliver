@@ -1,10 +1,10 @@
 import { showError, showInfo } from '@nextcloud/dialogs'
 import { getSidebar, registerFileAction } from '@nextcloud/files'
-import { t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import { defineCustomElement } from 'vue'
 import { errorMessage, getAssetForFile, handInWaveform } from './api.js'
 import icon from './icon.svg?raw'
+import { t } from './lib/l10n.js'
 import { reviewable } from './lib/media.js'
 import { uploadedAudio } from './lib/waveform.js'
 

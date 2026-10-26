@@ -3,9 +3,9 @@ import arrowIcon from '@mdi/svg/svg/arrow-top-right.svg?raw'
 import penIcon from '@mdi/svg/svg/draw.svg?raw'
 import boxIcon from '@mdi/svg/svg/square-outline.svg?raw'
 import undoIcon from '@mdi/svg/svg/undo.svg?raw'
-import { t } from '@nextcloud/l10n'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import { COLORS } from '../lib/drawing.js'
+import { t } from '../lib/l10n.js'
 
 /** The drawing tools over the picture (story 89) */
 const tool = defineModel('tool', { type: String, default: 'pen' })

@@ -1,13 +1,13 @@
 <script setup>
 import commentsIcon from '@mdi/svg/svg/comment-text-multiple-outline.svg?raw'
 import panelIcon from '@mdi/svg/svg/dock-right.svg?raw'
-import { t } from '@nextcloud/l10n'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, onBeforeUnmount, onMounted } from 'vue'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import { landscape, sheet } from '../composables/panel.js'
+import { t } from '../lib/l10n.js'
 
 /** Whether the panel beside the player is open; on a phone it always is, under the player */
 const panelOpen = defineModel('panelOpen', { type: Boolean, default: true })

@@ -1,11 +1,11 @@
 <script setup>
 import menuIcon from '@mdi/svg/svg/chevron-down.svg?raw'
-import { t } from '@nextcloud/l10n'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import { t } from '../lib/l10n.js'
 
 const props = defineProps({
 	/** The Version Stack, newest first: [{ id, number }] */

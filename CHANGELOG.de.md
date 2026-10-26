@@ -25,6 +25,7 @@
 - Daten auch für Sprachen mit Region angezeigt, etwa Deutsch (Sie), statt abzubrechen.
 - Benachrichtigungen über eine Version entfernt, sobald sie gelöscht ist.
 - Ohne Download freigegebene Dateien aus den Downloads von Review-Links und dem WAV-Export herausgehalten, und ganz von Review-Links, wo Nextcloud ihren Inhalt verbirgt.
+- Namen mit & oder ' so angezeigt, wie sie sind, statt als HTML-Entitäten.
 
 ## 0.9.5 – 2026-10-24
 
