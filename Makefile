@@ -57,9 +57,10 @@ lint-php: composer
 fix-php: composer
 	$(PHP) vendor/bin/php-cs-fixer fix
 
-# PHPUnit integration tests run inside the Nextcloud container against its own HTTP API
+# PHPUnit integration tests run inside the Nextcloud container against its own HTTP API;
+# SHARD=2/3 runs the second of three shards of the integration tests alone, as CI does
 test-integration: composer
-	$(COMPOSE) exec -u www-data nextcloud php custom_apps/deliver/vendor/bin/phpunit -c custom_apps/deliver/phpunit.xml
+	$(COMPOSE) exec -u www-data nextcloud php custom_apps/deliver/$(if $(SHARD),dev/shard.php $(SHARD),vendor/bin/phpunit -c custom_apps/deliver/phpunit.xml)
 
 # What the App Store gets: the built app, nothing of the workshop around it.
 # The archive holds one folder named after the app id, as the store requires.

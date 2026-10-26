@@ -60,7 +60,7 @@ DELIVER_BROWSER_URL=http://<address the container can reach>:8080 npm run test:e
 
 `npm run test:unit` is vitest on pure client logic only (timecode math, the keyboard map, the polling merge, the filename convention). Component rendering is covered by the browser tests instead; `vitest.config.js` keeps it to `src/`.
 
-PHPUnit has two tiers: `tests/Unit` for pure PHP (filename convention, timecode, export writers, pipeline arithmetic) and `tests/Integration` for everything that needs a running Nextcloud. `make test-integration` runs both; `--testsuite Unit` runs the fast one alone.
+PHPUnit has two tiers: `tests/Unit` for pure PHP (filename convention, timecode, export writers, pipeline arithmetic) and `tests/Integration` for everything that needs a running Nextcloud. `make test-integration` runs both; `--testsuite Unit` runs the fast one alone. `make test-integration SHARD=2/3` runs one of three shards of the integration tests (`dev/shard.php`); CI runs the three side by side, each against its own instance, and the browser tests in a fourth job, so that it takes about a third as long.
 
 ## Packaging and releases
 
