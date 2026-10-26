@@ -1,6 +1,6 @@
 # Änderungen
 
-## Unveröffentlicht
+## 0.9.6 – 2026-10-26
 
 ### Neu
 - Gelöschte Projekte unter „Gelöschte Projekte“ aufbewahrt, zum Wiederherstellen oder endgültigen Löschen; nach 30 Tagen oder so vielen, wie der Admin einstellt, gehen sie mit allen Daten. Die Dateien bleiben.
