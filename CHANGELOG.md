@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.6 – 2026-10-26
 
 ### Added
 - Keep deleted Projects under Deleted Projects, to restore or delete for good; after 30 days, or as many as the admin sets, they go for good with all their data. The files stay.
