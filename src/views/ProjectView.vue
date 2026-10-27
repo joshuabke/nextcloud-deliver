@@ -19,6 +19,7 @@ import retryIcon from '@mdi/svg/svg/refresh.svg?raw'
 import renameIcon from '@mdi/svg/svg/rename-outline.svg?raw'
 import deleteIcon from '@mdi/svg/svg/trash-can-outline.svg?raw'
 import uploadIcon from '@mdi/svg/svg/tray-arrow-up.svg?raw'
+import { getCurrentUser } from '@nextcloud/auth'
 import { generateRemoteUrl, generateUrl } from '@nextcloud/router'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, onBeforeUnmount, ref, watch, watchEffect } from 'vue'
@@ -144,6 +145,7 @@ async function accept(asset, target) {
 }
 
 /** Folder, filter, order and search live in the address, so the way back from a Review keeps them */
+const me = getCurrentUser()?.uid ?? ''
 const folder = useQuery('folder', null, '')
 const filter = useQuery('filter', FILTERS, 'all')
 const sort = useQuery('sort', SORTS, 'activity')
@@ -152,9 +154,9 @@ const inView = computed(() => (project.value?.assets ?? []).filter((asset) => in
 const filters = computed(() => FILTERS.map((id) => ({
 	id,
 	label: FILTER_LABELS[id],
-	count: inView.value.filter((asset) => passes(asset, id)).length,
+	count: inView.value.filter((asset) => passes(asset, id, me)).length,
 })))
-const shown = computed(() => inView.value.filter((asset) => passes(asset, filter.value) && found(asset, query.value)))
+const shown = computed(() => inView.value.filter((asset) => passes(asset, filter.value, me) && found(asset, query.value)))
 // Sorted within each folder, the folders themselves by path
 const groups = computed(() => groupByFolder(sortAssets(shown.value, sort.value)))
 // Ticked Assets a filter, a search or another folder takes off the screen are no longer ticked: the menu acts only on what is in sight

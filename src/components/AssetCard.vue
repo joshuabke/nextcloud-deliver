@@ -141,7 +141,7 @@ const status = computed(() => {
 				{{ asset.name }}
 			</div>
 			<div class="deliver-card__meta">
-				<NcDateTime :timestamp="newest.createdAt * 1000" />
+				<template v-if="newest.deliveredBy">{{ newest.deliveredBy.name }} · </template><NcDateTime :timestamp="newest.createdAt * 1000" />
 			</div>
 			<DueDate v-if="asset.dueDate" class="deliver-card__due" :modelValue="asset.dueDate" />
 		</a>

@@ -1,5 +1,9 @@
 # Änderungen
 
+## Unveröffentlicht
+
+- Angezeigt, wer jede Version geliefert hat, und nach dem Gelieferten gefiltert.
+
 ## 0.9.7 – 2026-10-27
 
 ### Neu
@@ -8,6 +12,8 @@
 
 ### Geändert
 - Versionsdateien für die Projektliste ordnerweise statt einzeln nachgeschlagen.
+
+### Neu
 
 ### Behoben
 - Namen mit & oder ' so angezeigt, wie sie sind, statt als HTML-Entitäten.

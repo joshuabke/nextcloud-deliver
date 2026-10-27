@@ -102,6 +102,10 @@ _Avoid_: Sign-off, status, vote
 A Nextcloud user who can open a Version's file through Files permissions; read access lets them comment, write access lets them manage. Never stored, always derived from Files (ADR 0009).
 _Avoid_: Owner (except for the file's actual owner), collaborator, team
 
+**Delivered by**:
+The account that uploaded or synced a Version's file, or enabled it for review; whoever writes the file again takes it over, and nobody is named when only the periodic scan found it. Per Version, shown as a name next to the date, and grants nothing.
+_Avoid_: Owner, Uploader
+
 **Reviewer**:
 Anyone who reaches a Version through a Review Link instead of Files permissions, identified by a self-given name (prefilled from their account if they happen to be logged in). A Reviewer belongs to the Member and the Project of the link they came by; the same person on another Project is another Reviewer there. An email address is one Reviewer per Member and Project: inviting it again puts them on another link, each with rights of their own over the link's, each with a Personal Link that opens only that link (ADR 0014); on more than one link, only the Member changes their name and address; and naming oneself with it mails that Reviewer their Personal Link. Two Reviewers may share a name and are told apart by the colour of their avatar. Reviewers only ever touch their own Comments.
 _Avoid_: Guest, anonymous user, client, external user
@@ -178,6 +182,7 @@ The German translation (`l10n/de` with "du", `l10n/de_DE` with "Sie") uses these
 | Frame, Range | Frame, Bereich |
 | Resolved (and its opposite) | Erledigt (Offen) |
 | Member, Reviewer | Mitglied, Reviewer |
+| Delivered by | Geliefert von (the filter: „Von mir geliefert“) |
 | Review Link, Personal Link | Review-Link, Persönlicher Link |
 | Unseen | Ungesehen |
 | Proxy, Thumbnail Strip, Waveform | Proxy, Vorschauleiste, Wellenform |

@@ -366,6 +366,7 @@ class ProjectService {
 			'versionId' => $version->getId(),
 			'number' => $version->getNumber(),
 			'state' => $version->getState(),
+			'deliveredBy' => $this->deliveredBy($version),
 			'comments' => $this->comments->countByVersions([$version->getId()])[$version->getId()] ?? 0,
 			// Auto Intake holds the file while it lies in the Folder Project's folder
 			'autoIntake' => $project !== null && $project->getAutoIntake() && $this->projects->findAbove($file)?->getId() === $project->getId(),
@@ -598,7 +599,13 @@ class ProjectService {
 		$file = $file instanceof File ? $file : null;
 		$media = $this->urls->linkToRoute('deliver.media.show', ['id' => $version->getId(), 'kind' => '__kind__']);
 		return $this->describeVersion($version, $this->settingsOf($version), $file === null ? null : $this->davUrl($uid, $file), $media)
-			+ ['mimeType' => $file?->getMimeType(), 'canWrite' => $file !== null && $this->canWrite($file)];
+			+ ['mimeType' => $file?->getMimeType(), 'canWrite' => $file !== null && $this->canWrite($file), 'deliveredBy' => $this->deliveredBy($version), 'createdAt' => $version->getCreatedAt()];
+	}
+
+	/** Who delivered the Version, for Members only; null when nobody's request did */
+	private function deliveredBy(Version $version): ?array {
+		$uid = $version->getDeliveredBy();
+		return $uid === null ? null : $this->authors->of($uid, null);
 	}
 
 	/** The Member's WebDAV home, under which paths with a leading slash lie, for uploads there */
@@ -1191,6 +1198,7 @@ class ProjectService {
 					// To download and rename the newest one through WebDAV; null while Missing, and for the older ones
 					'url' => $file === null || $version !== $stack[0] ? null : $this->davUrl($uid, $file),
 					'createdAt' => $version->getCreatedAt(),
+					'deliveredBy' => $this->deliveredBy($version),
 					// The card's runtime, once probed
 					'durationFrames' => $version->getDurationFrames(),
 					'fps' => ['num' => $version->getFpsNum(), 'den' => $version->getFpsDen()],

@@ -72,9 +72,10 @@ class StackService {
 	 * @param ?Project $project null for No Project
 	 * @param ?string $enabledBy the Member who enabled it; null for Auto Intake
 	 * @param bool $stack false for an Asset of its own whatever its name, which takes a file in a Stack out of it (#92)
+	 * @param ?string $deliveredBy the account whose request brought the file to Auto Intake; null for the periodic scan
 	 * @return ?Version null when Auto Intake leaves out a file a Member removed (story 132)
 	 */
-	public function intake(?Project $project, File $file, ?string $enabledBy = null, bool $stack = true): ?Version {
+	public function intake(?Project $project, File $file, ?string $enabledBy = null, bool $stack = true, ?string $deliveredBy = null): ?Version {
 		$known = $this->versions->findByFile($file->getId());
 		if ($known !== null) {
 			// Stacked already, by Auto Intake or by hand, a file wanted as an Asset of its own leaves the Stack (#92)
@@ -89,7 +90,7 @@ class StackService {
 		}
 		$suggestion = VersionNaming::parse($file->getName());
 		$target = $suggestion === null || !$stack ? null : $this->onlyCandidate($project, $file, $suggestion['base'], $enabledBy);
-		return $this->register($project, $file, $suggestion['number'] ?? 1, $target, $enabledBy);
+		return $this->register($project, $file, $suggestion['number'] ?? 1, $target, $enabledBy, true, $enabledBy ?? $deliveredBy);
 	}
 
 	/**
@@ -105,7 +106,7 @@ class StackService {
 		if ($projectId !== null) {
 			$this->removed->lift($projectId, $file->getId());
 		}
-		return $this->register(null, $file, $this->nextNumber($asset->getId()), $asset, $enabledBy, false);
+		return $this->register(null, $file, $this->nextNumber($asset->getId()), $asset, $enabledBy, false, $enabledBy);
 	}
 
 	/**
@@ -159,7 +160,7 @@ class StackService {
 	 * is stacked automatically. When a concurrent request registered the same
 	 * file first, that Version wins.
 	 */
-	private function register(?Project $project, File $file, int $number, ?Asset $asset, ?string $enabledBy, bool $auto = true): Version {
+	private function register(?Project $project, File $file, int $number, ?Asset $asset, ?string $enabledBy, bool $auto, ?string $deliveredBy): Version {
 		$stacked = $asset !== null && $auto;
 		$this->db->beginTransaction();
 		try {
@@ -176,6 +177,7 @@ class StackService {
 			$version->setFileId($file->getId());
 			$version->setNumber($this->freeNumber($asset->getId(), $number));
 			$version->setName($file->getName());
+			$version->setDeliveredBy($deliveredBy);
 			$version->setAutoStacked($stacked);
 			$version->setCreatedAt($this->time->getTime());
 			$version = $this->versions->insert($version);
