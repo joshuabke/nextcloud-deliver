@@ -59,9 +59,9 @@ class Ffmpeg {
 	}
 
 	/**
-	 * Runs `ffmpeg -version` and keeps the answer for available(): hourly,
-	 * on the admin page, when the worker starts, and before a browser would
-	 * decode a Waveform for want of ffmpeg
+	 * Runs `ffmpeg -version` and keeps the answer for available(): on the
+	 * admin page, when the worker starts, and before a browser would decode
+	 * a Waveform for want of ffmpeg
 	 */
 	public function probe(): ?string {
 		$version = $this->version($this->ffmpeg());
