@@ -71,12 +71,14 @@ class StackService {
 	 *
 	 * @param ?Project $project null for No Project
 	 * @param ?string $enabledBy the Member who enabled it; null for Auto Intake
+	 * @param bool $stack false for an Asset of its own whatever its name, which takes a file in a Stack out of it (#92)
 	 * @return ?Version null when Auto Intake leaves out a file a Member removed (story 132)
 	 */
-	public function intake(?Project $project, File $file, ?string $enabledBy = null): ?Version {
+	public function intake(?Project $project, File $file, ?string $enabledBy = null, bool $stack = true): ?Version {
 		$known = $this->versions->findByFile($file->getId());
 		if ($known !== null) {
-			return $known;
+			// Stacked already, by Auto Intake or by hand, a file wanted as an Asset of its own leaves the Stack (#92)
+			return $stack ? $known : $this->unstack($known);
 		}
 		if ($project !== null && $enabledBy === null && $this->removed->isRemoved($project->getId(), $file->getId())) {
 			return null;
@@ -86,7 +88,7 @@ class StackService {
 			$this->removed->lift($project->getId(), $file->getId());
 		}
 		$suggestion = VersionNaming::parse($file->getName());
-		$target = $suggestion === null ? null : $this->onlyCandidate($project, $file, $suggestion['base'], $enabledBy);
+		$target = $suggestion === null || !$stack ? null : $this->onlyCandidate($project, $file, $suggestion['base'], $enabledBy);
 		return $this->register($project, $file, $suggestion['number'] ?? 1, $target, $enabledBy);
 	}
 
