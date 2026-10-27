@@ -4,6 +4,7 @@
 
 ### Added
 - Let `POST /assets` take `newAsset: true` to enable a file as an Asset of its own instead of stacking it by name.
+- Copy a Reviewer's Personal Link from their menu.
 
 ### Changed
 - Look up the Version files of the Project list folder by folder instead of one by one.

@@ -4,6 +4,7 @@
 
 ### Neu
 - `newAsset: true` für `POST /assets` ergänzt, um eine Datei als eigenes Asset freizugeben, statt sie nach ihrem Namen zu stapeln.
+- Persönlichen Link zum Kopieren ins Menü des Reviewers aufgenommen.
 
 ### Geändert
 - Versionsdateien für die Projektliste ordnerweise statt einzeln nachgeschlagen.
