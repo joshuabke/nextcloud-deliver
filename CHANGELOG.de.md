@@ -1,6 +1,6 @@
 # Änderungen
 
-## Unveröffentlicht
+## 0.9.7 – 2026-10-27
 
 ### Neu
 - `newAsset: true` für `POST /assets` ergänzt, um eine Datei als eigenes Asset freizugeben, statt sie nach ihrem Namen zu stapeln.
