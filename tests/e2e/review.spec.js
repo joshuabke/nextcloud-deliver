@@ -43,7 +43,7 @@ test.describe('Review view', () => {
 		expect((await api.fetch(dav, { method: 'MKCOL' })).status()).toBe(201)
 		expect((await api.fetch(`${dav}/clip.webm`, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(201)
 		const shared = await api.post('/ocs/v2.php/apps/files_sharing/api/v1/shares?format=json', {
-			form: { path: `/${folder}`, shareType: 0, shareWith: MATE, permissions: 1 },
+			form: { path: `/${folder}`, shareType: 0, shareWith: MATE, permissions: 17 },
 		})
 		expect(shared.ok()).toBe(true)
 
@@ -530,6 +530,11 @@ test.describe('Review view', () => {
 
 	test('the navigation lists a colleague\'s link and says who made it', async ({ playwright }) => {
 		const mate = await playwright.request.newContext({ baseURL: URL, httpCredentials: { username: MATE, password: MATE_PASSWORD, send: 'always' }, extraHTTPHeaders: ocsHeaders })
+		// Reading and resharing in Files is not Share in Deliver: the owner switches it on
+		const owner = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const members = `/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/members?format=json`
+		expect((await mate.post(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`)).status()).toBe(403)
+		expect((await owner.put(members, { data: { type: 'user', principal: MATE, level: 'comment', share: true, approve: false } })).status()).toBe(200)
 		const made = await mate.post(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`, { data: { label: 'Colleague link' } })
 		expect(made.status()).toBe(201)
 		const link = (await made.json()).ocs.data
@@ -545,7 +550,53 @@ test.describe('Review view', () => {
 			await expect(page.locator('.app-navigation').getByText('Made by deliver-e2e', { exact: true })).toHaveCount(0)
 		} finally {
 			await mate.delete(`/ocs/v2.php/apps/deliver/api/v1/links/${link.id}?format=json`)
+			await owner.delete(members + `&type=user&principal=${MATE}`)
 			await mate.dispose()
+			await owner.dispose()
+		}
+	})
+
+	test('the Project settings list the Members and set what each may do', async ({ playwright }) => {
+		const owner = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const api = `/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}`
+		const listed = async () => (await (await owner.get(`${api}/members?format=json`)).json()).ocs.data.find((each) => each.id === MATE)
+		try {
+			await page.goto(`/apps/deliver/projects/${projectId}`)
+			await page.getByRole('button', { name: 'Project settings' }).click()
+			const dialog = page.getByRole('dialog')
+			const mate = dialog.locator('.deliver-members__row', { hasText: 'Mara Mate' })
+			const level = mate.getByLabel('Access level of Mara Mate')
+			// Read access in Files gives Comment, and no Approve
+			await expect(level).toHaveValue('comment')
+			await expect(mate.getByRole('checkbox', { name: 'Approve' })).not.toBeChecked()
+
+			await mate.getByText('Approve', { exact: true }).click()
+			await expect.poll(async () => (await listed()).stored).toEqual({ level: 'comment', share: false, approve: true })
+			await level.selectOption('view')
+			// A View cannot approve, so the switch goes off and is fixed
+			await expect.poll(async () => (await listed()).stored).toEqual({ level: 'view', share: false, approve: false })
+			await expect(mate.getByRole('checkbox', { name: 'Approve' })).toBeDisabled()
+
+			// The owner is marked and cannot be lowered
+			const me = dialog.locator('.deliver-members__row', { hasText: USER })
+			await expect(me).toContainText('Owner')
+			await expect(me.getByLabel(`Access level of ${USER}`)).toBeDisabled()
+
+			// Back to what Files gives
+			await mate.getByRole('button', { name: 'Reset' }).click()
+			await expect(level).toHaveValue('comment')
+			expect((await listed()).stored).toBeNull()
+
+			// What someone newly given access in Files starts with
+			await dialog.getByLabel('Someone newly given access in Files starts with').selectOption('view')
+			await expect.poll(async () => (await (await owner.get(`${api}?format=json`)).json()).ocs.data.newcomers).toBe('view')
+			// Everyone who was a Member keeps what they had
+			await expect.poll(async () => (await listed()).stored?.level).toBe('comment')
+		} finally {
+			await owner.put(`${api}?format=json`, { data: { newcomers: 'files' } })
+			await owner.delete(`${api}/members?format=json&type=user&principal=${MATE}`)
+			await owner.dispose()
+			await page.keyboard.press('Escape').catch(() => {})
 		}
 	})
 

@@ -42,13 +42,13 @@ class ExportService {
 
 	/**
 	 * @param ?string $liveSet for `ableton`: the uploaded .als to add the locators to
-	 * @throws AccessDeniedException exporting needs write access (stories 67 to 69)
+	 * @throws AccessDeniedException exporting needs Manage (stories 67 to 69)
 	 * @throws InvalidRequestException an unknown format, or an Ableton export without a Live Set
 	 * @return array{name: string, mime: string, body?: string, path?: string} the file, as content or as a temporary file the caller deletes
 	 */
 	public function export(Viewer $viewer, Version $version, Project $project, string $format, bool $unresolvedOnly, bool $zeroBased, ?string $liveSet = null): array {
 		if (!$viewer->canWrite) {
-			throw new AccessDeniedException('Exporting needs write access to the file');
+			throw new AccessDeniedException('Exporting needs Manage');
 		}
 		if (!isset(self::FORMATS[$format])) {
 			throw new InvalidRequestException('Exports come as ' . implode(', ', array_keys(self::FORMATS)));

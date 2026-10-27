@@ -11,8 +11,8 @@ use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\DB\Exception as DbException;
 
 /**
- * Approvals (story 88): whoever may comment on a Version approves it or
- * requests changes; one decision per person, which they change or take back.
+ * Approvals (story 88): a Member with Approve, or a Reviewer whose link lets
+ * them comment, approves a Version or requests changes; one decision per person, which they change or take back.
  */
 class ApprovalService {
 	public const APPROVED = 'approved';
@@ -40,13 +40,13 @@ class ApprovalService {
 
 	/**
 	 * @param ?string $status approved, changes, or null to take the decision back
-	 * @throws AccessDeniedException only who may comment decides
+	 * @throws AccessDeniedException only who may approve decides
 	 * @throws InvalidRequestException an unknown status
 	 * @return list<array{author: array, status: string, updatedAt: int}>
 	 */
 	public function decide(Viewer $viewer, Version $version, ?string $status): array {
-		if (!$viewer->canComment || ($viewer->uid === null && $viewer->reviewerId === null)) {
-			throw new AccessDeniedException('Only who may comment approves');
+		if (!$viewer->canApprove || ($viewer->uid === null && $viewer->reviewerId === null)) {
+			throw new AccessDeniedException('Only who may approve decides');
 		}
 		if (!$this->window->open($viewer, $version)) {
 			throw new ProjectConflictException('Only the newest Version is decided on here');

@@ -15,9 +15,11 @@ final class Viewer {
 	private function __construct(
 		public readonly ?string $uid,
 		public readonly ?int $reviewerId,
-		/** Resolve, and delete other people's Comments */
+		/** Manage: resolve, delete other people's Comments, export */
 		public readonly bool $canWrite,
 		public readonly bool $canComment,
+		/** Approve a Version or request changes */
+		public readonly bool $canApprove,
 		/** Comment on a Version that is not the newest in its Stack */
 		public readonly bool $canCommentOnOlder,
 		/** Someone on a Review Link who may comment as soon as they give a name */
@@ -25,13 +27,14 @@ final class Viewer {
 	) {
 	}
 
-	public static function member(string $uid, bool $canWrite, bool $canCommentOnOlder): self {
-		return new self($uid, null, $canWrite, true, $canCommentOnOlder);
+	/** A Member's Access level in the Version's Project (ADR 0016) */
+	public static function member(string $uid, Grant $grant, bool $canCommentOnOlder): self {
+		return new self($uid, null, $grant->manages(), $grant->comments(), $grant->approve, $canCommentOnOlder);
 	}
 
 	/** A Reviewer never resolves and never touches what they did not write */
 	public static function reviewer(int $reviewerId, bool $canComment, bool $canCommentOnOlder): self {
-		return new self(null, $reviewerId, false, $canComment, $canCommentOnOlder);
+		return new self(null, $reviewerId, false, $canComment, $canComment, $canCommentOnOlder);
 	}
 
 	/**
@@ -40,7 +43,7 @@ final class Viewer {
 	 * name instead of saying that commenting is off.
 	 */
 	public static function unnamed(bool $shareTakesComments, bool $canCommentOnOlder): self {
-		return new self(null, null, false, false, $canCommentOnOlder, $shareTakesComments);
+		return new self(null, null, false, false, false, $canCommentOnOlder, $shareTakesComments);
 	}
 
 	public function owns(Comment $comment): bool {

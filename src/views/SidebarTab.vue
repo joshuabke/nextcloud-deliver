@@ -41,6 +41,8 @@ const projects = ref([])
 const { busy, error, run } = useBusy()
 
 const isFolder = computed(() => props.node?.type === 'folder')
+/** In review in a Project this Member has no access to: all they learn is that (ADR 0016) */
+const restricted = computed(() => asset.value?.restricted === true)
 const canWrite = computed(() => ((props.node?.permissions ?? 0) & Permission.UPDATE) !== 0)
 // Auto Intake holds a file in its folder's Project; removing it keeps it out (story 132), moving it elsewhere does not
 const ownedByAutoIntake = computed(() => !isFolder.value && asset.value?.autoIntake === true)
@@ -182,7 +184,12 @@ async function remove() {
 </script>
 
 <template>
-	<div class="deliver-tab">
+	<div v-if="restricted" class="deliver-tab">
+		<p class="deliver-tab__hint">
+			{{ t('deliver', 'This file is in review in a Project.') }}
+		</p>
+	</div>
+	<div v-else class="deliver-tab">
 		<template v-if="isFolder">
 			<NcCheckboxRadioSwitch
 				type="switch"
@@ -203,7 +210,7 @@ async function remove() {
 			v-else
 			type="switch"
 			:modelValue="asset !== null"
-			:disabled="busy || !canWrite"
+			:disabled="busy || !canWrite || (asset !== null && !asset.canWrite)"
 			@update:modelValue="toggle">
 			{{ t('deliver', 'Review in Deliver') }}
 		</NcCheckboxRadioSwitch>
@@ -237,12 +244,12 @@ async function remove() {
 			</template>
 		</p>
 
-		<section v-if="isFolder && project && canWrite" class="deliver-tab__section">
+		<section v-if="isFolder && project && project.canWrite" class="deliver-tab__section">
 			<h4>{{ t('deliver', 'Project settings') }}</h4>
 			<ProjectSettingsFields :project="project" :disabled="busy" @save="saveSettings" />
 		</section>
 
-		<section v-if="asset || project" class="deliver-tab__section">
+		<section v-if="(asset ?? project)?.access?.share" class="deliver-tab__section">
 			<h4>{{ t('deliver', 'Review Links') }}</h4>
 			<ReviewLinks :projectId="asset ? asset.projectId : project.id" :assetId="asset?.assetId ?? null" />
 		</section>
@@ -254,7 +261,7 @@ async function remove() {
 			{{ t('deliver', 'Open in Deliver') }}
 		</NcButton>
 		<NcButton
-			v-if="isFolder && project && canWrite"
+			v-if="isFolder && project && project.canWrite"
 			:disabled="busy"
 			variant="tertiary"
 			@click="remove">

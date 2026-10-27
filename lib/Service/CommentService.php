@@ -148,7 +148,7 @@ class CommentService {
 	}
 
 	/**
-	 * Deletes a Comment with its Replies. Write access deletes any; an author
+	 * Deletes a Comment with its Replies. Manage deletes any; an author
 	 * deletes their own as long as nobody else has replied to it.
 	 *
 	 * @throws AccessDeniedException not the author, or others have replied
@@ -158,11 +158,11 @@ class CommentService {
 		$replies = $this->comments->findByParent($comment->getId());
 		if (!$viewer->canWrite) {
 			if (!$viewer->owns($comment)) {
-				throw new AccessDeniedException('Only the author or a Member with write access can delete this Comment');
+				throw new AccessDeniedException('Only the author or a Member with Manage can delete this Comment');
 			}
 			foreach ($replies as $reply) {
 				if (!$viewer->owns($reply)) {
-					throw new AccessDeniedException('Others have replied to this Comment, so only a Member with write access can delete it');
+					throw new AccessDeniedException('Others have replied to this Comment, so only a Member with Manage can delete it');
 				}
 			}
 		}
@@ -298,11 +298,11 @@ class CommentService {
 		}
 	}
 
-	/** @throws AccessDeniedException only write access resolves */
+	/** @throws AccessDeniedException only Manage resolves */
 	public function setResolved(Viewer $viewer, Version $version, int $id, bool $resolved): array {
 		$comment = $this->reach($version, $id);
 		if (!$viewer->canWrite) {
-			throw new AccessDeniedException('Write permission on the file is required to resolve a Comment');
+			throw new AccessDeniedException('Manage is required to resolve a Comment');
 		}
 		if ($comment->getParentId() !== null) {
 			throw new InvalidRequestException('Replies are not resolved on their own');
@@ -384,6 +384,7 @@ class CommentService {
 			'overwrittenAt' => $version->getOverwrittenAt(),
 			'canWrite' => $viewer->canWrite,
 			'canComment' => ($viewer->canComment || $viewer->canCommentOnceNamed) && $this->window->open($viewer, $version),
+			'canApprove' => $viewer->canApprove && $this->window->open($viewer, $version),
 			// So that the Comment field refuses a file that would not fit before uploading it
 			'attachmentLimit' => $this->attachmentLimit(),
 			'seenUntil' => $seen?->getSeenUntil() ?? 0,
@@ -406,7 +407,7 @@ class CommentService {
 	 * @return list<string>
 	 */
 	private function membersOf(Version $version): array {
-		return $this->membersByVersion[$version->getId()] ??= $this->members->of($version->getFileId());
+		return $this->membersByVersion[$version->getId()] ??= $this->members->inReview($version);
 	}
 
 	/**

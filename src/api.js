@@ -50,6 +50,9 @@ export const inviteToProject = (projectId, fields) => axios.post(url(`/projects/
 export const searchContacts = (search) => axios.get(url('/contacts'), { params: { search } }).then(data)
 export const getSettings = () => axios.get(url('/settings')).then(data)
 export const updateSettings = (settings) => axios.put(url('/settings'), settings).then(data)
+export const listProjectMembers = (id) => axios.get(url(`/projects/${id}/members`)).then(data)
+export const setProjectMember = (id, member) => axios.put(url(`/projects/${id}/members`), member).then(data)
+export const resetProjectMember = (id, type, principal) => axios.delete(url(`/projects/${id}/members`), { params: { type, principal } }).then(data)
 export const muteProject = (id, muted) => axios.put(url(`/projects/${id}/mute`), { muted }).then(data)
 
 export const getVersion = (id) => axios.get(url(`/versions/${id}`)).then(data)

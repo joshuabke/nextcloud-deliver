@@ -17,7 +17,7 @@ use OCP\Security\IHasher;
 use OCP\Security\ISecureRandom;
 
 /**
- * A Project's Review Links (ADR 0010, 0011): made, changed and removed by every Member who sees the Project (ADR 0017), on No Project by the Member
+ * A Project's Review Links (ADR 0010, 0011): made, changed and removed by every Member with Share (ADR 0016, 0017), on No Project by the Member
  * alone; what goes on behind a token is ReviewLinks'
  */
 class ReviewLinkService {
@@ -168,12 +168,12 @@ class ReviewLinkService {
 
 	/**
 	 * Who manages the links and Reviewers of a Project, in one place: every
-	 * Member who sees it (ADR 0017). On No Project they are the Member's own.
+	 * Member with Share (ADR 0016, 0017). On No Project they are the Member's own.
 	 *
 	 * @param ?int $projectId null for No Project
 	 * @param string $madeBy whose they are on No Project: the Member who made the link, or the Reviewer's
 	 * @throws NotFoundException no such Project, a Deleted Project (ADR 0015) or one the Member does not see
-	 * @throws AccessDeniedException another Member's, on No Project
+	 * @throws AccessDeniedException another Member's, on No Project; a Project where they have no Share
 	 */
 	public function mayManage(string $uid, ?int $projectId, ?string $madeBy): void {
 		if ($projectId === null) {
@@ -182,7 +182,7 @@ class ReviewLinkService {
 			}
 			return;
 		}
-		$this->projects->visible($uid, $projectId);
+		$this->projects->shareable($uid, $projectId);
 	}
 
 	private function newToken(): string {

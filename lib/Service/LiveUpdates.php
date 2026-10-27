@@ -30,7 +30,7 @@ class LiveUpdates {
 		if ($queue === null) {
 			return;
 		}
-		foreach ($this->members->of($version->getFileId()) as $uid) {
+		foreach ($this->members->inReview($version) as $uid) {
 			try {
 				$queue->push('notify_custom', ['user' => $uid, 'message' => self::MESSAGE, 'body' => ['versionId' => $version->getId()]]);
 			} catch (\Throwable $e) {

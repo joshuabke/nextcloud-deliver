@@ -590,7 +590,26 @@
 		"This file is inside a Project you may not change": "Diese Datei liegt in einem Projekt, das du nicht ändern darfst",
 		"This file belongs to a Project you may not change": "Diese Datei gehört zu einem Projekt, das du nicht ändern darfst",
 		"This folder is inside a Project already": "Dieser Ordner liegt schon in einem Projekt",
-		"This folder contains a Project already": "Dieser Ordner enthält schon ein Projekt"
+		"This folder contains a Project already": "Dieser Ordner enthält schon ein Projekt",
+		"None": "Keine",
+		"View": "Ansehen",
+		"Manage": "Verwalten",
+		"As in Files": "Wie in Dateien",
+		"The owner of a Project keeps Manage, Share and Approve.": "Wer das Projekt besitzt, behält Verwalten, Teilen und Abnehmen.",
+		"Files does not let them share this.": "Dateien erlaubt ihnen nicht, dies zu teilen.",
+		"They do not see the Project.": "Sie sehen das Projekt nicht.",
+		"You cannot give what you do not have yourself.": "Du kannst nichts vergeben, was du selbst nicht hast.",
+		"Approving needs Comment or Manage.": "Abnehmen setzt Kommentieren oder Verwalten voraus.",
+		"Members": "Mitglieder",
+		"Someone newly given access in Files starts with": "Wer neu Zugriff in Dateien bekommt, startet mit",
+		"Search Members": "Mitglieder suchen",
+		"Group": "Gruppe",
+		"Owner": "Besitzer",
+		"through group {group}": "über Gruppe {group}",
+		"Access level of {name}": "Zugriffsstufe von {name}",
+		"Back to what Files gives": "Zurück zu dem, was Dateien gibt",
+		"Reset": "Zurücksetzen",
+		"This file is in review in a Project.": "Diese Datei ist in einem Projekt im Review."
 	},
 	"pluralForm": "nplurals=2; plural=(n != 1);"
 }

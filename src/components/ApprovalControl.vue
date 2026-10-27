@@ -21,8 +21,8 @@ const LABELS = {
 	changes: t('deliver', 'Changes requested'),
 }
 
-/** Only who may comment decides; everyone sees the decisions (story 88) */
-const canDecide = computed(() => store.canComment === true && store.me?.type !== 'unnamed')
+/** Only a Member with Approve, or a Reviewer who may comment, decides; everyone sees the decisions (story 88) */
+const canDecide = computed(() => store.canApprove === true && store.me?.type !== 'unnamed')
 const label = computed(() => LABELS[store.myDecision] ?? t('deliver', 'Approve'))
 
 /**

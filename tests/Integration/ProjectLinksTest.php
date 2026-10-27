@@ -44,6 +44,9 @@ class ProjectLinksTest extends TestCase {
 		$this->versionId = $admin->ocs('GET', "/projects/{$this->projectId}")['data']['assets'][0]['versions'][0]['id'];
 		$shared = $admin->ocsForm('POST', '/ocs/v2.php/apps/files_sharing/api/v1/shares', ['path' => "/{$this->root}", 'shareType' => 0, 'shareWith' => $this->benId, 'permissions' => 31]);
 		self::assertSame(200, $shared['status'], json_encode($shared['data']));
+		// Writing and resharing in Files is not Share in Deliver: the owner gives it (ADR 0016)
+		$given = $admin->ocs('PUT', "/projects/{$this->projectId}/members", ['type' => 'user', 'principal' => $this->benId, 'level' => 'manage', 'share' => true]);
+		self::assertSame(200, $given['status'], json_encode($given['data']));
 	}
 
 	protected function tearDown(): void {

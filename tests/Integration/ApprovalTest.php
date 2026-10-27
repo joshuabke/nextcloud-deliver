@@ -67,7 +67,9 @@ class ApprovalTest extends TestCase {
 		self::assertSame(200, $decided['status'], json_encode($decided['data']));
 		self::assertSame([['admin', 'approved']], array_map(static fn ($a) => [$a['author']['id'], $a['status']], $decided['data']));
 
-		// Reading the folder is enough to decide, as it is to comment
+		// Reading the folder is enough to comment but not to decide: a Member with Manage switches Approve on (ADR 0016)
+		self::assertSame(403, $this->decide($member, 'changes')['status']);
+		$this->nc->ocs('PUT', "/projects/{$this->projectId}/members", ['type' => 'user', 'principal' => $user, 'level' => 'comment', 'approve' => true]);
 		$this->decide($member, 'changes');
 		$listed = $member->ocs('GET', "/versions/{$this->versionId}/comments")['data']['approvals'];
 		self::assertSame([['admin', 'approved'], [$user, 'changes']], array_map(static fn ($a) => [$a['author']['id'], $a['status']], $listed));

@@ -58,7 +58,7 @@ class NotificationService {
 	/** @return list<string> the Members a Comment mentions, not its author */
 	private function mentioned(Comment $comment, Version $version): array {
 		return array_values(array_diff(
-			array_intersect(Mentions::parse($comment->getBody()), $this->members->of($version->getFileId())),
+			array_intersect(Mentions::parse($comment->getBody()), $this->members->inReview($version)),
 			[$comment->getUserId()],
 		));
 	}
@@ -133,8 +133,8 @@ class NotificationService {
 	 * @param list<string> $exclude who hears of it otherwise
 	 */
 	private function notify(Version $version, string $subject, string $objectType, string $objectId, array $parameters, ?string $actor, array $exclude = []): void {
-		// Whoever can open the file hears, unless they muted its Project or No Project (ADR 0009)
-		$recipients = array_diff($this->members->of($version->getFileId()), $this->mutes->mutedBy($version->getProjectId() ?? 0), [$actor], $exclude);
+		// Whoever can open the file hears, unless they muted its Project or No Project (ADR 0009) or have no access to the Project (ADR 0016)
+		$recipients = array_diff($this->members->inReview($version), $this->mutes->mutedBy($version->getProjectId() ?? 0), [$actor], $exclude);
 		$this->send($version, $subject, $objectType, $objectId, $parameters, array_values($recipients));
 	}
 

@@ -325,6 +325,7 @@ class ReviewerTest extends TestCase {
 		$this->nc->ocsForm('POST', '/ocs/v2.php/cloud/users', ['userid' => $uid, 'password' => $password]);
 		try {
 			$this->nc->ocsForm('POST', '/ocs/v2.php/apps/files_sharing/api/v1/shares', ['path' => "/{$this->root}", 'shareType' => 0, 'shareWith' => $uid, 'permissions' => 31]);
+			self::assertSame(200, $this->nc->ocs('PUT', "/projects/{$this->projectId}/members", ['type' => 'user', 'principal' => $uid, 'level' => 'manage', 'share' => true])['status']);
 			$theirs = $this->nc->withUser($uid, $password)->ocs('POST', "/projects/{$this->projectId}/links")['data']['token'];
 			self::assertSame(201, $this->reviewer()->call('POST', '/api/reviewer', ['name' => 'Mara'])['status']);
 			$visitor = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $theirs);
