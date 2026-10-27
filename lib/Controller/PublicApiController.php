@@ -434,7 +434,7 @@ class PublicApiController extends PublicShareController {
 			// A logged-in visitor gets their display name offered (story 58)
 			? ['type' => 'unnamed', 'name' => $this->userSession->getUser()?->getDisplayName() ?? '']
 			// On several links, only the Member who invited them changes name and address (ADR 0014)
-			: ['type' => 'reviewer', 'id' => $reviewer->getId(), 'name' => $reviewer->getName(), 'email' => $reviewer->getEmail(), 'mail' => $reviewer->mailWishes(), 'severalLinks' => $this->reviewers->linkCount($reviewer) > 1, 'link' => $this->personalLink($reviewer)];
+			: ['type' => 'reviewer'] + $this->reviewers->serialize($reviewer) + ['severalLinks' => $this->reviewers->linkCount($reviewer) > 1, 'link' => $this->personalLink($reviewer)];
 	}
 
 	/** The Reviewer's Personal Link through this link, for their menu: the browser holds its key already (story 128) */
