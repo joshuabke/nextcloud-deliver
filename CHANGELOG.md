@@ -2,7 +2,11 @@
 
 ## Unreleased
 
+### Changed
+- Look up the Version files of the Project list folder by folder instead of one by one.
+
 ### Fixed
+- Show names with & or ' as they are instead of as HTML entities.
 - Check for ffmpeg on the admin page instead of on every page load.
 
 ## 0.9.6 – 2026-10-26

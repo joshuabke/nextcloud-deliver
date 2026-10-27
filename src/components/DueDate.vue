@@ -1,11 +1,12 @@
 <script setup>
 import calendarIcon from '@mdi/svg/svg/calendar-clock.svg?raw'
 import closeIcon from '@mdi/svg/svg/close.svg?raw'
-import { getCanonicalLocale, t } from '@nextcloud/l10n'
+import { getCanonicalLocale } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DueDateDialog from './DueDateDialog.vue'
 import { dayOf, urgency } from '../lib/due.js'
+import { t } from '../lib/l10n.js'
 
 const props = defineProps({
 	/** YYYY-MM-DD, or null */

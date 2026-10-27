@@ -1,10 +1,10 @@
 <script setup>
-import { t } from '@nextcloud/l10n'
 import { ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import ReviewLinkItem from './ReviewLinkItem.vue'
 import { createReviewLink, listReviewLinks } from '../api.js'
 import { useBusy } from '../composables/busy.js'
+import { t } from '../lib/l10n.js'
 
 // The Review Links that show a Project or one of its Assets, in the Files sidebar and in the Review view
 const props = defineProps({

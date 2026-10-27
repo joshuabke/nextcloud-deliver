@@ -2,7 +2,6 @@
 import changesIcon from '@mdi/svg/svg/alert-circle-outline.svg?raw'
 import approvedIcon from '@mdi/svg/svg/check-decagram.svg?raw'
 import { showError } from '@nextcloud/dialogs'
-import { t } from '@nextcloud/l10n'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -10,6 +9,7 @@ import NcActions from '@nextcloud/vue/components/NcActions'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import PersonAvatar from './PersonAvatar.vue'
 import { errorMessage } from '../api.js'
+import { t } from '../lib/l10n.js'
 import { useCommentsStore } from '../store/comments.js'
 
 const store = useCommentsStore()
