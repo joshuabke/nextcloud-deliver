@@ -1,4 +1,4 @@
-import { t } from '@nextcloud/l10n'
+import { t } from './l10n.js'
 
 /**
  * What a 409 on naming oneself or changing one's settings means, in the

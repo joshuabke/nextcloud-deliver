@@ -2,7 +2,6 @@
 import downloadIcon from '@mdi/svg/svg/download.svg?raw'
 import axios from '@nextcloud/axios'
 import { showError } from '@nextcloud/dialogs'
-import { t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import { computed, ref } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -12,6 +11,7 @@ import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import { errorMessage } from '../api.js'
+import { t } from '../lib/l10n.js'
 
 const props = defineProps({
 	versionId: { type: Number, required: true },

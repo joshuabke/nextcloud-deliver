@@ -1,7 +1,7 @@
 <script setup>
-import { t } from '@nextcloud/l10n'
 import { computed } from 'vue'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
+import { t } from '../lib/l10n.js'
 
 /**
  * What a Review Link shows: the whole Project, or only the Assets picked

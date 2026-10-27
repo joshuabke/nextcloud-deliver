@@ -1,6 +1,6 @@
 <script setup>
-import { t } from '@nextcloud/l10n'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
+import { t } from '../lib/l10n.js'
 
 const props = defineProps({
 	name: { type: String, required: true },

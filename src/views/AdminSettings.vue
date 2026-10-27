@@ -1,5 +1,4 @@
 <script setup>
-import { t } from '@nextcloud/l10n'
 import { computed, onMounted, ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
@@ -8,6 +7,7 @@ import NcSettingsSection from '@nextcloud/vue/components/NcSettingsSection'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { errorMessage, getPipelineSettings, getSupportReport, retryFailedJobs, savePipelineSettings } from '../api.js'
 import { useBusy } from '../composables/busy.js'
+import { t } from '../lib/l10n.js'
 
 const ENCODERS = [
 	{ id: 'none', label: t('deliver', 'None: software (libx264)') },

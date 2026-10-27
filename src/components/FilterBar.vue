@@ -1,11 +1,11 @@
 <script setup>
 import sortIcon from '@mdi/svg/svg/sort.svg?raw'
-import { t } from '@nextcloud/l10n'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import NcActionRadio from '@nextcloud/vue/components/NcActionRadio'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import { t } from '../lib/l10n.js'
 
 const filter = defineModel('filter', { type: String, required: true })
 const sort = defineModel('sort', { type: String, required: true })

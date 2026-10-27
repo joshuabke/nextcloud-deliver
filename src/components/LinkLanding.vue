@@ -2,12 +2,12 @@
 import downloadIcon from '@mdi/svg/svg/download.svg?raw'
 import audioIcon from '@mdi/svg/svg/music-note-outline.svg?raw'
 import videoIcon from '@mdi/svg/svg/play-box-outline.svg?raw'
-import { n, t } from '@nextcloud/l10n'
 import { computed, onBeforeUnmount, onMounted, reactive } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DueDate from './DueDate.vue'
 import MediaStill from './MediaStill.vue'
+import { n, t } from '../lib/l10n.js'
 
 // A link with several Assets opens on a grid of them, under its description (stories 123, 125)
 const props = defineProps({

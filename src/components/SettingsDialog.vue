@@ -1,11 +1,11 @@
 <script setup>
 import { showError } from '@nextcloud/dialogs'
-import { t } from '@nextcloud/l10n'
 import { ref } from 'vue'
 import NcAppSettingsDialog from '@nextcloud/vue/components/NcAppSettingsDialog'
 import NcAppSettingsSection from '@nextcloud/vue/components/NcAppSettingsSection'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import { errorMessage, getSettings, updateSettings } from '../api.js'
+import { t } from '../lib/l10n.js'
 
 /** The Member's own Deliver settings (story 144) */
 const emit = defineEmits(['close'])

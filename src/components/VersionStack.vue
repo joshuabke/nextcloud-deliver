@@ -1,5 +1,4 @@
 <script setup>
-import { t } from '@nextcloud/l10n'
 import { ref } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionInput from '@nextcloud/vue/components/NcActionInput'
@@ -8,6 +7,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { regenerateVersion, unstackVersion, updateVersion } from '../api.js'
 import { useBusy } from '../composables/busy.js'
+import { t } from '../lib/l10n.js'
 import { stackKind } from '../lib/media.js'
 import { previewUrl } from '../lib/preview.js'
 import { useUploadsStore } from '../store/uploads.js'
