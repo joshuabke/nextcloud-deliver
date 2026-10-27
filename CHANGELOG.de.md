@@ -2,6 +2,9 @@
 
 ## Unveröffentlicht
 
+### Geändert
+- Versionsdateien für die Projektliste ordnerweise statt einzeln nachgeschlagen.
+
 ### Behoben
 - Namen mit & oder ' so angezeigt, wie sie sind, statt als HTML-Entitäten.
 

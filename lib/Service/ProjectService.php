@@ -57,6 +57,7 @@ class ProjectService {
 		private Members $members,
 		private Authors $authors,
 		private Ffmpeg $ffmpeg,
+		private OpenFiles $openFiles,
 		private PipelineSettings $settings,
 		private NotificationService $notifications,
 		private IL10N $l,
@@ -74,14 +75,13 @@ class ProjectService {
 	public function listForUser(string $uid): array {
 		$home = $this->root->getUserFolder($uid);
 		$result = [];
-		// ponytail: opens every Version's file per Project; index access if lists get long
 		foreach ($this->projects->findAll() as $project) {
 			// Listed under Deleted Projects instead (ADR 0015)
 			if ($project->isDeleted()) {
 				continue;
 			}
 			$folder = $this->folderOf($project, $home);
-			$stacks = $this->visibleStacks($project, $uid, $home);
+			$stacks = $this->visibleStacks($project, $uid, $home, false);
 			if ($folder === null && $stacks[0] === [] && $project->getOwnerUid() !== $uid) {
 				continue;
 			}
@@ -90,7 +90,7 @@ class ProjectService {
 				'activity' => $this->activity($project, $stacks, $uid),
 			];
 		}
-		$none = $this->visibleStacks(null, $uid, $home);
+		$none = $this->visibleStacks(null, $uid, $home, false);
 		if ($none[0] !== []) {
 			$result[] = $this->serializeNone() + [
 				'muted' => $this->mutes->isMuted(self::NONE, $uid),
@@ -930,7 +930,7 @@ class ProjectService {
 		}
 		$home = $this->root->getUserFolder($uid);
 		$folder = $this->folderOf($project, $home);
-		if ($folder === null && $project->getOwnerUid() !== $uid && $this->visibleStacks($project, $uid, $home)[0] === []) {
+		if ($folder === null && $project->getOwnerUid() !== $uid && $this->visibleStacks($project, $uid, $home, false)[0] === []) {
 			throw new NotFoundException('Project not found');
 		}
 		return [$project, $folder];
@@ -1112,9 +1112,10 @@ class ProjectService {
 	 * this Member can open their files; a Missing Version comes along with
 	 * the rest of its Stack.
 	 *
-	 * @return array{0: array<int, non-empty-list<Version>>, 1: list<int>, 2: array<int, File>, 3: array<int, Version>} the Stacks by Asset id, newest Version first; all their Version ids; the files this Member opens, by Version id; each Asset's newest Version, shown or not
+	 * @param bool $nodes whether to open the files, for their paths and rights; without, only which ones the Member can open is looked up, folder by folder (#64)
+	 * @return array{0: array<int, non-empty-list<Version>>, 1: list<int>, 2: array<int, File>, 3: array<int, Version>} the Stacks by Asset id, newest Version first; all their Version ids; the files this Member opens, by Version id, when asked for; each Asset's newest Version, shown or not
 	 */
-	private function visibleStacks(?Project $project, string $uid, Folder $home): array {
+	private function visibleStacks(?Project $project, string $uid, Folder $home, bool $nodes = true): array {
 		$versions = $project === null
 			? $this->versions->findByAssets(array_map(static fn (Asset $asset) => $asset->getId(), $this->assets->findUnassigned($uid)))
 			: $this->versions->findByProject($project->getId());
@@ -1122,21 +1123,28 @@ class ProjectService {
 		$whole = $project === null || $project->getOwnerUid() === $uid || $this->folderOf($project, $home) !== null;
 		$byAsset = [];
 		$files = [];
+		$openable = $nodes ? [] : $this->openFiles->among($home, array_map(static fn (Version $version) => $version->getFileId(), $versions));
+		$opens = [];
 		foreach ($versions as $version) {
-			$file = $home->getFirstNodeById($version->getFileId());
-			if ($file instanceof File) {
-				$files[$version->getId()] = $file;
+			if ($nodes) {
+				$file = $home->getFirstNodeById($version->getFileId());
+				if ($file instanceof File) {
+					$files[$version->getId()] = $file;
+					$opens[$version->getId()] = true;
+				}
+			} elseif (isset($openable[$version->getFileId()])) {
+				$opens[$version->getId()] = true;
 			}
 			$byAsset[$version->getAssetId()][] = $version;
 		}
 		$versionsByAsset = [];
 		$versionIds = [];
 		foreach ($byAsset as $assetId => $stack) {
-			$open = array_values(array_filter($stack, static fn (Version $version) => isset($files[$version->getId()])));
+			$open = array_values(array_filter($stack, static fn (Version $version) => isset($opens[$version->getId()])));
 			if ($open === [] && !$whole) {
 				continue;
 			}
-			$shown = array_values(array_filter($stack, static fn (Version $version) => isset($files[$version->getId()]) || $version->getState() !== Version::STATE_READY));
+			$shown = array_values(array_filter($stack, static fn (Version $version) => isset($opens[$version->getId()]) || $version->getState() !== Version::STATE_READY));
 			if ($shown !== []) {
 				$versionsByAsset[$assetId] = $shown;
 				array_push($versionIds, ...array_map(static fn (Version $version) => $version->getId(), $shown));

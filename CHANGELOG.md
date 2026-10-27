@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Changed
+- Look up the Version files of the Project list folder by folder instead of one by one.
+
 ### Fixed
 - Show names with & or ' as they are instead of as HTML entities.
 
