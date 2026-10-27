@@ -3,7 +3,7 @@
 ## Unreleased
 
 ### Changed
-- Load the Project list in one query for which Version files a Member can open, instead of opening each file.
+- Look up the Version files of the Project list folder by folder instead of one by one.
 
 ## 0.9.6 – 2026-10-26
 

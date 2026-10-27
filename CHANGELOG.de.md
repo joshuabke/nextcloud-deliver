@@ -3,7 +3,7 @@
 ## Unveröffentlicht
 
 ### Geändert
-- Projektliste mit einer Abfrage geladen, welche Versionsdateien ein Mitglied öffnen kann, statt jede Datei zu öffnen.
+- Versionsdateien für die Projektliste ordnerweise statt einzeln nachgeschlagen.
 
 ## 0.9.6 – 2026-10-26
 

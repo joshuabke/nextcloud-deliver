@@ -57,6 +57,7 @@ class ProjectService {
 		private Members $members,
 		private Authors $authors,
 		private Ffmpeg $ffmpeg,
+		private OpenFiles $openFiles,
 		private PipelineSettings $settings,
 		private NotificationService $notifications,
 		private IL10N $l,
@@ -1111,7 +1112,7 @@ class ProjectService {
 	 * this Member can open their files; a Missing Version comes along with
 	 * the rest of its Stack.
 	 *
-	 * @param bool $nodes whether to open the files, for their paths and rights; without, only which ones the Member can open is looked up, in one query (#64)
+	 * @param bool $nodes whether to open the files, for their paths and rights; without, only which ones the Member can open is looked up, folder by folder (#64)
 	 * @return array{0: array<int, non-empty-list<Version>>, 1: list<int>, 2: array<int, File>, 3: array<int, Version>} the Stacks by Asset id, newest Version first; all their Version ids; the files this Member opens, by Version id, when asked for; each Asset's newest Version, shown or not
 	 */
 	private function visibleStacks(?Project $project, string $uid, Folder $home, bool $nodes = true): array {
@@ -1122,7 +1123,7 @@ class ProjectService {
 		$whole = $project === null || $project->getOwnerUid() === $uid || $this->folderOf($project, $home) !== null;
 		$byAsset = [];
 		$files = [];
-		$openable = $nodes ? [] : $this->versions->openableFiles($uid, array_map(static fn (Version $version) => $version->getFileId(), $versions));
+		$openable = $nodes ? [] : $this->openFiles->among($home, array_map(static fn (Version $version) => $version->getFileId(), $versions));
 		$opens = [];
 		foreach ($versions as $version) {
 			if ($nodes) {
