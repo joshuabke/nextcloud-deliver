@@ -27,8 +27,8 @@ class ScanProjects extends TimedJob {
 	}
 
 	protected function run($argument): void {
-		$this->projects->scanAll();
-		// Whether ffmpeg is there, for pages that only read it (#56)
+		// Whether ffmpeg is there, for pages that only read it (#56); first, so a failing scan does not keep it stale
 		$this->ffmpeg->probe();
+		$this->projects->scanAll();
 	}
 }
