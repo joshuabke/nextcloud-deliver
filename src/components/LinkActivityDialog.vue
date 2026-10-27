@@ -1,11 +1,11 @@
 <script setup>
-import { t } from '@nextcloud/l10n'
 import { ref } from 'vue'
 import NcDateTime from '@nextcloud/vue/components/NcDateTime'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { linkApi } from '../api.js'
+import { t } from '../lib/l10n.js'
 
 // Who opened a link, watched and downloaded what, newest first (story 124)
 const props = defineProps({

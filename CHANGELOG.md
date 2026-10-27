@@ -3,7 +3,15 @@
 ## Unreleased
 
 ### Added
+- Let `POST /assets` take `newAsset: true` to enable a file as an Asset of its own instead of stacking it by name.
 - Copy a Reviewer's Personal Link from their menu.
+
+### Changed
+- Look up the Version files of the Project list folder by folder instead of one by one.
+
+### Fixed
+- Show names with & or ' as they are instead of as HTML entities.
+- Check for ffmpeg on the admin page instead of on every page load.
 
 ## 0.9.6 – 2026-10-26
 

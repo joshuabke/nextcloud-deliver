@@ -1,5 +1,4 @@
 <script setup>
-import { t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import { ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -11,6 +10,7 @@ import ProjectSettingsFields from './ProjectSettingsFields.vue'
 import { useBusy } from '../composables/busy.js'
 import { confirmProjectRemoval } from '../confirm.js'
 import { projectDir } from '../lib/folders.js'
+import { t } from '../lib/l10n.js'
 import { useProjectsStore } from '../store/projects.js'
 
 const props = defineProps({

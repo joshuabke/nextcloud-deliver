@@ -1,9 +1,9 @@
 <script setup>
-import { t } from '@nextcloud/l10n'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import NcListItemIcon from '@nextcloud/vue/components/NcListItemIcon'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { searchContacts } from '../api.js'
+import { t } from '../lib/l10n.js'
 import { peopleToSuggest } from '../lib/people.js'
 
 /**

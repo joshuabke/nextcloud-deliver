@@ -2,7 +2,6 @@
 import takeOffIcon from '@mdi/svg/svg/account-remove-outline.svg?raw'
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import { showError, showSuccess } from '@nextcloud/dialogs'
-import { t } from '@nextcloud/l10n'
 import { computed, ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
@@ -15,6 +14,7 @@ import { putReviewerOn, renewReviewerKey, takeReviewerOff, updateReviewerAsMembe
 import { copyLink } from '../clipboard.js'
 import { useBusy } from '../composables/busy.js'
 import { confirmRemoval, confirmTakeOff } from '../confirm.js'
+import { t } from '../lib/l10n.js'
 
 const props = defineProps({
 	/** A Reviewer of the Project, with their Personal Link and own rights through each link they are on */

@@ -122,7 +122,7 @@ class PipelineSettings {
 	 */
 	public function status(): array {
 		return [
-			'ffmpeg' => $this->ffmpeg->version($this->ffmpeg->ffmpeg()),
+			'ffmpeg' => $this->ffmpeg->probe(),
 			'ffprobe' => $this->ffmpeg->version($this->ffmpeg->ffprobe()),
 			'encoder' => $this->encoder->active(),
 			'states' => $this->jobs->countByState(),

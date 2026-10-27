@@ -1,5 +1,4 @@
 <script setup>
-import { t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
@@ -7,6 +6,7 @@ import AssetPicker from './AssetPicker.vue'
 import LinkActivityDialog from './LinkActivityDialog.vue'
 import ReviewLinkItem from './ReviewLinkItem.vue'
 import { errorMessage, linkApi } from '../api.js'
+import { t } from '../lib/l10n.js'
 import { linkTitle } from '../lib/linkTitle.js'
 
 const props = defineProps({

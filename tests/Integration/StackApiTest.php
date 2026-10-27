@@ -87,6 +87,36 @@ class StackApiTest extends TestCase {
 		self::assertSame(['song.mp3'], array_column($this->stack('song'), 'name'), 'and stays as it was');
 	}
 
+	public function testAFileIsEnabledAsANewAssetWhateverItsName(): void {
+		$mixes = $this->nc->ocs('POST', '/projects', ['name' => 'Mixes'])['data']['id'];
+		$folder = "{$this->root}-mixes";
+		$this->nc->mkdir($folder);
+		$this->nc->put("$folder/mix.wav", 'not really audio');
+		$this->nc->put("$folder/mix_v2.wav", 'not really audio');
+		$first = $this->nc->ocs('POST', '/assets', ['fileId' => $this->nc->fileId("$folder/mix.wav"), 'projectId' => $mixes])['data'];
+
+		// Picked as a new Asset in a client, it never sits in the other Stack, not even for a moment (#92)
+		$second = $this->nc->ocs('POST', '/assets', ['fileId' => $this->nc->fileId("$folder/mix_v2.wav"), 'projectId' => $mixes, 'newAsset' => true]);
+		self::assertSame(201, $second['status'], json_encode($second['data']));
+		self::assertNotSame($first['assetId'], $second['data']['assetId']);
+		self::assertSame([2, $mixes], [$second['data']['number'], $second['data']['projectId']], 'numbered by its name all the same');
+		self::assertSame(400, $this->nc->ocs('POST', '/assets', ['fileId' => $this->nc->fileId("$folder/mix.wav"), 'assetId' => $first['assetId'], 'newAsset' => true])['status'], 'onto an Asset or a new one, not both');
+
+		// Taken by Auto Intake already, the file leaves the Stack its name put it in
+		$this->put('cut.mp4');
+		$this->put('cut_v2.mp4');
+		self::assertCount(2, $this->stack('cut'));
+		$own = $this->nc->ocs('POST', '/assets', ['fileId' => $this->nc->fileId("{$this->root}/cut_v2.mp4"), 'projectId' => $this->projectId, 'newAsset' => true]);
+		self::assertSame(201, $own['status'], json_encode($own['data']));
+		self::assertEqualsCanonicalizing([['cut_v2.mp4', false], ['cut.mp4', false]], array_map(
+			static fn (array $asset) => [$asset['versions'][0]['name'], $asset['versions'][0]['autoStacked']],
+			array_values(array_filter($this->assets(), static fn (array $asset) => count($asset['versions']) === 1)),
+		), 'two Assets of one Version each');
+
+		$this->nc->deleteProject($mixes);
+		$this->nc->delete($folder);
+	}
+
 	public function testTheNextCutStacksOnACutWhoseFileIsInTheTrash(): void {
 		$this->put('cut.mp4');
 		$this->nc->delete("{$this->root}/cut.mp4");

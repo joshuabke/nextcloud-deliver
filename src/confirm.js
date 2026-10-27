@@ -1,6 +1,6 @@
-import { t } from '@nextcloud/l10n'
 import { spawnDialog } from '@nextcloud/vue/functions/dialog'
 import ConfirmDialog from './components/ConfirmDialog.vue'
+import { t } from './lib/l10n.js'
 
 /**
  * Asks before something is deleted.

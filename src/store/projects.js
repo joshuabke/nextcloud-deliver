@@ -1,6 +1,6 @@
-import { t } from '@nextcloud/l10n'
 import { defineStore } from 'pinia'
 import { createNamedProject, createProject, getProject, listProjects, muteProject, removeProject, updateProject } from '../api.js'
+import { t } from '../lib/l10n.js'
 
 /**
  * @param {object} project - a Project as the server sends it

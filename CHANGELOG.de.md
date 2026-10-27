@@ -3,7 +3,15 @@
 ## Unveröffentlicht
 
 ### Neu
+- `newAsset: true` für `POST /assets` ergänzt, um eine Datei als eigenes Asset freizugeben, statt sie nach ihrem Namen zu stapeln.
 - Persönlichen Link zum Kopieren ins Menü des Reviewers aufgenommen.
+
+### Geändert
+- Versionsdateien für die Projektliste ordnerweise statt einzeln nachgeschlagen.
+
+### Behoben
+- Namen mit & oder ' so angezeigt, wie sie sind, statt als HTML-Entitäten.
+- ffmpeg auf der Admin-Seite geprüft statt bei jedem Seitenaufruf.
 
 ## 0.9.6 – 2026-10-26
 

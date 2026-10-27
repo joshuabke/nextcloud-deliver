@@ -80,10 +80,24 @@ class TroubleshootingTest extends TestCase {
 	}
 
 	public function testTheAppPageTellsWhetherTheServerHasFfmpeg(): void {
+		exec('ffmpeg -version 2>&1', $output, $code);
+		self::assertSame($code === 0, $this->pageSaysFfmpeg(), 'the Uploads dialog reads it (story 138)');
+		if ($code !== 0) {
+			return;
+		}
+
+		// The page reads what was last probed and starts no ffmpeg itself (#56)
+		$this->nc->ocsForm('POST', '/ocs/v2.php/apps/provisioning_api/api/v1/config/apps/deliver/ffmpeg_version', ['value' => '']);
+		self::assertFalse($this->pageSaysFfmpeg());
+		// The admin page probes again
+		self::assertNotNull($this->nc->ocs('GET', '/admin/settings')['data']['status']['ffmpeg']);
+		self::assertTrue($this->pageSaysFfmpeg());
+	}
+
+	private function pageSaysFfmpeg(): bool {
 		$page = $this->nc->request('GET', '/index.php/apps/deliver/');
 		self::assertSame(200, $page['status']);
-		self::assertSame(1, preg_match('/id="initial-state-deliver-ffmpeg" value="([^"]*)"/', $page['body'], $match), 'the Uploads dialog reads it (story 138)');
-		exec('ffmpeg -version 2>&1', $output, $code);
-		self::assertSame($code === 0, json_decode(base64_decode($match[1])));
+		self::assertSame(1, preg_match('/id="initial-state-deliver-ffmpeg" value="([^"]*)"/', $page['body'], $match));
+		return json_decode(base64_decode($match[1]));
 	}
 }
