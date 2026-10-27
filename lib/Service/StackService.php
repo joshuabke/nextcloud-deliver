@@ -77,7 +77,7 @@ class StackService {
 	public function intake(?Project $project, File $file, ?string $enabledBy = null, bool $stack = true): ?Version {
 		$known = $this->versions->findByFile($file->getId());
 		if ($known !== null) {
-			// Taken by Auto Intake already, a file wanted as an Asset of its own leaves the Stack (#92)
+			// Stacked already, by Auto Intake or by hand, a file wanted as an Asset of its own leaves the Stack (#92)
 			return $stack ? $known : $this->unstack($known);
 		}
 		if ($project !== null && $enabledBy === null && $this->removed->isRemoved($project->getId(), $file->getId())) {
