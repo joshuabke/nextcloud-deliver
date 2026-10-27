@@ -1,6 +1,5 @@
 <script setup>
 import { Permission } from '@nextcloud/files'
-import { n, t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import { computed, ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -23,6 +22,7 @@ import {
 import { useBusy } from '../composables/busy.js'
 import { orDeletedProject } from '../composables/deletedProject.js'
 import { confirmProjectRemoval, confirmRemoval } from '../confirm.js'
+import { n, t } from '../lib/l10n.js'
 
 // The Files app also sets folder, view and active on the web component; only node is used
 const props = defineProps({

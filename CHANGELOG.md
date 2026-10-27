@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Show names with & or ' as they are instead of as HTML entities.
+
 ## 0.9.6 – 2026-10-26
 
 ### Added

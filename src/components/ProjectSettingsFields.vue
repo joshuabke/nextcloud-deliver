@@ -1,8 +1,8 @@
 <script setup>
-import { t } from '@nextcloud/l10n'
 import { computed } from 'vue'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
+import { t } from '../lib/l10n.js'
 
 const props = defineProps({
 	/** The Project whose settings these are */

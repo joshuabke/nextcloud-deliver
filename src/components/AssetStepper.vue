@@ -1,9 +1,9 @@
 <script setup>
 import previousIcon from '@mdi/svg/svg/chevron-left.svg?raw'
 import nextIcon from '@mdi/svg/svg/chevron-right.svg?raw'
-import { t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import { t } from '../lib/l10n.js'
 
 defineProps({
 	/** Where the Asset on screen stands, from 0 */

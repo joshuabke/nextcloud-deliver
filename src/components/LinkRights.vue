@@ -1,6 +1,6 @@
 <script setup>
-import { t } from '@nextcloud/l10n'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
+import { t } from '../lib/l10n.js'
 
 /** A Review Link's rights for its Reviewers (stories 51, 121), for its settings and for an invitation */
 defineProps({

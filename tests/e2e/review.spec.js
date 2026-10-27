@@ -193,10 +193,11 @@ test.describe('Review view', () => {
 		// Nextcloud reads the type from the extension, so it stays
 		await rename.getByLabel('Name').fill('renamed.mov')
 		await expect(rename.getByRole('button', { name: 'Rename' })).toBeDisabled()
-		await rename.getByLabel('Name').fill('renamed.webm')
+		// A name with & and ' shows as it is, in labels too (#93)
+		await rename.getByLabel('Name').fill('Smith & O\'Neil.webm')
 		await rename.getByRole('button', { name: 'Rename' }).click()
-		const renamed = card(page, 'renamed')
-		await expect(renamed).toBeVisible()
+		const renamed = card(page, 'Smith & O\'Neil')
+		await expect(renamed.getByRole('button', { name: 'Actions for Smith & O\'Neil', exact: true })).toBeVisible()
 
 		// Removed from a Folder Project with Auto Intake, a file waits as not up for review (#45)
 		await card(page, 'third').click({ button: 'right' })
@@ -212,7 +213,7 @@ test.describe('Review view', () => {
 		await page.getByRole('menuitem', { name: 'Add as a new Version of…' }).click()
 		const stacking = page.getByRole('dialog', { name: 'Add third.webm as a new Version' })
 		await stacking.locator('.v-select').click()
-		await page.getByRole('option', { name: 'renamed' }).click()
+		await page.getByRole('option', { name: 'Smith & O\'Neil' }).click()
 		await stacking.getByRole('button', { name: 'Add', exact: true }).click()
 		// The Asset is named after its newest Version's file
 		await expect(card(page, 'third').locator('.deliver-card__version')).toHaveText('V2')

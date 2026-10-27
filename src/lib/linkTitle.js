@@ -1,4 +1,4 @@
-import { n, t } from '@nextcloud/l10n'
+import { n, t } from './l10n.js'
 
 /**
  * A Review Link's title: its label, else what it shows, since the people it

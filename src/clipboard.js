@@ -1,5 +1,5 @@
 import { showError, showSuccess } from '@nextcloud/dialogs'
-import { t } from '@nextcloud/l10n'
+import { t } from './lib/l10n.js'
 
 /**
  * Copies a Review Link or Personal Link and says so.

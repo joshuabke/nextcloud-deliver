@@ -1,6 +1,5 @@
 <script setup>
 import { showError, showSuccess } from '@nextcloud/dialogs'
-import { t } from '@nextcloud/l10n'
 import { computed, reactive, ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
@@ -13,6 +12,7 @@ import LinkRights from './LinkRights.vue'
 import { inviteToProject } from '../api.js'
 import { copyLink } from '../clipboard.js'
 import { useBusy } from '../composables/busy.js'
+import { t } from '../lib/l10n.js'
 import { reviewerWithAddress } from '../lib/people.js'
 
 /**

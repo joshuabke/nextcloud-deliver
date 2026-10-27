@@ -2,10 +2,10 @@
 import moreIcon from '@mdi/svg/svg/dots-horizontal.svg?raw'
 import videoIcon from '@mdi/svg/svg/filmstrip.svg?raw'
 import audioIcon from '@mdi/svg/svg/waveform.svg?raw'
-import { t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import { useLongPress } from '../composables/longpress.js'
+import { t } from '../lib/l10n.js'
 
 defineProps({
 	/** A media file in the Project's folder that is no Asset */
