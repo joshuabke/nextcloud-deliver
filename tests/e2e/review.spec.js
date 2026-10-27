@@ -11,6 +11,7 @@ const USER = 'deliver-e2e'
 const PASSWORD = 'deliver-e2e-' + randomBytes(12).toString('hex')
 /** A second Member, someone to mention */
 const MATE = 'deliver-e2e-mate'
+const MATE_PASSWORD = 'mate-' + randomBytes(12).toString('hex')
 const CDP = process.env.DELIVER_CDP ?? 'http://127.0.0.1:9222'
 /** The browser may sit in its own container, where localhost is not Nextcloud */
 const BROWSER_URL = process.env.DELIVER_BROWSER_URL ?? URL
@@ -527,6 +528,27 @@ test.describe('Review view', () => {
 		await visitor.close()
 	})
 
+	test('the navigation lists a colleague\'s link and says who made it', async ({ playwright }) => {
+		const mate = await playwright.request.newContext({ baseURL: URL, httpCredentials: { username: MATE, password: MATE_PASSWORD, send: 'always' }, extraHTTPHeaders: ocsHeaders })
+		const made = await mate.post(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`, { data: { label: 'Colleague link' } })
+		expect(made.status()).toBe(201)
+		const link = (await made.json()).ocs.data
+		await mate.put(`/ocs/v2.php/apps/deliver/api/v1/links/${link.id}?format=json`, { data: { label: 'Mara\'s link' } })
+		try {
+			await page.goto(`/apps/deliver/projects/${projectId}`)
+			const theirs = page.locator('.app-navigation li').filter({ hasText: 'Mara\'s link' }).first()
+			await expect(theirs).toContainText('Made by Mara Mate')
+			// Their link, though, is not marked as made by someone else
+			await page.locator('.app-navigation').getByRole('button', { name: 'Create Review Link' }).click()
+			await expect(page.getByRole('dialog')).toBeVisible()
+			await page.keyboard.press('Escape')
+			await expect(page.locator('.app-navigation').getByText('Made by deliver-e2e', { exact: true })).toHaveCount(0)
+		} finally {
+			await mate.delete(`/ocs/v2.php/apps/deliver/api/v1/links/${link.id}?format=json`)
+			await mate.dispose()
+		}
+	})
+
 	test('a Member invites someone from their contacts on a link of their own', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		// The test user keeps their address book between runs: a name of this run's own
@@ -674,8 +696,11 @@ async function testUser(playwright) {
 		expect((await admin.put(`${users}/${USER}?format=json`, { form: { key: 'password', value: PASSWORD } })).ok()).toBe(true)
 	}
 	expect((await admin.put(`${users}/${USER}?format=json`, { form: { key: 'language', value: 'en' } })).ok()).toBe(true)
-	// The mate never logs in; a random password it is
-	await admin.post(`${users}?format=json`, { form: { userid: MATE, password: 'mate-' + randomBytes(12).toString('hex'), displayName: 'Mara Mate' } })
+	// The mate never logs in to the browser, but makes a link through the API
+	const mate = await admin.post(`${users}?format=json`, { form: { userid: MATE, password: MATE_PASSWORD, displayName: 'Mara Mate' } })
+	if (!mate.ok()) {
+		expect((await admin.put(`${users}/${MATE}?format=json`, { form: { key: 'password', value: MATE_PASSWORD } })).ok()).toBe(true)
+	}
 	await admin.dispose()
 }
 

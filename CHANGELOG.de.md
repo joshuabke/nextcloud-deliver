@@ -7,9 +7,14 @@
 - Dateien mit Kommentaren oder Abnahmen gegen Überschreiben, Umbenennen und Löschen außerhalb von Deliver gesperrt, mit einer Projekteinstellung.
 - Kommentare, die vor einem Überschreiben ihrer Datei entstanden, markiert und die Mitglieder benachrichtigt.
 - `POST /versions/{id}/replace` für Delivery-Werkzeuge ergänzt, um die Datei einer Version bei erhaltenen Kommentaren zu ersetzen.
+- In der Navigation angezeigt, von wem ein Review-Link stammt.
 
 ### Geändert
 - Dateien über Deliver statt über WebDAV umbenannt.
+- Jedem Mitglied eines Projekts alle seine Review-Links und Reviewer zum Ansehen und Verwalten gegeben.
+- Eine E-Mail-Adresse zu einem Reviewer je Projekt gemacht, egal wer ihn eingeladen hat; doppelt eingeladene Reviewer zusammengeführt.
+- Persönlichen Link eines zusammengeführten Reviewers ungültig gemacht, wo auch der Reviewer, in den er aufging, auf dem Link war.
+- Bei jeder Liste geprüft, ob ein Reviewer in den Kontakten dessen ist, der sie ansieht, statt einmal je Reviewer.
 
 ## 0.9.7 – 2026-10-27
 

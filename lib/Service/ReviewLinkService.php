@@ -5,29 +5,32 @@ declare(strict_types=1);
 namespace OCA\Deliver\Service;
 
 use OCA\Deliver\Db\AssetMapper;
-use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\ReviewLinkMapper;
 use OCA\Deliver\Db\ReviewLinkRecord;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\EventDispatcher\IEventDispatcher;
 use OCP\Files\NotFoundException;
 use OCP\HintException;
+use OCP\IUserManager;
 use OCP\Security\Events\ValidatePasswordPolicyEvent;
 use OCP\Security\IHasher;
 use OCP\Security\ISecureRandom;
 
-/** A Member's Review Links (ADR 0010, 0011): made, changed and removed by the Member who made them; what goes on behind a token is ReviewLinks' */
+/**
+ * A Project's Review Links (ADR 0010, 0011): made, changed and removed by every Member who sees the Project (ADR 0017), on No Project by the Member
+ * alone; what goes on behind a token is ReviewLinks'
+ */
 class ReviewLinkService {
 	private const TOKEN_LENGTH = 20;
 
 	public function __construct(
 		private ReviewLinkMapper $linkRecords,
 		private ProjectService $projects,
-		private ProjectMapper $projectMapper,
 		private AssetMapper $assets,
 		private StackService $stacks,
 		private ReviewLinks $reviewLinks,
 		private ISecureRandom $random,
+		private IUserManager $users,
 		private IHasher $hasher,
 		private IEventDispatcher $events,
 		private ITimeFactory $time,
@@ -44,12 +47,8 @@ class ReviewLinkService {
 	 */
 	public function create(string $uid, int $projectId, ?array $assetIds = null): array {
 		$link = new ReviewLinkRecord();
-		if ($projectId === ProjectService::NONE) {
-			$link->setProjectId(null);
-		} else {
-			$this->projects->visible($uid, $projectId);
-			$link->setProjectId($projectId);
-		}
+		$this->mayManage($uid, $projectId === ProjectService::NONE ? null : $projectId, $uid);
+		$link->setProjectId($projectId === ProjectService::NONE ? null : $projectId);
 		$link->setAssetIds($this->picked($link, $assetIds));
 		if ($link->getProjectId() === null && $link->getAssetIds() === null) {
 			throw new InvalidRequestException('A link on No Project shows the Assets picked for it');
@@ -102,22 +101,21 @@ class ReviewLinkService {
 		return $this->serialize($this->linkRecords->update($link));
 	}
 
-	/** Deletes the link; its Reviewers stay the Member's, their Comments stay */
+	/** Deletes the link; its Reviewers stay the Project's, their Comments stay */
 	public function delete(string $uid, int $id): void {
 		$link = $this->own($uid, $id);
 		$this->linkRecords->forget($link);
 	}
 
 	/**
-	 * @return list<array<string, mixed>> the Member's links on a Project, or on No Project for 0, for its navigation
-	 * @throws NotFoundException a Deleted Project
+	 * @return list<array<string, mixed>> the Project's links, or the Member's on No Project for 0, for its navigation
+	 * @throws NotFoundException a Deleted Project, or one the Member does not see
 	 */
 	public function listFor(string $uid, int $projectId): array {
+		$projectId = $projectId === ProjectService::NONE ? null : $projectId;
 		// A Deleted Project's links wait for its restore, as if it were gone (ADR 0015)
-		if ($this->projectMapper->isDeleted($projectId)) {
-			throw new NotFoundException('Project not found');
-		}
-		$links = $this->linkRecords->findByProject($projectId === ProjectService::NONE ? null : $projectId, $uid);
+		$this->mayManage($uid, $projectId, $uid);
+		$links = $this->linkRecords->findByProject($projectId, $uid);
 		return array_map(fn (ReviewLinkRecord $link) => $this->serialize($link), $links);
 	}
 
@@ -141,6 +139,8 @@ class ReviewLinkService {
 			'token' => $link->getToken(),
 			'url' => $reviewLink->url(),
 			'projectId' => $link->getProjectId() ?? ProjectService::NONE,
+			// Who made it, whose reshare rights bound what it shows (ADR 0010, 0017)
+			'madeBy' => ['id' => $link->getOwnerUid(), 'name' => $this->users->getDisplayName($link->getOwnerUid()) ?? $link->getOwnerUid()],
 			'label' => $link->getLabel(),
 			'description' => $link->getDescription(),
 			'hasPassword' => $link->getPasswordHash() !== null,
@@ -154,18 +154,35 @@ class ReviewLinkService {
 	}
 
 	/**
-	 * @throws NotFoundException no such link, or one of a Deleted Project, which waits for its restore (ADR 0015)
-	 * @throws AccessDeniedException another Member's link
+	 * @throws NotFoundException no such link, or one of a Deleted Project, which waits for its restore (ADR 0015), or of a Project the Member does not see
+	 * @throws AccessDeniedException another Member's link on No Project
 	 */
 	private function own(string $uid, int $id): ReviewLinkRecord {
 		$link = $this->linkRecords->find($id);
-		if ($link === null || $this->projectMapper->isDeleted($link->getProjectId())) {
+		if ($link === null) {
 			throw new NotFoundException('Link not found');
 		}
-		if ($link->getOwnerUid() !== $uid) {
-			throw new AccessDeniedException('Only the Member who made a link changes it');
-		}
+		$this->mayManage($uid, $link->getProjectId(), $link->getOwnerUid());
 		return $link;
+	}
+
+	/**
+	 * Who manages the links and Reviewers of a Project, in one place: every
+	 * Member who sees it (ADR 0017). On No Project they are the Member's own.
+	 *
+	 * @param ?int $projectId null for No Project
+	 * @param string $madeBy whose they are on No Project: the Member who made the link, or the Reviewer's
+	 * @throws NotFoundException no such Project, a Deleted Project (ADR 0015) or one the Member does not see
+	 * @throws AccessDeniedException another Member's, on No Project
+	 */
+	public function mayManage(string $uid, ?int $projectId, ?string $madeBy): void {
+		if ($projectId === null) {
+			if ($madeBy !== $uid) {
+				throw new AccessDeniedException('Only the Member they belong to changes links and Reviewers on No Project');
+			}
+			return;
+		}
+		$this->projects->visible($uid, $projectId);
 	}
 
 	private function newToken(): string {

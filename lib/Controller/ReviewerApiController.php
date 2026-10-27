@@ -12,6 +12,7 @@ use OCA\Deliver\Service\InvalidRequestException;
 use OCA\Deliver\Service\ReviewerService;
 use OCA\Deliver\Service\ReviewLink;
 use OCA\Deliver\Service\ReviewLinks;
+use OCA\Deliver\Service\ReviewLinkService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
@@ -21,7 +22,7 @@ use OCP\Files\NotFoundException;
 use OCP\IRequest;
 
 /**
- * A Member's Reviewers, on whichever link
+ * A Project's Reviewers, on whichever of its links, for every Member who sees it (ADR 0017)
  *
  * @psalm-import-type Rights from ReviewerMapper
  */
@@ -33,13 +34,14 @@ class ReviewerApiController extends OCSController {
 		IRequest $request,
 		private ReviewerService $reviewers,
 		private ReviewLinks $links,
+		private ReviewLinkService $linkService,
 		private Contacts $contacts,
 		private ?string $userId,
 	) {
 		parent::__construct($appName, $request);
 	}
 
-	/** A Member edits a Reviewer of theirs: name, address, mail wishes */
+	/** A Member edits a Reviewer of the Project: name, address, mail wishes */
 	#[NoAdminRequired]
 	public function update(
 		int $id,
@@ -54,9 +56,7 @@ class ReviewerApiController extends OCSController {
 			$this->links->assertRenameFree($reviewer, $name);
 			$this->links->assertAddressFree($reviewer, $email);
 			$wishes = ['replies' => $mailReplies, 'comments' => $mailComments, 'versions' => $mailVersions];
-			$reviewer = $this->reviewers->update($reviewer, $name, $email, $wishes);
-			$this->contacts->checkContacts([$reviewer]);
-			return $this->reviewers->serialize($reviewer);
+			return $this->reviewers->serialize($this->reviewers->update($reviewer, $name, $email, $wishes));
 		});
 	}
 
@@ -72,8 +72,8 @@ class ReviewerApiController extends OCSController {
 	}
 
 	/**
-	 * Puts a Reviewer of the Member on another of their links of the same
-	 * Project, with a Personal Link of its own through it (story 55, ADR 0014)
+	 * Puts a Reviewer on another link of their Project, with a Personal Link of
+	 * its own through it (story 55, ADR 0014)
 	 */
 	#[NoAdminRequired]
 	public function putOn(int $id, string $token): Response {
@@ -136,13 +136,17 @@ class ReviewerApiController extends OCSController {
 		return $this->guard(fn () => $this->reviewers->remove($this->own($id)));
 	}
 
-	/** @throws AccessDeniedException the Reviewer is another Member's (ADR 0009) */
+	/**
+	 * @throws NotFoundException a Project the Member does not see
+	 * @throws AccessDeniedException a removed Reviewer, or another Member's on No Project
+	 */
 	private function own(int $id): Reviewer {
 		$reviewer = $this->reviewers->find($id);
 		// A removed Reviewer stays removed: their Personal Links do not come back
-		if ($reviewer->getOwnerUid() !== (string)$this->userId || $reviewer->getRemovedAt() !== null) {
-			throw new AccessDeniedException('Only the Member a Reviewer belongs to changes them');
+		if ($reviewer->getRemovedAt() !== null) {
+			throw new AccessDeniedException('A removed Reviewer is not changed');
 		}
+		$this->linkService->mayManage((string)$this->userId, $reviewer->getProjectId(), $reviewer->getOwnerUid());
 		return $reviewer;
 	}
 }

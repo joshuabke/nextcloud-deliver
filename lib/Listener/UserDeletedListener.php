@@ -20,7 +20,8 @@ use OCP\User\Events\UserDeletedEvent;
  * Nextcloud hands a deleted account's user id to whoever is created under it
  * next, so nothing of Deliver may stay tied to it. A Folder Project passes to
  * whoever owns the folder, any other Project is deleted for good, as nobody
- * else could restore it (story 152), the account's links and Reviewers go, and its
+ * else could restore it (story 152), the links the account made go, and so do
+ * its Reviewers on No Project; those of a Project stay with it (ADR 0017). Its
  * Comments, Approvals and Reactions stay, by a Deleted user.
  *
  * @template-implements IEventListener<UserDeletedEvent>
@@ -58,9 +59,10 @@ class UserDeletedListener implements IEventListener {
 		foreach ($this->linkRecords->findByOwner($uid) as $link) {
 			$this->linkRecords->forget($link);
 		}
-		foreach ($this->reviewerMapper->findByOwners([$uid]) as $reviewer) {
+		foreach ($this->reviewerMapper->findInProject(null, [$uid]) as $reviewer) {
 			$this->reviewers->remove($reviewer);
 		}
+		$this->reviewerMapper->releaseOwner($uid);
 		foreach (['deliver_seen', 'deliver_mutes'] as $table) {
 			$qb = $this->db->getQueryBuilder();
 			$qb->delete($table)->where($qb->expr()->eq('user_id', $qb->createNamedParameter($uid)))->executeStatement();

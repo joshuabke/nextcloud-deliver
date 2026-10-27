@@ -108,7 +108,7 @@ class ContactsTest extends TestCase {
 		$lee = $invite('Lee', 'lee@studio.test');
 		$noa = $invite('Noa', null);
 
-		self::assertSame(['Kim' => true, 'Lee' => false, 'Noa' => null], $this->inContacts(), 'checked on invite, whatever the case of the address');
+		self::assertSame(['Kim' => true, 'Lee' => false, 'Noa' => null], $this->inContacts(), 'whatever the case of the address');
 
 		$saved = $this->save($lee);
 		self::assertSame([201, ['saved' => true]], [$saved['status'], $saved['data']]);
@@ -123,10 +123,10 @@ class ContactsTest extends TestCase {
 
 		$this->contact('Noa Novak', ['noa@studio.test']);
 		$this->nc->ocs('PUT', "/reviewers/$noa", ['name' => 'Noa', 'email' => 'noa@studio.test']);
-		self::assertTrue($this->inContacts()['Noa'], 'an address the Member gives is checked');
+		self::assertTrue($this->inContacts()['Noa'], 'an address the Member gives is found');
 	}
 
-	public function testAReviewerWhoNamedThemselvesIsCheckedOnTheNextList(): void {
+	public function testAReviewerWhoNamedThemselvesIsCheckedOnEachList(): void {
 		$this->contact('Kim Novak', ['kim@studio.test']);
 		$link = $this->link();
 		$visitor = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $link['token']);
@@ -137,11 +137,11 @@ class ContactsTest extends TestCase {
 		self::assertSame(['Max' => false], $this->inContacts());
 
 		$this->contact('Max Hand', ['max@studio.test']);
-		self::assertSame(['Max' => false], $this->inContacts(), 'checked once, not on every list');
+		self::assertSame(['Max' => true], $this->inContacts(), 'asked again on every list, so a contact added since shows');
 		self::assertSame(['saved' => false], $this->save($named['data']['id'])['data'], 'added by hand since: nothing is saved twice');
 
-		$visitor->call('PUT', '/api/reviewer', ['email' => 'kim@studio.test']);
-		self::assertSame(['Max' => true], $this->inContacts(), 'a new address is checked again');
+		$visitor->call('PUT', '/api/reviewer', ['email' => 'lee@studio.test']);
+		self::assertSame(['Max' => false], $this->inContacts(), 'and a new address with it');
 	}
 
 	/** @return int how many contacts the address book holds */

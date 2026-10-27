@@ -145,6 +145,7 @@ OC.L10N.register(
 		"Lock files with Comments": "Dateien mit Kommentaren sperren",
 		"Loop": "Wiederholen",
 		"Loop the Range": "Bereich wiederholen",
+		"Made by {name}": "Von {name}",
 		"Mail them their Personal Link": "Persönlichen Link per Mail schicken",
 		"MIDI markers: Pro Tools, Cubase, REAPER, Logic": "MIDI-Marker: Pro Tools, Cubase, REAPER, Logic",
 		"Mail me about": "Mail an mich bei",

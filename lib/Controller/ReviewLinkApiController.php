@@ -20,7 +20,7 @@ use OCP\IConfig;
 use OCP\IRequest;
 use OCP\IUserSession;
 
-/** A Member's Review Links (ADR 0010, 0011), their Reviewers and activity */
+/** A Project's Review Links (ADR 0010, 0011), its Reviewers and the activity, for every Member who sees it (ADR 0017) */
 class ReviewLinkApiController extends OCSController {
 	use GuardsErrors;
 
@@ -42,9 +42,9 @@ class ReviewLinkApiController extends OCSController {
 	}
 
 	/**
-	 * My links on a Project, or on No Project for 0, and my Reviewers on any of
-	 * them, paused or not, each with their Personal Link and own rights through
-	 * each live one they are on, for its navigation (story 100, ADR 0014)
+	 * The links on a Project, or mine on No Project for 0, and its Reviewers on
+	 * any of them, paused or not, each with their Personal Link and own rights
+	 * through each live one they are on, for its navigation (story 100, ADR 0014)
 	 */
 	#[NoAdminRequired]
 	public function index(int $id): Response {
@@ -52,12 +52,13 @@ class ReviewLinkApiController extends OCSController {
 			$uid = (string)$this->userId;
 			$links = $this->linkService->listFor($uid, $id);
 			$live = array_filter($links, static fn (array $link) => $link['live']);
-			$ofProject = $this->reviewers->ofProject($uid, $id === ProjectService::NONE ? null : $id);
-			$this->contacts->checkContacts($ofProject);
+			$ofProject = $this->reviewers->ofProject($id === ProjectService::NONE ? null : $id, $uid);
+			$inContacts = $this->contacts->among($ofProject);
 			['reviewers' => $reviewers, 'on' => $on] = $this->links->reviewersBy($ofProject, array_column($links, 'token'), array_column($live, 'url', 'token'));
 			return [
 				'links' => array_map(static fn (array $link) => $link + ['reviewerIds' => $on[$link['token']] ?? []], $links),
-				'reviewers' => $reviewers,
+				// Whether each is in the contacts of whoever asks
+				'reviewers' => array_map(static fn (array $reviewer) => $reviewer + ['inContacts' => $inContacts[$reviewer['id']]], $reviewers),
 				// Whether an invitation can mail the Personal Link (story 145)
 				'canMail' => ReviewerMail::configured($this->config),
 			];
@@ -92,7 +93,7 @@ class ReviewLinkApiController extends OCSController {
 	public function invite(int $id, string $name, ?string $email = null, bool $sendMail = false, ?string $message = null): Response {
 		return $this->guard(function () use ($id, $name, $email, $sendMail, $message) {
 			$link = $this->linkService->ownLink((string)$this->userId, $id);
-			[$reviewer, $key] = $this->links->invite($link, $name, $email);
+			[$reviewer, $key] = $this->links->invite($link, (string)$this->userId, $name, $email);
 			return $this->welcome($link, $reviewer, $key, $sendMail, $message);
 		}, Http::STATUS_CREATED);
 	}
@@ -114,7 +115,7 @@ class ReviewLinkApiController extends OCSController {
 				$rights = array_diff(ReviewLink::FLAGS, ['review']);
 				$link = $this->linkService->update($uid, $linkId, array_intersect_key($this->request->getParams(), array_flip($rights)));
 				$reviewLink = $this->linkService->ownLink($uid, $linkId);
-				[$reviewer, $key] = $this->links->invite($reviewLink, $name, $email);
+				[$reviewer, $key] = $this->links->invite($reviewLink, $uid, $name, $email);
 			} catch (\Throwable $e) {
 				$this->linkService->delete($uid, $linkId);
 				throw $e;
@@ -126,7 +127,6 @@ class ReviewLinkApiController extends OCSController {
 
 	/** @return array<string, mixed> the invited Reviewer with their Personal Link, mailed to them when asked */
 	private function welcome(ReviewLink $link, Reviewer $reviewer, string $key, bool $sendMail, ?string $message): array {
-		$this->contacts->checkContacts([$reviewer]);
 		$personalLink = $link->personalLink($key);
 		$member = $this->userSession->getUser();
 		$mailed = $sendMail && $member !== null && $this->mail->invited($reviewer, $personalLink, $member, $message);

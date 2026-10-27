@@ -285,7 +285,8 @@ class ReviewLinkTest extends TestCase {
 			self::assertSame(201, $created['status'], json_encode($created['data']));
 			$visitor = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $created['data']['token']);
 			self::assertSame([], $visitor->call('GET', '/api/assets')['data'], 'a file the Member may not reshare stays out');
-			self::assertSame(403, $this->nc->ocs('PUT', "/links/{$created['data']['id']}", ['review' => false])['status'], 'only its Member changes a link');
+			$paused = $this->nc->ocs('PUT', "/links/{$created['data']['id']}", ['review' => false]);
+			self::assertSame([200, $uid], [$paused['status'], $paused['data']['madeBy']['id']], 'every Member of the Project changes it, but what it shows stays bound to the Member who made it (ADR 0017)');
 		} finally {
 			$this->nc->ocsForm('DELETE', "/ocs/v2.php/cloud/users/$uid");
 		}

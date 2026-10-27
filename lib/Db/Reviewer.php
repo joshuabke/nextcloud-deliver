@@ -12,8 +12,8 @@ use OCP\AppFramework\Db\Entity;
  * Personal Link through it carries, so the same person is the same author
  * on any device, forever (ADR 0014).
  *
- * @method string getOwnerUid()
- * @method void setOwnerUid(string $ownerUid)
+ * @method ?string getOwnerUid()
+ * @method void setOwnerUid(?string $ownerUid)
  * @method ?int getProjectId()
  * @method void setProjectId(?int $projectId)
  * @method string getName()
@@ -30,14 +30,12 @@ use OCP\AppFramework\Db\Entity;
  * @method void setMailVersions(?bool $mailVersions)
  * @method ?string getLanguage()
  * @method void setLanguage(?string $language)
- * @method ?bool getInContacts()
- * @method void setInContacts(?bool $inContacts)
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
  */
 class Reviewer extends Entity {
-	/** The Member they belong to: who invited them, or whose Review Link they named themselves on */
-	protected string $ownerUid = '';
+	/** On No Project the Member they belong to; on a Project only who invited them, or whose Review Link they named themselves on, null once that account is gone (ADR 0017) */
+	protected ?string $ownerUid = null;
 	/** The Project whose links they come by (ADR 0013); null for the Member's links on No Project */
 	protected ?int $projectId = null;
 	protected ?string $name = null;
@@ -51,8 +49,6 @@ class Reviewer extends Entity {
 	protected ?bool $mailVersions = null;
 	/** de or en, for the mails to them; null leaves it to the request that sends one */
 	protected ?string $language = null;
-	/** Whether their address is in one of the Member's address books (#66); null until checked */
-	protected ?bool $inContacts = null;
 
 	public function __construct() {
 		$this->addType('projectId', 'integer');
@@ -61,7 +57,6 @@ class Reviewer extends Entity {
 		$this->addType('mailReplies', 'boolean');
 		$this->addType('mailComments', 'boolean');
 		$this->addType('mailVersions', 'boolean');
-		$this->addType('inContacts', 'boolean');
 	}
 
 	/** @return array{replies: bool, comments: bool, versions: bool} what to mail, the defaults filled in */
