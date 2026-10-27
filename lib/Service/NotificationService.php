@@ -29,6 +29,7 @@ class NotificationService {
 	public const APPROVED = 'approved';
 	public const CHANGES = 'changes';
 	public const MENTION = 'mention';
+	public const OVERWRITTEN = 'overwritten';
 	public const DUE_TOMORROW = 'due_tomorrow';
 	public const DUE_TODAY = 'due_today';
 
@@ -118,6 +119,11 @@ class NotificationService {
 	/** The file of a Version went to the trash (stories 18 and 63) */
 	public function versionMissing(Version $version): void {
 		$this->notify($version, self::MISSING, 'version', (string)$version->getId(), ['file' => $version->getName()], $this->userSession->getUser()?->getUID());
+	}
+
+	/** The file of a Version with Comments was overwritten without the lock, so its Comments may be on another picture now (ADR 0018) */
+	public function overwritten(Version $version): void {
+		$this->notify($version, self::OVERWRITTEN, 'version', (string)$version->getId(), [], $this->userSession->getUser()?->getUID());
 	}
 
 	/**

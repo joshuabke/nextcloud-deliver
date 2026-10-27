@@ -54,6 +54,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setState(string $state)
  * @method ?string getDeliveredBy()
  * @method void setDeliveredBy(?string $deliveredBy)
+ * @method ?int getOverwrittenAt()
+ * @method void setOverwrittenAt(?int $overwrittenAt)
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
  */
@@ -88,6 +90,8 @@ class Version extends Entity {
 	protected string $thumbsState = 'none';
 	protected string $waveformState = 'none';
 	protected ?string $derivedError = null;
+	/** When its file was last overwritten under Comments; Comments made before are marked (ADR 0018) */
+	protected ?int $overwrittenAt = null;
 	protected int $createdAt = 0;
 
 	public function __construct() {
@@ -106,6 +110,7 @@ class Version extends Entity {
 		$this->addType('height', 'integer');
 		$this->addType('hasVideo', 'boolean');
 		$this->addType('hasAudio', 'boolean');
+		$this->addType('overwrittenAt', 'integer');
 		$this->addType('createdAt', 'integer');
 	}
 }

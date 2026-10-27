@@ -270,13 +270,14 @@ function stackOptionsFor(file) {
 /**
  * @param {string} url - WebDAV URL of the file
  * @param {string} name - its name
+ * @param {number} fileId - the file, which Deliver renames
  * @param {boolean} canWrite - whether this Member may rename it
  * @return {object[]} Download and, with write access, Rename (story 131)
  */
-function fileItems(url, name, canWrite) {
+function fileItems(url, name, fileId, canWrite) {
 	return [
 		{ label: t('deliver', 'Download'), icon: downloadIcon, href: url, download: name },
-		canWrite && { label: t('deliver', 'Rename…'), icon: renameIcon, action: () => { renaming.value = { name, url } } },
+		canWrite && { label: t('deliver', 'Rename…'), icon: renameIcon, action: () => { renaming.value = { name, fileId } } },
 	]
 }
 
@@ -285,7 +286,7 @@ function fileItems(url, name, canWrite) {
  */
 async function rename(name) {
 	try {
-		await renameFile(renaming.value.url, name)
+		await renameFile(renaming.value.fileId, name)
 	} catch (e) {
 		error.value = errorMessage(e)
 	}
@@ -305,7 +306,7 @@ function openFileMenu(event, file) {
 		items: [
 			canWrite && { label: t('deliver', 'Add for review'), icon: addIcon, action: () => add(file) },
 			canWrite && stackOptionsFor(file).length > 0 && { label: t('deliver', 'Add as a new Version of…'), icon: newVersionIcon, action: () => openStacking(file) },
-			...fileItems(davFolder(file.path) + '/' + encodeURIComponent(file.name), file.name, canWrite),
+			...fileItems(davFolder(file.path) + '/' + encodeURIComponent(file.name), file.name, file.fileId, canWrite),
 			{ label: t('deliver', 'Show in Files'), icon: filesIcon, href: generateUrl('/apps/files/files/{fileId}', { fileId: file.fileId }) + '?' + new URLSearchParams({ dir, opendetails: 'true' }) },
 		].filter(Boolean),
 	}
@@ -406,7 +407,7 @@ function assetItems(asset) {
 		asset.canWrite && { label: asset.dueDate ? t('deliver', 'Change the Due Date') : t('deliver', 'Set a Due Date'), icon: dueIcon, action: () => { dueFor.value = [asset] } },
 		asset.canWrite && !isMobile.value && { label: t('deliver', 'Manage Versions'), icon: stackIcon, action: () => { managing.value = asset.id } },
 		asset.canWrite && { label: t('deliver', 'Move to Project…'), icon: moveIcon, action: () => openAssign([asset]) },
-		...(newest.url ? fileItems(newest.url, newest.name, asset.canWrite) : []),
+		...(newest.url ? fileItems(newest.url, newest.name, newest.fileId, asset.canWrite) : []),
 		{
 			label: t('deliver', 'Show in Files'),
 			icon: filesIcon,

@@ -133,6 +133,32 @@ class NextcloudClient {
 		$this->request('DELETE', $this->dav($path));
 	}
 
+	/** The status of a raw WebDAV request on a file of the user's, such as a sync client sends */
+	public function davStatus(string $method, string $path, ?string $body = null, ?string $destination = null): int {
+		return $this->request($method, $this->dav($path), $body, $destination === null ? [] : ['Destination: ' . $this->baseUrl . $this->dav($destination)])['status'];
+	}
+
+	public function get(string $path): string {
+		return $this->request('GET', $this->dav($path))['body'];
+	}
+
+	/** Who holds the lock on a file, by display name; null when nobody does */
+	public function lockedBy(string $path): ?string {
+		$response = $this->request(
+			'PROPFIND',
+			$this->dav($path),
+			'<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:nc="http://nextcloud.org/ns"><d:prop><nc:lock/><nc:lock-owner-displayname/></d:prop></d:propfind>',
+			['Depth: 0', 'Content-Type: application/xml'],
+		);
+		if ($response['status'] !== 207) {
+			throw new \RuntimeException("PROPFIND $path failed: {$response['status']}");
+		}
+		if (preg_match('#<nc:lock>1</nc:lock>#', $response['body']) !== 1) {
+			return null;
+		}
+		return preg_match('#<nc:lock-owner-displayname>([^<]*)</nc:lock-owner-displayname>#', $response['body'], $m) === 1 ? $m[1] : '';
+	}
+
 	/** Empties the trash, which is what permanent deletion looks like from outside */
 	public function emptyTrash(): void {
 		$this->request('DELETE', '/remote.php/dav/trashbin/' . rawurlencode($this->user) . '/trash');

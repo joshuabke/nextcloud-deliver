@@ -2,7 +2,14 @@
 
 ## Unreleased
 
+### Added
 - Show who delivered each Version, and filter by what you delivered.
+- Lock files with Comments or Approvals against overwriting, renaming and deleting outside Deliver, with a Project setting.
+- Mark Comments made before an overwrite of their file and notify the Members.
+- Add `POST /versions/{id}/replace` for delivering tools to replace a Version's file, Comments kept.
+
+### Changed
+- Rename files through Deliver instead of WebDAV.
 
 ## 0.9.7 – 2026-10-27
 
@@ -12,8 +19,6 @@
 
 ### Changed
 - Look up the Version files of the Project list folder by folder instead of one by one.
-
-### Added
 
 ### Fixed
 - Show names with & or ' as they are instead of as HTML entities.

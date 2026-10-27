@@ -624,6 +624,37 @@ test.describe('Review view', () => {
 			await page.keyboard.press('Escape').catch(() => {})
 		}
 	})
+
+	test('a file with Comments is locked, and an overwrite without the lock marks them', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const lock = (lockFiles) => api.put(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`, { data: { lockFiles } })
+		const clip = `/remote.php/dav/files/${USER}/${folder}/overwrite.webm`
+		try {
+			// A file of its own, as the Versions of the tests before are no longer the newest
+			expect((await api.fetch(clip, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(201)
+			const project = await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)
+			const mine = (await project.json()).ocs.data.assets.find((asset) => asset.versions[0].name === 'overwrite.webm').versions[0].id
+
+			// A Comment locks the file against a sync client
+			const commented = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${mine}/comments?format=json`, { data: { inFrame: 1, body: 'lock me' } })
+			expect(commented.status(), await commented.text()).toBe(201)
+			expect((await api.fetch(clip, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(423)
+
+			// The switch is in the Project settings, and off frees the file
+			await page.goto(`/apps/deliver/projects/${projectId}`)
+			await page.getByRole('button', { name: 'Project settings' }).click()
+			const settings = page.getByRole('dialog', { name: /^Settings of/ })
+			await settings.getByText('Lock files with Comments').click()
+			await expect.poll(async () => (await api.fetch(clip, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(204)
+			await page.keyboard.press('Escape')
+
+			await page.goto(`/apps/deliver/versions/${mine}`)
+			await expect(page.locator('.deliver-comment__overwritten').first()).toContainText('before the overwrite on')
+		} finally {
+			await lock(true)
+			await api.dispose()
+		}
+	})
 })
 
 /**

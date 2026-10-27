@@ -22,6 +22,8 @@ export const useCommentsStore = defineStore('comments', {
 		versionId: null,
 		comments: [],
 		canWrite: false,
+		/** When the Version's file was overwritten under Comments, or null; Comments made up to then are marked */
+		overwrittenAt: null,
 		/** Null until the first answer; false where the person may only read */
 		canComment: null,
 		/** Me, in the shape of a Comment's author */
@@ -109,6 +111,7 @@ export const useCommentsStore = defineStore('comments', {
 			}
 			this.comments = mergeComments([], answer.comments, null)
 			this.canWrite = answer.canWrite
+			this.overwrittenAt = answer.overwrittenAt
 			this.canComment = answer.canComment
 			this.me = answer.me
 			this.seenUntil = answer.seenUntil
@@ -126,6 +129,7 @@ export const useCommentsStore = defineStore('comments', {
 				}
 				this.comments = mergeComments(this.comments, answer.comments, answer.ids)
 				this.approvals = answer.approvals
+				this.overwrittenAt = answer.overwrittenAt
 				this.now = answer.now
 				this.onScreen()
 			} catch {

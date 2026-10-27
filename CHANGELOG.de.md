@@ -2,7 +2,14 @@
 
 ## Unveröffentlicht
 
+### Neu
 - Angezeigt, wer jede Version geliefert hat, und nach dem Gelieferten gefiltert.
+- Dateien mit Kommentaren oder Abnahmen gegen Überschreiben, Umbenennen und Löschen außerhalb von Deliver gesperrt, mit einer Projekteinstellung.
+- Kommentare, die vor einem Überschreiben ihrer Datei entstanden, markiert und die Mitglieder benachrichtigt.
+- `POST /versions/{id}/replace` für Delivery-Werkzeuge ergänzt, um die Datei einer Version bei erhaltenen Kommentaren zu ersetzen.
+
+### Geändert
+- Dateien über Deliver statt über WebDAV umbenannt.
 
 ## 0.9.7 – 2026-10-27
 
@@ -12,8 +19,6 @@
 
 ### Geändert
 - Versionsdateien für die Projektliste ordnerweise statt einzeln nachgeschlagen.
-
-### Neu
 
 ### Behoben
 - Namen mit & oder ' so angezeigt, wie sie sind, statt als HTML-Entitäten.

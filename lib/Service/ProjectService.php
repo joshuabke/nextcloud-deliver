@@ -23,6 +23,7 @@ use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;
 use OCP\Files\NotFoundException;
+use OCP\Files\NotPermittedException;
 use OCP\Files\Storage\ISharedStorage;
 use OCP\IL10N;
 use OCP\IURLGenerator;
@@ -60,6 +61,7 @@ class ProjectService {
 		private OpenFiles $openFiles,
 		private PipelineSettings $settings,
 		private NotificationService $notifications,
+		private FileLock $fileLock,
 		private IL10N $l,
 		private LoggerInterface $logger,
 	) {
@@ -265,6 +267,7 @@ class ProjectService {
 		?int $fpsDen = null,
 		?string $timecodeMode = null,
 		?string $name = null,
+		?bool $lockFiles = null,
 	): array {
 		[$project, $folder] = $this->editable($uid, $id);
 		if (($fpsNum !== null && $fpsNum < 1) || ($fpsDen !== null && $fpsDen < 1)) {
@@ -289,6 +292,9 @@ class ProjectService {
 		if ($allowOlder !== null) {
 			$project->setAllowOlder($allowOlder);
 		}
+		if ($lockFiles !== null) {
+			$project->setLockFiles($lockFiles);
+		}
 		if ($fpsNum !== null) {
 			$project->setFpsNum($fpsNum);
 		}
@@ -299,6 +305,9 @@ class ProjectService {
 			$project->setTimecodeMode($timecodeMode);
 		}
 		$project = $this->projects->update($project);
+		if ($lockFiles !== null) {
+			$this->syncLocks($id);
+		}
 		if ($autoIntake === true && $folder !== null) {
 			$this->intakeFolder($project, $folder);
 		}
@@ -451,12 +460,89 @@ class ProjectService {
 		if ($file instanceof File) {
 			$this->assertSameKind($uid, $newest, $file);
 		}
-		return $this->versionPayload($this->stacks->stack($version, $assetId, $number), $uid);
+		$version = $this->stacks->stack($version, $assetId, $number);
+		$this->fileLock->sync($version);
+		return $this->versionPayload($version, $uid);
 	}
 
 	/** Moves a Version into an Asset of its own; also undoes an automatic stack (stories 13 and 16) */
 	public function unstackVersion(string $uid, int $versionId): array {
 		return $this->versionPayload($this->stacks->unstack($this->writableVersion($uid, $versionId)), $uid);
+	}
+
+	/**
+	 * Renames a file in its folder (story 131) from inside Deliver's lock, which
+	 * WebDAV cannot pass; Deliver follows the rename. It never replaces a file
+	 * of the same name.
+	 *
+	 * @throws NotFoundException the user cannot reach the file
+	 * @throws AccessDeniedException the file is read-only for this user
+	 * @throws InvalidRequestException the name is empty, too long or has a slash
+	 * @throws ProjectConflictException the folder holds a file of that name
+	 */
+	public function renameFile(string $uid, int $fileId, string $name): void {
+		$file = $this->root->getUserFolder($uid)->getFirstNodeById($fileId);
+		if (!$file instanceof File) {
+			throw new NotFoundException('File not found');
+		}
+		self::assertWritable($file);
+		$name = trim($name);
+		if ($name === '' || mb_strlen($name) > 255 || str_contains($name, '/') || $name === '.' || $name === '..') {
+			throw new InvalidRequestException('A file name has up to 255 characters and no slash');
+		}
+		$folder = $file->getParent();
+		if ($folder->nodeExists($name)) {
+			throw new ProjectConflictException($this->l->t('A file with this name is already in the folder.'));
+		}
+		try {
+			$this->fileLock->inScope($file, static fn () => $file->move($folder->getPath() . '/' . $name));
+		} catch (NotPermittedException) {
+			throw new AccessDeniedException('You may not rename this file');
+		}
+	}
+
+	/**
+	 * Replaces the content of a Version's file with a file uploaded next to it
+	 * (ADR 0018, spec: Delivering again): the browser or the delivering tool
+	 * cannot write over a locked file, and a large file must not travel in a
+	 * request body. The file keeps its id, so the Version and its Comments
+	 * stay; the upload is gone once its content has been streamed over. A
+	 * Version with Comments needs the confirmation first.
+	 *
+	 * @param int $uploadId the file id of the upload, in the folder of the Version's file
+	 * @throws AccessDeniedException the Version's file is read-only for this user
+	 * @throws NotFoundException no such Version or upload for this user
+	 * @throws InvalidRequestException the upload is not a file in the Version's folder
+	 * @throws ProjectConflictException the Version has Comments and nobody confirmed
+	 */
+	public function replaceFile(string $uid, int $versionId, int $uploadId, bool $confirm): array {
+		$version = $this->writableVersion($uid, $versionId);
+		$home = $this->root->getUserFolder($uid);
+		$file = $home->getFirstNodeById($version->getFileId());
+		$upload = $home->getFirstNodeById($uploadId) ?? throw new NotFoundException('Upload not found');
+		if (!$file instanceof File || !$upload instanceof File) {
+			throw new NotFoundException('File not found');
+		}
+		if ($upload->getId() === $file->getId() || $upload->getParent()->getId() !== $file->getParent()->getId() || $this->versions->findByFile($upload->getId()) !== null) {
+			throw new InvalidRequestException('The upload must be a file of its own next to the Version\'s file');
+		}
+		self::assertWritable($upload);
+		if (!$confirm && $this->comments->findByVersion($versionId) !== []) {
+			throw new ProjectConflictException($this->l->t('This Version has Comments, so replacing its file needs a confirmation.'), 'confirm');
+		}
+		$this->fileLock->inScope($file, static function () use ($file, $upload): void {
+			$stream = $upload->fopen('r');
+			try {
+				$file->putContent($stream);
+			} finally {
+				// putContent closes it when it can
+				if (is_resource($stream)) {
+					fclose($stream);
+				}
+			}
+			$upload->delete();
+		});
+		return $this->versionPayload($this->versions->find($versionId) ?? $version, $uid);
 	}
 
 	/**
@@ -651,6 +737,8 @@ class ProjectService {
 			'name' => $version->getName(),
 			'state' => $version->getState(),
 			'autoStacked' => (bool)$version->getAutoStacked(),
+			// When its file was overwritten under Comments, which then are marked as made before (ADR 0018)
+			'overwrittenAt' => $version->getOverwrittenAt(),
 			// Until ffprobe has run, the Project's frame rate counts the Frames
 			'fps' => [
 				'num' => $version->getFpsNum() ?? $project->getFpsNum(),
@@ -740,7 +828,14 @@ class ProjectService {
 			// told so, the trash marks nothing Missing and mails nobody about it
 			if ($file !== null) {
 				$this->stacks->deleting($file->getId());
-				$file->delete();
+				// Released first, so that no lock stays behind on the file in the trash
+				$this->fileLock->release($version);
+				try {
+					$file->delete();
+				} catch (\Throwable $e) {
+					$this->fileLock->sync($version);
+					throw $e;
+				}
 			}
 			$this->stacks->purge($version);
 		}
@@ -777,6 +872,8 @@ class ProjectService {
 		$project->setDeletedBy($uid);
 		$this->projects->update($project);
 		foreach ($this->versions->findByProject($id) as $version) {
+			// Its files can go to the trash meanwhile (ADR 0018)
+			$this->fileLock->release($version);
 			$this->notifications->versionGone($version, array_map(static fn ($comment) => $comment->getId(), $this->comments->findByVersion($version->getId())));
 		}
 		foreach ($this->assets->findByProject($id) as $asset) {
@@ -814,6 +911,14 @@ class ProjectService {
 		$project->setDeletedAt(null);
 		$project->setDeletedBy(null);
 		$this->projects->update($project);
+		$this->syncLocks($id);
+	}
+
+	/** Sets or lifts the locks of a Project's files to match its setting and its Comments */
+	private function syncLocks(int $projectId): void {
+		foreach ($this->versions->findByProject($projectId) as $version) {
+			$this->fileLock->sync($version);
+		}
 	}
 
 	/** Deletes a Deleted Project for good, with all its data (story 150) */
@@ -919,9 +1024,11 @@ class ProjectService {
 				}
 			}
 		}
-		foreach ($this->versions->findAll() as $version) {
+		$versions = $this->versions->findAll();
+		foreach ($versions as $version) {
 			$this->stacks->check($version);
 		}
+		$this->fileLock->lockExisting($versions);
 	}
 
 	/**
@@ -1323,6 +1430,9 @@ class ProjectService {
 			'canWrite' => $this->mayEdit($project, $folder, $uid),
 			'autoIntake' => (bool)$project->getAutoIntake(),
 			'allowOlder' => (bool)$project->getAllowOlder(),
+			'lockFiles' => $project->locksFiles(),
+			// The setting means something only where Nextcloud can lock
+			'lockAvailable' => $this->fileLock->available(),
 			'fps' => ['num' => $project->getFpsNum(), 'den' => $project->getFpsDen()],
 			'timecodeMode' => $project->getTimecodeMode(),
 			'createdAt' => $project->getCreatedAt(),
@@ -1341,6 +1451,9 @@ class ProjectService {
 			'canWrite' => false,
 			'autoIntake' => false,
 			'allowOlder' => false,
+			// No Project always locks files in review
+			'lockFiles' => true,
+			'lockAvailable' => false,
 			'fps' => ['num' => $defaults->getFpsNum(), 'den' => $defaults->getFpsDen()],
 			'timecodeMode' => $defaults->getTimecodeMode(),
 			'createdAt' => 0,
