@@ -2,7 +2,7 @@
  * What the Uploads dialog says about an upload and its derived media
  * (stories 133–140), free of the store so Vitest can check it.
  */
-import { n, t } from '@nextcloud/l10n'
+import { n, t } from './l10n.js'
 
 /** Derived media kinds in the order they are listed */
 export const KINDS = ['waveform', 'proxy', 'thumbs']

@@ -1,9 +1,9 @@
 <script setup>
-import { t } from '@nextcloud/l10n'
 import { computed, nextTick, onMounted, ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
+import { t } from '../lib/l10n.js'
 import { extensionOf } from '../lib/media.js'
 
 const props = defineProps({

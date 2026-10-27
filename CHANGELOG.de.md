@@ -5,6 +5,9 @@
 ### Geändert
 - Versionsdateien für die Projektliste ordnerweise statt einzeln nachgeschlagen.
 
+### Behoben
+- Namen mit & oder ' so angezeigt, wie sie sind, statt als HTML-Entitäten.
+
 ## 0.9.6 – 2026-10-26
 
 ### Neu

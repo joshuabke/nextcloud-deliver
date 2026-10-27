@@ -1,10 +1,10 @@
 <script setup>
-import { t } from '@nextcloud/l10n'
 import { ref } from 'vue'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import { setReviewerRights } from '../api.js'
 import { useBusy } from '../composables/busy.js'
+import { t } from '../lib/l10n.js'
 
 /**
  * A Reviewer's own rights on one Review Link they are on, over the link's
