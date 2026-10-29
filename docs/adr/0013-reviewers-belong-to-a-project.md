@@ -19,3 +19,4 @@ A Reviewer now belongs to the Member and to one Project: the Project of the link
 - A Reviewer who came by links of several Projects before this keeps the first of them and leaves the others' lists; a Member invites them again there. One whose links are all gone joins the Project of their first Comment; one with neither link nor Comment is removed.
 - ADR 0009's consequence on Reviewers is superseded; the rest of it stands.
 - The Personal Link through every link of the Member on the Project is narrowed by ADR 0014 to the links the Reviewer is on.
+- Belonging to the Member as well is superseded by ADR 0017: Reviewers and Review Links belong to the Project alone.
