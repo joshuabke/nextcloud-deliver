@@ -17,6 +17,16 @@ describe('filters', () => {
 		expect([passes(through, 'approved'), passes(through, 'due')]).toEqual([true, false])
 	})
 
+	it('finds what I delivered by the newest Version', () => {
+		const mine = { type: 'user', id: 'anna', name: 'Anna' }
+		const older = version({ deliveredBy: mine })
+		const newer = version({ deliveredBy: { type: 'user', id: 'ben', name: 'Ben' } })
+		expect(passes(asset({}, [version({ deliveredBy: mine })]), 'mine', 'anna')).toBe(true)
+		expect(passes(asset({}, [newer, older]), 'mine', 'anna')).toBe(false)
+		expect(passes(asset({}, [version({ deliveredBy: null })]), 'mine', 'anna')).toBe(false)
+		expect(passes(asset({}, [version({ deliveredBy: null })]), 'mine', '')).toBe(false)
+	})
+
 	it('searches the Asset name and the newest file name', () => {
 		expect(found(asset(), ' cut ')).toBe(true)
 		expect(found(asset(), 'V2.MOV')).toBe(true)

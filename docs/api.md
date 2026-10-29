@@ -55,6 +55,8 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | GET | `/contacts?search=` | People of my own and shared address books whose name or address matches, `{name, email, photo}` per address, `photo` the CardDAV URL of their picture or null; never the instance's users |
 | GET/PUT | `/settings` `{addressBook}` | My Deliver settings: the address book Reviewers are saved to, of `addressBooks` I can write to |
 
+Every Version a Member gets, in a Project's Assets, in the Review view's Version Stack and in the Files sidebar's Asset, carries `deliveredBy`: `{type, id, name}` of the account whose request wrote its file or enabled it for review, or null when nobody's did. Reviewers are not told.
+
 Rights follow each Version's file (ADR 0009): read access views and comments, write access manages. Missing write access answers 403; a request that clashes with the current state (a nested Folder Project, a taken Version Number, an older Version closed for Comments) answers 409.
 
 A Personal Link is the Review Link's URL plus the key of that Reviewer on that link, `/s/{token}?r={key}`; each link a Reviewer is on has a key of its own (ADR 0014). Opening it stores the key in a cookie for that link, so the browser keeps the identity there.

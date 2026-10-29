@@ -112,6 +112,13 @@ test.describe('Review view', () => {
 		await expect(second).toHaveCount(0)
 		await page.getByRole('button', { name: /^All/ }).click()
 
+		// Whoever uploads delivers: the card names them, and the filter finds what they delivered
+		await expect(second.locator('.deliver-card__meta')).toContainText(/^deliver-e2e · /)
+		await page.getByRole('button', { name: /^Delivered by me/ }).click()
+		await expect(page).toHaveURL(/filter=mine/)
+		await expect(second).toBeVisible()
+		await page.getByRole('button', { name: /^All/ }).click()
+
 		// The latest activity comes first, until the order is by name
 		await expect(page.locator('.deliver-card__name').first()).toHaveText('second')
 		await page.getByRole('button', { name: 'Latest activity' }).click()

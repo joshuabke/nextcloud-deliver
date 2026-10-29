@@ -4,6 +4,7 @@ import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionInput from '@nextcloud/vue/components/NcActionInput'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcDateTime from '@nextcloud/vue/components/NcDateTime'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { regenerateVersion, unstackVersion, updateVersion } from '../api.js'
 import { useBusy } from '../composables/busy.js'
@@ -100,6 +101,9 @@ function drop(event) {
 						<span class="deliver-stack__text">
 							<strong>{{ t('deliver', 'Version {number}', { number: version.number }) }}</strong>
 							<span class="deliver-stack__file">{{ version.name }}</span>
+							<span class="deliver-stack__file">
+								<template v-if="version.deliveredBy">{{ version.deliveredBy.name }} · </template><NcDateTime :timestamp="version.createdAt * 1000" />
+							</span>
 						</span>
 					</button>
 					<span v-if="version.state === 'missing'" class="deliver-stack__badge">{{ t('deliver', 'Missing') }}</span>

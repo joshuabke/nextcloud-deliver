@@ -52,6 +52,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setAutoStacked(bool $autoStacked)
  * @method string getState()
  * @method void setState(string $state)
+ * @method ?string getDeliveredBy()
+ * @method void setDeliveredBy(?string $deliveredBy)
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
  */
@@ -75,6 +77,8 @@ class Version extends Entity {
 	protected ?int $height = null;
 	protected ?bool $hasVideo = false;
 	protected ?bool $hasAudio = false;
+	/** The account whose request wrote the file or enabled it for review; null when nobody's did */
+	protected ?string $deliveredBy = null;
 	protected string $state = self::STATE_READY;
 	/** Whether browsers play the original; null until ffprobe has looked */
 	protected ?bool $playable = null;

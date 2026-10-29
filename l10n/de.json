@@ -67,6 +67,7 @@
 		"Deliver is preparing a version of this file that the browser can play: {percent} %": "Deliver bereitet eine Fassung dieser Datei vor, die der Browser abspielen kann: {percent} %",
 		"Deliver makes Proxies, Thumbnail Strips and Waveforms with ffmpeg in the background. Without ffmpeg, files the browser plays natively still work.": "Deliver erzeugt Proxies, Vorschauleisten und Wellenformen mit ffmpeg im Hintergrund. Ohne ffmpeg funktionieren Dateien weiter, die der Browser selbst abspielt.",
 		"Deliver settings": "Deliver-Einstellungen",
+		"Delivered by me": "Von mir geliefert",
 		"Derived media": "Abgeleitete Medien",
 		"Description for Reviewers": "Beschreibung für Reviewer",
 		"Don't rename files that are actively being worked on outside of Deliver.": "Benenne keine Dateien um, an denen außerhalb von Deliver gerade gearbeitet wird.",

@@ -1,5 +1,6 @@
 <script setup>
 import menuIcon from '@mdi/svg/svg/chevron-down.svg?raw'
+import { getCanonicalLocale } from '@nextcloud/l10n'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -19,6 +20,17 @@ const emit = defineEmits(['select'])
 
 /** On a phone the pill says enough on its own */
 const isMobile = useIsMobile()
+
+/**
+ * @param {{deliveredBy?: {name: string}, createdAt?: number}} version - a Version as a Member's Review view has it
+ * @return {string} "Anna · Oct 26", only the date with nobody; empty on a Review Link, which tells neither
+ */
+function delivered(version) {
+	return [
+		version.deliveredBy?.name,
+		version.createdAt && new Date(version.createdAt * 1000).toLocaleDateString(getCanonicalLocale(), { dateStyle: 'medium' }),
+	].filter(Boolean).join(' · ')
+}
 
 const number = computed(() => props.versions.find((each) => each.id === props.current)?.number)
 </script>
@@ -41,6 +53,7 @@ const number = computed(() => props.versions.find((each) => each.id === props.cu
 				:key="each.id"
 				:modelValue="each.id === current"
 				type="radio"
+				:description="delivered(each)"
 				closeAfterClick
 				@click="emit('select', each.id)">
 				{{ t('deliver', 'Version {number}', { number: each.number }) }}

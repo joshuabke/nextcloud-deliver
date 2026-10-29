@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Show who delivered each Version, and filter by what you delivered.
+
 ## 0.9.7 – 2026-10-27
 
 ### Added
@@ -8,6 +12,8 @@
 
 ### Changed
 - Look up the Version files of the Project list folder by folder instead of one by one.
+
+### Added
 
 ### Fixed
 - Show names with & or ' as they are instead of as HTML entities.

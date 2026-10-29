@@ -22,6 +22,7 @@ use OCP\Files\Events\Node\NodeWrittenEvent;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\Node;
+use OCP\IUserSession;
 
 /**
  * Keeps Deliver in step with Files (ADR 0002): a new media file in a Folder
@@ -55,7 +56,13 @@ class FileEventsListener implements IEventListener {
 		private VersionMapper $versions,
 		private StackService $stacks,
 		private DerivedMedia $media,
+		private IUserSession $userSession,
 	) {
+	}
+
+	/** The account whose request this is; nobody in a background job or on the command line */
+	private function actor(): ?string {
+		return $this->userSession->getUser()?->getUID();
 	}
 
 	public function handle(Event $event): void {
@@ -79,7 +86,7 @@ class FileEventsListener implements IEventListener {
 		$project = $this->projects->findAbove($node);
 		// A Deleted Project takes nothing in (ADR 0015)
 		if ($project?->getAutoIntake() === true && !$project->isDeleted()) {
-			$this->stacks->intake($project, $node);
+			$this->stacks->intake($project, $node, deliveredBy: $this->actor());
 		}
 	}
 
@@ -98,6 +105,8 @@ class FileEventsListener implements IEventListener {
 	private function rewritten(int $fileId): void {
 		$version = $this->versions->findByFile($fileId);
 		if ($version !== null) {
+			// Whoever writes it again delivers it now; a write without an account leaves the name as it was
+			$version->setDeliveredBy($this->actor() ?? $version->getDeliveredBy());
 			$this->media->reread($version);
 		}
 	}

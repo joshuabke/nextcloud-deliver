@@ -65,7 +65,7 @@ class UserDeletedListener implements IEventListener {
 			$qb = $this->db->getQueryBuilder();
 			$qb->delete($table)->where($qb->expr()->eq('user_id', $qb->createNamedParameter($uid)))->executeStatement();
 		}
-		foreach (['deliver_comments' => 'user_id', 'deliver_approvals' => 'user_id', 'deliver_reactions' => 'user_id', 'deliver_assets' => 'enabled_by', 'deliver_projects' => 'deleted_by'] as $table => $column) {
+		foreach (['deliver_comments' => 'user_id', 'deliver_approvals' => 'user_id', 'deliver_reactions' => 'user_id', 'deliver_assets' => 'enabled_by', 'deliver_versions' => 'delivered_by','deliver_projects' => 'deleted_by'] as $table => $column) {
 			$qb = $this->db->getQueryBuilder();
 			$qb->update($table)->set($column, $qb->createNamedParameter(null))
 				->where($qb->expr()->eq($column, $qb->createNamedParameter($uid)))->executeStatement();

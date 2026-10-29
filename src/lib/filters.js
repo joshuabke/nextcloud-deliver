@@ -5,7 +5,7 @@ import { t } from './l10n.js'
  * Version of an Asset, except Unseen, which looks for Unseen Comments
  * anywhere in the Stack.
  */
-export const FILTERS = ['all', 'unseen', 'changes', 'approved', 'due']
+export const FILTERS = ['all', 'unseen', 'changes', 'approved', 'due', 'mine']
 
 /** The names of the filters, of the Project view and the Project list alike */
 export const FILTER_LABELS = {
@@ -14,14 +14,16 @@ export const FILTER_LABELS = {
 	changes: t('deliver', 'Changes requested'),
 	approved: t('deliver', 'Approved'),
 	due: t('deliver', 'Due'),
+	mine: t('deliver', 'Delivered by me'),
 }
 
 /**
  * @param {object} asset - an Asset with its Version Stack, newest first
  * @param {string} filter - one of FILTERS
+ * @param {string} me - the user id of the person looking
  * @return {boolean} whether the Asset passes the filter
  */
-export function passes(asset, filter) {
+export function passes(asset, filter, me = '') {
 	const newest = asset.versions[0]
 	const { approved = 0, changes = 0 } = newest.approvals
 	switch (filter) {
@@ -34,6 +36,8 @@ export function passes(asset, filter) {
 		case 'due':
 		// Due and not yet through, like the next Due Date on the Project's tile
 			return asset.dueDate !== null && !(approved > 0 && changes === 0)
+		case 'mine':
+			return me !== '' && newest.deliveredBy?.type === 'user' && newest.deliveredBy.id === me
 		default:
 			return true
 	}
