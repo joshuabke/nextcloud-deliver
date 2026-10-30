@@ -6,6 +6,7 @@ import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { listProjectMembers, resetProjectMember, setProjectMember } from '../api.js'
 import { useBusy } from '../composables/busy.js'
+import { approveLocked, clampSwitches, shareLocked } from '../lib/access.js'
 import { t } from '../lib/l10n.js'
 import { useProjectsStore } from '../store/projects.js'
 
@@ -60,55 +61,12 @@ function levelLocked(member) {
 
 /**
  * @param {object} member - a row
- * @return {string|null} why its Share switch cannot be changed, if it cannot
- */
-function shareLocked(member) {
-	if (member.owner) {
-		return t('deliver', 'The owner of a Project keeps Manage, Share and Approve.')
-	}
-	if (!member.canShare) {
-		return t('deliver', 'Files does not let them share this.')
-	}
-	if (member.level === 'none') {
-		return t('deliver', 'They do not see the Project.')
-	}
-	if (!member.share && !mine.value.share) {
-		return t('deliver', 'You cannot give what you do not have yourself.')
-	}
-	return null
-}
-
-/**
- * @param {object} member - a row
- * @return {string|null} why its Approve switch cannot be changed, if it cannot
- */
-function approveLocked(member) {
-	if (member.owner) {
-		return t('deliver', 'The owner of a Project keeps Manage, Share and Approve.')
-	}
-	if (member.level === 'none' || member.level === 'view') {
-		return t('deliver', 'Approving needs Comment or Manage.')
-	}
-	if (!member.approve && !mine.value.approve) {
-		return t('deliver', 'You cannot give what you do not have yourself.')
-	}
-	return null
-}
-
-/**
- * @param {object} member - a row
  * @param {object} fields - level, share or approve, whichever changed
  */
 function change(member, fields) {
 	return run(async () => {
-		const next = { level: member.level, share: member.share, approve: member.approve, ...fields }
 		// Switches the level cannot carry are off
-		if (next.level === 'none') {
-			next.share = false
-		}
-		if (next.level === 'none' || next.level === 'view') {
-			next.approve = false
-		}
+		const next = clampSwitches({ level: member.level, share: member.share, approve: member.approve, ...fields })
 		try {
 			const saved = await setProjectMember(props.project.id, { type: member.type, principal: member.id, ...next })
 			members.value = members.value.map((each) => each.type === member.type && each.id === member.id ? saved : each)
@@ -183,18 +141,18 @@ function setNewcomers(event) {
 						{{ level.label }}
 					</option>
 				</select>
-				<span :title="shareLocked(member) ?? ''">
+				<span :title="shareLocked(member, mine) ?? ''">
 					<NcCheckboxRadioSwitch
 						:modelValue="member.share"
-						:disabled="busy || shareLocked(member) !== null"
+						:disabled="busy || shareLocked(member, mine) !== null"
 						@update:modelValue="change(member, { share: $event })">
 						{{ t('deliver', 'Share') }}
 					</NcCheckboxRadioSwitch>
 				</span>
-				<span :title="approveLocked(member) ?? ''">
+				<span :title="approveLocked(member, mine) ?? ''">
 					<NcCheckboxRadioSwitch
 						:modelValue="member.approve"
-						:disabled="busy || approveLocked(member) !== null"
+						:disabled="busy || approveLocked(member, mine) !== null"
 						@update:modelValue="change(member, { approve: $event })">
 						{{ t('deliver', 'Approve') }}
 					</NcCheckboxRadioSwitch>
