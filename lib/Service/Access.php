@@ -128,13 +128,30 @@ class Access {
 	/**
 	 * What someone has with nothing set for them (nor for their groups): the
 	 * level the Project gives newcomers if they came after it was last
-	 * changed, else what Files gives. The one place of that rule, for people
-	 * and for groups.
+	 * changed, else what Files gives. A person not noted themselves who is in
+	 * groups that were stands where those stand, the highest of them. The one
+	 * place of that rule, for people and for groups.
 	 */
 	public function byDefault(Project $project, string $type, string $id, bool $write): Grant {
 		$seen = $this->seen($project);
 		$key = MemberMapper::key($type, $id);
-		$newcomers = array_key_exists($key, $seen) ? $seen[$key] : $project->getNewcomers();
+		if (!array_key_exists($key, $seen) && $type === MemberMapper::USER) {
+			$inherited = null;
+			foreach ($this->groupsOf($id) as $gid) {
+				$groupKey = MemberMapper::key(MemberMapper::GROUP, $gid);
+				if (array_key_exists($groupKey, $seen)) {
+					$grant = $this->startingWith($seen[$groupKey], $write);
+					$inherited = $inherited?->merge($grant) ?? $grant;
+				}
+			}
+			if ($inherited !== null) {
+				return $inherited;
+			}
+		}
+		return $this->startingWith(array_key_exists($key, $seen) ? $seen[$key] : $project->getNewcomers(), $write);
+	}
+
+	private function startingWith(?string $newcomers, bool $write): Grant {
 		return match ($newcomers) {
 			Grant::NONE, Grant::VIEW => new Grant($newcomers, false, false),
 			default => new Grant($write ? Grant::MANAGE : Grant::COMMENT, false, $write),

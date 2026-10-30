@@ -443,6 +443,38 @@ class AccessTest extends TestCase {
 		self::assertSame(201, $this->comment($member), 'later changes of the group reach them');
 	}
 
+	public function testAPersonNewInAnOldGroupStartsWhereTheGroupStands(): void {
+		[$old] = $this->member();
+		$files = $this->group($old);
+		$this->share(1, $files, 1);
+		// The group is noted under "as in Files"
+		$this->setNewcomers('view');
+
+		[$viewers] = $this->member();
+		$view = $this->group($viewers);
+		$this->share(1, $view, 1);
+		// and this one under "View"
+		$this->setNewcomers('none');
+
+		[$alone, $asAlone] = $this->member();
+		$this->admin->ocsForm('POST', "/ocs/v2.php/cloud/users/$alone/groups", ['groupid' => $files]);
+		[$onlyView, $asOnlyView] = $this->member();
+		$this->admin->ocsForm('POST', "/ocs/v2.php/cloud/users/$onlyView/groups", ['groupid' => $view]);
+		[$both, $asBoth] = $this->member();
+		foreach ([$files, $view] as $group) {
+			$this->admin->ocsForm('POST', "/ocs/v2.php/cloud/users/$both/groups", ['groupid' => $group]);
+		}
+
+		$listed = $this->listed();
+		self::assertSame(['comment', 'view', 'comment'], [$listed[$alone]['level'], $listed[$onlyView]['level'], $listed[$both]['level']], 'they have what their group has, the highest of several');
+		self::assertSame([null, null, null], [$listed[$alone]['stored'], $listed[$onlyView]['stored'], $listed[$both]['stored']]);
+		self::assertSame([201, 403, 201], [$this->comment($asAlone), $this->comment($asOnlyView), $this->comment($asBoth)]);
+
+		// Someone with no group at all is a newcomer of the setting
+		[$loner] = $this->member(1);
+		self::assertSame('none', $this->listed()[$loner]['level']);
+	}
+
 	public function testSwitchingNewcomersChangesNothingForExistingMembers(): void {
 		[$reader, $asReader] = $this->member(1);
 		[$writer, $asWriter] = $this->member(15);
