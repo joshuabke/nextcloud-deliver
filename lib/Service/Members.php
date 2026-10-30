@@ -45,7 +45,7 @@ class Members {
 		$node = null;
 		foreach ($this->root->getById($nodeId) as $candidate) {
 			// The trash has no shares and no access list
-			if (preg_match('#^/[^/]+/files(/|$)#', $candidate->getPath()) === 1) {
+			if (Access::isOwnersCopy($candidate)) {
 				$node = $candidate;
 				break;
 			}

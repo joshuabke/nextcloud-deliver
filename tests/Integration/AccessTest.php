@@ -67,6 +67,21 @@ class AccessTest extends TestCase {
 		self::assertSame(200, $shared['status'], json_encode($shared['data']));
 	}
 
+	private function unshare(string $user): void {
+		$shares = $this->admin->ocsForm('GET', '/ocs/v2.php/apps/files_sharing/api/v1/shares?path=' . rawurlencode("/{$this->root}"))['data'];
+		foreach ($shares as $share) {
+			if ($share['share_with'] === $user) {
+				self::assertSame(200, $this->admin->ocsForm('DELETE', '/ocs/v2.php/apps/files_sharing/api/v1/shares/' . $share['id'])['status']);
+			}
+		}
+	}
+
+	/** Runs PHP inside this Nextcloud, for what no API does: the periodic scan */
+	private function inNextcloud(string $code): void {
+		exec('php -r ' . escapeshellarg('require "/var/www/html/lib/base.php"; \\OCP\\Server::get(\\OCP\\App\\IAppManager::class)->loadApp("deliver"); ' . $code) . ' 2>&1', $output, $status);
+		self::assertSame(0, $status, implode("\n", $output));
+	}
+
 	private function group(string ...$members): string {
 		$group = 'deliver-group-' . bin2hex(random_bytes(4));
 		$this->admin->ocsForm('POST', '/ocs/v2.php/cloud/groups', ['groupid' => $group]);
@@ -242,6 +257,49 @@ class AccessTest extends TestCase {
 		self::assertSame(403, $member->ocs('POST', "/files/$fileId/rename", ['name' => 'renamed.mp4'])['status'], 'the file is read-only for them');
 	}
 
+	public function testRenamingAndReplacingNeedFilesWriteAndManageInTheProject(): void {
+		$fileId = $this->admin->fileId("{$this->root}/cut.mp4");
+		$this->admin->put("{$this->root}/.deliver-replace-1", 'the new cut');
+		$uploadId = $this->admin->fileId("{$this->root}/.deliver-replace-1");
+		$rename = fn (NextcloudClient $as, ?int $id = null, string $name = 'renamed.mp4') => $as->ocs('POST', '/files/' . ($id ?? $fileId) . '/rename', ['name' => $name])['status'];
+		$replace = fn (NextcloudClient $as) => $as->ocs('POST', "/versions/{$this->versionId}/replace", ['fileId' => $uploadId])['status'];
+
+		// Files' write access alone is not enough: the Access level decides what is done with the review
+		[$user, $member] = $this->member(15);
+		foreach (['view', 'comment'] as $level) {
+			self::assertSame(200, $this->setLevel('user', $user, $level)['status']);
+			self::assertSame([403, 403], [$rename($member), $replace($member)], "$level may not run the review");
+		}
+		self::assertSame(200, $this->setLevel('user', $user, 'none')['status']);
+		self::assertSame([404, 404], [$rename($member), $replace($member)], 'None does not see the Project');
+		self::assertSame('not really a video', $this->admin->get("{$this->root}/cut.mp4"));
+
+		// Files has the say over the file itself, whatever the Access level
+		[$reader, $readOnly] = $this->member(1);
+		self::assertSame(200, $this->setLevel('user', $reader, 'manage')['status']);
+		self::assertSame([403, 403], [$rename($readOnly), $replace($readOnly)], 'the file is read-only for them');
+
+		// The upload goes once streamed over, so a share that does not let them delete it replaces nothing
+		[$keeper, $noDelete] = $this->member(7);
+		self::assertSame(200, $this->setLevel('user', $keeper, 'manage')['status']);
+		self::assertSame(403, $replace($noDelete));
+		self::assertSame('not really a video', $this->admin->get("{$this->root}/cut.mp4"));
+		self::assertSame('the new cut', $this->admin->get("{$this->root}/.deliver-replace-1"));
+
+		// A file that is no Version takes Files' write access only
+		$this->admin->put("{$this->root}/notes.txt", 'x');
+		$notes = $this->admin->fileId("{$this->root}/notes.txt");
+		self::assertSame(200, $this->setLevel('user', $user, 'view')['status']);
+		self::assertSame([403, 200], [$rename($readOnly, $notes, 'a.txt'), $rename($member, $notes, 'b.txt')]);
+
+		// Both together
+		self::assertSame(200, $this->setLevel('user', $user, 'manage')['status']);
+		self::assertSame(200, $replace($member));
+		self::assertSame('the new cut', $this->admin->get("{$this->root}/cut.mp4"));
+		self::assertSame(200, $rename($member));
+		self::assertSame($fileId, $this->admin->fileId("{$this->root}/renamed.mp4"));
+	}
+
 	public function testShareIsOfferedWhereFilesLetsThemReshare(): void {
 		[$reshares, $withShare] = $this->member(17);
 		[$onlyReads, $reads] = $this->member(1);
@@ -349,6 +407,11 @@ class AccessTest extends TestCase {
 		self::assertSame(403, $this->comment($asThird));
 
 		self::assertSame(400, $this->admin->ocs('PUT', "/projects/{$this->projectId}", ['newcomers' => 'everything'])['status']);
+		// One settings change is taken whole or not at all
+		self::assertSame(400, $this->admin->ocs('PUT', "/projects/{$this->projectId}", ['newcomers' => 'files', 'fpsNum' => 0])['status']);
+		self::assertSame(400, $this->admin->ocs('PUT', "/projects/{$this->projectId}", ['newcomers' => 'everything', 'timecodeMode' => 'frames'])['status']);
+		$unchanged = $this->admin->ocs('GET', "/projects/{$this->projectId}")['data'];
+		self::assertSame(['view', 'smpte'], [$unchanged['newcomers'], $unchanged['timecodeMode']]);
 		self::assertSame(200, $this->admin->ocs('PUT', "/projects/{$this->projectId}", ['newcomers' => 'files'])['status']);
 		self::assertSame(403, $this->comment($asThird));
 		self::assertSame(404, $this->comment($asLater));
@@ -407,6 +470,38 @@ class AccessTest extends TestCase {
 		self::assertSame(201, $this->comment($member), 'later changes of the group reach them');
 	}
 
+	public function testAPersonNewInAnOldGroupStartsWhereTheGroupStands(): void {
+		[$old] = $this->member();
+		$files = $this->group($old);
+		$this->share(1, $files, 1);
+		// The group is noted under "as in Files"
+		$this->setNewcomers('view');
+
+		[$viewers] = $this->member();
+		$view = $this->group($viewers);
+		$this->share(1, $view, 1);
+		// and this one under "View"
+		$this->setNewcomers('none');
+
+		[$alone, $asAlone] = $this->member();
+		$this->admin->ocsForm('POST', "/ocs/v2.php/cloud/users/$alone/groups", ['groupid' => $files]);
+		[$onlyView, $asOnlyView] = $this->member();
+		$this->admin->ocsForm('POST', "/ocs/v2.php/cloud/users/$onlyView/groups", ['groupid' => $view]);
+		[$both, $asBoth] = $this->member();
+		foreach ([$files, $view] as $group) {
+			$this->admin->ocsForm('POST', "/ocs/v2.php/cloud/users/$both/groups", ['groupid' => $group]);
+		}
+
+		$listed = $this->listed();
+		self::assertSame(['comment', 'view', 'comment'], [$listed[$alone]['level'], $listed[$onlyView]['level'], $listed[$both]['level']], 'they have what their group has, the highest of several');
+		self::assertSame([null, null, null], [$listed[$alone]['stored'], $listed[$onlyView]['stored'], $listed[$both]['stored']]);
+		self::assertSame([201, 403, 201], [$this->comment($asAlone), $this->comment($asOnlyView), $this->comment($asBoth)]);
+
+		// Someone with no group at all is a newcomer of the setting
+		[$loner] = $this->member(1);
+		self::assertSame('none', $this->listed()[$loner]['level']);
+	}
+
 	public function testSwitchingNewcomersChangesNothingForExistingMembers(): void {
 		[$reader, $asReader] = $this->member(1);
 		[$writer, $asWriter] = $this->member(15);
@@ -446,6 +541,39 @@ class AccessTest extends TestCase {
 		}
 		// Who was there before the change has what Files gives, who came after it what the setting gave
 		self::assertSame(['comment', 'none'], [$this->listed()[$before]['level'], $this->listed()[$after]['level']]);
+	}
+
+	public function testWhoLosesAccessComesBackAsANewcomer(): void {
+		[$user, $member] = $this->member(1);
+		$this->setNewcomers('none');
+		self::assertSame('comment', $this->listed()[$user]['level'], 'noted under "as in Files"');
+
+		// The periodic scan forgets them once Files has taken their access back
+		$this->unshare($user);
+		$this->inNextcloud('\\OCP\\Server::get(\\OCA\\Deliver\\Service\\ProjectMembers::class)->forgetLostAll();');
+		$this->share(0, $user, 1);
+		self::assertSame('none', $this->listed()[$user]['level'], 'a newcomer of the setting now');
+
+		// So does building the list while they are away
+		$this->setNewcomers('view');
+		[$other] = $this->member(1);
+		self::assertSame('view', $this->listed()[$other]['level']);
+		$this->setNewcomers('files');
+		self::assertSame('view', $this->listed()[$other]['level'], 'noted under View');
+		$this->unshare($other);
+		self::assertArrayNotHasKey($other, $this->listed());
+		$this->share(0, $other, 1);
+		self::assertSame('comment', $this->listed()[$other]['level'], 'a newcomer of "as in Files" now');
+	}
+
+	public function testWhoLosesAccessKeepsTheEntryAMemberSetForThem(): void {
+		[$user] = $this->member(1);
+		self::assertSame(200, $this->setLevel('user', $user, 'view')['status']);
+		$this->unshare($user);
+		self::assertArrayNotHasKey($user, $this->listed());
+		$this->inNextcloud('\\OCP\\Server::get(\\OCA\\Deliver\\Service\\ProjectMembers::class)->forgetLostAll();');
+		$this->share(0, $user, 1);
+		self::assertSame('view', $this->listed()[$user]['level'], 'a decision about them, not a default');
 	}
 
 	public function testOnlyManageSeesAndSetsMembers(): void {
