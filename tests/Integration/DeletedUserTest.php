@@ -60,6 +60,8 @@ class DeletedUserTest extends TestCase {
 		$folderProject = $folderProject['data']['id'];
 		// Resharing in Files is not Share in Deliver: the folder's owner gives it (ADR 0016)
 		self::assertSame(200, $this->keeper->ocs('PUT', "/projects/$folderProject/members", ['type' => 'user', 'principal' => $this->goneId, 'level' => 'manage', 'share' => true, 'approve' => true])['status']);
+		// Seen as a Member under "as in Files" when newcomers change to View
+		self::assertSame(200, $this->keeper->ocs('PUT', "/projects/$folderProject", ['newcomers' => 'view'])['status']);
 		$named = $gone->ocs('POST', '/projects', ['name' => 'Mine'])['data']['id'];
 		self::assertSame(201, $gone->ocs('POST', '/assets', ['fileId' => $gone->fileId('own.mp4'), 'projectId' => $named])['status']);
 		$cut = $gone->ocs('GET', '/files/' . $gone->fileId('shared/cut.mp4') . '/asset')['data'];
@@ -89,7 +91,8 @@ class DeletedUserTest extends TestCase {
 
 		// Comments and Approvals stay, by a Deleted user the new account is not
 		$this->shareSharedWith($this->goneId);
-		$listed = $again->ocs('GET', "/versions/{$cut['versionId']}/comments")['data'];
+		self::assertSame('view', $again->ocs('GET', "/projects/$folderProject")['data']['access']['level'], 'a newcomer, not who the old account was seen as');
+		$listed =$again->ocs('GET', "/versions/{$cut['versionId']}/comments")['data'];
 		self::assertSame('logo late', $listed['comments'][0]['body']);
 		self::assertSame('deleted', $listed['comments'][0]['author']['type']);
 		self::assertSame('deleted', $listed['comments'][0]['reactions'][0]['authors'][0]['type']);
