@@ -81,6 +81,15 @@ class ProjectMembers {
 		return $this->row($project, $type, $principal);
 	}
 
+	/** For the periodic scan: whoever lost access to a Project since is forgotten in it, as listing its Members does */
+	public function forgetLostAll(): void {
+		foreach ($this->projectMapper->findAll() as $project) {
+			if (!$project->isDeleted()) {
+				$this->rows($project);
+			}
+		}
+	}
+
 	/**
 	 * Takes back what was set for them: they have what Files gives them again.
 	 *
@@ -220,6 +229,7 @@ class ProjectMembers {
 				$rows[] = $this->userRow($project, $uid, $via[$uid] ?? []);
 			}
 		}
+		$this->access->forgetLost($project, array_map(static fn (array $row) => MemberMapper::key($row['type'], $row['id']), $rows));
 		usort($rows, static fn (array $a, array $b) => [$a['id'] === $owner ? 0 : 1, $a['type'] === MemberMapper::GROUP ? 0 : 1, mb_strtolower($a['name'])]
 			<=> [$b['id'] === $owner ? 0 : 1, $b['type'] === MemberMapper::GROUP ? 0 : 1, mb_strtolower($b['name'])]);
 		return $rows;

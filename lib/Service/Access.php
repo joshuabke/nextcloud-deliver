@@ -174,6 +174,21 @@ class Access {
 		$this->seen[$project->getId()][MemberMapper::key($type, $id)] = $project->getNewcomers();
 	}
 
+	/**
+	 * Forgets how everyone came who is not among those who reach the Project
+	 * now, so that gaining access again makes them newcomers under the setting
+	 * of that day. What a Member with Manage set for them stays.
+	 *
+	 * @param list<string> $reaching MemberMapper::key() of everyone who reaches the Project
+	 */
+	public function forgetLost(Project $project, array $reaching): void {
+		foreach (array_keys(array_diff_key($this->seen($project), array_flip($reaching))) as $key) {
+			[$type, $id] = explode('/', $key, 2);
+			$this->members->unsee($project->getId(), $type, $id);
+			unset($this->seen[$project->getId()][$key]);
+		}
+	}
+
 	/** @return array<string, ?string> */
 	private function seen(Project $project): array {
 		return $this->seen[$project->getId()] ??= $this->members->seen($project->getId());

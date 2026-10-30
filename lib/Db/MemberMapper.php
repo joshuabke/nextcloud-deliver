@@ -59,6 +59,16 @@ class MemberMapper {
 		return $seen;
 	}
 
+	/** Forgets under which setting a person or group was first seen, as they come back as newcomers */
+	public function unsee(int $projectId, string $type, string $id): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete(self::SEEN)
+			->where($qb->expr()->eq('project_id', $qb->createNamedParameter($projectId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('principal_type', $qb->createNamedParameter($type)))
+			->andWhere($qb->expr()->eq('principal_id', $qb->createNamedParameter($id)))
+			->executeStatement();
+	}
+
 	/** Notes under which setting a person or group was first seen; a second note changes nothing */
 	public function see(int $projectId, string $type, string $id, ?string $newcomers): void {
 		$qb = $this->db->getQueryBuilder();
