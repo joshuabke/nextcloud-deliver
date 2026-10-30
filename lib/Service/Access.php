@@ -20,9 +20,6 @@ use OCP\IUserManager;
  * that follows the files (ADR 0009).
  */
 class Access {
-	/** Named, not imported: the Group folders app need not be there */
-	private const GROUP_FOLDER_MOUNT = 'OCA\\GroupFolders\\Mount\\GroupMountPoint';
-
 	/** @var array<int, list<array{type: string, id: string, level: string, share: bool, approve: bool}>> stored entries by Project, for this request */
 	private array $entries = [];
 	/** @var array<int, array<string, ?string>> the newcomers setting each person or group was first seen under, by Project and "type/id" */
@@ -37,6 +34,7 @@ class Access {
 		private IGroupManager $groupManager,
 		private IUserManager $users,
 		private IRootFolder $root,
+		private GroupFolders $groupFolders,
 	) {
 	}
 
@@ -153,7 +151,7 @@ class Access {
 				if (preg_match('#^/[^/]+/files(/|$)#', $node->getPath()) !== 1) {
 					continue;
 				}
-				$owner = is_a($node->getMountPoint(), self::GROUP_FOLDER_MOUNT) ? null : ($node->getOwner()?->getUID() ?? $owner);
+				$owner = $this->groupFolders->holds($node) ? null : ($node->getOwner()?->getUID() ?? $owner);
 				break;
 			}
 		}
