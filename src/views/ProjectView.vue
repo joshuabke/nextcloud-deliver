@@ -412,7 +412,7 @@ function assetItems(asset) {
 		asset.manages && { label: asset.dueDate ? t('deliver', 'Change the Due Date') : t('deliver', 'Set a Due Date'), icon: dueIcon, action: () => { dueFor.value = [asset] } },
 		asset.manages && !isMobile.value && { label: t('deliver', 'Manage Versions'), icon: stackIcon, action: () => { managing.value = asset.id } },
 		asset.manages && { label: t('deliver', 'Move to Project…'), icon: moveIcon, action: () => openAssign([asset]) },
-		...(newest.url ? fileItems(newest.url, newest.name, newest.fileId, asset.filesWrite) : []),
+		...(newest.url ? fileItems(newest.url, newest.name, newest.fileId, asset.manages && asset.filesWrite) : []),
 		{
 			label: t('deliver', 'Show in Files'),
 			icon: filesIcon,

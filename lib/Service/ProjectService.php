@@ -487,10 +487,11 @@ class ProjectService {
 	/**
 	 * Renames a file in its folder (story 131) from inside Deliver's lock, which
 	 * WebDAV cannot pass; Deliver follows the rename. It never replaces a file
-	 * of the same name.
+	 * of the same name. Files' write access is needed, and for a Version's file
+	 * Manage in its Project too (ADR 0016, 0018).
 	 *
-	 * @throws NotFoundException the user cannot reach the file
-	 * @throws AccessDeniedException the file is read-only for this user
+	 * @throws NotFoundException the user cannot reach the file, or the Project of its Version
+	 * @throws AccessDeniedException the file is read-only for this user, or a Version they do not manage
 	 * @throws InvalidRequestException the name is empty, too long or has a slash
 	 * @throws ProjectConflictException the folder holds a file of that name
 	 */
@@ -498,6 +499,10 @@ class ProjectService {
 		$file = $this->root->getUserFolder($uid)->getFirstNodeById($fileId);
 		if (!$file instanceof File) {
 			throw new NotFoundException('File not found');
+		}
+		$version = $this->versions->findByFile($file->getId());
+		if ($version !== null) {
+			$this->writableVersion($uid, $version->getId());
 		}
 		self::assertWritable($file);
 		$name = trim($name);
@@ -524,7 +529,7 @@ class ProjectService {
 	 * Version with Comments needs the confirmation first.
 	 *
 	 * @param int $uploadId the file id of the upload, in the folder of the Version's file
-	 * @throws AccessDeniedException the Version's file is read-only for this user
+	 * @throws AccessDeniedException they do not manage the Version's Project, its file or the upload is read-only for them, or they may not delete the upload
 	 * @throws NotFoundException no such Version or upload for this user
 	 * @throws InvalidRequestException the upload is not a file in the Version's folder
 	 * @throws ProjectConflictException the Version has Comments and nobody confirmed
@@ -537,10 +542,15 @@ class ProjectService {
 		if (!$file instanceof File || !$upload instanceof File) {
 			throw new NotFoundException('File not found');
 		}
+		self::assertWritable($file);
 		if ($upload->getId() === $file->getId() || $upload->getParent()->getId() !== $file->getParent()->getId() || $this->versions->findByFile($upload->getId()) !== null) {
 			throw new InvalidRequestException('The upload must be a file of its own next to the Version\'s file');
 		}
 		self::assertWritable($upload);
+		// It goes once streamed over: refused only then, the Version's file would be replaced and the upload left behind
+		if (!$upload->isDeletable()) {
+			throw new AccessDeniedException('Deleting the upload is not allowed');
+		}
 		if (!$confirm && $this->comments->findByVersion($versionId) !== []) {
 			throw new ProjectConflictException($this->l->t('This Version has Comments, so replacing its file needs a confirmation.'), 'confirm');
 		}
