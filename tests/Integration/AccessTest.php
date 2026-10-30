@@ -414,6 +414,20 @@ class AccessTest extends TestCase {
 		self::assertSame('none', $this->listed()[$later]['level']);
 	}
 
+	public function testATakenBackEntryLeavesWhatTheyCameUnder(): void {
+		[$before] = $this->member(1);
+		self::assertSame(200, $this->setLevel('user', $before, 'view')['status']);
+		$this->setNewcomers('none');
+		[$after] = $this->member(1);
+		self::assertSame(200, $this->setLevel('user', $after, 'comment')['status']);
+
+		foreach ([$before, $after] as $user) {
+			self::assertSame(200, $this->admin->ocs('DELETE', "/projects/{$this->projectId}/members?type=user&principal=$user")['status']);
+		}
+		// Who was there before the change has what Files gives, who came after it what the setting gave
+		self::assertSame(['comment', 'none'], [$this->listed()[$before]['level'], $this->listed()[$after]['level']]);
+	}
+
 	public function testOnlyManageSeesAndSetsMembers(): void {
 		[$reader, $asReader] = $this->member(1);
 		self::assertSame(403, $asReader->ocs('GET', "/projects/{$this->projectId}/members")['status']);
