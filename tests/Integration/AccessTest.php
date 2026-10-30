@@ -264,6 +264,13 @@ class AccessTest extends TestCase {
 		self::assertSame(200, $this->setLevel('user', $reader, 'manage')['status']);
 		self::assertSame([403, 403], [$rename($readOnly), $replace($readOnly)], 'the file is read-only for them');
 
+		// The upload goes once streamed over, so a share that does not let them delete it replaces nothing
+		[$keeper, $noDelete] = $this->member(7);
+		self::assertSame(200, $this->setLevel('user', $keeper, 'manage')['status']);
+		self::assertSame(403, $replace($noDelete));
+		self::assertSame('not really a video', $this->admin->get("{$this->root}/cut.mp4"));
+		self::assertSame('the new cut', $this->admin->get("{$this->root}/.deliver-replace-1"));
+
 		// A file that is no Version takes Files' write access only
 		$this->admin->put("{$this->root}/notes.txt", 'x');
 		$notes = $this->admin->fileId("{$this->root}/notes.txt");
