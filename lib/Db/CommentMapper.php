@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace OCA\Deliver\Db;
 
 use OCP\DB\QueryBuilder\IQueryBuilder;
+use OCP\EventDispatcher\IEventDispatcher;
 use OCP\IDBConnection;
 
-/** @template-extends Mapper<Comment> */
-class CommentMapper extends Mapper {
-	public function __construct(IDBConnection $db) {
-		parent::__construct($db, 'deliver_comments', Comment::class);
+/** @template-extends ReviewDataMapper<Comment> */
+class CommentMapper extends ReviewDataMapper {
+	public function __construct(IDBConnection $db, IEventDispatcher $events) {
+		parent::__construct($db, 'deliver_comments', Comment::class, $events);
 	}
 
 	/**
