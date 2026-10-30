@@ -56,10 +56,6 @@ class Access {
 		if ($stored !== null) {
 			return new Grant($stored['level'], $stored['share'] && $reshare(), $stored['approve']);
 		}
-		// Noted while the setting can matter; when it is changed, everyone it did not matter for is noted then
-		if ($project->getNewcomers() !== null) {
-			$this->see($project, MemberMapper::USER, $uid);
-		}
 		return $this->byDefault($project, MemberMapper::USER, $uid, $write);
 	}
 
@@ -81,6 +77,9 @@ class Access {
 	/**
 	 * Notes under which newcomers setting a person or group is first seen as a
 	 * Member of the Project: later changes of the setting do not reach them.
+	 * Called for everyone listed as a Member when the setting changes, so
+	 * whoever came since the last change is noted under the setting they came
+	 * under; nothing is written while reading.
 	 */
 	public function see(Project $project, string $type, string $id): void {
 		$seen = $this->seen($project);
