@@ -6,6 +6,7 @@ namespace OCA\Deliver\Controller;
 
 use OCA\Deliver\Db\Reviewer;
 use OCA\Deliver\Db\ReviewerMapper;
+use OCA\Deliver\Db\Scope;
 use OCA\Deliver\Service\AccessDeniedException;
 use OCA\Deliver\Service\Contacts;
 use OCA\Deliver\Service\InvalidRequestException;
@@ -146,7 +147,7 @@ class ReviewerApiController extends OCSController {
 		if ($reviewer->getRemovedAt() !== null) {
 			throw new AccessDeniedException('A removed Reviewer is not changed');
 		}
-		$this->linkService->mayManage((string)$this->userId, $reviewer->getProjectId(), $reviewer->getOwnerUid());
+		$this->linkService->mayManage((string)$this->userId, Scope::ofReviewer($reviewer));
 		return $reviewer;
 	}
 }

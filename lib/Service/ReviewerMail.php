@@ -8,6 +8,7 @@ use OCA\Deliver\AppInfo\Application;
 use OCA\Deliver\Db\Comment;
 use OCA\Deliver\Db\Reviewer;
 use OCA\Deliver\Db\ReviewerMapper;
+use OCA\Deliver\Db\Scope;
 use OCA\Deliver\Db\Version;
 use OCP\IConfig;
 use OCP\IL10N;
@@ -44,7 +45,7 @@ class ReviewerMail {
 	 * @return \OCA\Deliver\Db\Reviewer[]
 	 */
 	private function reviewersOf(Version $version): array {
-		return $this->reviewers->findInProject($version->getProjectId(), $this->members->of($version->getFileId()));
+		return $this->reviewers->findInProject(Scope::of($version->getProjectId(), ...$this->members->of($version->getFileId())));
 	}
 
 	/**

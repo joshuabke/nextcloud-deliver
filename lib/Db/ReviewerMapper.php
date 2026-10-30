@@ -39,29 +39,25 @@ class ReviewerMapper extends Mapper {
 	 * A Project's Reviewers belong to the Project, whoever invited them; on No
 	 * Project they are each Member's own (ADR 0017). Narrows a query to either.
 	 *
-	 * @param ?int $projectId null for No Project
-	 * @param list<string> $ownerUids whose No Project, when $projectId is null; unused otherwise
 	 */
-	private function inProject(IQueryBuilder $qb, ?int $projectId, array $ownerUids): void {
-		if ($projectId === null) {
+	private function inProject(IQueryBuilder $qb, Scope $scope): void {
+		if ($scope->isNoProject()) {
 			$qb->andWhere($qb->expr()->isNull('project_id'))
-				->andWhere($qb->expr()->in('owner_uid', $qb->createNamedParameter($ownerUids, IQueryBuilder::PARAM_STR_ARRAY)));
+				->andWhere($qb->expr()->in('owner_uid', $qb->createNamedParameter($scope->ownerUids, IQueryBuilder::PARAM_STR_ARRAY)));
 		} else {
-			$qb->andWhere($qb->expr()->eq('project_id', $qb->createNamedParameter($projectId, IQueryBuilder::PARAM_INT)));
+			$qb->andWhere($qb->expr()->eq('project_id', $qb->createNamedParameter($scope->projectId, IQueryBuilder::PARAM_INT)));
 		}
 	}
 
 	/**
-	 * @param ?int $projectId null for No Project
-	 * @param list<string> $ownerUids whose No Project, when $projectId is null
 	 * @return Reviewer[] the Reviewers of the Project, or of these Members on No Project, oldest first; removed ones left out
 	 */
-	public function findInProject(?int $projectId, array $ownerUids): array {
+	public function findInProject(Scope $scope): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')->from($this->getTableName())
 			->where($qb->expr()->isNull('removed_at'))
 			->orderBy('created_at')->addOrderBy('id');
-		$this->inProject($qb, $projectId, $ownerUids);
+		$this->inProject($qb, $scope);
 		return $this->findEntities($qb);
 	}
 
@@ -159,17 +155,15 @@ class ReviewerMapper extends Mapper {
 	}
 
 	/**
-	 * @param ?int $projectId null for No Project
-	 * @param string $ownerUid whose No Project, when $projectId is null
 	 * @return Reviewer[] the Reviewers of the Project with this address, whatever its case; removed ones left out
 	 */
-	public function findByAddress(?int $projectId, string $ownerUid, string $email): array {
+	public function findByAddress(Scope $scope, string $email): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')->from($this->getTableName())
 			->where($qb->expr()->eq($qb->func()->lower('email'), $qb->createNamedParameter(mb_strtolower($email))))
 			->andWhere($qb->expr()->isNull('removed_at'))
 			->orderBy('created_at')->addOrderBy('id');
-		$this->inProject($qb, $projectId, [$ownerUid]);
+		$this->inProject($qb, $scope);
 		return $this->findEntities($qb);
 	}
 
@@ -177,15 +171,13 @@ class ReviewerMapper extends Mapper {
 	 * The names in a review: a Project's Reviewers are every Member's, while
 	 * No Project is each Member's own, so there the Member counts (ADR 0013)
 	 *
-	 * @param ?int $projectId null for No Project
-	 * @param string $ownerUid whose No Project, when $projectId is null
 	 * @return list<string> the names of its Reviewers, on a link or not (#75); removed ones and the one excepted left out
 	 */
-	public function namesIn(?int $projectId, string $ownerUid, ?int $exceptId): array {
+	public function namesIn(Scope $scope, ?int $exceptId): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->selectDistinct('name')->from($this->getTableName())
 			->where($qb->expr()->isNull('removed_at'));
-		$this->inProject($qb, $projectId, [$ownerUid]);
+		$this->inProject($qb, $scope);
 		if ($exceptId !== null) {
 			$qb->andWhere($qb->expr()->neq('id', $qb->createNamedParameter($exceptId, IQueryBuilder::PARAM_INT)));
 		}

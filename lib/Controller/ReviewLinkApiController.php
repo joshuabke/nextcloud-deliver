@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Deliver\Controller;
 
 use OCA\Deliver\Db\Reviewer;
+use OCA\Deliver\Db\Scope;
 use OCA\Deliver\Service\Contacts;
 use OCA\Deliver\Service\ProjectService;
 use OCA\Deliver\Service\ReviewerMail;
@@ -52,7 +53,7 @@ class ReviewLinkApiController extends OCSController {
 			$uid = (string)$this->userId;
 			$links = $this->linkService->listFor($uid, $id);
 			$live = array_filter($links, static fn (array $link) => $link['live']);
-			$ofProject = $this->reviewers->ofProject($id === ProjectService::NONE ? null : $id, $uid);
+			$ofProject = $this->reviewers->ofProject(Scope::of($id === ProjectService::NONE ? null : $id, $uid));
 			$inContacts = $this->contacts->among($ofProject);
 			['reviewers' => $reviewers, 'on' => $on] = $this->links->reviewersBy($ofProject, array_column($links, 'token'), array_column($live, 'url', 'token'));
 			return [

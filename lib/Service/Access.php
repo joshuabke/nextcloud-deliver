@@ -20,9 +20,9 @@ use OCP\IUserManager;
  * that follows the files (ADR 0009).
  */
 class Access {
-	/** @var array<int, list<array{type: string, id: string, level: string, share: bool, approve: bool}>> stored entries by Project, for this request */
+	/** @var array<int, array<string, Grant>> what was set, by Project and MemberMapper::key(), for this request */
 	private array $entries = [];
-	/** @var array<int, array<string, ?string>> the newcomers setting each person or group was first seen under, by Project and "type/id" */
+	/** @var array<int, array<string, ?string>> the newcomers setting each person or group was first seen under, by Project and MemberMapper::key() */
 	private array $seen = [];
 	/** @var array<string, list<string>> */
 	private array $groups = [];
@@ -52,7 +52,7 @@ class Access {
 		}
 		$stored = $this->stored($uid, $project);
 		if ($stored !== null) {
-			return new Grant($stored['level'], $stored['share'] && $reshare(), $stored['approve']);
+			return $stored->share && !$reshare() ? $stored->withoutShare() : $stored;
 		}
 		// Noted while the setting can matter; when it is changed, everyone it did not matter for is noted then
 		if ($project->getNewcomers() !== null) {
@@ -69,7 +69,8 @@ class Access {
 	 */
 	public function byDefault(Project $project, string $type, string $id, bool $write): Grant {
 		$seen = $this->seen($project);
-		$newcomers = array_key_exists($type . '/' . $id, $seen) ? $seen[$type . '/' . $id] : $project->getNewcomers();
+		$key = MemberMapper::key($type, $id);
+		$newcomers = array_key_exists($key, $seen) ? $seen[$key] : $project->getNewcomers();
 		return match ($newcomers) {
 			Grant::NONE, Grant::VIEW => new Grant($newcomers, false, false),
 			default => new Grant($write ? Grant::MANAGE : Grant::COMMENT, false, $write),
@@ -82,11 +83,11 @@ class Access {
 	 */
 	public function see(Project $project, string $type, string $id): void {
 		$seen = $this->seen($project);
-		if (array_key_exists($type . '/' . $id, $seen)) {
+		if (array_key_exists(MemberMapper::key($type, $id), $seen)) {
 			return;
 		}
 		$this->members->see($project->getId(), $type, $id, $project->getNewcomers());
-		$this->seen[$project->getId()][$type . '/' . $id] = $project->getNewcomers();
+		$this->seen[$project->getId()][MemberMapper::key($type, $id)] = $project->getNewcomers();
 	}
 
 	/** @return array<string, ?string> */
@@ -99,34 +100,29 @@ class Access {
 		if ($project === null || $this->ownerOf($project) === $uid) {
 			return true;
 		}
-		return ($this->stored($uid, $project)['level'] ?? $this->byDefault($project, MemberMapper::USER, $uid, false)->level) !== Grant::NONE;
+		return ($this->stored($uid, $project) ?? $this->byDefault($project, MemberMapper::USER, $uid, false))->sees();
 	}
 
 	/**
 	 * What a Member with Manage set for this person: their own entry, else the
 	 * highest level of their groups' with every switch any of them has.
-	 *
-	 * @return ?array{type: string, id: string, level: string, share: bool, approve: bool}
 	 */
-	public function stored(string $uid, Project $project): ?array {
-		$groups = $this->groupsOf($uid);
+	public function stored(string $uid, Project $project): ?Grant {
+		$entries = $this->entries($project);
+		if (isset($entries[MemberMapper::key(MemberMapper::USER, $uid)])) {
+			return $entries[MemberMapper::key(MemberMapper::USER, $uid)];
+		}
 		$merged = null;
-		foreach ($this->entries($project) as $entry) {
-			if ($entry['type'] === MemberMapper::USER && $entry['id'] === $uid) {
-				return $entry;
-			}
-			if ($entry['type'] === MemberMapper::GROUP && in_array($entry['id'], $groups, true)) {
-				$merged = $merged === null ? $entry : [
-					'level' => Grant::rank($entry['level']) > Grant::rank($merged['level']) ? $entry['level'] : $merged['level'],
-					'share' => $merged['share'] || $entry['share'],
-					'approve' => $merged['approve'] || $entry['approve'],
-				] + $entry;
+		foreach ($this->groupsOf($uid) as $gid) {
+			$entry = $entries[MemberMapper::key(MemberMapper::GROUP, $gid)] ?? null;
+			if ($entry !== null) {
+				$merged = $merged?->merge($entry) ?? $entry;
 			}
 		}
 		return $merged;
 	}
 
-	/** @return list<array{type: string, id: string, level: string, share: bool, approve: bool}> */
+	/** @return array<string, Grant> what was set for each person and group, by MemberMapper::key() */
 	public function entries(Project $project): array {
 		return $this->entries[$project->getId()] ??= $this->members->forProject($project->getId());
 	}

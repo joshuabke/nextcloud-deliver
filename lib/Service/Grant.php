@@ -41,6 +41,20 @@ final class Grant {
 		return $this->level === self::MANAGE;
 	}
 
+	/** Of several groups a person is in: the highest level, and every switch any of them has */
+	public function merge(self $other): self {
+		return new self(
+			self::rank($other->level) > self::rank($this->level) ? $other->level : $this->level,
+			$this->share || $other->share,
+			$this->approve || $other->approve,
+		);
+	}
+
+	/** Where Files lets nobody reshare */
+	public function withoutShare(): self {
+		return new self($this->level, false, $this->approve);
+	}
+
 	/** @return array{level: string, share: bool, approve: bool} */
 	public function toArray(): array {
 		return ['level' => $this->level, 'share' => $this->share, 'approve' => $this->approve];

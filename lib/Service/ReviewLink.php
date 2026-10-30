@@ -10,6 +10,7 @@ use OCA\Deliver\Db\Project;
 use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\Reviewer;
 use OCA\Deliver\Db\ReviewLinkRecord;
+use OCA\Deliver\Db\Scope;
 use OCA\Deliver\Db\Version;
 use OCA\Deliver\Db\VersionMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -56,6 +57,11 @@ class ReviewLink {
 	/** Its Project; null for a single file in No Project */
 	public function projectId(): ?int {
 		return $this->link->getProjectId();
+	}
+
+	/** Where its Reviewers belong: its Project, or on No Project the Member who made it (ADR 0017) */
+	public function scope(): Scope {
+		return Scope::of($this->projectId(), $this->ownerUid());
 	}
 
 	/** The Member who made it: its files are those they may reshare (ADR 0010); on No Project also whose Reviewers come by it */
@@ -150,8 +156,7 @@ class ReviewLink {
 
 	/** Whether the Reviewer comes by it: a link of their Project, on No Project of their Member (ADR 0017) */
 	public function takes(Reviewer $reviewer): bool {
-		return $reviewer->getProjectId() === $this->projectId()
-			&& ($this->projectId() !== null || $reviewer->getOwnerUid() === $this->ownerUid());
+		return $this->scope()->holds($reviewer);
 	}
 
 	/** The link's URL plus the key of a Reviewer's Personal Link through it: whoever opens it is that Reviewer here */

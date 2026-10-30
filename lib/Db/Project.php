@@ -35,6 +35,9 @@ use OCP\AppFramework\Db\Entity;
  * @method void setNewcomers(?string $newcomers)
  */
 class Project extends Entity {
+	/** The newcomers setting that leaves them as Files has them; the column holds null for it */
+	public const NEWCOMERS_FILES = 'files';
+
 	/** Set for a Folder Project only (ADR 0009) */
 	protected ?int $folderId = null;
 	protected ?string $name = null;
@@ -63,6 +66,11 @@ class Project extends Entity {
 		$this->addType('fpsNum', 'integer');
 		$this->addType('fpsDen', 'integer');
 		$this->addType('createdAt', 'integer');
+	}
+
+	/** The newcomers setting as the API names it: files, view or none */
+	public function newcomersSetting(): string {
+		return $this->newcomers ?? self::NEWCOMERS_FILES;
 	}
 
 	public function locksFiles(): bool {

@@ -8,6 +8,7 @@ use OCA\Deliver\Db\MemberMapper;
 use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\ReviewerMapper;
 use OCA\Deliver\Db\ReviewLinkMapper;
+use OCA\Deliver\Db\Scope;
 use OCA\Deliver\Service\ReviewerService;
 use OCA\Deliver\Service\StackService;
 use OCP\EventDispatcher\Event;
@@ -61,7 +62,7 @@ class UserDeletedListener implements IEventListener {
 		foreach ($this->linkRecords->findByOwner($uid) as $link) {
 			$this->linkRecords->forget($link);
 		}
-		foreach ($this->reviewerMapper->findInProject(null, [$uid]) as $reviewer) {
+		foreach ($this->reviewerMapper->findInProject(Scope::noProject($uid)) as $reviewer) {
 			$this->reviewers->remove($reviewer);
 		}
 		$this->reviewerMapper->releaseOwner($uid);

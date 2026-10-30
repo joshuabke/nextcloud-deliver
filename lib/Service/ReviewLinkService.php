@@ -7,6 +7,7 @@ namespace OCA\Deliver\Service;
 use OCA\Deliver\Db\AssetMapper;
 use OCA\Deliver\Db\ReviewLinkMapper;
 use OCA\Deliver\Db\ReviewLinkRecord;
+use OCA\Deliver\Db\Scope;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\EventDispatcher\IEventDispatcher;
 use OCP\Files\NotFoundException;
@@ -47,8 +48,9 @@ class ReviewLinkService {
 	 */
 	public function create(string $uid, int $projectId, ?array $assetIds = null): array {
 		$link = new ReviewLinkRecord();
-		$this->mayManage($uid, $projectId === ProjectService::NONE ? null : $projectId, $uid);
-		$link->setProjectId($projectId === ProjectService::NONE ? null : $projectId);
+		$projectId = $projectId === ProjectService::NONE ? null : $projectId;
+		$this->mayManage($uid, Scope::of($projectId, $uid));
+		$link->setProjectId($projectId);
 		$link->setAssetIds($this->picked($link, $assetIds));
 		if ($link->getProjectId() === null && $link->getAssetIds() === null) {
 			throw new InvalidRequestException('A link on No Project shows the Assets picked for it');
@@ -112,10 +114,10 @@ class ReviewLinkService {
 	 * @throws NotFoundException a Deleted Project, or one the Member does not see
 	 */
 	public function listFor(string $uid, int $projectId): array {
-		$projectId = $projectId === ProjectService::NONE ? null : $projectId;
+		$scope = Scope::of($projectId === ProjectService::NONE ? null : $projectId, $uid);
 		// A Deleted Project's links wait for its restore, as if it were gone (ADR 0015)
-		$this->mayManage($uid, $projectId, $uid);
-		$links = $this->linkRecords->findByProject($projectId, $uid);
+		$this->mayManage($uid, $scope);
+		$links = $this->linkRecords->findByProject($scope);
 		return array_map(fn (ReviewLinkRecord $link) => $this->serialize($link), $links);
 	}
 
@@ -162,7 +164,7 @@ class ReviewLinkService {
 		if ($link === null) {
 			throw new NotFoundException('Link not found');
 		}
-		$this->mayManage($uid, $link->getProjectId(), $link->getOwnerUid());
+		$this->mayManage($uid, Scope::of($link->getProjectId(), $link->getOwnerUid()));
 		return $link;
 	}
 
@@ -170,19 +172,18 @@ class ReviewLinkService {
 	 * Who manages the links and Reviewers of a Project, in one place: every
 	 * Member with Share (ADR 0016, 0017). On No Project they are the Member's own.
 	 *
-	 * @param ?int $projectId null for No Project
-	 * @param string $madeBy whose they are on No Project: the Member who made the link, or the Reviewer's
+	 * @param Scope $scope what they belong to; on No Project they are the Member's who made the link or invited the Reviewer
 	 * @throws NotFoundException no such Project, a Deleted Project (ADR 0015) or one the Member does not see
 	 * @throws AccessDeniedException another Member's, on No Project; a Project where they have no Share
 	 */
-	public function mayManage(string $uid, ?int $projectId, ?string $madeBy): void {
-		if ($projectId === null) {
-			if ($madeBy !== $uid) {
+	public function mayManage(string $uid, Scope $scope): void {
+		if ($scope->isNoProject()) {
+			if ($scope->ownerUids !== [$uid]) {
 				throw new AccessDeniedException('Only the Member they belong to changes links and Reviewers on No Project');
 			}
 			return;
 		}
-		$this->projects->shareable($uid, $projectId);
+		$this->projects->shareable($uid, (int)$scope->projectId);
 	}
 
 	private function newToken(): string {
