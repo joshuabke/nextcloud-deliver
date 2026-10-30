@@ -11,6 +11,7 @@
 - Festgelegt, was jedes Mitglied in einem Projekt darf: Keine, Ansehen, Kommentieren oder Verwalten, mit Teilen und Abnehmen, standardmäßig wie Dateien es erlaubt.
 - Wählbar gemacht, womit jemand startet, der neu Zugriff in Dateien bekommt: wie in Dateien, Ansehen oder Keine; gilt nur für Personen, die nach der Änderung dazukommen.
 - Jemanden, der neu in eine Gruppe kommt, dort starten lassen, wo die Gruppe im Projekt steht.
+- Jemanden, der den Zugriff auf ein Projekt verliert und wiederbekommt, wie einen Neuzugang behandelt.
 - Die Mitglieder eines Projekts, Personen und Gruppen, mit `GET /projects/{id}/members` aufgelistet und mit `PUT` und `DELETE` einstellbar gemacht.
 - Die Gruppen eines Gruppenordners als Mitglieder seines Projekts aufgelistet.
 
