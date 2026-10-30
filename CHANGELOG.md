@@ -9,18 +9,20 @@
 - Add `POST /versions/{id}/replace` for delivering tools to replace a Version's file, Comments kept.
 - Show who made a Review Link in the navigation.
 - Set what each Member may do in a Project: None, View, Comment or Manage, with Share and Approve, defaulting to what Files allows.
-- Choose what someone newly given access in Files starts with: as in Files, View or None.
+- Choose what someone newly given access in Files starts with: as in Files, View or None; it applies only to people who come after the change.
 - List a Project's Members, people and groups, with `GET /projects/{id}/members`, and set them with `PUT` and `DELETE`.
+- List the groups of a group folder as Members of its Project.
 
 ### Changed
-- Rename files through Deliver instead of WebDAV.
-- Let every Member of a Project see and manage all its Review Links and Reviewers.
+- Rename files through Deliver instead of WebDAV, for Members with Manage and write access in Files.
+- Let Members with Share see and manage all of a Project's Review Links and Reviewers, whoever made them.
 - Make an email address one Reviewer per Project, whoever invited them; merge Reviewers invited twice.
 - Stop a merged Reviewer's Personal Link on a link where the Reviewer they merged into was on it too.
 - Check on every list whether a Reviewer is in the contacts of whoever looks, instead of once per Reviewer.
-- Let read access in Files no longer approve Versions unless a Member with Manage allows it.
-- Let only Members with Share manage a Project's Review Links and Reviewers.
+- Stop read access in Files from approving Versions, unless a Member with Manage allows it.
+- Let only Members with Comment edit and delete their own Comments.
 - Keep a Project, its Versions, notifications and Mentions from Members with None; say in the Files sidebar only that the file is in review.
+- Treat a Member with None as a Reviewer on a Review Link.
 
 ## 0.9.7 – 2026-10-27
 
