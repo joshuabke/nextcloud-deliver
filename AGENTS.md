@@ -39,6 +39,8 @@ Deliver is a Nextcloud app for frame-accurate video and audio review (a Frame.io
 - Files is the source of truth: never copy, move or write media outside the Project folder except derived media in app data.
 - Frames are the anchor; seconds are derived. Any code path that stores seconds is wrong.
 - Every UI string goes through `t()`; German translation ships. Add the German to `l10n/de.json` (du) and `l10n/de_DE.json` (Sie) with the terms in `CONTEXT.md`, then `npm run l10n` writes the `.js` files; Vitest fails on any untranslated or stale string.
+- While working, run the tests a change touches (PHPUnit with `--filter`, the Vitest file, `make lint-php`, `npm run lint`). The whole PHPUnit suite and Playwright run in CI on every push, in three shards and the browser side by side in about five minutes: wait for those checks rather than running the full suite locally.
+- A rule the code must keep that no behaviour shows, such as that Comments and Approvals change only through their mappers (`tests/Unit/ReviewDataWritesTest.php`), is a test in `tests/Unit` that reads the code. It never mocks Deliver's own classes to check who calls whom.
 - Changelog entries (`CHANGELOG.md`, `CHANGELOG.de.md`) are terse one-liners starting with a verb, what changed rather than why or what the user now sees: `Fix icon alignment on the minimised upload card.` Group them under `### Added`/`### Changed`/`### Fixed` only when a release has several kinds. Every implementation PR adds its lines to the `## Unreleased` section at the top of both files (`## Unveröffentlicht` in German); the release commit turns it into the version heading.
 - Spec changes go to `docs/spec-v2.md`; glossary changes go to `CONTEXT.md` in the same commit as the code that introduces the term.
 
