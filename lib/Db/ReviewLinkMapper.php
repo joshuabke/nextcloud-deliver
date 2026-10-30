@@ -48,13 +48,19 @@ class ReviewLinkMapper extends Mapper {
 		return $this->findEntities($qb);
 	}
 
-	/** @return ReviewLinkRecord[] a Member's links on a Project, or to Assets of No Project for null, oldest first */
+	/**
+	 * @param string $ownerUid whose No Project, when $projectId is null; a Project's links are every Member's (ADR 0017)
+	 * @return ReviewLinkRecord[] the links on a Project, or the Member's to Assets of No Project for null, oldest first
+	 */
 	public function findByProject(?int $projectId, string $ownerUid): array {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('*')->from($this->getTableName())
-			->where($projectId === null ? $qb->expr()->isNull('project_id') : $qb->expr()->eq('project_id', $qb->createNamedParameter($projectId)))
-			->andWhere($qb->expr()->eq('owner_uid', $qb->createNamedParameter($ownerUid)))
-			->orderBy('id');
+		$qb->select('*')->from($this->getTableName())->orderBy('id');
+		if ($projectId === null) {
+			$qb->where($qb->expr()->isNull('project_id'))
+				->andWhere($qb->expr()->eq('owner_uid', $qb->createNamedParameter($ownerUid)));
+		} else {
+			$qb->where($qb->expr()->eq('project_id', $qb->createNamedParameter($projectId)));
+		}
 		return $this->findEntities($qb);
 	}
 }

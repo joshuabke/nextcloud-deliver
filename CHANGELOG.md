@@ -7,9 +7,14 @@
 - Lock files with Comments or Approvals against overwriting, renaming and deleting outside Deliver, with a Project setting.
 - Mark Comments made before an overwrite of their file and notify the Members.
 - Add `POST /versions/{id}/replace` for delivering tools to replace a Version's file, Comments kept.
+- Show who made a Review Link in the navigation.
 
 ### Changed
 - Rename files through Deliver instead of WebDAV.
+- Let every Member of a Project see and manage all its Review Links and Reviewers.
+- Make an email address one Reviewer per Project, whoever invited them; merge Reviewers invited twice.
+- Stop a merged Reviewer's Personal Link on a link where the Reviewer they merged into was on it too.
+- Check on every list whether a Reviewer is in the contacts of whoever looks, instead of once per Reviewer.
 
 ## 0.9.7 – 2026-10-27
 

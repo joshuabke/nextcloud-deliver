@@ -6,7 +6,6 @@ namespace OCA\Deliver\Service;
 
 use OCA\Deliver\AppInfo\Application;
 use OCA\Deliver\Db\Reviewer;
-use OCA\Deliver\Db\ReviewerMapper;
 use OCP\Config\IUserConfig;
 use OCP\Constants;
 use OCP\Contacts\IManager;
@@ -15,8 +14,10 @@ use OCP\IAddressBookEnabled;
 
 /**
  * The logged-in Member's address books, as a source of Reviewers' names and
- * addresses (#66). A contact is never tied to a Reviewer (ADR 0013). Only the
- * Member's own and shared address books count, never the instance's users.
+ * addresses (#66). A contact is never tied to a Reviewer (ADR 0013), and
+ * whether a Reviewer is in the contacts is asked afresh of whoever looks, as
+ * the Reviewers of a Project are every Member's (ADR 0017). Only the Member's
+ * own and shared address books count, never the instance's users.
  */
 class Contacts {
 	/** Leaves out the system address book: instance users become Members, not Reviewers */
@@ -26,7 +27,6 @@ class Contacts {
 
 	public function __construct(
 		private IManager $manager,
-		private ReviewerMapper $reviewers,
 		private IUserConfig $config,
 		private ?string $userId,
 	) {
@@ -59,20 +59,20 @@ class Contacts {
 	}
 
 	/**
-	 * Checks once whether each Reviewer's address is in the Member's address
-	 * books, and keeps the answer; one added or deleted by hand later does not
-	 * change it, Save to Contacts does.
+	 * Whether each Reviewer's address is in the logged-in Member's address
+	 * books, as they are now.
+	 * ponytail: one search per address on each list; keep a per-Member answer if a Project's Reviewers get many
 	 *
-	 * @param list<Reviewer> $reviewers of the logged-in Member
+	 * @param list<Reviewer> $reviewers
+	 * @return array<int, ?bool> Reviewer id → yes or no, null without an address
 	 */
-	public function checkContacts(array $reviewers): void {
+	public function among(array $reviewers): array {
+		$found = [];
 		foreach ($reviewers as $reviewer) {
 			$email = $reviewer->getEmail();
-			if ($email !== null && $reviewer->getInContacts() === null) {
-				$reviewer->setInContacts($this->has($email));
-				$this->reviewers->update($reviewer);
-			}
+			$found[$reviewer->getId()] = $email === null ? null : $this->has($email);
 		}
+		return $found;
 	}
 
 	/**
@@ -84,15 +84,12 @@ class Contacts {
 	 */
 	public function save(Reviewer $reviewer): bool {
 		$email = $reviewer->getEmail() ?? throw new InvalidRequestException('A Reviewer without an address cannot be saved to Contacts');
-		$saved = false;
-		if (!$this->has($email)) {
-			$book = $this->target() ?? throw new InvalidRequestException('There is no address book to save to');
-			$book->createOrUpdate(['FN' => (string)$reviewer->getName(), 'EMAIL' => $email]);
-			$saved = true;
+		if ($this->has($email)) {
+			return false;
 		}
-		$reviewer->setInContacts(true);
-		$this->reviewers->update($reviewer);
-		return $saved;
+		$book = $this->target() ?? throw new InvalidRequestException('There is no address book to save to');
+		$book->createOrUpdate(['FN' => (string)$reviewer->getName(), 'EMAIL' => $email]);
+		return true;
 	}
 
 	/** Whether a contact in the Member's address books has this address, whatever its case */

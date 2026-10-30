@@ -36,19 +36,46 @@ class ReviewerMapper extends Mapper {
 	}
 
 	/**
-	 * @param list<string> $uids
-	 * @return Reviewer[] the Reviewers of these Members, oldest first; removed ones left out
+	 * A Project's Reviewers belong to the Project, whoever invited them; on No
+	 * Project they are each Member's own (ADR 0017). Narrows a query to either.
+	 *
+	 * @param ?int $projectId null for No Project
+	 * @param list<string> $ownerUids whose No Project, when $projectId is null; unused otherwise
 	 */
-	public function findByOwners(array $uids): array {
-		if ($uids === []) {
-			return [];
+	private function inProject(IQueryBuilder $qb, ?int $projectId, array $ownerUids): void {
+		if ($projectId === null) {
+			$qb->andWhere($qb->expr()->isNull('project_id'))
+				->andWhere($qb->expr()->in('owner_uid', $qb->createNamedParameter($ownerUids, IQueryBuilder::PARAM_STR_ARRAY)));
+		} else {
+			$qb->andWhere($qb->expr()->eq('project_id', $qb->createNamedParameter($projectId, IQueryBuilder::PARAM_INT)));
 		}
+	}
+
+	/**
+	 * @param ?int $projectId null for No Project
+	 * @param list<string> $ownerUids whose No Project, when $projectId is null
+	 * @return Reviewer[] the Reviewers of the Project, or of these Members on No Project, oldest first; removed ones left out
+	 */
+	public function findInProject(?int $projectId, array $ownerUids): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')->from($this->getTableName())
-			->where($qb->expr()->in('owner_uid', $qb->createNamedParameter($uids, IQueryBuilder::PARAM_STR_ARRAY)))
-			->andWhere($qb->expr()->isNull('removed_at'))
+			->where($qb->expr()->isNull('removed_at'))
 			->orderBy('created_at')->addOrderBy('id');
+		$this->inProject($qb, $projectId, $ownerUids);
 		return $this->findEntities($qb);
+	}
+
+	/**
+	 * A deleted account leaves its Project's Reviewers with the Project, but
+	 * no longer as their inviter: the next account of that name is handed the id
+	 */
+	public function releaseOwner(string $uid): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('owner_uid', $qb->createNamedParameter(null, IQueryBuilder::PARAM_NULL))
+			->where($qb->expr()->eq('owner_uid', $qb->createNamedParameter($uid)))
+			->andWhere($qb->expr()->isNotNull('project_id'))
+			->executeStatement();
 	}
 
 	/**
@@ -131,14 +158,18 @@ class ReviewerMapper extends Mapper {
 			->executeStatement();
 	}
 
-	/** @return Reviewer[] the Member's Reviewers with this address, whatever its case; removed ones left out */
-	public function findByAddress(string $ownerUid, string $email): array {
+	/**
+	 * @param ?int $projectId null for No Project
+	 * @param string $ownerUid whose No Project, when $projectId is null
+	 * @return Reviewer[] the Reviewers of the Project with this address, whatever its case; removed ones left out
+	 */
+	public function findByAddress(?int $projectId, string $ownerUid, string $email): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')->from($this->getTableName())
-			->where($qb->expr()->eq('owner_uid', $qb->createNamedParameter($ownerUid)))
-			->andWhere($qb->expr()->eq($qb->func()->lower('email'), $qb->createNamedParameter(mb_strtolower($email))))
+			->where($qb->expr()->eq($qb->func()->lower('email'), $qb->createNamedParameter(mb_strtolower($email))))
 			->andWhere($qb->expr()->isNull('removed_at'))
 			->orderBy('created_at')->addOrderBy('id');
+		$this->inProject($qb, $projectId, [$ownerUid]);
 		return $this->findEntities($qb);
 	}
 
@@ -154,12 +185,7 @@ class ReviewerMapper extends Mapper {
 		$qb = $this->db->getQueryBuilder();
 		$qb->selectDistinct('name')->from($this->getTableName())
 			->where($qb->expr()->isNull('removed_at'));
-		if ($projectId === null) {
-			$qb->andWhere($qb->expr()->isNull('project_id'))
-				->andWhere($qb->expr()->eq('owner_uid', $qb->createNamedParameter($ownerUid)));
-		} else {
-			$qb->andWhere($qb->expr()->eq('project_id', $qb->createNamedParameter($projectId, IQueryBuilder::PARAM_INT)));
-		}
+		$this->inProject($qb, $projectId, [$ownerUid]);
 		if ($exceptId !== null) {
 			$qb->andWhere($qb->expr()->neq('id', $qb->createNamedParameter($exceptId, IQueryBuilder::PARAM_INT)));
 		}
@@ -229,6 +255,93 @@ class ReviewerMapper extends Mapper {
 				->where($qb->expr()->in('id', $qb->createNamedParameter($chunk, IQueryBuilder::PARAM_INT_ARRAY)))
 				->andWhere($qb->expr()->isNull('removed_at'))
 				->executeStatement();
+		}
+	}
+
+	/**
+	 * Makes an address one Reviewer per Project (ADR 0017): the Reviewers of a
+	 * Project who share one, whatever its case, go into the oldest, who keeps
+	 * their name. Their places on links move to it, and where both were on a
+	 * link, the oldest keeps its row and key, so the other's Personal Link
+	 * there stops working. Comments, link activity move over; of Approvals the
+	 * newest decision stays, Reactions are not doubled and the later Unseen
+	 * mark counts. No Project stays each Member's own, and removed Reviewers
+	 * are no one's.
+	 *
+	 * @return int how many Reviewers went into another
+	 */
+	public function mergeSameAddress(): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id', 'project_id', 'email')->from($this->getTableName())
+			->where($qb->expr()->isNull('removed_at'))
+			->andWhere($qb->expr()->isNotNull('project_id'))
+			->andWhere($qb->expr()->isNotNull('email'))
+			->orderBy('id');
+		$result = $qb->executeQuery();
+		$byAddress = [];
+		while (($row = $result->fetch()) !== false) {
+			$byAddress[$row['project_id'] . ' ' . mb_strtolower(trim((string)$row['email']))][] = (int)$row['id'];
+		}
+		$result->closeCursor();
+		$merged = 0;
+		foreach ($byAddress as $ids) {
+			$keep = array_shift($ids);
+			foreach ($ids as $drop) {
+				$this->fold('deliver_reviewer_links', ['token'], $keep, $drop);
+				$this->fold('deliver_approvals', ['version_id'], $keep, $drop, 'updated_at', ['status']);
+				$this->fold('deliver_reactions', ['comment_id', 'emoji'], $keep, $drop);
+				$this->fold('deliver_seen', ['version_id'], $keep, $drop, 'seen_until');
+				foreach (['deliver_comments', 'deliver_link_activity'] as $table) {
+					$qb = $this->db->getQueryBuilder();
+					$qb->update($table)->set('reviewer_id', $qb->createNamedParameter($keep, IQueryBuilder::PARAM_INT))
+						->where($qb->expr()->eq('reviewer_id', $qb->createNamedParameter($drop, IQueryBuilder::PARAM_INT)))
+						->executeStatement();
+				}
+				$this->deleteBy('id', $drop);
+				$merged++;
+			}
+		}
+		return $merged;
+	}
+
+	/**
+	 * Moves what one Reviewer has in a table to another. Where both have a row
+	 * with the same $keys the other's goes: the kept row stays as it is, unless
+	 * the dropped one is newer by $newer, then it takes that column and $copy.
+	 *
+	 * @param list<string> $keys the columns that make a row the same person's twice
+	 * @param list<string> $copy columns that go with $newer
+	 */
+	private function fold(string $table, array $keys, int $keep, int $drop, ?string $newer = null, array $copy = []): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($table)->where($qb->expr()->eq('reviewer_id', $qb->createNamedParameter($drop, IQueryBuilder::PARAM_INT)));
+		$result = $qb->executeQuery();
+		$rows = $result->fetchAll();
+		$result->closeCursor();
+		foreach ($rows as $row) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->select('*')->from($table)->where($qb->expr()->eq('reviewer_id', $qb->createNamedParameter($keep, IQueryBuilder::PARAM_INT)));
+			foreach ($keys as $key) {
+				$qb->andWhere($qb->expr()->eq($key, $qb->createNamedParameter($row[$key], str_ends_with($key, '_id') ? IQueryBuilder::PARAM_INT : IQueryBuilder::PARAM_STR)));
+			}
+			$result = $qb->executeQuery();
+			$kept = $result->fetch();
+			$result->closeCursor();
+			$qb = $this->db->getQueryBuilder();
+			if ($kept === false) {
+				$qb->update($table)->set('reviewer_id', $qb->createNamedParameter($keep, IQueryBuilder::PARAM_INT));
+			} elseif ($newer !== null && (int)$row[$newer] > (int)$kept[$newer]) {
+				$qb->update($table);
+				foreach ([$newer, ...$copy] as $column) {
+					$qb->set($column, $qb->createNamedParameter($row[$column]));
+				}
+				$qb->where($qb->expr()->eq('id', $qb->createNamedParameter($kept['id'], IQueryBuilder::PARAM_INT)))->executeStatement();
+				$qb = $this->db->getQueryBuilder();
+				$qb->delete($table);
+			} else {
+				$qb->delete($table);
+			}
+			$qb->where($qb->expr()->eq('id', $qb->createNamedParameter($row['id'], IQueryBuilder::PARAM_INT)))->executeStatement();
 		}
 	}
 

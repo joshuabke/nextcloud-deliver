@@ -27,16 +27,18 @@ class ReviewerService {
 	}
 
 	/**
-	 * A new Reviewer of the link's Member and Project, named by themselves on
-	 * the link or invited through it (ADR 0013).
+	 * A new Reviewer of the link's Project, named by themselves on the link or
+	 * invited through it (ADR 0013). They remember who invited them, which
+	 * counts for nothing on a Project (ADR 0017).
 	 *
+	 * @param ?string $invitedBy the Member who invited them; the link's maker if they named themselves
 	 * @param array{replies?: ?bool, comments?: ?bool, versions?: ?bool} $mail what they want mailed
 	 * @throws InvalidRequestException the name is empty or the email is not one
 	 */
-	public function claim(ReviewLink $link, string $name, ?string $email, array $mail = [], ?string $language = null): Reviewer {
+	public function claim(ReviewLink $link, string $name, ?string $email, array $mail = [], ?string $language = null, ?string $invitedBy = null): Reviewer {
 		$email = self::email($email);
 		$reviewer = new Reviewer();
-		$reviewer->setOwnerUid($link->ownerUid());
+		$reviewer->setOwnerUid($link->projectId() === null ? $link->ownerUid() : $invitedBy ?? $link->ownerUid());
 		$reviewer->setProjectId($link->projectId());
 		$reviewer->setName(self::name($name));
 		$reviewer->setEmail($email);
@@ -61,10 +63,6 @@ class ReviewerService {
 			$reviewer->setLanguage($language);
 		}
 		$email = self::email($email);
-		if (mb_strtolower((string)$email) !== mb_strtolower((string)$reviewer->getEmail())) {
-			// Checked again on the Member's next list of them (#66)
-			$reviewer->setInContacts(null);
-		}
 		$reviewer->setEmail($email);
 		self::wish($reviewer, $mail);
 		return $this->reviewers->update($reviewer);
@@ -91,10 +89,11 @@ class ReviewerService {
 
 	/**
 	 * @param ?int $projectId null for No Project
-	 * @return list<Reviewer> the Member's Reviewers of the Project, on a link or not, oldest first
+	 * @param string $uid whose No Project, when $projectId is null
+	 * @return list<Reviewer> the Project's Reviewers, whoever invited them, on a link or not, oldest first
 	 */
-	public function ofProject(string $uid, ?int $projectId): array {
-		return array_values(array_filter($this->reviewers->findByOwners([$uid]), static fn (Reviewer $reviewer) => $reviewer->getProjectId() === $projectId));
+	public function ofProject(?int $projectId, string $uid): array {
+		return $this->reviewers->findInProject($projectId, [$uid]);
 	}
 
 	/** No Personal Link names them any more and they leave every list; their Comments keep their name */

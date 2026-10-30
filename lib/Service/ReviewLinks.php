@@ -138,7 +138,7 @@ class ReviewLinks {
 	 * @return list<array<string, mixed>>
 	 */
 	public function reviewersOf(ReviewLink $link): array {
-		$ofTheProject = array_filter($this->reviewerMapper->findByOwners([$link->ownerUid()]), $link->takes(...));
+		$ofTheProject = $this->reviewers->ofProject($link->projectId(), $link->ownerUid());
 		$ids = array_map(static fn (Reviewer $reviewer) => $reviewer->getId(), $ofTheProject);
 		$places = $this->reviewerMapper->placesOf($ids);
 		// Those on this link, whose Personal Link opens it (ADR 0014)
@@ -155,18 +155,20 @@ class ReviewLinks {
 
 	/**
 	 * A Reviewer invited by a Member, for their Personal Link (story 53): one
-	 * whose address the Project already knows gets this link too, under the
-	 * name they have, so that every address is one Reviewer (ADR 0014).
+	 * whose address the Project already knows, whoever invited them, gets this
+	 * link too, under the name they have, so that every address is one Reviewer
+	 * (ADR 0014, 0017).
 	 *
+	 * @param string $by the Member who invites
 	 * @return array{Reviewer, string} the Reviewer and the key of their Personal Link through this link
 	 * @throws InvalidRequestException the name is empty or the email is not one
 	 * @throws ProjectConflictException someone in the review has the name
 	 */
-	public function invite(ReviewLink $link, string $name, ?string $email): array {
+	public function invite(ReviewLink $link, string $by, string $name, ?string $email): array {
 		$reviewer = $this->returning($link, $email);
 		if ($reviewer === null) {
 			$this->assertNameFree($link, $name);
-			$reviewer = $this->reviewers->claim($link, $name, $email);
+			$reviewer = $this->reviewers->claim($link, $name, $email, invitedBy: $by);
 		}
 		// A key of its own, which only this invitation hands out (ADR 0014): new on a link they are on already,
 		// so that whoever named themselves there with the address before keeps none of it
@@ -191,7 +193,7 @@ class ReviewLinks {
 			return;
 		}
 		// Their Project's Reviewers, also when they are on no link themselves
-		if ($reviewersToo && in_array(self::normal($name), array_map(self::normal(...), $this->reviewerMapper->namesIn($reviewer->getProjectId(), $reviewer->getOwnerUid(), $reviewer->getId())), true)) {
+		if ($reviewersToo && in_array(self::normal($name), array_map(self::normal(...), $this->reviewerMapper->namesIn($reviewer->getProjectId(), (string)$reviewer->getOwnerUid(), $reviewer->getId())), true)) {
 			throw $this->nameTaken($name);
 		}
 		$reviews = [];
@@ -242,12 +244,7 @@ class ReviewLinks {
 		if ($email === '') {
 			return null;
 		}
-		foreach ($this->reviewerMapper->findByAddress($link->ownerUid(), $email) as $reviewer) {
-			if ($link->takes($reviewer)) {
-				return $reviewer;
-			}
-		}
-		return null;
+		return $this->reviewerMapper->findByAddress($link->projectId(), $link->ownerUid(), $email)[0] ?? null;
 	}
 
 	/**
@@ -262,8 +259,8 @@ class ReviewLinks {
 		if ($email === '' || mb_strtolower($email) === mb_strtolower((string)$reviewer->getEmail())) {
 			return;
 		}
-		foreach ($this->reviewerMapper->findByAddress($reviewer->getOwnerUid(), $email) as $other) {
-			if ($other->getId() !== $reviewer->getId() && $other->getProjectId() === $reviewer->getProjectId()) {
+		foreach ($this->reviewerMapper->findByAddress($reviewer->getProjectId(), (string)$reviewer->getOwnerUid(), $email) as $other) {
+			if ($other->getId() !== $reviewer->getId()) {
 				throw $this->addressTaken($email);
 			}
 		}
@@ -327,7 +324,7 @@ class ReviewLinks {
 	 * The Reviewers of a Project, each with their Personal Link and own rights
 	 * through each of these links they are on, and who is on which link.
 	 *
-	 * @param list<Reviewer> $reviewers the Member's Reviewers of the Project, on a link or not (story 55)
+	 * @param list<Reviewer> $reviewers the Project's Reviewers, on a link or not (story 55)
 	 * @param list<string> $tokens every link listed
 	 * @param array<string, string> $urls token → URL of each live link
 	 * @return array{reviewers: list<array<string, mixed>>, on: array<string, list<int>>}
@@ -344,7 +341,6 @@ class ReviewLinks {
 		}
 		return [
 			'reviewers' => array_map(fn (Reviewer $reviewer) => $this->reviewers->serialize($reviewer) + [
-				'inContacts' => $reviewer->getInContacts(),
 				'links' => self::personalLinks($tokens, $places[$reviewer->getId()] ?? [], $urls),
 			], $reviewers),
 			'on' => $on,
@@ -380,7 +376,7 @@ class ReviewLinks {
 	public function reviewLinkFor(Version $version, Reviewer $reviewer): ?string {
 		$token = null;
 		$on = $this->reviewerMapper->placesOfReviewer($reviewer->getId());
-		foreach ($this->linkRecords->findByProject($version->getProjectId(), $reviewer->getOwnerUid()) as $each) {
+		foreach ($this->linkRecords->findByProject($version->getProjectId(), (string)$reviewer->getOwnerUid()) as $each) {
 			$link = $this->of($each);
 			try {
 				if ($link->isLive() && $link->takes($reviewer) && isset($on[$link->token()]) && $link->version($version) === $version) {

@@ -81,7 +81,9 @@ class DeletedUserTest extends TestCase {
 		$kept = $this->keeper->ocs('GET', "/projects/$folderProject");
 		self::assertSame(200, $kept['status']);
 		self::assertTrue($kept['data']['canWrite']);
-		self::assertSame([], $this->keeper->ocs('GET', "/projects/$folderProject/links")['data']['links']);
+		$left = $this->keeper->ocs('GET', "/projects/$folderProject/links")['data'];
+		self::assertSame([], $left['links'], 'the links the account made are gone');
+		self::assertSame(['Kim'], array_column($left['reviewers'], 'name'), 'its Reviewers stay with the Project');
 
 		// Comments and Approvals stay, by a Deleted user the new account is not
 		$this->shareSharedWith($this->goneId);

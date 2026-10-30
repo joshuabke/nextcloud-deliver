@@ -8,6 +8,7 @@ import projectWideIcon from '@mdi/svg/svg/link-box-variant-outline.svg?raw'
 import pausedIcon from '@mdi/svg/svg/link-variant-off.svg?raw'
 import pickedIcon from '@mdi/svg/svg/playlist-check.svg?raw'
 import addIcon from '@mdi/svg/svg/plus.svg?raw'
+import { getCurrentUser } from '@nextcloud/auth'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -37,9 +38,9 @@ const props = defineProps({
 const store = useProjectsStore()
 const route = useRoute()
 const router = useRouter()
-/** My Review Links on this Project, paused ones too */
+/** The Review Links on this Project, whoever made them, paused ones too */
 const links = ref([])
-/** The Project's Reviewers on any of these links, each once, with their Personal Link and own rights through each link they are on */
+/** The Project's Reviewers, whoever invited them, on any of these links, each once, with their Personal Link and own rights through each link they are on */
 const reviewers = ref([])
 /** The link whose settings are open */
 const editing = ref(null)
@@ -67,6 +68,8 @@ const invitingOpen = ref(false)
 const canMail = ref(false)
 
 const project = computed(() => store.details[props.id])
+/** Whose links are not marked as made by someone else */
+const me = getCurrentUser()?.uid
 const folders = computed(() => folderTree(project.value?.assets ?? []))
 const current = computed(() => route.query.folder ?? '')
 const byId = computed(() => new Map(reviewers.value.map((reviewer) => [reviewer.id, reviewer])))
@@ -242,6 +245,9 @@ function personalLink(reviewer) {
 						{{ t('deliver', 'Copy link') }}
 					</NcActionButton>
 				</template>
+				<li v-if="link.madeBy.id !== me" class="deliver-navigation__made-by">
+					{{ t('deliver', 'Made by {name}', { name: link.madeBy.name }) }}
+				</li>
 				<!-- Who is on this link; a click opens their rights on it, their Personal Link through it is one click away -->
 				<NcAppNavigationItem
 					v-for="reviewer in link.reviewerIds.map((id) => byId.get(id)).filter(Boolean)"
@@ -355,6 +361,12 @@ function personalLink(reviewer) {
 <style scoped>
 .deliver-navigation__footer {
 	padding: var(--default-grid-baseline);
+}
+
+.deliver-navigation__made-by {
+	padding: 0 calc(3 * var(--default-grid-baseline)) var(--default-grid-baseline) calc(3 * var(--default-grid-baseline));
+	font-size: var(--font-size-small, 13px);
+	color: var(--color-text-maxcontrast);
 }
 
 .deliver-navigation__hint {

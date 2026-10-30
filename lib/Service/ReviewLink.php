@@ -58,7 +58,7 @@ class ReviewLink {
 		return $this->link->getProjectId();
 	}
 
-	/** The Member whose Reviewers come by it */
+	/** The Member who made it: its files are those they may reshare (ADR 0010); on No Project also whose Reviewers come by it */
 	public function ownerUid(): string {
 		return $this->link->getOwnerUid();
 	}
@@ -148,9 +148,10 @@ class ReviewLink {
 		return $this->flags()['canDownload'] && $file !== null && ProjectService::downloadable($file);
 	}
 
-	/** Whether the Reviewer comes by it: a link of their Member on their Project (ADR 0013) */
+	/** Whether the Reviewer comes by it: a link of their Project, on No Project of their Member (ADR 0017) */
 	public function takes(Reviewer $reviewer): bool {
-		return $reviewer->getOwnerUid() === $this->ownerUid() && $reviewer->getProjectId() === $this->projectId();
+		return $reviewer->getProjectId() === $this->projectId()
+			&& ($this->projectId() !== null || $reviewer->getOwnerUid() === $this->ownerUid());
 	}
 
 	/** The link's URL plus the key of a Reviewer's Personal Link through it: whoever opens it is that Reviewer here */

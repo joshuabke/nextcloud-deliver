@@ -37,13 +37,14 @@ class ReviewerMail {
 	}
 
 	/**
-	 * The Reviewers who may hear of a Version: those of the Members who can
-	 * open its file; a mail goes out only where a review link they come by shows it.
+	 * The Reviewers who may hear of a Version: those of its Project, or on No
+	 * Project those of the Members who can open its file; a mail goes out only
+	 * where a review link they come by shows it.
 	 *
 	 * @return \OCA\Deliver\Db\Reviewer[]
 	 */
 	private function reviewersOf(Version $version): array {
-		return $this->reviewers->findByOwners($this->members->of($version->getFileId()));
+		return $this->reviewers->findInProject($version->getProjectId(), $this->members->of($version->getFileId()));
 	}
 
 	/**
