@@ -8,7 +8,6 @@ import penIcon from '@mdi/svg/svg/draw.svg?raw'
 import reactIcon from '@mdi/svg/svg/emoticon-plus-outline.svg?raw'
 import fileIcon from '@mdi/svg/svg/file-outline.svg?raw'
 import { formatFileSize } from '@nextcloud/files'
-import { getCanonicalLocale } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
@@ -19,6 +18,7 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import PersonAvatar from './PersonAvatar.vue'
 import { attachmentUrl } from '../api.js'
 import { useBusy } from '../composables/busy.js'
+import { day } from '../lib/day.js'
 import { n, t } from '../lib/l10n.js'
 import { linkify } from '../lib/links.js'
 import { splitMentions } from '../lib/mentions.js'
@@ -55,7 +55,7 @@ const unseen = computed(() => props.comment.createdAt > store.seenUntil && !mine
 const fresh = computed(() => store.now - props.comment.createdAt < FRESH)
 /** Written before the file was overwritten, so perhaps about another picture (ADR 0018); a Comment of the same second counts, as timestamps count whole seconds */
 const beforeOverwrite = computed(() => store.overwrittenAt !== null && props.comment.createdAt <= store.overwrittenAt)
-const overwriteDay = computed(() => new Date((store.overwrittenAt ?? 0) * 1000).toLocaleDateString(getCanonicalLocale(), { dateStyle: 'medium' }))
+const overwriteDay = computed(() => day(store.overwrittenAt ?? 0))
 const canReply = computed(() => !props.isReply && store.canComment === true && store.me?.type !== 'unnamed')
 /** A Member needs Comment to edit or delete their own Comments (ADR 0016), also on a Version closed for new ones; a Reviewer keeps theirs */
 const canChange = computed(() => mine.value && store.canChangeOwn)

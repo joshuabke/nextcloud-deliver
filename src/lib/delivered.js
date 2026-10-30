@@ -1,4 +1,4 @@
-import { getCanonicalLocale } from '@nextcloud/l10n'
+import { day } from './day.js'
 
 /**
  * @param {{deliveredBy?: {name: string}, createdAt?: number}} version - a Version as a Member's Review view has it
@@ -7,6 +7,6 @@ import { getCanonicalLocale } from '@nextcloud/l10n'
 export function delivered(version) {
 	return [
 		version.deliveredBy?.name,
-		version.createdAt && new Date(version.createdAt * 1000).toLocaleDateString(getCanonicalLocale(), { dateStyle: 'medium' }),
+		version.createdAt && day(version.createdAt),
 	].filter(Boolean).join(' · ')
 }

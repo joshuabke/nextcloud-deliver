@@ -109,6 +109,11 @@ class Access {
 		return $folder instanceof Folder ? $folder : null;
 	}
 
+	/** The node as its owner has it, not as a share of it and not in the trash */
+	public static function isOwnersCopy(Node $node): bool {
+		return preg_match('#^/[^/]+/files(/|$)#', $node->getPath()) === 1;
+	}
+
 	public static function canWrite(Node $node): bool {
 		return ($node->getPermissions() & Constants::PERMISSION_UPDATE) !== 0;
 	}
@@ -205,8 +210,7 @@ class Access {
 		$owner = $project->getOwnerUid();
 		if ($project->getFolderId() !== null) {
 			foreach ($this->root->getById($project->getFolderId()) as $node) {
-				// The owner's own copy, not a share of it and not the trash
-				if (preg_match('#^/[^/]+/files(/|$)#', $node->getPath()) !== 1) {
+				if (!self::isOwnersCopy($node)) {
 					continue;
 				}
 				$owner = $this->groupFolders->holds($node) ? null : ($node->getOwner()?->getUID() ?? $owner);
