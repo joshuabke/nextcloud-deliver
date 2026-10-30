@@ -16,14 +16,12 @@ use OCA\Deliver\Db\Version;
 use OCA\Deliver\Db\VersionMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Utility\ITimeFactory;
-use OCP\Constants;
 use OCP\DB\Exception as DbException;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;
 use OCP\Files\NotFoundException;
-use OCP\Files\NotPermittedException;
 use OCP\Files\Storage\ISharedStorage;
 use OCP\IL10N;
 use OCP\IURLGenerator;
@@ -83,7 +81,7 @@ class ProjectService {
 			if ($project->isDeleted() || !$this->access->sees($uid, $project)) {
 				continue;
 			}
-			$folder = $this->folderOf($project, $home);
+			$folder = $this->access->folderOf($project, $home);
 			$stacks = $this->visibleStacks($project, $uid, $home, false);
 			if ($folder === null && $stacks[0] === [] && $project->getOwnerUid() !== $uid) {
 				continue;
@@ -109,7 +107,7 @@ class ProjectService {
 		if ($project === null || $project->isDeleted() || !$this->access->sees($uid, $project)) {
 			throw new NotFoundException('Folder is not a Project');
 		}
-		$folder = $this->folderOf($project, $this->root->getUserFolder($uid)) ?? throw new NotFoundException('Folder is not a Project');
+		$folder = $this->access->folderOf($project, $this->root->getUserFolder($uid)) ?? throw new NotFoundException('Folder is not a Project');
 		return $this->serialize($project, $folder, $uid);
 	}
 
@@ -148,7 +146,7 @@ class ProjectService {
 				'path' => ltrim(substr(dirname($file->getPath()), strlen($folder->getPath())), '/'),
 				'mimeType' => $file->getMimetype(),
 				// Adding it for review takes Files' write access and Manage
-				'canAdd' => self::canWrite($file) && $manages,
+				'canAdd' => Access::canWrite($file) && $manages,
 			], $this->looseFiles($project, $folder)),
 		];
 	}
@@ -196,7 +194,7 @@ class ProjectService {
 		if (!$folder instanceof Folder) {
 			throw new ProjectConflictException('Only a folder can become a Folder Project');
 		}
-		$this->assertWritable($folder);
+		Access::assertWritable($folder);
 		$deleted = $this->projects->findByFolderId($folderId);
 		if ($deleted?->isDeleted() === true) {
 			throw $this->deletedConflict($deleted, $uid, $this->l->t('This folder is a Project already'));
@@ -337,7 +335,7 @@ class ProjectService {
 		if (!$file instanceof File || !Reviewable::file($file)) {
 			throw new ProjectConflictException('Only a video, audio or picture file can be enabled for review');
 		}
-		$this->assertWritable($file);
+		Access::assertWritable($file);
 		$this->assertNotHeld($file, $uid);
 		if ($assetId !== null) {
 			$asset = $this->assets->find($assetId) ?? throw new NotFoundException('Asset not found');
@@ -379,7 +377,7 @@ class ProjectService {
 		if ($project !== null && !$this->access->sees($uid, $project)) {
 			return ['restricted' => true];
 		}
-		$grant = $this->grantOfFile($uid, $project, $file);
+		$grant = $this->access->grantOfFile($uid, $project, $file);
 		return [
 			'assetId' => $version->getAssetId(),
 			'projectId' => $project?->getId() ?? self::NONE,
@@ -485,87 +483,6 @@ class ProjectService {
 	}
 
 	/**
-	 * Renames a file in its folder (story 131) from inside Deliver's lock, which
-	 * WebDAV cannot pass; Deliver follows the rename. It never replaces a file
-	 * of the same name. Files' write access is needed, and for a Version's file
-	 * Manage in its Project too (ADR 0016, 0018).
-	 *
-	 * @throws NotFoundException the user cannot reach the file, or the Project of its Version
-	 * @throws AccessDeniedException the file is read-only for this user, or a Version they do not manage
-	 * @throws InvalidRequestException the name is empty, too long or has a slash
-	 * @throws ProjectConflictException the folder holds a file of that name
-	 */
-	public function renameFile(string $uid, int $fileId, string $name): void {
-		$file = $this->root->getUserFolder($uid)->getFirstNodeById($fileId);
-		if (!$file instanceof File) {
-			throw new NotFoundException('File not found');
-		}
-		$version = $this->versions->findByFile($file->getId());
-		if ($version !== null) {
-			$this->writableVersion($uid, $version->getId());
-		}
-		self::assertWritable($file);
-		$name = trim($name);
-		if ($name === '' || mb_strlen($name) > 255 || str_contains($name, '/') || $name === '.' || $name === '..') {
-			throw new InvalidRequestException('A file name has up to 255 characters and no slash');
-		}
-		$folder = $file->getParent();
-		if ($folder->nodeExists($name)) {
-			throw new ProjectConflictException($this->l->t('A file with this name is already in the folder.'));
-		}
-		try {
-			$this->fileLock->inScope($file, static fn () => $file->move($folder->getPath() . '/' . $name));
-		} catch (NotPermittedException) {
-			throw new AccessDeniedException('You may not rename this file');
-		}
-	}
-
-	/**
-	 * Replaces the content of a Version's file with a file uploaded next to it
-	 * (ADR 0018, spec: Delivering again): the browser or the delivering tool
-	 * cannot write over a locked file, and a large file must not travel in a
-	 * request body. The file keeps its id, so the Version and its Comments
-	 * stay; the upload is gone once its content has been streamed over. A
-	 * Version with Comments needs the confirmation first.
-	 *
-	 * @param int $uploadId the file id of the upload, in the folder of the Version's file
-	 * @throws AccessDeniedException they do not manage the Version's Project, or its file or the upload is read-only for them
-	 * @throws NotFoundException no such Version or upload for this user
-	 * @throws InvalidRequestException the upload is not a file in the Version's folder
-	 * @throws ProjectConflictException the Version has Comments and nobody confirmed
-	 */
-	public function replaceFile(string $uid, int $versionId, int $uploadId, bool $confirm): array {
-		$version = $this->writableVersion($uid, $versionId);
-		$home = $this->root->getUserFolder($uid);
-		$file = $home->getFirstNodeById($version->getFileId());
-		$upload = $home->getFirstNodeById($uploadId) ?? throw new NotFoundException('Upload not found');
-		if (!$file instanceof File || !$upload instanceof File) {
-			throw new NotFoundException('File not found');
-		}
-		self::assertWritable($file);
-		if ($upload->getId() === $file->getId() || $upload->getParent()->getId() !== $file->getParent()->getId() || $this->versions->findByFile($upload->getId()) !== null) {
-			throw new InvalidRequestException('The upload must be a file of its own next to the Version\'s file');
-		}
-		self::assertWritable($upload);
-		if (!$confirm && $this->comments->findByVersion($versionId) !== []) {
-			throw new ProjectConflictException($this->l->t('This Version has Comments, so replacing its file needs a confirmation.'), 'confirm');
-		}
-		$this->fileLock->inScope($file, static function () use ($file, $upload): void {
-			$stream = $upload->fopen('r');
-			try {
-				$file->putContent($stream);
-			} finally {
-				// putContent closes it when it can
-				if (is_resource($stream)) {
-					fclose($stream);
-				}
-			}
-			$upload->delete();
-		});
-		return $this->versionPayload($this->versions->find($versionId) ?? $version, $uid);
-	}
-
-	/**
 	 * A Version this Member may see, with its file as they see it and what they
 	 * may do with its review. The file decides which they see (ADR 0009), their
 	 * Access level in the Project what they do (ADR 0016); a Missing Version,
@@ -588,7 +505,7 @@ class ProjectService {
 		$home = $this->root->getUserFolder($uid);
 		$file = $home->getFirstNodeById($version->getFileId());
 		if ($file instanceof File) {
-			return [$version, $file, $this->grantOfFile($uid, $project, $file)];
+			return [$version, $file, $this->access->grantOfFile($uid, $project, $file)];
 		}
 		// A file that is there but not theirs stays closed; only a Missing Version has no file to ask
 		if ($version->getState() === Version::STATE_READY) {
@@ -597,7 +514,7 @@ class ProjectService {
 		foreach ($this->versions->findByAsset($version->getAssetId()) as $sibling) {
 			$other = $home->getFirstNodeById($sibling->getFileId());
 			if ($other instanceof File) {
-				return [$version, null, $this->grantOfFile($uid, $project, $other)];
+				return [$version, null, $this->access->grantOfFile($uid, $project, $other)];
 			}
 		}
 		if ($project === null) {
@@ -607,51 +524,11 @@ class ProjectService {
 			}
 			throw new NotFoundException('Version not found');
 		}
-		$folder = $this->folderOf($project, $home);
+		$folder = $this->access->folderOf($project, $home);
 		if ($folder !== null || $project->getOwnerUid() === $uid) {
-			return [$version, null, $this->access->grant($uid, $project, $folder === null || $this->canWrite($folder), fn () => $this->mayReshare($uid, $project))];
+			return [$version, null, $this->access->grant($uid, $project, $folder === null || Access::canWrite($folder), fn () => $this->access->mayReshare($uid, $project))];
 		}
 		throw new NotFoundException('Version not found');
-	}
-
-	/** What Files and the Project's Members give this person on one of its files */
-	private function grantOfFile(string $uid, ?Project $project, File $file): Grant {
-		return $this->access->grant($uid, $project, self::canWrite($file), fn () => $project !== null && $this->mayReshare($uid, $project));
-	}
-
-	/** What they may do in the Project as a whole: with Files' write access to its folder they manage it, else they comment */
-	private function projectGrant(Project $project, ?Folder $folder, string $uid): Grant {
-		return $this->access->grant($uid, $project, $folder !== null && self::canWrite($folder), fn () => $this->mayReshare($uid, $project));
-	}
-
-	/** What this person may do in the Project as a whole, for the list of its Members (ADR 0016) */
-	public function grantFor(string $uid, Project $project): Grant {
-		return $this->projectGrant($project, $this->folderOf($project, $this->root->getUserFolder($uid)), $uid);
-	}
-
-	/** @var array<string, bool> */
-	private array $reshares = [];
-
-	/**
-	 * Whether Files lets them reshare what the Project holds: its folder for a
-	 * Folder Project, at least one of its files for any other (ADR 0016).
-	 */
-	public function mayReshare(string $uid, Project $project): bool {
-		return $this->reshares[$uid . '/' . $project->getId()] ??= $this->reshareable($uid, $project);
-	}
-
-	private function reshareable(string $uid, Project $project): bool {
-		$home = $this->root->getUserFolder($uid);
-		if ($project->getFolderId() !== null) {
-			return (($this->folderOf($project, $home)?->getPermissions() ?? 0) & Constants::PERMISSION_SHARE) !== 0;
-		}
-		foreach ($this->versions->findByProject($project->getId()) as $version) {
-			$file = $home->getFirstNodeById($version->getFileId());
-			if ($file instanceof File && ($file->getPermissions() & Constants::PERMISSION_SHARE) !== 0) {
-				return true;
-			}
-		}
-		return false;
 	}
 
 	private function projectById(?int $id): ?Project {
@@ -663,7 +540,7 @@ class ProjectService {
 	}
 
 	/** @throws AccessDeniedException they do not manage the Project this Version is in */
-	private function writableVersion(string $uid, int $versionId): Version {
+	public function writableVersion(string $uid, int $versionId): Version {
 		[$version, , $grant] = $this->reachVersion($uid, $versionId);
 		if (!$grant->manages()) {
 			throw new AccessDeniedException('Manage is required');
@@ -747,15 +624,15 @@ class ProjectService {
 			'manages' => $grant->manages(),
 			'access' => $grant->toArray(),
 			// Upload a new cut: Files' write access to its file
-			'filesWrite' => $versionFile !== null && self::canWrite($versionFile),
-			'project' => $project === null ? $this->serializeNone() : $this->serialize($project, $this->folderOf($project, $home), $uid),
+			'filesWrite' => $versionFile !== null && Access::canWrite($versionFile),
+			'project' => $project === null ? $this->serializeNone() : $this->serialize($project, $this->access->folderOf($project, $home), $uid),
 			'asset' => ['id' => $asset->getId(), 'name' => $this->stacks->nameOf($asset), 'dueDate' => $asset->getDueDate()],
 			'versions' => $stack,
 		];
 	}
 
 	/** A Member plays the original through their own WebDAV, which serves ranges */
-	private function versionPayload(Version $version, string $uid, ?Grant $grant = null): array {
+	public function versionPayload(Version $version, string $uid, ?Grant $grant = null): array {
 		$grant ??= $this->reachVersion($uid, $version->getId())[2];
 		$file = $this->root->getUserFolder($uid)->getFirstNodeById($version->getFileId());
 		$file = $file instanceof File ? $file : null;
@@ -1123,7 +1000,7 @@ class ProjectService {
 			throw new NotFoundException('Project not found');
 		}
 		$home = $this->root->getUserFolder($uid);
-		$folder = $this->folderOf($project, $home);
+		$folder = $this->access->folderOf($project, $home);
 		if ($folder === null && $project->getOwnerUid() !== $uid && $this->visibleStacks($project, $uid, $home, false)[0] === []) {
 			throw new NotFoundException('Project not found');
 		}
@@ -1146,13 +1023,13 @@ class ProjectService {
 
 	/** Who may change a Deleted Project; once its folder is out of reach, as in the trash of Files, whoever deleted it */
 	private function mayChangeDeleted(Project $project, Folder $home, string $uid): bool {
-		$folder = $this->folderOf($project, $home);
+		$folder = $this->access->folderOf($project, $home);
 		return $this->mayEdit($project, $folder, $uid)
 			|| ($project->getFolderId() !== null && $folder === null && $project->getDeletedBy() === $uid);
 	}
 
 	private function mayEdit(Project $project, ?Folder $folder, string $uid): bool {
-		return $this->projectGrant($project, $folder, $uid)->manages();
+		return $this->access->projectGrant($uid, $project, $folder)->manages();
 	}
 
 	/**
@@ -1163,16 +1040,9 @@ class ProjectService {
 	 */
 	public function assertShare(string $uid, int $id): void {
 		[$project, $folder] = $this->visible($uid, $id);
-		if (!$this->projectGrant($project, $folder, $uid)->share) {
+		if (!$this->access->projectGrant($uid, $project, $folder)->share) {
 			throw new AccessDeniedException('Only a Member with Share manages the Review Links and Reviewers of a Project');
 		}
-	}
-
-	/** The Folder Project's folder as this Member reaches it; null for other Projects or out of reach */
-	private function folderOf(Project $project, Folder $home): ?Folder {
-		$folderId = $project->getFolderId();
-		$folder = $folderId === null ? null : $home->getFirstNodeById($folderId);
-		return $folder instanceof Folder ? $folder : null;
 	}
 
 	private function projectOf(Asset $asset): ?Project {
@@ -1188,11 +1058,7 @@ class ProjectService {
 	}
 
 	private function nameOf(Project $project, Folder $home): string {
-		return $this->folderOf($project, $home)?->getName() ?? $project->getName() ?? '';
-	}
-
-	public static function canWrite(Node $node): bool {
-		return ($node->getPermissions() & Constants::PERMISSION_UPDATE) !== 0;
+		return $this->access->folderOf($project, $home)?->getName() ?? $project->getName() ?? '';
 	}
 
 	/** Whether the file may leave as a file: a share can allow viewing but not downloading, as Files' own view-only check reads it */
@@ -1213,13 +1079,6 @@ class ProjectService {
 		}
 		/** @var ISharedStorage $storage */
 		return $storage->getShare();
-	}
-
-	/** @throws AccessDeniedException the node is read-only for this user */
-	public static function assertWritable(Node $node): void {
-		if (!self::canWrite($node)) {
-			throw new AccessDeniedException('Write permission is required');
-		}
 	}
 
 	/**
@@ -1326,7 +1185,7 @@ class ProjectService {
 			? $this->versions->findByAssets(array_map(static fn (Asset $asset) => $asset->getId(), $this->assets->findUnassigned($uid)))
 			: $this->versions->findByProject($project->getId());
 		// Who sees the Project as a whole sees Stacks whose files are all Missing too: its folder's Members, and who made it
-		$whole = $project === null || $project->getOwnerUid() === $uid || $this->folderOf($project, $home) !== null;
+		$whole = $project === null || $project->getOwnerUid() === $uid || $this->access->folderOf($project, $home) !== null;
 		$byAsset = [];
 		$files = [];
 		$openable = $nodes ? [] : $this->openFiles->among($home, array_map(static fn (Version $version) => $version->getFileId(), $versions));
@@ -1429,7 +1288,7 @@ class ProjectService {
 				// Manage its Stack, set its Due Date, assign it: Manage in its Project, taken from its newest Version
 				'manages' => $manages,
 				// Upload a new Version, rename it, delete it: Files' write access to its newest file
-				'filesWrite' => $newestFile !== null && self::canWrite($newestFile),
+				'filesWrite' => $newestFile !== null && Access::canWrite($newestFile),
 				// For sorting: when its first Version arrived, and when anything last happened on it
 				'createdAt' => min(array_map(static fn (Version $version) => $version->getCreatedAt(), $stack)),
 				'lastActivity' => max(array_map(
@@ -1453,7 +1312,7 @@ class ProjectService {
 	private function managesAsset(string $uid, ?Project $project, Version $newest, array $files): bool {
 		$file = $files[$newest->getId()] ?? null;
 		if ($file !== null || $newest->getState() === Version::STATE_READY) {
-			return $file !== null && $this->grantOfFile($uid, $project, $file)->manages();
+			return $file !== null && $this->access->grantOfFile($uid, $project, $file)->manages();
 		}
 		try {
 			return $this->reachVersion($uid, $newest->getId())[2]->manages();
@@ -1511,7 +1370,7 @@ class ProjectService {
 	}
 
 	private function serialize(Project $project, ?Folder $folder, string $uid): array {
-		$grant = $this->projectGrant($project, $folder, $uid);
+		$grant = $this->access->projectGrant($uid, $project, $folder);
 		return [
 			'id' => $project->getId(),
 			'folderId' => $project->getFolderId(),
@@ -1521,7 +1380,7 @@ class ProjectService {
 			// Change its settings, rename or remove it: Manage (ADR 0016)
 			'manages' => $grant->manages(),
 			// Upload into its folder: Files' write access
-			'filesWrite' => $folder !== null && self::canWrite($folder),
+			'filesWrite' => $folder !== null && Access::canWrite($folder),
 			'access' => $grant->toArray(),
 			// What someone newly given access in Files starts with: files, view or none
 			'newcomers' => $project->newcomersSetting(),

@@ -6,7 +6,12 @@ namespace OCA\Deliver\Service;
 
 use OCA\Deliver\Db\MemberMapper;
 use OCA\Deliver\Db\Project;
+use OCA\Deliver\Db\VersionMapper;
+use OCP\Constants;
+use OCP\Files\File;
+use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
+use OCP\Files\Node;
 use OCP\IGroupManager;
 use OCP\IUserManager;
 
@@ -28,6 +33,8 @@ class Access {
 	private array $groups = [];
 	/** @var array<int, ?string> */
 	private array $owners = [];
+	/** @var array<string, bool> */
+	private array $reshares = [];
 
 	public function __construct(
 		private MemberMapper $members,
@@ -35,6 +42,7 @@ class Access {
 		private IUserManager $users,
 		private IRootFolder $root,
 		private GroupFolders $groupFolders,
+		private VersionMapper $versions,
 	) {
 	}
 
@@ -55,6 +63,61 @@ class Access {
 			return $stored->share && !$reshare() ? $stored->withoutShare() : $stored;
 		}
 		return $this->byDefault($project, MemberMapper::USER, $uid, $write);
+	}
+
+	/** What Files and the Project's Members give this person on one of its files */
+	public function grantOfFile(string $uid, ?Project $project, File $file): Grant {
+		return $this->grant($uid, $project, self::canWrite($file), fn () => $project !== null && $this->mayReshare($uid, $project));
+	}
+
+	/** What they may do in the Project as a whole: with Files' write access to its folder they manage it, else they comment */
+	public function projectGrant(string $uid, Project $project, ?Folder $folder): Grant {
+		return $this->grant($uid, $project, $folder !== null && self::canWrite($folder), fn () => $this->mayReshare($uid, $project));
+	}
+
+	/** What this person may do in the Project as a whole, for the list of its Members (ADR 0016) */
+	public function grantFor(string $uid, Project $project): Grant {
+		return $this->projectGrant($uid, $project, $this->folderOf($project, $this->root->getUserFolder($uid)));
+	}
+
+	/**
+	 * Whether Files lets them reshare what the Project holds: its folder for a
+	 * Folder Project, at least one of its files for any other (ADR 0016).
+	 */
+	public function mayReshare(string $uid, Project $project): bool {
+		return $this->reshares[$uid . '/' . $project->getId()] ??= $this->reshareable($uid, $project);
+	}
+
+	private function reshareable(string $uid, Project $project): bool {
+		$home = $this->root->getUserFolder($uid);
+		if ($project->getFolderId() !== null) {
+			return (($this->folderOf($project, $home)?->getPermissions() ?? 0) & Constants::PERMISSION_SHARE) !== 0;
+		}
+		foreach ($this->versions->findByProject($project->getId()) as $version) {
+			$file = $home->getFirstNodeById($version->getFileId());
+			if ($file instanceof File && ($file->getPermissions() & Constants::PERMISSION_SHARE) !== 0) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** The Folder Project's folder as this Member reaches it; null for other Projects or out of reach */
+	public function folderOf(Project $project, Folder $home): ?Folder {
+		$folderId = $project->getFolderId();
+		$folder = $folderId === null ? null : $home->getFirstNodeById($folderId);
+		return $folder instanceof Folder ? $folder : null;
+	}
+
+	public static function canWrite(Node $node): bool {
+		return ($node->getPermissions() & Constants::PERMISSION_UPDATE) !== 0;
+	}
+
+	/** @throws AccessDeniedException the node is read-only for this user */
+	public static function assertWritable(Node $node): void {
+		if (!self::canWrite($node)) {
+			throw new AccessDeniedException('Write permission is required');
+		}
 	}
 
 	/**
