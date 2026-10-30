@@ -67,6 +67,21 @@ class AccessTest extends TestCase {
 		self::assertSame(200, $shared['status'], json_encode($shared['data']));
 	}
 
+	private function unshare(string $user): void {
+		$shares = $this->admin->ocsForm('GET', '/ocs/v2.php/apps/files_sharing/api/v1/shares?path=' . rawurlencode("/{$this->root}"))['data'];
+		foreach ($shares as $share) {
+			if ($share['share_with'] === $user) {
+				self::assertSame(200, $this->admin->ocsForm('DELETE', '/ocs/v2.php/apps/files_sharing/api/v1/shares/' . $share['id'])['status']);
+			}
+		}
+	}
+
+	/** Runs PHP inside this Nextcloud, for what no API does: the periodic scan */
+	private function inNextcloud(string $code): void {
+		exec('php -r ' . escapeshellarg('require "/var/www/html/lib/base.php"; \\OCP\\Server::get(\\OCP\\App\\IAppManager::class)->loadApp("deliver"); ' . $code) . ' 2>&1', $output, $status);
+		self::assertSame(0, $status, implode("\n", $output));
+	}
+
 	private function group(string ...$members): string {
 		$group = 'deliver-group-' . bin2hex(random_bytes(4));
 		$this->admin->ocsForm('POST', '/ocs/v2.php/cloud/groups', ['groupid' => $group]);
@@ -514,6 +529,39 @@ class AccessTest extends TestCase {
 		}
 		// Who was there before the change has what Files gives, who came after it what the setting gave
 		self::assertSame(['comment', 'none'], [$this->listed()[$before]['level'], $this->listed()[$after]['level']]);
+	}
+
+	public function testWhoLosesAccessComesBackAsANewcomer(): void {
+		[$user, $member] = $this->member(1);
+		$this->setNewcomers('none');
+		self::assertSame('comment', $this->listed()[$user]['level'], 'noted under "as in Files"');
+
+		// The periodic scan forgets them once Files has taken their access back
+		$this->unshare($user);
+		$this->inNextcloud('\\OCP\\Server::get(\\OCA\\Deliver\\Service\\ProjectMembers::class)->forgetLostAll();');
+		$this->share(0, $user, 1);
+		self::assertSame('none', $this->listed()[$user]['level'], 'a newcomer of the setting now');
+
+		// So does building the list while they are away
+		$this->setNewcomers('view');
+		[$other] = $this->member(1);
+		self::assertSame('view', $this->listed()[$other]['level']);
+		$this->setNewcomers('files');
+		self::assertSame('view', $this->listed()[$other]['level'], 'noted under View');
+		$this->unshare($other);
+		self::assertArrayNotHasKey($other, $this->listed());
+		$this->share(0, $other, 1);
+		self::assertSame('comment', $this->listed()[$other]['level'], 'a newcomer of "as in Files" now');
+	}
+
+	public function testWhoLosesAccessKeepsTheEntryAMemberSetForThem(): void {
+		[$user] = $this->member(1);
+		self::assertSame(200, $this->setLevel('user', $user, 'view')['status']);
+		$this->unshare($user);
+		self::assertArrayNotHasKey($user, $this->listed());
+		$this->inNextcloud('\\OCP\\Server::get(\\OCA\\Deliver\\Service\\ProjectMembers::class)->forgetLostAll();');
+		$this->share(0, $user, 1);
+		self::assertSame('view', $this->listed()[$user]['level'], 'a decision about them, not a default');
 	}
 
 	public function testOnlyManageSeesAndSetsMembers(): void {
