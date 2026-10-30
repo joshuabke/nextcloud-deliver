@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Db;
 
+use OCA\Deliver\Service\Grant;
 use OCP\DB\Exception as DbException;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
@@ -24,22 +25,24 @@ class MemberMapper {
 	) {
 	}
 
-	/** @return list<array{type: string, id: string, level: string, share: bool, approve: bool}> */
+	/** How a person or a group is told apart in the lists below */
+	public static function key(string $type, string $id): string {
+		return $type . '/' . $id;
+	}
+
+	/** @return array<string, Grant> what was set for each person and group of a Project, by key() */
 	public function forProject(int $projectId): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')->from(self::TABLE)
 			->where($qb->expr()->eq('project_id', $qb->createNamedParameter($projectId, IQueryBuilder::PARAM_INT)))
 			->orderBy('id');
 		$result = $qb->executeQuery();
-		$rows = array_map(static fn (array $row) => [
-			'type' => (string)$row['principal_type'],
-			'id' => (string)$row['principal_id'],
-			'level' => (string)$row['level'],
-			'share' => (bool)$row['share'],
-			'approve' => (bool)$row['approve'],
-		], $result->fetchAll());
+		$grants = [];
+		while ($row = $result->fetch()) {
+			$grants[self::key((string)$row['principal_type'], (string)$row['principal_id'])] = new Grant((string)$row['level'], (bool)$row['share'], (bool)$row['approve']);
+		}
 		$result->closeCursor();
-		return $rows;
+		return $grants;
 	}
 
 	/** @return array<string, ?string> the setting by "type/id" of everyone seen; a null value is a person seen while it was as in Files */
@@ -50,7 +53,7 @@ class MemberMapper {
 		$result = $qb->executeQuery();
 		$seen = [];
 		while ($row = $result->fetch()) {
-			$seen[$row['principal_type'] . '/' . $row['principal_id']] = $row['newcomers'] === null ? null : (string)$row['newcomers'];
+			$seen[self::key((string)$row['principal_type'], (string)$row['principal_id'])] = $row['newcomers'] === null ? null : (string)$row['newcomers'];
 		}
 		$result->closeCursor();
 		return $seen;
@@ -75,16 +78,16 @@ class MemberMapper {
 		}
 	}
 
-	public function set(int $projectId, string $type, string $id, string $level, bool $share, bool $approve): void {
+	public function set(int $projectId, string $type, string $id, Grant $grant): void {
 		$this->remove($projectId, $type, $id);
 		$qb = $this->db->getQueryBuilder();
 		$qb->insert(self::TABLE)->values([
 			'project_id' => $qb->createNamedParameter($projectId, IQueryBuilder::PARAM_INT),
 			'principal_type' => $qb->createNamedParameter($type),
 			'principal_id' => $qb->createNamedParameter($id),
-			'level' => $qb->createNamedParameter($level),
-			'share' => $qb->createNamedParameter($share, IQueryBuilder::PARAM_BOOL),
-			'approve' => $qb->createNamedParameter($approve, IQueryBuilder::PARAM_BOOL),
+			'level' => $qb->createNamedParameter($grant->level),
+			'share' => $qb->createNamedParameter($grant->share, IQueryBuilder::PARAM_BOOL),
+			'approve' => $qb->createNamedParameter($grant->approve, IQueryBuilder::PARAM_BOOL),
 		]);
 		try {
 			$qb->executeStatement();

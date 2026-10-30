@@ -6,6 +6,7 @@ namespace OCA\Deliver\Service;
 
 use OCA\Deliver\Db\Reviewer;
 use OCA\Deliver\Db\ReviewerMapper;
+use OCA\Deliver\Db\Scope;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Files\NotFoundException;
 use OCP\Security\ISecureRandom;
@@ -88,12 +89,10 @@ class ReviewerService {
 	}
 
 	/**
-	 * @param ?int $projectId null for No Project
-	 * @param string $uid whose No Project, when $projectId is null
 	 * @return list<Reviewer> the Project's Reviewers, whoever invited them, on a link or not, oldest first
 	 */
-	public function ofProject(?int $projectId, string $uid): array {
-		return $this->reviewers->findInProject($projectId, [$uid]);
+	public function ofProject(Scope $scope): array {
+		return $this->reviewers->findInProject($scope);
 	}
 
 	/** No Personal Link names them any more and they leave every list; their Comments keep their name */

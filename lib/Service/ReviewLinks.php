@@ -11,6 +11,7 @@ use OCA\Deliver\Db\Reviewer;
 use OCA\Deliver\Db\ReviewerMapper;
 use OCA\Deliver\Db\ReviewLinkMapper;
 use OCA\Deliver\Db\ReviewLinkRecord;
+use OCA\Deliver\Db\Scope;
 use OCA\Deliver\Db\Version;
 use OCA\Deliver\Db\VersionMapper;
 use OCP\AppFramework\Utility\ITimeFactory;
@@ -140,7 +141,7 @@ class ReviewLinks {
 	 * @return list<array<string, mixed>>
 	 */
 	public function reviewersOf(ReviewLink $link): array {
-		$ofTheProject = $this->reviewers->ofProject($link->projectId(), $link->ownerUid());
+		$ofTheProject = $this->reviewers->ofProject($link->scope());
 		$ids = array_map(static fn (Reviewer $reviewer) => $reviewer->getId(), $ofTheProject);
 		$places = $this->reviewerMapper->placesOf($ids);
 		// Those on this link, whose Personal Link opens it (ADR 0014)
@@ -195,7 +196,7 @@ class ReviewLinks {
 			return;
 		}
 		// Their Project's Reviewers, also when they are on no link themselves
-		if ($reviewersToo && in_array(self::normal($name), array_map(self::normal(...), $this->reviewerMapper->namesIn($reviewer->getProjectId(), (string)$reviewer->getOwnerUid(), $reviewer->getId())), true)) {
+		if ($reviewersToo && in_array(self::normal($name), array_map(self::normal(...), $this->reviewerMapper->namesIn(Scope::ofReviewer($reviewer), $reviewer->getId())), true)) {
 			throw $this->nameTaken($name);
 		}
 		$reviews = [];
@@ -229,7 +230,7 @@ class ReviewLinks {
 		$uids = array_unique(array_merge([$link->ownerUid()], ...array_map($this->members->of(...), array_unique($fileIds))));
 		$names = [
 			...array_map(fn (string $uid) => $this->users->getDisplayName($uid) ?? $uid, $uids),
-			...($reviewersToo ? $this->reviewerMapper->namesIn($link->projectId(), $link->ownerUid(), $except?->getId()) : []),
+			...($reviewersToo ? $this->reviewerMapper->namesIn($link->scope(), $except?->getId()) : []),
 		];
 		if (in_array(self::normal($name), array_map(self::normal(...), $names), true)) {
 			throw $this->nameTaken($name);
@@ -246,7 +247,7 @@ class ReviewLinks {
 		if ($email === '') {
 			return null;
 		}
-		return $this->reviewerMapper->findByAddress($link->projectId(), $link->ownerUid(), $email)[0] ?? null;
+		return $this->reviewerMapper->findByAddress($link->scope(), $email)[0] ?? null;
 	}
 
 	/**
@@ -261,7 +262,7 @@ class ReviewLinks {
 		if ($email === '' || mb_strtolower($email) === mb_strtolower((string)$reviewer->getEmail())) {
 			return;
 		}
-		foreach ($this->reviewerMapper->findByAddress($reviewer->getProjectId(), (string)$reviewer->getOwnerUid(), $email) as $other) {
+		foreach ($this->reviewerMapper->findByAddress(Scope::ofReviewer($reviewer), $email) as $other) {
 			if ($other->getId() !== $reviewer->getId()) {
 				throw $this->addressTaken($email);
 			}
@@ -378,7 +379,7 @@ class ReviewLinks {
 	public function reviewLinkFor(Version $version, Reviewer $reviewer): ?string {
 		$token = null;
 		$on = $this->reviewerMapper->placesOfReviewer($reviewer->getId());
-		foreach ($this->linkRecords->findByProject($version->getProjectId(), (string)$reviewer->getOwnerUid()) as $each) {
+		foreach ($this->linkRecords->findByProject(Scope::ofReviewer($reviewer)) as $each) {
 			$link = $this->of($each);
 			try {
 				if ($link->isLive() && $link->takes($reviewer) && isset($on[$link->token()]) && $link->version($version) === $version) {

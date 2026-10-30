@@ -1518,7 +1518,7 @@ class ProjectService {
 			'filesWrite' => $folder !== null && self::canWrite($folder),
 			'access' => $grant->toArray(),
 			// What someone newly given access in Files starts with: files, view or none
-			'newcomers' => $project->getNewcomers() ?? 'files',
+			'newcomers' => $project->newcomersSetting(),
 			'autoIntake' => (bool)$project->getAutoIntake(),
 			'allowOlder' => (bool)$project->getAllowOlder(),
 			'lockFiles' => $project->locksFiles(),
@@ -1542,7 +1542,7 @@ class ProjectService {
 			'canWrite' => false,
 			'filesWrite' => false,
 			'access' => (new Grant(Grant::MANAGE, true, true))->toArray(),
-			'newcomers' => 'files',
+			'newcomers' => Project::NEWCOMERS_FILES,
 			'autoIntake' => false,
 			'allowOlder' => false,
 			// No Project always locks files in review

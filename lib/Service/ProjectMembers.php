@@ -27,7 +27,7 @@ use OCP\Share\IShare;
  * what they have as a result.
  */
 class ProjectMembers {
-	public const NEWCOMERS = ['files', Grant::VIEW, Grant::NONE];
+	public const NEWCOMERS = [Project::NEWCOMERS_FILES, Grant::VIEW, Grant::NONE];
 
 	public function __construct(
 		private ProjectService $projects,
@@ -77,7 +77,7 @@ class ProjectMembers {
 		if ($grant->share && !$row['canShare']) {
 			throw new InvalidRequestException('Files does not let them share this');
 		}
-		$this->store($project, $type, $principal, $grant, $row['stored']);
+		$this->store($project, $type, $principal, $grant);
 		return $this->row($project, $type, $principal);
 	}
 
@@ -89,8 +89,8 @@ class ProjectMembers {
 	 */
 	public function reset(string $uid, int $id, string $type, string $principal): array {
 		[$project] = $this->projects->editable($uid, $id);
-		$row = $this->row($project, $type, $principal);
-		$this->store($project, $type, $principal, null, $row['stored']);
+		$this->row($project, $type, $principal);
+		$this->store($project, $type, $principal, null);
 		return $this->row($project, $type, $principal);
 	}
 
@@ -106,27 +106,27 @@ class ProjectMembers {
 		if (!in_array($newcomers, self::NEWCOMERS, true)) {
 			throw new InvalidRequestException('Newcomers start with ' . implode(', ', self::NEWCOMERS));
 		}
-		if (($project->getNewcomers() ?? 'files') === $newcomers) {
+		if ($project->newcomersSetting() === $newcomers) {
 			return;
 		}
 		foreach ($this->rows($project) as $row) {
 			$this->access->see($project, $row['type'], $row['id']);
 		}
-		$project->setNewcomers($newcomers === 'files' ? null : $newcomers);
+		$project->setNewcomers($newcomers === Project::NEWCOMERS_FILES ? null : $newcomers);
 		$this->projectMapper->update($project);
 	}
 
-	/**
-	 * @param ?array{level: string, share: bool, approve: bool} $before the entry to put back if the change leaves a group folder without Manage
-	 */
-	private function store(Project $project, string $type, string $principal, ?Grant $grant, ?array $before): void {
+	/** @param ?Grant $grant what to set for them; null takes back what was set */
+	private function store(Project $project, string $type, string $principal, ?Grant $grant): void {
 		if ($type === MemberMapper::USER && $this->access->ownerOf($project) === $principal) {
 			throw new AccessDeniedException('The owner of a Project keeps Manage, Share and Approve');
 		}
+		// To put back if the change leaves a group folder without Manage
+		$before = $this->entry($project, $type, $principal);
 		if ($grant === null) {
 			$this->entries->remove($project->getId(), $type, $principal);
 		} else {
-			$this->entries->set($project->getId(), $type, $principal, $grant->level, $grant->share, $grant->approve);
+			$this->entries->set($project->getId(), $type, $principal, $grant);
 		}
 		$this->access->forget($project);
 		// A group folder has no owner, so someone must stay who manages it
@@ -134,7 +134,7 @@ class ProjectMembers {
 			if ($before === null) {
 				$this->entries->remove($project->getId(), $type, $principal);
 			} else {
-				$this->entries->set($project->getId(), $type, $principal, $before['level'], $before['share'], $before['approve']);
+				$this->entries->set($project->getId(), $type, $principal, $before);
 			}
 			$this->access->forget($project);
 			throw new ProjectConflictException('The last Member with Manage stays');
@@ -211,7 +211,7 @@ class ProjectMembers {
 			'name' => $this->users->getDisplayName($uid) ?? $uid,
 			'owner' => $this->access->ownerOf($project) === $uid,
 			'via' => $via,
-			'stored' => $this->entry($project, MemberMapper::USER, $uid),
+			'stored' => $this->entry($project, MemberMapper::USER, $uid)?->toArray(),
 			'canShare' => $this->projects->mayReshare($uid, $project),
 		] + $grant->toArray();
 	}
@@ -225,8 +225,9 @@ class ProjectMembers {
 		$canShare = ($permissions & Constants::PERMISSION_SHARE) !== 0;
 		$write = ($permissions & Constants::PERMISSION_UPDATE) !== 0;
 		$grant = match (true) {
-			$stored !== null => new Grant($stored['level'], $stored['share'] && $canShare, $stored['approve']),
-			default => $this->access->byDefault($project, MemberMapper::GROUP, $gid, $write),
+			$stored === null => $this->access->byDefault($project, MemberMapper::GROUP, $gid, $write),
+			$stored->share && !$canShare => $stored->withoutShare(),
+			default => $stored,
 		};
 		return [
 			'type' => MemberMapper::GROUP,
@@ -234,19 +235,13 @@ class ProjectMembers {
 			'name' => $this->groups->get($gid)?->getDisplayName() ?? $gid,
 			'owner' => false,
 			'via' => [],
-			'stored' => $stored,
+			'stored' => $stored?->toArray(),
 			'canShare' => $canShare,
 		] + $grant->toArray();
 	}
 
-	/** @return ?array{level: string, share: bool, approve: bool} */
-	private function entry(Project $project, string $type, string $id): ?array {
-		foreach ($this->access->entries($project) as $entry) {
-			if ($entry['type'] === $type && $entry['id'] === $id) {
-				return ['level' => $entry['level'], 'share' => $entry['share'], 'approve' => $entry['approve']];
-			}
-		}
-		return null;
+	private function entry(Project $project, string $type, string $id): ?Grant {
+		return $this->access->entries($project)[MemberMapper::key($type, $id)] ?? null;
 	}
 
 	/**

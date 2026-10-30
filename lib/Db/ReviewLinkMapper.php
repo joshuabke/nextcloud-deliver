@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Db;
 
+use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 
 /** @template-extends Mapper<ReviewLinkRecord> */
@@ -49,17 +50,16 @@ class ReviewLinkMapper extends Mapper {
 	}
 
 	/**
-	 * @param string $ownerUid whose No Project, when $projectId is null; a Project's links are every Member's (ADR 0017)
-	 * @return ReviewLinkRecord[] the links on a Project, or the Member's to Assets of No Project for null, oldest first
+	 * @return ReviewLinkRecord[] the links on a Project (every Member's, ADR 0017), or the Member's to Assets of No Project, oldest first
 	 */
-	public function findByProject(?int $projectId, string $ownerUid): array {
+	public function findByProject(Scope $scope): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')->from($this->getTableName())->orderBy('id');
-		if ($projectId === null) {
+		if ($scope->isNoProject()) {
 			$qb->where($qb->expr()->isNull('project_id'))
-				->andWhere($qb->expr()->eq('owner_uid', $qb->createNamedParameter($ownerUid)));
+				->andWhere($qb->expr()->in('owner_uid', $qb->createNamedParameter($scope->ownerUids, IQueryBuilder::PARAM_STR_ARRAY)));
 		} else {
-			$qb->where($qb->expr()->eq('project_id', $qb->createNamedParameter($projectId)));
+			$qb->where($qb->expr()->eq('project_id', $qb->createNamedParameter($scope->projectId, IQueryBuilder::PARAM_INT)));
 		}
 		return $this->findEntities($qb);
 	}
