@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Controller;
 
+use OCA\Deliver\Service\FileOperations;
 use OCA\Deliver\Service\ProjectMembers;
 use OCA\Deliver\Service\ProjectService;
 use OCP\AppFramework\Http;
@@ -21,6 +22,7 @@ class ProjectApiController extends OCSController {
 		IRequest $request,
 		private ProjectService $service,
 		private ProjectMembers $members,
+		private FileOperations $files,
 		private ?string $userId,
 	) {
 		parent::__construct($appName, $request);
@@ -79,12 +81,7 @@ class ProjectApiController extends OCSController {
 		?string $newcomers = null,
 		?bool $lockFiles = null,
 	): Response {
-		return $this->guard(function () use ($id, $autoIntake, $allowOlder, $fpsNum, $fpsDen, $timecodeMode, $name, $newcomers, $lockFiles) {
-			if ($newcomers !== null) {
-				$this->members->setNewcomers((string)$this->userId, $id, $newcomers);
-			}
-			return $this->service->updateSettings((string)$this->userId, $id, $autoIntake, $allowOlder, $fpsNum, $fpsDen, $timecodeMode, $name, $lockFiles);
-		});
+		return $this->guard(fn () => $this->members->updateSettings((string)$this->userId, $id, $newcomers, $autoIntake, $allowOlder, $fpsNum, $fpsDen, $timecodeMode, $name, $lockFiles));
 	}
 
 	#[NoAdminRequired]
@@ -111,7 +108,7 @@ class ProjectApiController extends OCSController {
 	#[NoAdminRequired]
 	public function renameFile(int $fileId, string $name): Response {
 		return $this->guard(function () use ($fileId, $name) {
-			$this->service->renameFile((string)$this->userId, $fileId, $name);
+			$this->files->rename((string)$this->userId, $fileId, $name);
 			return [];
 		});
 	}
@@ -123,7 +120,7 @@ class ProjectApiController extends OCSController {
 	 */
 	#[NoAdminRequired]
 	public function replace(int $id, int $fileId, bool $confirm = false): Response {
-		return $this->guard(fn () => $this->service->replaceFile((string)$this->userId, $id, uploadId: $fileId, confirm: $confirm));
+		return $this->guard(fn () => $this->files->replace((string)$this->userId, $id, uploadId: $fileId, confirm: $confirm));
 	}
 
 	#[NoAdminRequired]

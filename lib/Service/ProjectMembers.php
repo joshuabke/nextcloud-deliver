@@ -69,7 +69,7 @@ class ProjectMembers {
 		}
 		$grant = new Grant($level, $share, $approve);
 		$row = $this->row($project, $type, $principal);
-		$mine = $this->projects->grantFor($uid, $project);
+		$mine = $this->access->grantFor($uid, $project);
 		// Never above their own: a switch they lack stays as it is for the other
 		if (($grant->share && !$mine->share && !$row['share']) || ($grant->approve && !$mine->approve && !$row['approve'])) {
 			throw new AccessDeniedException('A Member cannot give what they do not have themselves');
@@ -95,17 +95,43 @@ class ProjectMembers {
 	}
 
 	/**
+	 * A Project's settings in one go, the newcomers setting among them: the
+	 * Members' side of it is kept here, the rest by ProjectService.
+	 *
+	 * @return array<string, mixed> the Project as it is now
+	 * @throws InvalidRequestException a setting that does not apply
+	 */
+	public function updateSettings(
+		string $uid,
+		int $id,
+		?string $newcomers = null,
+		?bool $autoIntake = null,
+		?bool $allowOlder = null,
+		?int $fpsNum = null,
+		?int $fpsDen = null,
+		?string $timecodeMode = null,
+		?string $name = null,
+		?bool $lockFiles = null,
+	): array {
+		if ($newcomers !== null && !in_array($newcomers, self::NEWCOMERS, true)) {
+			throw new InvalidRequestException('Newcomers start with ' . implode(', ', self::NEWCOMERS));
+		}
+		// The rest is checked before anything is saved, so the newcomers go last: a refused setting leaves them as they were
+		$settings = $this->projects->updateSettings($uid, $id, $autoIntake, $allowOlder, $fpsNum, $fpsDen, $timecodeMode, $name, $lockFiles);
+		if ($newcomers === null) {
+			return $settings;
+		}
+		$this->setNewcomers($uid, $id, $newcomers);
+		return ['newcomers' => $newcomers] + $settings;
+	}
+
+	/**
 	 * What someone newly given access in Files starts with. A change reaches
 	 * only people who come after it: everyone who is a Member now is noted
 	 * first, under the setting they have had so far, and nobody gets an entry.
-	 *
-	 * @throws InvalidRequestException unknown
 	 */
-	public function setNewcomers(string $uid, int $id, string $newcomers): void {
+	private function setNewcomers(string $uid, int $id, string $newcomers): void {
 		[$project] = $this->projects->editable($uid, $id);
-		if (!in_array($newcomers, self::NEWCOMERS, true)) {
-			throw new InvalidRequestException('Newcomers start with ' . implode(', ', self::NEWCOMERS));
-		}
 		if ($project->newcomersSetting() === $newcomers) {
 			return;
 		}
@@ -204,7 +230,7 @@ class ProjectMembers {
 	 * @return array<string, mixed>
 	 */
 	private function userRow(Project $project, string $uid, array $via): array {
-		$grant = $this->projects->grantFor($uid, $project);
+		$grant = $this->access->grantFor($uid, $project);
 		return [
 			'type' => MemberMapper::USER,
 			'id' => $uid,
@@ -212,7 +238,7 @@ class ProjectMembers {
 			'owner' => $this->access->ownerOf($project) === $uid,
 			'via' => $via,
 			'stored' => $this->entry($project, MemberMapper::USER, $uid)?->toArray(),
-			'canShare' => $this->projects->mayReshare($uid, $project),
+			'canShare' => $this->access->mayReshare($uid, $project),
 		] + $grant->toArray();
 	}
 
