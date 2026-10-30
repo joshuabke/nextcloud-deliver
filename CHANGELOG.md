@@ -23,6 +23,7 @@
 - Check on every list whether a Reviewer is in the contacts of whoever looks, instead of once per Reviewer.
 - Stop read access in Files from approving Versions, unless a Member with Manage allows it.
 - Let only Members with Comment edit and delete their own Comments.
+- Let Reviewers edit their own Comments only where their link lets them comment.
 - Keep a Project, its Versions, notifications and Mentions from Members with None; say in the Files sidebar only that the file is in review.
 - Treat a Member with None as a Reviewer on a Review Link.
 

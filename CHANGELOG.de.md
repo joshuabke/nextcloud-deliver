@@ -23,6 +23,7 @@
 - Bei jeder Liste geprüft, ob ein Reviewer in den Kontakten dessen ist, der sie ansieht, statt einmal je Reviewer.
 - Abnahmen mit Lesezugriff in Dateien beendet, sofern ein Mitglied mit Verwalten sie nicht erlaubt.
 - Das Bearbeiten und Löschen eigener Kommentare auf Mitglieder mit Kommentieren beschränkt.
+- Das Bearbeiten eigener Kommentare für Reviewer darauf beschränkt, wo ihr Link Kommentare erlaubt.
 - Projekt, Versionen, Benachrichtigungen und Erwähnungen vor Mitgliedern mit Keine verborgen; in der Dateien-Seitenleiste steht nur noch, dass die Datei im Review ist.
 - Ein Mitglied mit Keine auf einem Review-Link wie einen Reviewer behandelt.
 
