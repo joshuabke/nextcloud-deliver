@@ -51,7 +51,6 @@ class CommentService {
 		private CommentWindow $window,
 		private Members $members,
 		private IAppConfig $config,
-		private FileLock $fileLock,
 	) {
 	}
 
@@ -121,7 +120,6 @@ class CommentService {
 		$comment->setCreatedAt($now);
 		$comment->setUpdatedAt($now);
 		$comment = $this->comments->insert($comment);
-		$this->fileLock->sync($version);
 		$serialized = $this->serialize($version, $comment);
 		$author = $serialized['author']['name'];
 		$this->notifications->commented($comment, $version, $author);
@@ -173,7 +171,6 @@ class CommentService {
 			$this->comments->delete($gone);
 			$this->notifications->commentDeleted($gone->getId());
 		}
-		$this->fileLock->sync($version);
 		$this->live->changed($version);
 	}
 

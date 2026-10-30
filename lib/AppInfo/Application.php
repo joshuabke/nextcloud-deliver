@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\AppInfo;
 
+use OCA\Deliver\Event\ReviewDataChanged;
 use OCA\Deliver\Listener\FileEventsListener;
 use OCA\Deliver\Listener\GroupDeletedListener;
 use OCA\Deliver\Listener\LoadSidebarListener;
+use OCA\Deliver\Listener\ReviewDataListener;
 use OCA\Deliver\Listener\UserDeletedListener;
 use OCA\Deliver\Notification\Notifier;
 use OCA\Deliver\SetupCheck\BackgroundJobsCheck;
@@ -41,6 +43,7 @@ class Application extends App implements IBootstrap {
 		$context->registerEventListener(LoadSidebar::class, LoadSidebarListener::class);
 		$context->registerEventListener(UserDeletedEvent::class, UserDeletedListener::class);
 		$context->registerEventListener(GroupDeletedEvent::class, GroupDeletedListener::class);
+		$context->registerEventListener(ReviewDataChanged::class, ReviewDataListener::class);
 		// Files is the source of truth, so Deliver follows its events (ADR 0002)
 		foreach ([NodeCreatedEvent::class, NodeWrittenEvent::class, VersionRestoredEvent::class, NodeRenamedEvent::class, NodeDeletedEvent::class, MoveToTrashEvent::class, NodeRestoredEvent::class] as $event) {
 			$context->registerEventListener($event, FileEventsListener::class);
