@@ -590,8 +590,8 @@ test.describe('Review view', () => {
 			// What someone newly given access in Files starts with
 			await dialog.getByLabel('Someone newly given access in Files starts with').selectOption('view')
 			await expect.poll(async () => (await (await owner.get(`${api}?format=json`)).json()).ocs.data.newcomers).toBe('view')
-			// Everyone who was a Member keeps what they had
-			await expect.poll(async () => (await listed()).stored?.level).toBe('comment')
+			// Everyone who was a Member keeps what Files gives, with no entry made for them
+			expect(await listed()).toMatchObject({ level: 'comment', stored: null })
 		} finally {
 			await owner.put(`${api}?format=json`, { data: { newcomers: 'files' } })
 			await owner.delete(`${api}/members?format=json&type=user&principal=${MATE}`)
