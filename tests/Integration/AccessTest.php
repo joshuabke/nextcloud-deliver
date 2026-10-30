@@ -158,6 +158,20 @@ class AccessTest extends TestCase {
 		self::assertContains($user, array_column($this->admin->ocs('GET', "/versions/{$this->versionId}/members")['data'], 'id'));
 	}
 
+	public function testNoneOnAReviewLinkReviewsAsAReviewer(): void {
+		[$user, $member] = $this->member(1);
+		$token = $this->admin->ocs('POST', "/projects/{$this->projectId}/links")['data']['token'];
+		$context = fn () => json_decode($member->request('GET', "/apps/deliver/s/$token/api/context?versionId={$this->versionId}", null, ['Accept: application/json'])['body'], true);
+		self::assertSame('member', $context()['me']['type'], 'with Files access they preview the link');
+
+		self::assertSame(200, $this->setLevel('user', $user, 'none')['status']);
+		$none = $context();
+		self::assertSame(['unnamed', true], [$none['me']['type'], $none['flags']['canComment']], 'with None they are no Member of it, but review as any logged-in non-Member');
+
+		self::assertSame(200, $this->setLevel('user', $user, 'view')['status']);
+		self::assertSame('member', $context()['me']['type'], 'and with access again they preview');
+	}
+
 	public function testNoneKeepsTheProjectOutOfSight(): void {
 		[$user, $member] = $this->member(1);
 		$fileId = $this->admin->fileId("{$this->root}/cut.mp4");

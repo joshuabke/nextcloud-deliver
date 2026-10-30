@@ -45,6 +45,7 @@ class ReviewLinks {
 		private ITimeFactory $time,
 		private IConfig $config,
 		private Members $members,
+		private Access $access,
 		private IUserManager $users,
 		private IL10N $l,
 	) {
@@ -81,10 +82,11 @@ class ReviewLinks {
 	/**
 	 * Whether a logged-in user is a Member of each of these Versions: they can
 	 * open its file in Files, as rights follow each file (ADR 0009). They
-	 * preview it as Reviewers see it but review it in the app (story 59).
+	 * preview it as Reviewers see it but review it in the app (story 59). With
+	 * None in the link's Project they are none, and review as any non-Member.
 	 */
-	public function isMember(?string $uid, Version ...$versions): bool {
-		if ($uid === null || $versions === []) {
+	public function isMember(?string $uid, ReviewLink $link, Version ...$versions): bool {
+		if ($uid === null || $versions === [] || !$this->access->sees($uid, $link->project())) {
 			return false;
 		}
 		$home = $this->root->getUserFolder($uid);

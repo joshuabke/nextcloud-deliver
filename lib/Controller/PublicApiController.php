@@ -449,7 +449,7 @@ class PublicApiController extends PublicShareController {
 
 	/** The logged-in user can open the file of each of these Versions, and previews them rather than reviewing (story 59) */
 	private function member(Version ...$versions): bool {
-		return $this->links->isMember($this->userSession->getUser()?->getUID(), ...$versions);
+		return $this->links->isMember($this->userSession->getUser()?->getUID(), $this->link(), ...$versions);
 	}
 
 	/** A Reviewer comments while the link or their own rights allow it, and never resolves; a Member's preview only reads */

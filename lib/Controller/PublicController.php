@@ -75,7 +75,7 @@ class PublicController extends AuthPublicShareController {
 		$response = new TemplateResponse(Application::APP_ID, 'public', [], TemplateResponse::RENDER_AS_PUBLIC);
 		// A Member of what the page shows previews it, and is no Reviewer opening it, whichever key comes along (story 59)
 		$shown = $version === null ? array_column(array_column($link->assets(), 'versions'), 0) : [$version];
-		$member = $this->links->isMember($this->userSession->getUser()?->getUID(), ...$shown);
+		$member = $this->links->isMember($this->userSession->getUser()?->getUID(), $link, ...$shown);
 
 		$reviewer = null;
 		if (!$member) {
