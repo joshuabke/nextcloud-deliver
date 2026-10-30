@@ -309,9 +309,10 @@ class AccessTest extends TestCase {
 		self::assertSame(200, $this->admin->ocs('PUT', "/projects/{$this->projectId}", ['newcomers' => 'none'])['status']);
 		self::assertSame('none', $this->admin->ocs('GET', "/projects/{$this->projectId}")['data']['newcomers']);
 
-		// Who was a Member keeps what they had, now as an entry of their own
+		// Who was a Member keeps what Files gives, with no entry made for them
 		self::assertSame(201, $this->comment($asCurrent));
-		self::assertSame(['comment', false, false], array_values(array_intersect_key($this->listed()[$current]['stored'], array_flip(['level', 'share', 'approve']))));
+		self::assertNull($this->listed()[$current]['stored']);
+		self::assertSame('comment', $this->listed()[$current]['level']);
 
 		// Whoever Files gives access later starts from the setting
 		[$later, $asLater] = $this->member(1);
@@ -319,14 +320,98 @@ class AccessTest extends TestCase {
 		self::assertSame(404, $this->comment($asLater));
 		self::assertSame('none', $this->listed()[$later]['level']);
 
+		// A change is for the next ones: who came under None stays kept out, who came before stays as they were
 		self::assertSame(200, $this->admin->ocs('PUT', "/projects/{$this->projectId}", ['newcomers' => 'view'])['status']);
-		self::assertSame('view', $asLater->ocs('GET', "/projects/{$this->projectId}")['data']['access']['level']);
-		self::assertSame(403, $this->comment($asLater));
+		self::assertSame(404, $asLater->ocs('GET', "/projects/{$this->projectId}")['status']);
 		self::assertSame(201, $this->comment($asCurrent));
+		[, $asThird] = $this->member(1);
+		self::assertSame('view', $asThird->ocs('GET', "/projects/{$this->projectId}")['data']['access']['level']);
+		self::assertSame(403, $this->comment($asThird));
 
 		self::assertSame(400, $this->admin->ocs('PUT', "/projects/{$this->projectId}", ['newcomers' => 'everything'])['status']);
 		self::assertSame(200, $this->admin->ocs('PUT', "/projects/{$this->projectId}", ['newcomers' => 'files'])['status']);
-		self::assertSame(201, $this->comment($asLater));
+		self::assertSame(403, $this->comment($asThird));
+		self::assertSame(404, $this->comment($asLater));
+		[, $asFourth] = $this->member(1);
+		self::assertSame(201, $this->comment($asFourth), 'as in Files again for the next ones');
+	}
+
+	private function setNewcomers(string $newcomers): void {
+		self::assertSame(200, $this->admin->ocs('PUT', "/projects/{$this->projectId}", ['newcomers' => $newcomers])['status']);
+	}
+
+	public function testChangingNewcomersLeavesAFileWriterManagingTheirAsset(): void {
+		// A Project with no folder: Files decides per file, and the setting is for newcomers only
+		$project = $this->admin->ocs('POST', '/projects', ['name' => 'Loose cuts'])['data']['id'];
+		// Outside the folder of the Project that setUp made
+		$loose = "{$this->root}-loose.mp4";
+		try {
+			$this->admin->put($loose, 'not really a video');
+			$asset = $this->admin->ocs('POST', '/assets', ['fileId' => $this->admin->fileId($loose), 'projectId' => $project]);
+			self::assertSame(201, $asset['status'], json_encode($asset['data']));
+			[$writer, $asWriter] = $this->member();
+			$shared = $this->admin->ocsForm('POST', '/ocs/v2.php/apps/files_sharing/api/v1/shares', [
+				'path' => "/$loose", 'shareType' => 0, 'shareWith' => $writer, 'permissions' => 3,
+			]);
+			self::assertSame(200, $shared['status'], json_encode($shared['data']));
+			$version = $asset['data']['versionId'];
+			$comment = $this->admin->ocs('POST', "/versions/$version/comments", ['inFrame' => 1, 'body' => 'x'])['data'];
+			$resolve = fn () => $asWriter->ocs('PUT', "/comments/{$comment['id']}/resolved", ['resolved' => true])['status'];
+			self::assertSame(200, $resolve(), 'a writer of the file manages its review');
+
+			foreach (['view', 'none', 'files'] as $newcomers) {
+				self::assertSame(200, $this->admin->ocs('PUT', "/projects/$project", ['newcomers' => $newcomers])['status']);
+				self::assertSame(200, $resolve(), "still managing after newcomers $newcomers");
+				self::assertSame(200, $asWriter->ocs('GET', "/versions/$version/comments")['status']);
+			}
+			$members = $this->admin->ocs('GET', "/projects/$project/members")['data'];
+			self::assertSame([null], array_column(array_filter($members, static fn ($row) => $row['id'] === $writer), 'stored'));
+		} finally {
+			$this->admin->deleteProject($project);
+			$this->admin->delete($loose);
+		}
+	}
+
+	public function testNewcomersDoNotPinPeopleWhoComeInThroughAGroup(): void {
+		[$user, $member] = $this->member();
+		$group = $this->group($user);
+		$this->share(1, $group, 1);
+		self::assertSame(200, $this->setLevel('group', $group, 'view')['status']);
+		self::assertSame(403, $this->comment($member));
+
+		$this->setNewcomers('none');
+		self::assertNull($this->listed()[$user]['stored'], 'no entry of their own');
+		self::assertSame(403, $this->comment($member), 'still View through the group');
+
+		self::assertSame(200, $this->setLevel('group', $group, 'comment')['status']);
+		self::assertSame(201, $this->comment($member), 'later changes of the group reach them');
+	}
+
+	public function testSwitchingNewcomersChangesNothingForExistingMembers(): void {
+		[$reader, $asReader] = $this->member(1);
+		[$writer, $asWriter] = $this->member(15);
+		foreach (['view', 'none', 'files', 'none', 'view'] as $newcomers) {
+			$this->setNewcomers($newcomers);
+			self::assertSame(201, $this->comment($asReader), "Comment stays with newcomers $newcomers");
+			self::assertSame(200, $this->approve($asWriter), "Manage stays with newcomers $newcomers");
+			$listed = $this->listed();
+			self::assertSame(['comment', 'manage'], [$listed[$reader]['level'], $listed[$writer]['level']]);
+			self::assertSame([null, null], [$listed[$reader]['stored'], $listed[$writer]['stored']]);
+		}
+	}
+
+	public function testANewcomerAfterTheChangeStartsAtTheSetting(): void {
+		[$before] = $this->member(1);
+		$this->setNewcomers('view');
+		[$after, $asAfter] = $this->member(1);
+		self::assertSame(['comment', 'view'], [$this->listed()[$before]['level'], $this->listed()[$after]['level']]);
+		self::assertSame(403, $this->comment($asAfter));
+
+		// Another change keeps them where the setting put them when they came; the setting is for the next ones
+		$this->setNewcomers('none');
+		self::assertSame('view', $this->listed()[$after]['level']);
+		[$later] = $this->member(1);
+		self::assertSame('none', $this->listed()[$later]['level']);
 	}
 
 	public function testOnlyManageSeesAndSetsMembers(): void {
