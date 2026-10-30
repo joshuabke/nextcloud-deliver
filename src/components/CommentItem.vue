@@ -59,7 +59,7 @@ const overwriteDay = computed(() => new Date((store.overwrittenAt ?? 0) * 1000).
 const canReply = computed(() => !props.isReply && store.canComment === true && store.me?.type !== 'unnamed')
 /** A Member needs Comment to edit or delete their own Comments (ADR 0016), also on a Version closed for new ones; a Reviewer keeps theirs */
 const canChange = computed(() => mine.value && store.canChangeOwn)
-const canDelete = computed(() => canChange.value || store.canWrite)
+const canDelete = computed(() => canChange.value || store.manages)
 /** Reactions need a name to put on them, like Comments (story 91) */
 const canReact = computed(() => store.canComment === true && store.me?.type !== 'unnamed')
 
@@ -133,7 +133,7 @@ function saveReply() {
 				<span class="deliver-comment__spacer" />
 				<span v-if="number !== null" class="deliver-comment__number">#{{ number }}</span>
 				<NcButton
-					v-if="!isReply && store.canWrite"
+					v-if="!isReply && store.manages"
 					variant="tertiary"
 					size="small"
 					:disabled="busy"

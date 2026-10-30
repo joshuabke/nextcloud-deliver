@@ -16,7 +16,7 @@ final class Viewer {
 		public readonly ?string $uid,
 		public readonly ?int $reviewerId,
 		/** Manage: resolve, delete other people's Comments, export */
-		public readonly bool $canWrite,
+		public readonly bool $manages,
 		public readonly bool $canComment,
 		/** Approve a Version or request changes */
 		public readonly bool $canApprove,

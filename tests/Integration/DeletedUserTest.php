@@ -84,7 +84,7 @@ class DeletedUserTest extends TestCase {
 		// The Folder Project passes to whoever owns the folder
 		$kept = $this->keeper->ocs('GET', "/projects/$folderProject");
 		self::assertSame(200, $kept['status']);
-		self::assertTrue($kept['data']['canWrite']);
+		self::assertTrue($kept['data']['manages']);
 		$left = $this->keeper->ocs('GET', "/projects/$folderProject/links")['data'];
 		self::assertSame([], $left['links'], 'the links the account made are gone');
 		self::assertSame(['Kim'], array_column($left['reviewers'], 'name'), 'its Reviewers stay with the Project');

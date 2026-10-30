@@ -43,7 +43,7 @@ const { busy, error, run } = useBusy()
 const isFolder = computed(() => props.node?.type === 'folder')
 /** In review in a Project this Member has no access to: all they learn is that (ADR 0016) */
 const restricted = computed(() => asset.value?.restricted === true)
-const canWrite = computed(() => ((props.node?.permissions ?? 0) & Permission.UPDATE) !== 0)
+const filesWrite = computed(() => ((props.node?.permissions ?? 0) & Permission.UPDATE) !== 0)
 // Auto Intake holds a file in its folder's Project; removing it keeps it out (story 132), moving it elsewhere does not
 const ownedByAutoIntake = computed(() => !isFolder.value && asset.value?.autoIntake === true)
 const NO_PROJECT = { id: 0, label: t('deliver', 'No Project') }
@@ -194,14 +194,14 @@ async function remove() {
 			<NcCheckboxRadioSwitch
 				type="switch"
 				:modelValue="project ? project.autoIntake : intake"
-				:disabled="busy || !canWrite"
+				:disabled="busy || !filesWrite"
 				@update:modelValue="setIntake">
 				{{ t('deliver', 'Auto Intake: review every media file in this folder') }}
 			</NcCheckboxRadioSwitch>
 			<NcButton
 				v-if="!project"
 				variant="primary"
-				:disabled="busy || !canWrite"
+				:disabled="busy || !filesWrite"
 				@click="makeProject">
 				{{ t('deliver', 'Make this folder a Project') }}
 			</NcButton>
@@ -210,14 +210,14 @@ async function remove() {
 			v-else
 			type="switch"
 			:modelValue="asset !== null"
-			:disabled="busy || !canWrite || (asset !== null && !asset.canWrite)"
+			:disabled="busy || !filesWrite || (asset !== null && !asset.manages)"
 			@update:modelValue="toggle">
 			{{ t('deliver', 'Review in Deliver') }}
 		</NcCheckboxRadioSwitch>
 		<p v-if="ownedByAutoIntake" class="deliver-tab__hint">
 			{{ t('deliver', 'This folder is on Auto Intake, so the file stays in its Project. Removed, it stays out until it is added for review again.') }}
 		</p>
-		<p v-else-if="!canWrite" class="deliver-tab__hint">
+		<p v-else-if="!filesWrite" class="deliver-tab__hint">
 			{{ isFolder
 				? t('deliver', 'Write permission on the folder is required to turn it into a Project.')
 				: t('deliver', 'Write permission on the file is required to enable it for review.') }}
@@ -233,7 +233,7 @@ async function remove() {
 			:options="projectOptions"
 			:modelValue="assignedTo"
 			:clearable="false"
-			:disabled="busy || !asset.canWrite || ownedByAutoIntake"
+			:disabled="busy || !asset.manages || ownedByAutoIntake"
 			@update:modelValue="assign" />
 
 		<p v-if="asset" class="deliver-tab__hint">
@@ -244,7 +244,7 @@ async function remove() {
 			</template>
 		</p>
 
-		<section v-if="isFolder && project && project.canWrite" class="deliver-tab__section">
+		<section v-if="isFolder && project && project.manages" class="deliver-tab__section">
 			<h4>{{ t('deliver', 'Project settings') }}</h4>
 			<ProjectSettingsFields :project="project" :disabled="busy" @save="saveSettings" />
 		</section>
@@ -261,7 +261,7 @@ async function remove() {
 			{{ t('deliver', 'Open in Deliver') }}
 		</NcButton>
 		<NcButton
-			v-if="isFolder && project && project.canWrite"
+			v-if="isFolder && project && project.manages"
 			:disabled="busy"
 			variant="tertiary"
 			@click="remove">

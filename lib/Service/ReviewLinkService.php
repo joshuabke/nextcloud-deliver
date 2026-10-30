@@ -49,7 +49,7 @@ class ReviewLinkService {
 	public function create(string $uid, int $projectId, ?array $assetIds = null): array {
 		$link = new ReviewLinkRecord();
 		$projectId = $projectId === ProjectService::NONE ? null : $projectId;
-		$this->mayManage($uid, Scope::of($projectId, $uid));
+		$this->mayShare($uid, Scope::of($projectId, $uid));
 		$link->setProjectId($projectId);
 		$link->setAssetIds($this->picked($link, $assetIds));
 		if ($link->getProjectId() === null && $link->getAssetIds() === null) {
@@ -116,7 +116,7 @@ class ReviewLinkService {
 	public function listFor(string $uid, int $projectId): array {
 		$scope = Scope::of($projectId === ProjectService::NONE ? null : $projectId, $uid);
 		// A Deleted Project's links wait for its restore, as if it were gone (ADR 0015)
-		$this->mayManage($uid, $scope);
+		$this->mayShare($uid, $scope);
 		$links = $this->linkRecords->findByProject($scope);
 		return array_map(fn (ReviewLinkRecord $link) => $this->serialize($link), $links);
 	}
@@ -164,7 +164,7 @@ class ReviewLinkService {
 		if ($link === null) {
 			throw new NotFoundException('Link not found');
 		}
-		$this->mayManage($uid, Scope::of($link->getProjectId(), $link->getOwnerUid()));
+		$this->mayShare($uid, Scope::of($link->getProjectId(), $link->getOwnerUid()));
 		return $link;
 	}
 
@@ -176,14 +176,14 @@ class ReviewLinkService {
 	 * @throws NotFoundException no such Project, a Deleted Project (ADR 0015) or one the Member does not see
 	 * @throws AccessDeniedException another Member's, on No Project; a Project where they have no Share
 	 */
-	public function mayManage(string $uid, Scope $scope): void {
+	public function mayShare(string $uid, Scope $scope): void {
 		if ($scope->isNoProject()) {
 			if ($scope->ownerUids !== [$uid]) {
 				throw new AccessDeniedException('Only the Member they belong to changes links and Reviewers on No Project');
 			}
 			return;
 		}
-		$this->projects->shareable($uid, (int)$scope->projectId);
+		$this->projects->assertShare($uid, (int)$scope->projectId);
 	}
 
 	private function newToken(): string {

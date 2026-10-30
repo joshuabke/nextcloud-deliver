@@ -116,10 +116,14 @@ class ProjectApiController extends OCSController {
 		});
 	}
 
-	/** Replaces a Version's file with an upload next to it, keeping its Comments (ADR 0018) */
+	/**
+	 * Replaces a Version's file with an upload next to it, keeping its Comments (ADR 0018)
+	 *
+	 * @param int $fileId the file id of the upload, which the service calls $uploadId
+	 */
 	#[NoAdminRequired]
 	public function replace(int $id, int $fileId, bool $confirm = false): Response {
-		return $this->guard(fn () => $this->service->replaceFile((string)$this->userId, $id, $fileId, $confirm));
+		return $this->guard(fn () => $this->service->replaceFile((string)$this->userId, $id, uploadId: $fileId, confirm: $confirm));
 	}
 
 	#[NoAdminRequired]

@@ -78,10 +78,10 @@ class CollectionsTest extends TestCase {
 		$listed = array_column($this->guest->ocs('GET', '/projects')['data'], null, 'id');
 		self::assertArrayHasKey($project, $listed, 'a Project shows up for whoever can open one of its files');
 		self::assertSame(1, $listed[$project]['activity']['assets']);
-		self::assertFalse($listed[$project]['canWrite'], 'only who made it changes it');
+		self::assertFalse($listed[$project]['manages'], 'only who made it changes it');
 		$shown = $this->guest->ocs('GET', "/projects/$project")['data'];
 		self::assertSame(['cut'], array_column($shown['assets'], 'name'), 'and only the Assets they can open');
-		self::assertFalse($shown['assets'][0]['canWrite']);
+		self::assertFalse($shown['assets'][0]['manages']);
 
 		$comments = $this->guest->ocs('GET', "/versions/{$cut['versionId']}/comments");
 		self::assertSame([200, 'logo late'], [$comments['status'], $comments['data']['comments'][0]['body']]);

@@ -153,7 +153,7 @@ class AccessTest extends TestCase {
 		self::assertFalse($read['data']['canApprove']);
 		$project = $member->ocs('GET', "/projects/{$this->projectId}");
 		self::assertSame('view', $project['data']['access']['level']);
-		self::assertFalse($project['data']['canWrite']);
+		self::assertFalse($project['data']['manages']);
 		// View is notified and can be mentioned
 		self::assertContains($user, array_column($this->admin->ocs('GET', "/versions/{$this->versionId}/members")['data'], 'id'));
 	}

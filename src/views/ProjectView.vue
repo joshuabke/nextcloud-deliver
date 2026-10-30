@@ -164,7 +164,7 @@ watch(shown, (now) => {
 	selected.value = selected.value.filter((id) => now.some((asset) => asset.id === id))
 })
 /** The Assets on screen that can be ticked */
-const selectable = computed(() => selectAll(shown.value.filter((asset) => asset.canWrite)))
+const selectable = computed(() => selectAll(shown.value.filter((asset) => asset.manages)))
 /** Whether the ticked Assets are Missing ones; null while none is ticked. Missing ones are only ticked together (story 141) */
 const tickedMissing = computed(() => {
 	const first = project.value?.assets.find((asset) => selected.value.includes(asset.id))
@@ -188,7 +188,7 @@ function toggle(asset, range) {
 	if (range && anchor !== null) {
 		const missing = tickedMissing.value ?? allMissing(asset)
 		const order = groups.value.flatMap((group) => group.assets)
-		const added = between(order, anchor, asset.id).filter((each) => each.canWrite && allMissing(each) === missing)
+		const added = between(order, anchor, asset.id).filter((each) => each.manages && allMissing(each) === missing)
 		selected.value = [...new Set([...selected.value, ...added.map((each) => each.id)])]
 	} else {
 		selected.value = selected.value.includes(asset.id) ? selected.value.filter((id) => id !== asset.id) : [...selected.value, asset.id]
@@ -222,7 +222,7 @@ const adding = ref(new Set())
  * folder, and in another Project only once a folder of it is open
  */
 const canUpload = computed(() => {
-	if (project.value?.none === false && !project.value.canWrite) {
+	if (project.value?.none === false && !project.value.manages) {
 		return false
 	}
 	return project.value?.path ? project.value.filesWrite : folder.value.startsWith('/')
@@ -268,7 +268,7 @@ const stackOptions = computed(() => stackOptionsFor(stackingFile.value))
  */
 function stackOptionsFor(file) {
 	return (project.value?.assets ?? [])
-		.filter((asset) => asset.canWrite && stackKind(asset.versions) === mediaKind(file?.mimeType))
+		.filter((asset) => asset.manages && stackKind(asset.versions) === mediaKind(file?.mimeType))
 		.map((asset) => ({ id: asset.id, label: asset.name }))
 }
 
@@ -276,13 +276,13 @@ function stackOptionsFor(file) {
  * @param {string} url - WebDAV URL of the file
  * @param {string} name - its name
  * @param {number} fileId - the file, which Deliver renames
- * @param {boolean} canWrite - whether this Member may rename it
+ * @param {boolean} mayRename - whether this Member may rename it
  * @return {object[]} Download and, with write access, Rename (story 131)
  */
-function fileItems(url, name, fileId, canWrite) {
+function fileItems(url, name, fileId, mayRename) {
 	return [
 		{ label: t('deliver', 'Download'), icon: downloadIcon, href: url, download: name },
-		canWrite && { label: t('deliver', 'Rename…'), icon: renameIcon, action: () => { renaming.value = { name, fileId } } },
+		mayRename && { label: t('deliver', 'Rename…'), icon: renameIcon, action: () => { renaming.value = { name, fileId } } },
 	]
 }
 
@@ -303,15 +303,15 @@ async function rename(name) {
  * @param {object} file - a media file in the folder that is no Asset
  */
 function openFileMenu(event, file) {
-	const canWrite = file.canWrite
+	const canAdd = file.canAdd
 	const dir = projectDir(project.value.path) + (file.path ? '/' + file.path : '')
 	menu.value = {
 		x: event.clientX,
 		y: event.clientY,
 		items: [
-			canWrite && { label: t('deliver', 'Add for review'), icon: addIcon, action: () => add(file) },
-			canWrite && stackOptionsFor(file).length > 0 && { label: t('deliver', 'Add as a new Version of…'), icon: newVersionIcon, action: () => openStacking(file) },
-			...fileItems(davFolder(file.path) + '/' + encodeURIComponent(file.name), file.name, file.fileId, canWrite),
+			canAdd && { label: t('deliver', 'Add for review'), icon: addIcon, action: () => add(file) },
+			canAdd && stackOptionsFor(file).length > 0 && { label: t('deliver', 'Add as a new Version of…'), icon: newVersionIcon, action: () => openStacking(file) },
+			...fileItems(davFolder(file.path) + '/' + encodeURIComponent(file.name), file.name, file.fileId, canAdd),
 			{ label: t('deliver', 'Show in Files'), icon: filesIcon, href: generateUrl('/apps/files/files/{fileId}', { fileId: file.fileId }) + '?' + new URLSearchParams({ dir, opendetails: 'true' }) },
 		].filter(Boolean),
 	}
@@ -407,19 +407,19 @@ function assetItems(asset) {
 	return [
 		{ label: t('deliver', 'Open'), icon: openIcon, action: () => router.push(`/versions/${newest.id}`) },
 		previous && { label: t('deliver', 'Compare with the Version before'), icon: compareIcon, action: () => router.push(`/compare/${previous.id}/${newest.id}`) },
-		asset.canWrite && asset.filesWrite && { label: t('deliver', 'Upload a new Version'), icon: newVersionIcon, action: () => pickVersion(asset) },
-		asset.canWrite && newest.processingFailed && { label: t('deliver', 'Process again'), icon: retryIcon, action: () => processAgain([asset]) },
-		asset.canWrite && { label: asset.dueDate ? t('deliver', 'Change the Due Date') : t('deliver', 'Set a Due Date'), icon: dueIcon, action: () => { dueFor.value = [asset] } },
-		asset.canWrite && !isMobile.value && { label: t('deliver', 'Manage Versions'), icon: stackIcon, action: () => { managing.value = asset.id } },
-		asset.canWrite && { label: t('deliver', 'Move to Project…'), icon: moveIcon, action: () => openAssign([asset]) },
+		asset.manages && asset.filesWrite && { label: t('deliver', 'Upload a new Version'), icon: newVersionIcon, action: () => pickVersion(asset) },
+		asset.manages && newest.processingFailed && { label: t('deliver', 'Process again'), icon: retryIcon, action: () => processAgain([asset]) },
+		asset.manages && { label: asset.dueDate ? t('deliver', 'Change the Due Date') : t('deliver', 'Set a Due Date'), icon: dueIcon, action: () => { dueFor.value = [asset] } },
+		asset.manages && !isMobile.value && { label: t('deliver', 'Manage Versions'), icon: stackIcon, action: () => { managing.value = asset.id } },
+		asset.manages && { label: t('deliver', 'Move to Project…'), icon: moveIcon, action: () => openAssign([asset]) },
 		...(newest.url ? fileItems(newest.url, newest.name, newest.fileId, asset.filesWrite) : []),
 		{
 			label: t('deliver', 'Show in Files'),
 			icon: filesIcon,
 			href: generateUrl('/apps/files/files/{fileId}', { fileId: newest.fileId }) + '?' + new URLSearchParams({ dir, opendetails: 'true' }),
 		},
-		asset.canWrite && { label: project.value.none ? t('deliver', 'Remove from Deliver') : t('deliver', 'Remove from Project'), icon: removeIcon, danger: true, action: () => remove([asset]) },
-		asset.canWrite && asset.filesWrite && { label: t('deliver', 'Delete'), icon: deleteIcon, danger: true, action: () => deleteFiles([asset]) },
+		asset.manages && { label: project.value.none ? t('deliver', 'Remove from Deliver') : t('deliver', 'Remove from Project'), icon: removeIcon, danger: true, action: () => remove([asset]) },
+		asset.manages && asset.filesWrite && { label: t('deliver', 'Delete'), icon: deleteIcon, danger: true, action: () => deleteFiles([asset]) },
 	]
 }
 
@@ -664,7 +664,7 @@ function dropped(event) {
 						:key="asset.id"
 						:asset="asset"
 						:candidates="suggestions.get(asset.id) ?? []"
-						:canWrite="asset.canWrite"
+						:manages="asset.manages"
 						:selected="selected.includes(asset.id)"
 						:selecting="selected.length > 0"
 						:locked="tickedMissing !== null && tickedMissing !== allMissing(asset)"
@@ -687,7 +687,7 @@ function dropped(event) {
 						:key="file.fileId"
 						:file="file"
 						:where="file.path ? file.path : project.name"
-						:canAdd="file.canWrite"
+						:canAdd="file.canAdd"
 						:adding="adding.has(file.fileId)"
 						@add="add(file)"
 						@contextmenu.prevent="openFileMenu($event, file)"

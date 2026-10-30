@@ -148,7 +148,7 @@ class ProjectService {
 				'path' => ltrim(substr(dirname($file->getPath()), strlen($folder->getPath())), '/'),
 				'mimeType' => $file->getMimetype(),
 				// Adding it for review takes Files' write access and Manage
-				'canWrite' => self::canWrite($file) && $manages,
+				'canAdd' => self::canWrite($file) && $manages,
 			], $this->looseFiles($project, $folder)),
 		];
 	}
@@ -392,7 +392,7 @@ class ProjectService {
 			// Auto Intake holds the file while it lies in the Folder Project's folder
 			'autoIntake' => $project !== null && $project->getAutoIntake() && $this->projects->findAbove($file)?->getId() === $project->getId(),
 			// Manage its Asset: enable and disable it, stack it
-			'canWrite' => $grant->manages(),
+			'manages' => $grant->manages(),
 			'access' => $grant->toArray(),
 			// Without ffmpeg the browser that uploaded the audio decodes its Waveform from the file it holds (ADR 0012); a WAV's comes from its PCM here
 			'waveformFromBrowser' => $version->getWaveformState() === DerivedMedia::STATE_NONE
@@ -738,7 +738,7 @@ class ProjectService {
 		return [
 			'versionId' => $versionId,
 			// Manage its Asset: Version Numbers, metadata, stacking, resolving
-			'canWrite' => $grant->manages(),
+			'manages' => $grant->manages(),
 			'access' => $grant->toArray(),
 			// Upload a new cut: Files' write access to its file
 			'filesWrite' => $versionFile !== null && self::canWrite($versionFile),
@@ -755,7 +755,7 @@ class ProjectService {
 		$file = $file instanceof File ? $file : null;
 		$media = $this->urls->linkToRoute('deliver.media.show', ['id' => $version->getId(), 'kind' => '__kind__']);
 		return $this->describeVersion($version, $this->settingsOf($version), $file === null ? null : $this->davUrl($uid, $file), $media)
-			+ ['mimeType' => $file?->getMimeType(), 'canWrite' => $grant->manages(), 'deliveredBy' => $this->deliveredBy($version), 'createdAt' => $version->getCreatedAt()];
+			+ ['mimeType' => $file?->getMimeType(), 'manages' => $grant->manages(), 'deliveredBy' => $this->deliveredBy($version), 'createdAt' => $version->getCreatedAt()];
 	}
 
 	/** Who delivered the Version, for Members only; null when nobody's request did */
@@ -1155,7 +1155,7 @@ class ProjectService {
 	 * @throws NotFoundException no such Project, a Deleted Project or one the Member does not see
 	 * @throws AccessDeniedException they have no Share, or Files lets them reshare nothing of it
 	 */
-	public function shareable(string $uid, int $id): void {
+	public function assertShare(string $uid, int $id): void {
 		[$project, $folder] = $this->visible($uid, $id);
 		if (!$this->projectGrant($project, $folder, $uid)->share) {
 			throw new AccessDeniedException('Only a Member with Share manages the Review Links and Reviewers of a Project');
@@ -1413,7 +1413,7 @@ class ProjectService {
 				];
 			}
 			$newestFile = $files[$newestByAsset[$asset->getId()]->getId()] ?? null;
-			$canWrite = $this->managesAsset($uid, $project, $newestByAsset[$asset->getId()], $files);
+			$manages = $this->managesAsset($uid, $project, $newestByAsset[$asset->getId()], $files);
 			$result[] = [
 				'id' => $asset->getId(),
 				'name' => $this->stacks->nameOf($asset),
@@ -1421,7 +1421,7 @@ class ProjectService {
 				'parentId' => $asset->getParentId(),
 				'dueDate' => $asset->getDueDate(),
 				// Manage its Stack, set its Due Date, assign it: Manage in its Project, taken from its newest Version
-				'canWrite' => $canWrite,
+				'manages' => $manages,
 				// Upload a new Version, rename it, delete it: Files' write access to its newest file
 				'filesWrite' => $newestFile !== null && self::canWrite($newestFile),
 				// For sorting: when its first Version arrived, and when anything last happened on it
@@ -1513,7 +1513,7 @@ class ProjectService {
 			'path' => $folder?->getPath(),
 			'none' => false,
 			// Change its settings, rename or remove it: Manage (ADR 0016)
-			'canWrite' => $grant->manages(),
+			'manages' => $grant->manages(),
 			// Upload into its folder: Files' write access
 			'filesWrite' => $folder !== null && self::canWrite($folder),
 			'access' => $grant->toArray(),
@@ -1539,7 +1539,7 @@ class ProjectService {
 			'name' => '',
 			'path' => null,
 			'none' => true,
-			'canWrite' => false,
+			'manages' => false,
 			'filesWrite' => false,
 			'access' => (new Grant(Grant::MANAGE, true, true))->toArray(),
 			'newcomers' => Project::NEWCOMERS_FILES,

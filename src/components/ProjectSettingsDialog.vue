@@ -58,7 +58,7 @@ async function remove() {
 				@update:modelValue="save({ muted: $event })">
 				{{ t('deliver', 'Mute notifications') }}
 			</NcCheckboxRadioSwitch>
-			<template v-if="project.canWrite">
+			<template v-if="project.manages">
 				<NcTextField
 					v-if="!project.folderId"
 					v-model="name"
@@ -82,7 +82,7 @@ async function remove() {
 		</div>
 		<template #actions>
 			<NcButton
-				v-if="project.canWrite"
+				v-if="project.manages"
 				variant="error"
 				:disabled="busy"
 				@click="remove">

@@ -147,7 +147,7 @@ class ReviewerApiController extends OCSController {
 		if ($reviewer->getRemovedAt() !== null) {
 			throw new AccessDeniedException('A removed Reviewer is not changed');
 		}
-		$this->linkService->mayManage((string)$this->userId, Scope::ofReviewer($reviewer));
+		$this->linkService->mayShare((string)$this->userId, Scope::ofReviewer($reviewer));
 		return $reviewer;
 	}
 }
