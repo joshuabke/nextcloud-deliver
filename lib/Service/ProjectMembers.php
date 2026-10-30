@@ -181,9 +181,6 @@ class ProjectMembers {
 			if ($group === null) {
 				continue;
 			}
-			if ($project->getNewcomers() !== null) {
-				$this->access->see($project, MemberMapper::GROUP, $gid);
-			}
 			$rows[] = $this->groupRow($project, $gid, $permissions);
 			foreach ($group->getUsers() as $member) {
 				$via[$member->getUID()][] = ['id' => $gid, 'name' => $group->getDisplayName()];
