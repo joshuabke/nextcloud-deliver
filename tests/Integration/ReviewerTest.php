@@ -396,6 +396,20 @@ class ReviewerTest extends TestCase {
 		self::assertSame(200, $asReviewer->call('GET', "/api/versions/{$this->versionId}/comments")['status'], 'reading stays');
 	}
 
+	public function testAReviewerEditsTheirCommentOnlyWhereTheLinkTakesComments(): void {
+		$asReviewer = $this->reviewer();
+		$asReviewer->call('POST', '/api/reviewer', ['name' => 'Mara']);
+		$edited = $this->comment($asReviewer, ['inFrame' => 10, 'body' => 'first']);
+		$deleted = $this->comment($asReviewer, ['inFrame' => 20, 'body' => 'second']);
+		self::assertSame(200, $asReviewer->call('PUT', "/api/comments/{$edited['id']}", ['body' => 'first, better'])['status']);
+
+		$this->setFlags(['canComment' => false]);
+		$read = $asReviewer->call('GET', "/api/versions/{$this->versionId}/comments")['data'];
+		self::assertSame([false, true], [$read['canEditOwn'], $read['canDeleteOwn']], 'the client offers Delete only');
+		self::assertSame(403, $asReviewer->call('PUT', "/api/comments/{$edited['id']}", ['body' => 'rewritten'])['status']);
+		self::assertSame(200, $asReviewer->call('DELETE', "/api/comments/{$deleted['id']}")['status']);
+	}
+
 	public function testAMemberInvitesAReviewerAndReissuesTheLinkLater(): void {
 		$invited = $this->nc->ocs('POST', "/links/{$this->linkId}/reviewers", ['name' => 'Jo', 'email' => 'jo@example.test']);
 		self::assertSame(201, $invited['status'], json_encode($invited['data']));

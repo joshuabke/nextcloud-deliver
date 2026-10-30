@@ -53,10 +53,16 @@ final class Viewer {
 	}
 
 	/**
-	 * Whether the Comments they wrote are still theirs to edit and delete: a
-	 * Member needs Comment (ADR 0016), a Reviewer keeps theirs.
+	 * Whether the Comments they wrote are still theirs to edit: only where
+	 * they may comment, a Member with Comment (ADR 0016), a Reviewer where
+	 * their link and own rights let them.
 	 */
-	public function mayChangeOwn(): bool {
+	public function mayEditOwn(): bool {
+		return $this->canComment;
+	}
+
+	/** Whether the Comments they wrote are still theirs to delete: a Reviewer keeps that when commenting is off */
+	public function mayDeleteOwn(): bool {
 		return $this->canComment || $this->reviewerId !== null;
 	}
 
