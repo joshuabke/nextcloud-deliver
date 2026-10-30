@@ -10,6 +10,7 @@
 - Show who made a Review Link in the navigation.
 - Set what each Member may do in a Project: None, View, Comment or Manage, with Share and Approve, defaulting to what Files allows.
 - Choose what someone newly given access in Files starts with: as in Files, View or None; it applies only to people who come after the change.
+- Let someone new in a group start where the group stands in the Project.
 - List a Project's Members, people and groups, with `GET /projects/{id}/members`, and set them with `PUT` and `DELETE`.
 - List the groups of a group folder as Members of its Project.
 
