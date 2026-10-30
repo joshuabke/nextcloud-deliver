@@ -100,14 +100,14 @@ Deliver becomes a proper Nextcloud app, rebuilt from scratch, in which media fil
 
 ### Export
 
-67. As a Member with write access, I want to export a Version's Comments as CMX3600 EDL with marker notes, so that DaVinci Resolve imports them as markers.
-68. As a Member with write access, I want to export as FCP7 XML with markers, so that Premiere Pro imports them.
-69. As a Member with write access, I want to export as CSV, so that any other tool can consume them.
-70. As a Member with write access, I want an "unresolved only" toggle on export, so that only open feedback reaches the timeline.
-71. As a Member with write access, I want Ranges exported as markers with duration and Replies appended to the marker note, so that nothing is lost in the NLE.
-72. As a Member with write access, I want exports to use the file's embedded start timecode by default with a zero-based switch, so that markers land on the right timeline position.
-85. As a Member with write access, I want to export the Comments of an audio-only Version as markers for Pro Tools, Logic Pro, Cubase, Nuendo, REAPER, Ableton Live, Sequoia and Pyramix, so that audio feedback reaches the session the way video feedback reaches the NLE.
-86. As a Member with write access, I want to export as FCPXML with markers, so that Final Cut Pro imports them.
+67. As a Member with Manage, I want to export a Version's Comments as CMX3600 EDL with marker notes, so that DaVinci Resolve imports them as markers.
+68. As a Member with Manage, I want to export as FCP7 XML with markers, so that Premiere Pro imports them.
+69. As a Member with Manage, I want to export as CSV, so that any other tool can consume them.
+70. As a Member with Manage, I want an "unresolved only" toggle on export, so that only open feedback reaches the timeline.
+71. As a Member with Manage, I want Ranges exported as markers with duration and Replies appended to the marker note, so that nothing is lost in the NLE.
+72. As a Member with Manage, I want exports to use the file's embedded start timecode by default with a zero-based switch, so that markers land on the right timeline position.
+85. As a Member with Manage, I want to export the Comments of an audio-only Version as markers for Pro Tools, Logic Pro, Cubase, Nuendo, REAPER, Ableton Live, Sequoia and Pyramix, so that audio feedback reaches the session the way video feedback reaches the NLE.
+86. As a Member with Manage, I want to export as FCPXML with markers, so that Final Cut Pro imports them.
 
 ### Derived media and administration
 
@@ -309,7 +309,7 @@ Nextcloud hands a deleted account's user id to the next account created under it
 ### Permissions
 
 - Which Assets a person sees follows each Version's file (ADR 0009); what they do with them is their Access level in the Project (ADR 0016), defaulting to read giving Comment and write giving Manage. Whatever touches a file (upload, rename, delete it) also needs write access in Files. The Project as a whole (its settings, its Members, deleting it) takes Manage there: by default write access to a Folder Project's folder, and on any other Project only the owner, while write access to a single file lets a Member manage that Asset. Someone with None gets 404 for the Project and its Versions, nothing is notified to them and they are not offered as a Mention.
-- View: see the review, export view. Notified and mentionable.
+- View: see the review. Notified and mentionable.
 - Comment: everything above plus comment, reply, edit and delete own Comments. A Comment that someone else has replied to is deleted only with Manage, so nobody deletes another person's Reply along with their own Comment.
 - Manage: everything above plus enable and disable files, assign them to a Project, stack and unstack (on both Assets), set Version Numbers, override metadata, resolve and unresolve, delete any Comment, regenerate derived media, export, the Project's settings and its Members' levels, never above their own.
 - Approve (a switch, from Comment up): approve a Version or request changes. Share (a switch, offered where Files lets the Member reshare): make, change and delete the Project's Review Links and manage its Reviewers; a link shows only files the Member who made it may reshare (ADR 0010).
