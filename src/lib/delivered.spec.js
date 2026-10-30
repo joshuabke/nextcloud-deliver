@@ -1,8 +1,6 @@
-import { getCanonicalLocale } from '@nextcloud/l10n'
 import { describe, expect, it } from 'vitest'
+import { day as date } from './day.js'
 import { delivered } from './delivered.js'
-
-const date = (seconds) => new Date(seconds * 1000).toLocaleDateString(getCanonicalLocale(), { dateStyle: 'medium' })
 
 describe('delivered', () => {
 	it('joins who and when', () => {

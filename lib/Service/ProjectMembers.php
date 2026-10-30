@@ -371,7 +371,7 @@ class ProjectMembers {
 	private function ownersCopy(int $fileId): ?Node {
 		$candidates = array_values(array_filter(
 			$this->root->getById($fileId),
-			static fn (Node $node) => preg_match('#^/[^/]+/files(/|$)#', $node->getPath()) === 1,
+			Access::isOwnersCopy(...),
 		));
 		$owner = ($candidates[0] ?? null)?->getOwner()?->getUID();
 		foreach ($candidates as $node) {

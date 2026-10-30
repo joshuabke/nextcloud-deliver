@@ -80,7 +80,7 @@ class FileLock {
 
 	/** Lifts the lock, as the Version leaves Deliver or its Project is deleted */
 	public function release(Version $version): void {
-		if ($this->locks->isLockProviderAvailable()) {
+		if ($this->available()) {
 			$this->apply($version, false);
 		}
 	}
@@ -96,7 +96,7 @@ class FileLock {
 
 	/** Whether the running code is in Deliver's lock scope: a write now is Deliver's own */
 	public function inOwnScope(): bool {
-		return $this->locks->isLockProviderAvailable() && $this->locks->getLockInScope()?->getOwner() === Application::APP_ID;
+		return $this->available() && $this->locks->getLockInScope()?->getOwner() === Application::APP_ID;
 	}
 
 	private function apply(Version $version, bool $wanted): void {

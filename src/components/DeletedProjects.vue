@@ -1,13 +1,13 @@
 <script setup>
 import closedIcon from '@mdi/svg/svg/chevron-down.svg?raw'
 import openIcon from '@mdi/svg/svg/chevron-up.svg?raw'
-import { getCanonicalLocale } from '@nextcloud/l10n'
 import { ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import { deleteProjectForGood, listDeletedProjects, restoreProject } from '../api.js'
 import { useBusy } from '../composables/busy.js'
 import { confirmDeleteForGood } from '../confirm.js'
+import { day } from '../lib/day.js'
 import { t } from '../lib/l10n.js'
 
 // The Deleted Projects this Member may restore, collapsed at the end of the Project list (story 148)
@@ -23,12 +23,6 @@ async function load() {
 }
 run(load)
 defineExpose({ load })
-
-/**
- * @param {number} seconds - a Unix time
- * @return {string} its day, as the user's locale writes it
- */
-const day = (seconds) => new Date(seconds * 1000).toLocaleDateString(getCanonicalLocale(), { dateStyle: 'medium' })
 
 /**
  * @param {object} project - a Deleted Project

@@ -964,7 +964,7 @@ class ProjectService {
 			}
 			foreach ($nodes as $folder) {
 				// The owner's own copy of the folder, not a share of it and not the trash
-				if ($folder instanceof Folder && preg_match('#^/[^/]+/files(/|$)#', $folder->getPath()) === 1) {
+				if ($folder instanceof Folder && Access::isOwnersCopy($folder)) {
 					if ($project->getName() !== $folder->getName()) {
 						$project->setName($folder->getName());
 						$this->projects->update($project);
