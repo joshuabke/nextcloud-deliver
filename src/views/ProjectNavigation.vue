@@ -68,6 +68,8 @@ const invitingOpen = ref(false)
 const canMail = ref(false)
 
 const project = computed(() => store.details[props.id])
+/** Whether this Member manages the Project's links and Reviewers: Share (ADR 0016) */
+const canShare = computed(() => project.value?.access?.share ?? false)
 /** Whose links are not marked as made by someone else */
 const me = getCurrentUser()?.uid
 const folders = computed(() => folderTree(project.value?.assets ?? []))
@@ -213,104 +215,107 @@ function personalLink(reviewer) {
 				</template>
 			</NcAppNavigationItem>
 
-			<NcAppNavigationCaption :name="t('deliver', 'Links')" :inline="1">
-				<template v-if="project && !project.none" #actions>
-					<NcActionButton :aria-label="t('deliver', 'Create Review Link')" @click="createLink">
-						<template #icon>
-							<NcIconSvgWrapper :svg="addIcon" />
-						</template>
-						{{ t('deliver', 'Create Review Link') }}
-					</NcActionButton>
-				</template>
-			</NcAppNavigationCaption>
-			<li v-if="links.length === 0" class="deliver-navigation__hint">
-				{{ t('deliver', 'No link with review yet.') }}
-			</li>
-			<NcAppNavigationItem
-				v-for="link in links"
-				:key="link.token"
-				:name="link.title"
-				:allowCollapse="link.reviewerIds.length > 0"
-				:open="true"
-				:inlineActions="1"
-				@click="editing = link">
-				<template #icon>
-					<NcIconSvgWrapper :svg="iconOf(link)" />
-				</template>
-				<template #actions>
-					<NcActionButton :aria-label="t('deliver', 'Copy link')" @click="copyLink(link.url, t('deliver', 'Link copied'))">
-						<template #icon>
-							<NcIconSvgWrapper :svg="copyIcon" />
-						</template>
-						{{ t('deliver', 'Copy link') }}
-					</NcActionButton>
-				</template>
-				<li v-if="link.madeBy.id !== me" class="deliver-navigation__made-by">
-					{{ t('deliver', 'Made by {name}', { name: link.madeBy.name }) }}
+			<!-- Review Links and Reviewers are for Members with Share (ADR 0016) -->
+			<template v-if="canShare">
+				<NcAppNavigationCaption :name="t('deliver', 'Links')" :inline="1">
+					<template v-if="project && !project.none" #actions>
+						<NcActionButton :aria-label="t('deliver', 'Create Review Link')" @click="createLink">
+							<template #icon>
+								<NcIconSvgWrapper :svg="addIcon" />
+							</template>
+							{{ t('deliver', 'Create Review Link') }}
+						</NcActionButton>
+					</template>
+				</NcAppNavigationCaption>
+				<li v-if="links.length === 0" class="deliver-navigation__hint">
+					{{ t('deliver', 'No link with review yet.') }}
 				</li>
-				<!-- Who is on this link; a click opens their rights on it, their Personal Link through it is one click away -->
 				<NcAppNavigationItem
-					v-for="reviewer in link.reviewerIds.map((id) => byId.get(id)).filter(Boolean)"
-					:key="reviewer.id"
-					:name="reviewer.name"
+					v-for="link in links"
+					:key="link.token"
+					:name="link.title"
+					:allowCollapse="link.reviewerIds.length > 0"
+					:open="true"
 					:inlineActions="1"
-					@click="openRights = { reviewerId: reviewer.id, link }">
+					@click="editing = link">
 					<template #icon>
-						<PersonAvatar :author="{ type: 'reviewer', id: reviewer.id, name: reviewer.name }" :size="24" />
+						<NcIconSvgWrapper :svg="iconOf(link)" />
 					</template>
 					<template #actions>
-						<NcActionButton
-							v-if="personalLinkOn(reviewer, link)?.url"
-							:aria-label="t('deliver', 'Copy Personal Link')"
-							@click="copyLink(personalLinkOn(reviewer, link).url, t('deliver', 'Personal Link copied'))">
+						<NcActionButton :aria-label="t('deliver', 'Copy link')" @click="copyLink(link.url, t('deliver', 'Link copied'))">
 							<template #icon>
 								<NcIconSvgWrapper :svg="copyIcon" />
 							</template>
-							{{ t('deliver', 'Copy Personal Link') }}
+							{{ t('deliver', 'Copy link') }}
 						</NcActionButton>
 					</template>
-				</NcAppNavigationItem>
-			</NcAppNavigationItem>
-
-			<NcAppNavigationCaption :name="t('deliver', 'Reviewers')" :inline="1">
-				<template v-if="project" #actions>
-					<NcActionButton :aria-label="t('deliver', 'Invite a Reviewer')" @click="invitingOpen = true">
+					<li v-if="link.madeBy.id !== me" class="deliver-navigation__made-by">
+						{{ t('deliver', 'Made by {name}', { name: link.madeBy.name }) }}
+					</li>
+					<!-- Who is on this link; a click opens their rights on it, their Personal Link through it is one click away -->
+					<NcAppNavigationItem
+						v-for="reviewer in link.reviewerIds.map((id) => byId.get(id)).filter(Boolean)"
+						:key="reviewer.id"
+						:name="reviewer.name"
+						:inlineActions="1"
+						@click="openRights = { reviewerId: reviewer.id, link }">
 						<template #icon>
-							<NcIconSvgWrapper :svg="addIcon" />
+							<PersonAvatar :author="{ type: 'reviewer', id: reviewer.id, name: reviewer.name }" :size="24" />
 						</template>
-						{{ t('deliver', 'Invite a Reviewer') }}
-					</NcActionButton>
-				</template>
-			</NcAppNavigationCaption>
-			<li v-if="reviewers.length === 0" class="deliver-navigation__hint">
-				{{ t('deliver', 'No Reviewers yet.') }}
-			</li>
-			<template v-else>
-				<NcAppNavigationItem
-					v-for="reviewer in reviewers"
-					:key="reviewer.id"
-					:name="reviewer.name"
-					:title="reviewer.email ?? ''"
-					:inlineActions="1"
-					@click="person = reviewer">
-					<template #icon>
-						<PersonAvatar :author="{ type: 'reviewer', id: reviewer.id, name: reviewer.name }" :size="24" />
-					</template>
-					<template #actions>
-						<NcActionButton v-if="personalLink(reviewer)" :aria-label="t('deliver', 'Copy Personal Link')" @click="copyLink(personalLink(reviewer), t('deliver', 'Personal Link copied'))">
-							<template #icon>
-								<NcIconSvgWrapper :svg="copyIcon" />
-							</template>
-							{{ t('deliver', 'Copy Personal Link') }}
-						</NcActionButton>
-						<NcActionButton v-if="reviewer.email" :disabled="reviewer.inContacts === true" @click="saveContact(reviewer)">
-							<template #icon>
-								<NcIconSvgWrapper :svg="contactIcon" />
-							</template>
-							{{ reviewer.inContacts ? t('deliver', 'In your contacts') : t('deliver', 'Save to Contacts') }}
-						</NcActionButton>
-					</template>
+						<template #actions>
+							<NcActionButton
+								v-if="personalLinkOn(reviewer, link)?.url"
+								:aria-label="t('deliver', 'Copy Personal Link')"
+								@click="copyLink(personalLinkOn(reviewer, link).url, t('deliver', 'Personal Link copied'))">
+								<template #icon>
+									<NcIconSvgWrapper :svg="copyIcon" />
+								</template>
+								{{ t('deliver', 'Copy Personal Link') }}
+							</NcActionButton>
+						</template>
+					</NcAppNavigationItem>
 				</NcAppNavigationItem>
+
+				<NcAppNavigationCaption :name="t('deliver', 'Reviewers')" :inline="1">
+					<template v-if="project" #actions>
+						<NcActionButton :aria-label="t('deliver', 'Invite a Reviewer')" @click="invitingOpen = true">
+							<template #icon>
+								<NcIconSvgWrapper :svg="addIcon" />
+							</template>
+							{{ t('deliver', 'Invite a Reviewer') }}
+						</NcActionButton>
+					</template>
+				</NcAppNavigationCaption>
+				<li v-if="reviewers.length === 0" class="deliver-navigation__hint">
+					{{ t('deliver', 'No Reviewers yet.') }}
+				</li>
+				<template v-else>
+					<NcAppNavigationItem
+						v-for="reviewer in reviewers"
+						:key="reviewer.id"
+						:name="reviewer.name"
+						:title="reviewer.email ?? ''"
+						:inlineActions="1"
+						@click="person = reviewer">
+						<template #icon>
+							<PersonAvatar :author="{ type: 'reviewer', id: reviewer.id, name: reviewer.name }" :size="24" />
+						</template>
+						<template #actions>
+							<NcActionButton v-if="personalLink(reviewer)" :aria-label="t('deliver', 'Copy Personal Link')" @click="copyLink(personalLink(reviewer), t('deliver', 'Personal Link copied'))">
+								<template #icon>
+									<NcIconSvgWrapper :svg="copyIcon" />
+								</template>
+								{{ t('deliver', 'Copy Personal Link') }}
+							</NcActionButton>
+							<NcActionButton v-if="reviewer.email" :disabled="reviewer.inContacts === true" @click="saveContact(reviewer)">
+								<template #icon>
+									<NcIconSvgWrapper :svg="contactIcon" />
+								</template>
+								{{ reviewer.inContacts ? t('deliver', 'In your contacts') : t('deliver', 'Save to Contacts') }}
+							</NcActionButton>
+						</template>
+					</NcAppNavigationItem>
+				</template>
 			</template>
 		</template>
 		<template #footer>
@@ -350,7 +355,7 @@ function personalLink(reviewer) {
 				v-if="person"
 				:reviewer="person"
 				:links="links"
-				:canWrite="project?.canWrite ?? false"
+				:canWrite="canShare"
 				@changed="load()"
 				@remove="dropReviewer(person)"
 				@close="person = null" />

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Listener;
 
+use OCA\Deliver\Db\MemberMapper;
 use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\ReviewerMapper;
 use OCA\Deliver\Db\ReviewLinkMapper;
@@ -29,6 +30,7 @@ use OCP\User\Events\UserDeletedEvent;
 class UserDeletedListener implements IEventListener {
 	public function __construct(
 		private ProjectMapper $projects,
+		private MemberMapper $members,
 		private ReviewLinkMapper $linkRecords,
 		private ReviewerMapper $reviewerMapper,
 		private ReviewerService $reviewers,
@@ -63,6 +65,7 @@ class UserDeletedListener implements IEventListener {
 			$this->reviewers->remove($reviewer);
 		}
 		$this->reviewerMapper->releaseOwner($uid);
+		$this->members->deleteByPrincipal(MemberMapper::USER, $uid);
 		foreach (['deliver_seen', 'deliver_mutes'] as $table) {
 			$qb = $this->db->getQueryBuilder();
 			$qb->delete($table)->where($qb->expr()->eq('user_id', $qb->createNamedParameter($uid)))->executeStatement();

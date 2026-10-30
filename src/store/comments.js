@@ -26,6 +26,8 @@ export const useCommentsStore = defineStore('comments', {
 		overwrittenAt: null,
 		/** Null until the first answer; false where the person may only read */
 		canComment: null,
+		/** Null until the first answer; whether this person may approve or request changes */
+		canApprove: null,
 		/** Me, in the shape of a Comment's author */
 		me: null,
 		/**
@@ -113,6 +115,7 @@ export const useCommentsStore = defineStore('comments', {
 			this.canWrite = answer.canWrite
 			this.overwrittenAt = answer.overwrittenAt
 			this.canComment = answer.canComment
+			this.canApprove = answer.canApprove
 			this.me = answer.me
 			this.seenUntil = answer.seenUntil
 			this.approvals = answer.approvals

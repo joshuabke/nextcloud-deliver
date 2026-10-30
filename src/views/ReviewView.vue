@@ -235,7 +235,7 @@ function upload(event) {
 				</template>
 			</NcButton>
 			<VersionPicker :versions="context.versions" :current="id" @select="$router.push(`/versions/${$event}`)" />
-			<template v-if="context.canWrite">
+			<template v-if="context.canWrite && context.filesWrite">
 				<NcButton
 					v-if="folderUrl && !isMobile"
 					:title="t('deliver', 'Upload a new cut and stack it on top')"
@@ -251,13 +251,13 @@ function upload(event) {
 					:accept="acceptFor(version?.mimeType)"
 					hidden
 					@change="upload">
-				<NcButton v-if="version?.url && !isMobile" @click="sharing = true">
-					<template #icon>
-						<NcIconSvgWrapper :svg="shareIcon" />
-					</template>
-					{{ t('deliver', 'Share') }}
-				</NcButton>
 			</template>
+			<NcButton v-if="context.access.share && version?.url && !isMobile" @click="sharing = true">
+				<template #icon>
+					<NcIconSvgWrapper :svg="shareIcon" />
+				</template>
+				{{ t('deliver', 'Share') }}
+			</NcButton>
 		</template>
 
 		<template #menu>
@@ -273,29 +273,27 @@ function upload(event) {
 				</template>
 				{{ t('deliver', 'Next Asset') }}
 			</NcActionButton>
-			<template v-if="context.canWrite">
-				<NcActionButton
-					v-if="folderUrl"
-					closeAfterClick
-					@click="fileInput.click()">
-					<template #icon>
-						<NcIconSvgWrapper :svg="uploadIcon" />
-					</template>
-					{{ t('deliver', 'New Version') }}
-				</NcActionButton>
-				<NcActionButton v-if="!context.asset.dueDate" closeAfterClick @click="pickingDue = true">
-					<template #icon>
-						<NcIconSvgWrapper :svg="dueIcon" />
-					</template>
-					{{ t('deliver', 'Set a Due Date') }}
-				</NcActionButton>
-				<NcActionButton v-if="version?.url" closeAfterClick @click="sharing = true">
-					<template #icon>
-						<NcIconSvgWrapper :svg="shareIcon" />
-					</template>
-					{{ t('deliver', 'Share') }}
-				</NcActionButton>
-			</template>
+			<NcActionButton
+				v-if="context.canWrite && context.filesWrite && folderUrl"
+				closeAfterClick
+				@click="fileInput.click()">
+				<template #icon>
+					<NcIconSvgWrapper :svg="uploadIcon" />
+				</template>
+				{{ t('deliver', 'New Version') }}
+			</NcActionButton>
+			<NcActionButton v-if="context.canWrite && !context.asset.dueDate" closeAfterClick @click="pickingDue = true">
+				<template #icon>
+					<NcIconSvgWrapper :svg="dueIcon" />
+				</template>
+				{{ t('deliver', 'Set a Due Date') }}
+			</NcActionButton>
+			<NcActionButton v-if="context.access.share && version?.url" closeAfterClick @click="sharing = true">
+				<template #icon>
+					<NcIconSvgWrapper :svg="shareIcon" />
+				</template>
+				{{ t('deliver', 'Share') }}
+			</NcActionButton>
 		</template>
 
 		<template #notice>

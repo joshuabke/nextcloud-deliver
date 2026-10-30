@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Controller;
 
+use OCA\Deliver\Service\ProjectMembers;
 use OCA\Deliver\Service\ProjectService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -19,6 +20,7 @@ class ProjectApiController extends OCSController {
 		string $appName,
 		IRequest $request,
 		private ProjectService $service,
+		private ProjectMembers $members,
 		private ?string $userId,
 	) {
 		parent::__construct($appName, $request);
@@ -74,11 +76,15 @@ class ProjectApiController extends OCSController {
 		?int $fpsDen = null,
 		?string $timecodeMode = null,
 		?string $name = null,
+		?string $newcomers = null,
 		?bool $lockFiles = null,
 	): Response {
-		return $this->guard(fn () => $this->service->updateSettings(
-			(string)$this->userId, $id, $autoIntake, $allowOlder, $fpsNum, $fpsDen, $timecodeMode, $name, $lockFiles,
-		));
+		return $this->guard(function () use ($id, $autoIntake, $allowOlder, $fpsNum, $fpsDen, $timecodeMode, $name, $newcomers, $lockFiles) {
+			if ($newcomers !== null) {
+				$this->members->setNewcomers((string)$this->userId, $id, $newcomers);
+			}
+			return $this->service->updateSettings((string)$this->userId, $id, $autoIntake, $allowOlder, $fpsNum, $fpsDen, $timecodeMode, $name, $lockFiles);
+		});
 	}
 
 	#[NoAdminRequired]

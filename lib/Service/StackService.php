@@ -9,6 +9,7 @@ use OCA\Deliver\Db\Asset;
 use OCA\Deliver\Db\AssetMapper;
 use OCA\Deliver\Db\AttachmentMapper;
 use OCA\Deliver\Db\CommentMapper;
+use OCA\Deliver\Db\MemberMapper;
 use OCA\Deliver\Db\MuteMapper;
 use OCA\Deliver\Db\Project;
 use OCA\Deliver\Db\ProjectMapper;
@@ -54,6 +55,7 @@ class StackService {
 		private NotificationService $notifications,
 		private ReviewerMail $reviewerMail,
 		private MuteMapper $mutes,
+		private MemberMapper $members,
 		private RemovedMapper $removed,
 		private IRootFolder $root,
 		private ITimeFactory $time,
@@ -394,6 +396,7 @@ class StackService {
 		}
 		$this->reviewers->deleteByProject($project->getId(), $this->time->getTime());
 		$this->mutes->deleteByProject($project->getId());
+		$this->members->deleteByProject($project->getId());
 		$this->removed->deleteByProject($project->getId());
 		foreach ($this->linkRecords->findAllOf($project->getId()) as $link) {
 			$this->linkRecords->forget($link);

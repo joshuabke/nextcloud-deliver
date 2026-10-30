@@ -58,6 +58,8 @@ class DeletedUserTest extends TestCase {
 		$folderProject = $gone->ocs('POST', '/projects', ['folderId' => $gone->fileId('shared')]);
 		self::assertSame(201, $folderProject['status'], json_encode($folderProject['data']));
 		$folderProject = $folderProject['data']['id'];
+		// Resharing in Files is not Share in Deliver: the folder's owner gives it (ADR 0016)
+		self::assertSame(200, $this->keeper->ocs('PUT', "/projects/$folderProject/members", ['type' => 'user', 'principal' => $this->goneId, 'level' => 'manage', 'share' => true, 'approve' => true])['status']);
 		$named = $gone->ocs('POST', '/projects', ['name' => 'Mine'])['data']['id'];
 		self::assertSame(201, $gone->ocs('POST', '/assets', ['fileId' => $gone->fileId('own.mp4'), 'projectId' => $named])['status']);
 		$cut = $gone->ocs('GET', '/files/' . $gone->fileId('shared/cut.mp4') . '/asset')['data'];

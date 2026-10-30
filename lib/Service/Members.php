@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Service;
 
+use OCA\Deliver\Db\ProjectMapper;
+use OCA\Deliver\Db\Version;
+use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\Files\IRootFolder;
 use OCP\Share\IManager as IShareManager;
 
@@ -12,7 +15,29 @@ class Members {
 	public function __construct(
 		private IRootFolder $root,
 		private IShareManager $shares,
+		private ProjectMapper $projects,
+		private Access $access,
 	) {
+	}
+
+	/**
+	 * Those of them who are not kept out of the Version's Project: the ones to
+	 * notify, to mention and to tell of changes (ADR 0016)
+	 *
+	 * @return list<string> user ids
+	 */
+	public function inReview(Version $version): array {
+		$members = $this->of($version->getFileId());
+		$projectId = $version->getProjectId();
+		if ($projectId === null || $members === []) {
+			return $members;
+		}
+		try {
+			$project = $this->projects->find($projectId);
+		} catch (DoesNotExistException) {
+			return $members;
+		}
+		return array_values(array_filter($members, fn (string $uid) => $this->access->sees($uid, $project)));
 	}
 
 	/** @return list<string> user ids; none while the file is only in the trash */

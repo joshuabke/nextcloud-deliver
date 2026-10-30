@@ -6,6 +6,7 @@ import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwit
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
+import ProjectMembers from './ProjectMembers.vue'
 import ProjectSettingsFields from './ProjectSettingsFields.vue'
 import { useBusy } from '../composables/busy.js'
 import { confirmProjectRemoval } from '../confirm.js'
@@ -73,6 +74,7 @@ async function remove() {
 					{{ t('deliver', 'Auto Intake: review every media file in this folder') }}
 				</NcCheckboxRadioSwitch>
 				<ProjectSettingsFields :project="project" :disabled="busy" @save="save" />
+				<ProjectMembers :project="project" />
 			</template>
 			<NcNoteCard v-if="error" type="error">
 				{{ error }}

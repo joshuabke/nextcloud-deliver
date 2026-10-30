@@ -31,6 +31,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setDeletedAt(?int $deletedAt)
  * @method ?string getDeletedBy()
  * @method void setDeletedBy(?string $deletedBy)
+ * @method ?string getNewcomers()
+ * @method void setNewcomers(?string $newcomers)
  */
 class Project extends Entity {
 	/** Set for a Folder Project only (ADR 0009) */
@@ -49,6 +51,8 @@ class Project extends Entity {
 	/** When and by whom it was deleted: a Deleted Project, until it goes for good (ADR 0015) */
 	protected ?int $deletedAt = null;
 	protected ?string $deletedBy = null;
+	/** What someone newly given access in Files starts with: view or none; null leaves them as Files has them (ADR 0016) */
+	protected ?string $newcomers = null;
 
 	public function __construct() {
 		$this->addType('folderId', 'integer');

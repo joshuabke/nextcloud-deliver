@@ -93,7 +93,7 @@ One person's emoji on a Comment or Reply, from a small fixed set; agreement with
 _Avoid_: Like, vote
 
 **Approval**:
-One person's decision on a Version: approved, or changes requested. Whoever may comment decides; a decision can be changed or taken back.
+One person's decision on a Version: approved, or changes requested. Members with Approve, and Reviewers whose link lets them comment, decide; a decision can be changed or taken back.
 _Avoid_: Sign-off, status, vote
 
 **Locked**:
@@ -103,19 +103,35 @@ _Avoid_: Frozen, protected, read-only
 ### People
 
 **Member**:
-A Nextcloud user who can open a Version's file through Files permissions; read access lets them comment, write access lets them manage. Never stored, always derived from Files (ADR 0009).
+A Nextcloud user who can open a Version's file through Files permissions; what they may do with its review is their Access level (ADR 0016). Never stored as a list, always derived from Files (ADR 0009).
 _Avoid_: Owner (except for the file's actual owner), collaborator, team
+
+**Project Member**:
+A person or a group who can open one of a Project's files, as Files grants it, with the Access level and switches a Member with Manage set for them, or what Files gives. Listed in the Project's settings. The Project's owner (the folder's owner for a Folder Project, whoever made any other Project) always has Manage, Share and Approve; a Folder Project in a group folder has no owner. A person's own entry wins over their groups'; across several groups the highest level and every switch any of them has count.
+_Avoid_: User, participant, collaborator
+
+**Access level**:
+What a Member may do in a Project: None (does not see the Project in Deliver: not listed, not notified, not mentioned), View (see the review), Comment (also comment and reply) or Manage (also run the review: enable, stack, number, resolve, delete any Comment, export, the Project's settings and Members). It defaults to what Files gives, read Comment and write Manage; whatever touches a file still takes Files' write access (ADR 0016).
+_Avoid_: Role, permission, rights (a Reviewer's rights belong to a link)
+
+**Share**:
+A switch next to the Access level: manage the Project's Review Links and Reviewers. Offered only where Files lets the Member reshare, and on by default for the owner only.
+_Avoid_: Invite, publish
+
+**Approve**:
+A switch from Comment up: approve a Version or request changes. On by default for Manage only.
+_Avoid_: Sign off, vote
 
 **Delivered by**:
 The account that uploaded or synced a Version's file, or enabled it for review; whoever writes the file again takes it over, and nobody is named when only the periodic scan found it. Per Version, shown as a name next to the date, and grants nothing.
 _Avoid_: Owner, Uploader
 
 **Reviewer**:
-Anyone who reaches a Version through a Review Link instead of Files permissions, identified by a self-given name (prefilled from their account if they happen to be logged in). A Reviewer belongs to the Project of the link they came by, whichever Member invited them, and every Member who sees the Project manages them (ADR 0017); on No Project they belong to the Member. The same person on another Project is another Reviewer there. An email address is one Reviewer per Project (on No Project, per Member): inviting it again puts them on another link, each with rights of their own over the link's, each with a Personal Link that opens only that link (ADR 0014); on more than one link, only a Member changes their name and address; and naming oneself with it mails that Reviewer their Personal Link. Two Reviewers may share a name and are told apart by the colour of their avatar. Reviewers only ever touch their own Comments.
+Anyone who reaches a Version through a Review Link instead of Files permissions, identified by a self-given name (prefilled from their account if they happen to be logged in). A Reviewer belongs to the Project of the link they came by, whichever Member invited them, and every Member with Share manages them (ADR 0016, 0017); on No Project they belong to the Member. The same person on another Project is another Reviewer there. An email address is one Reviewer per Project (on No Project, per Member): inviting it again puts them on another link, each with rights of their own over the link's, each with a Personal Link that opens only that link (ADR 0014); on more than one link, only a Member changes their name and address; and naming oneself with it mails that Reviewer their Personal Link. Two Reviewers may share a name and are told apart by the colour of their avatar. Reviewers only ever touch their own Comments.
 _Avoid_: Guest, anonymous user, client, external user
 
 **Review Link**:
-The only review link (ADR 0010, 0011): Deliver makes it for a Project and it shows the whole Project, growing as Assets join, or the Assets the Member picks, with its own password, expiry, pause switch and rights. Every Member who sees its Project sees and manages all its links, each saying who made it (ADR 0017). Made on No Project, it is that Member's alone and shows only Assets of No Project that they pick, at least one; an Asset leaves it once it joins a Project. It shows only files the Member who made it may share, and goes with its Project.
+The only review link (ADR 0010, 0011): Deliver makes it for a Project and it shows the whole Project, growing as Assets join, or the Assets the Member picks, with its own password, expiry, pause switch and rights. Every Member with Share sees and manages all its links, each saying who made it (ADR 0016, 0017). Made on No Project, it is that Member's alone and shows only Assets of No Project that they pick, at least one; an Asset leaves it once it joins a Project. It shows only files the Member who made it may share, and goes with its Project.
 _Avoid_: Project Link (it need not show the whole Project), Project share, collection link, Share Link (a Nextcloud link made in Files shows files and is never a review surface)
 
 **Personal Link**:
@@ -204,3 +220,6 @@ The German translation (`l10n/de` with "du", `l10n/de_DE` with "Sie") uses these
 | Watermark | Wasserzeichen |
 | Still | Standbild |
 | Approval (approved, changes requested) | Abnahme (abgenommen, Änderungen gewünscht) |
+| Project Member, Access level | Projektmitglied, Zugriffsstufe |
+| None, View, Comment, Manage | Keine, Ansehen, Kommentieren, Verwalten |
+| Share, Approve (the switches) | Teilen, Abnehmen |

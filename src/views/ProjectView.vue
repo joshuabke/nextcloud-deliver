@@ -221,7 +221,12 @@ const adding = ref(new Set())
  * Upload goes into the folder on screen: anywhere in a Folder Project's
  * folder, and in another Project only once a folder of it is open
  */
-const canUpload = computed(() => project.value?.path ? project.value.canWrite : folder.value.startsWith('/'))
+const canUpload = computed(() => {
+	if (project.value?.none === false && !project.value.canWrite) {
+		return false
+	}
+	return project.value?.path ? project.value.filesWrite : folder.value.startsWith('/')
+})
 /** The Assets being put into another Project, while its dialog is open */
 const assigning = ref(null)
 const assignTo = ref(null)
@@ -402,19 +407,19 @@ function assetItems(asset) {
 	return [
 		{ label: t('deliver', 'Open'), icon: openIcon, action: () => router.push(`/versions/${newest.id}`) },
 		previous && { label: t('deliver', 'Compare with the Version before'), icon: compareIcon, action: () => router.push(`/compare/${previous.id}/${newest.id}`) },
-		asset.canWrite && { label: t('deliver', 'Upload a new Version'), icon: newVersionIcon, action: () => pickVersion(asset) },
+		asset.canWrite && asset.filesWrite && { label: t('deliver', 'Upload a new Version'), icon: newVersionIcon, action: () => pickVersion(asset) },
 		asset.canWrite && newest.processingFailed && { label: t('deliver', 'Process again'), icon: retryIcon, action: () => processAgain([asset]) },
 		asset.canWrite && { label: asset.dueDate ? t('deliver', 'Change the Due Date') : t('deliver', 'Set a Due Date'), icon: dueIcon, action: () => { dueFor.value = [asset] } },
 		asset.canWrite && !isMobile.value && { label: t('deliver', 'Manage Versions'), icon: stackIcon, action: () => { managing.value = asset.id } },
 		asset.canWrite && { label: t('deliver', 'Move to Project…'), icon: moveIcon, action: () => openAssign([asset]) },
-		...(newest.url ? fileItems(newest.url, newest.name, newest.fileId, asset.canWrite) : []),
+		...(newest.url ? fileItems(newest.url, newest.name, newest.fileId, asset.filesWrite) : []),
 		{
 			label: t('deliver', 'Show in Files'),
 			icon: filesIcon,
 			href: generateUrl('/apps/files/files/{fileId}', { fileId: newest.fileId }) + '?' + new URLSearchParams({ dir, opendetails: 'true' }),
 		},
 		asset.canWrite && { label: project.value.none ? t('deliver', 'Remove from Deliver') : t('deliver', 'Remove from Project'), icon: removeIcon, danger: true, action: () => remove([asset]) },
-		asset.canWrite && { label: t('deliver', 'Delete'), icon: deleteIcon, danger: true, action: () => deleteFiles([asset]) },
+		asset.canWrite && asset.filesWrite && { label: t('deliver', 'Delete'), icon: deleteIcon, danger: true, action: () => deleteFiles([asset]) },
 	]
 }
 

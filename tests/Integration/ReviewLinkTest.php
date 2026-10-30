@@ -60,6 +60,32 @@ class ReviewLinkTest extends TestCase {
 		return array_combine(array_column($assets, 'name'), array_map(static fn (array $asset) => $asset['versions'][0]['id'], $assets));
 	}
 
+	/**
+	 * A Project by name with these files of a folder of their own, and a guest who may reshare the first and Share in it
+	 *
+	 * @param list<array{string, int}> $files name and the permissions the guest gets on it
+	 * @return array{int, string, NextcloudClient, string} the Project, the guest's id, their client and the folder
+	 */
+	private function projectOfFilesFor(array $files, array $attributes = []): array {
+		$uid = 'deliver-guest-' . bin2hex(random_bytes(4));
+		$password = 'Deliver-' . bin2hex(random_bytes(8));
+		$this->nc->ocsForm('POST', '/ocs/v2.php/cloud/users', ['userid' => $uid, 'password' => $password]);
+		$folder = 'deliver-test-' . bin2hex(random_bytes(4));
+		$this->nc->mkdir($folder);
+		$project = $this->nc->ocs('POST', '/projects', ['name' => 'Picked'])['data']['id'];
+		foreach ($files as [$name, $permissions]) {
+			$this->nc->put("$folder/$name.mp4", 'not really a video');
+			self::assertSame(201, $this->nc->ocs('POST', '/assets', ['fileId' => $this->nc->fileId("$folder/$name.mp4"), 'projectId' => $project])['status']);
+			$shared = $this->nc->ocsForm('POST', '/ocs/v2.php/apps/files_sharing/api/v1/shares', [
+				'path' => "/$folder/$name.mp4", 'shareType' => 0, 'shareWith' => $uid, 'permissions' => $permissions,
+			] + ($permissions === 17 ? $attributes : []));
+			self::assertSame(200, $shared['status'], json_encode($shared['data']));
+		}
+		// Files lets them reshare one file, so Share can be given; the owner gives it (ADR 0016)
+		self::assertSame(200, $this->nc->ocs('PUT', "/projects/$project/members", ['type' => 'user', 'principal' => $uid, 'level' => 'comment', 'share' => true])['status']);
+		return [$project, $uid, $this->nc->withUser($uid, $password), $folder];
+	}
+
 	public function testALinkShowsTheWholeProjectAsItGrows(): void {
 		$link = $this->link();
 		self::assertTrue($link['review'], 'a new link is live');
@@ -236,23 +262,15 @@ class ReviewLinkTest extends TestCase {
 	}
 
 	public function testAFileSharedWithoutDownloadsNeverLeavesThroughALink(): void {
-		$uid = 'deliver-guest-' . bin2hex(random_bytes(4));
-		$password = 'Deliver-' . bin2hex(random_bytes(8));
-		$this->nc->ocsForm('POST', '/ocs/v2.php/cloud/users', ['userid' => $uid, 'password' => $password]);
-		$guest = $this->nc->withUser($uid, $password);
+		// Read and reshare, but view only
+		[$project, $uid, $guest, $folder] = $this->projectOfFilesFor([['shared', 17]], ['attributes' => json_encode([['scope' => 'permissions', 'key' => 'download', 'value' => false]])]);
 		try {
-			// Read and reshare, but view only
-			$shared = $this->nc->ocsForm('POST', '/ocs/v2.php/apps/files_sharing/api/v1/shares', [
-				'path' => "/{$this->root}/cut.mp4", 'shareType' => 0, 'shareWith' => $uid, 'permissions' => 17,
-				'attributes' => json_encode([['scope' => 'permissions', 'key' => 'download', 'value' => false]]),
-			]);
-			self::assertSame(200, $shared['status'], json_encode($shared['data']));
-			$created = $guest->ocs('POST', "/projects/{$this->projectId}/links");
+			$created = $guest->ocs('POST', "/projects/$project/links");
 			self::assertSame(201, $created['status'], json_encode($created['data']));
 			self::assertTrue($created['data']['canDownload']);
 			$visitor = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $created['data']['token']);
 			$listed = $visitor->call('GET', '/api/assets')['data'];
-			self::assertSame([['cut', null]], array_map(static fn (array $asset) => [$asset['name'], $asset['downloadUrl']], $listed), 'shown, but never as a download');
+			self::assertSame([['shared', null]], array_map(static fn (array $asset) => [$asset['name'], $asset['downloadUrl']], $listed), 'shown, but never as a download');
 			self::assertSame(404, $visitor->raw('/download')['status'], 'nor in a ZIP');
 			preg_match('/id="initial-state-deliver-link" value="([^"]+)"/', $visitor->raw('')['body'], $state);
 			self::assertNull(json_decode(base64_decode($state[1]), true)['downloadAll'], 'and the page offers none');
@@ -263,6 +281,8 @@ class ReviewLinkTest extends TestCase {
 			self::assertSame(404, $visitor->raw("/media/{$listed[0]['newestId']}/original")['status']);
 		} finally {
 			$this->viewWithoutDownload(true);
+			$this->nc->deleteProject($project);
+			$this->nc->delete($folder);
 			$this->nc->ocsForm('DELETE', "/ocs/v2.php/cloud/users/$uid");
 		}
 	}
@@ -274,20 +294,18 @@ class ReviewLinkTest extends TestCase {
 	}
 
 	public function testALinkShowsOnlyWhatItsMemberMayShare(): void {
-		$uid = 'deliver-guest-' . bin2hex(random_bytes(4));
-		$password = 'Deliver-' . bin2hex(random_bytes(8));
-		$this->nc->ocsForm('POST', '/ocs/v2.php/cloud/users', ['userid' => $uid, 'password' => $password]);
-		$guest = $this->nc->withUser($uid, $password);
+		// One file they may reshare, so they have Share; one read only
+		[$project, $uid, $guest, $folder] = $this->projectOfFilesFor([['open', 17], ['closed', 1]]);
 		try {
-			// Read only, no resharing
-			$this->nc->ocsForm('POST', '/ocs/v2.php/apps/files_sharing/api/v1/shares', ['path' => "/{$this->root}/cut.mp4", 'shareType' => 0, 'shareWith' => $uid, 'permissions' => 1]);
-			$created = $guest->ocs('POST', "/projects/{$this->projectId}/links");
+			$created = $guest->ocs('POST', "/projects/$project/links");
 			self::assertSame(201, $created['status'], json_encode($created['data']));
 			$visitor = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $created['data']['token']);
-			self::assertSame([], $visitor->call('GET', '/api/assets')['data'], 'a file the Member may not reshare stays out');
+			self::assertSame(['open'], array_column($visitor->call('GET', '/api/assets')['data'], 'name'), 'a file the Member may not reshare stays out');
 			$paused = $this->nc->ocs('PUT', "/links/{$created['data']['id']}", ['review' => false]);
-			self::assertSame([200, $uid], [$paused['status'], $paused['data']['madeBy']['id']], 'every Member of the Project changes it, but what it shows stays bound to the Member who made it (ADR 0017)');
+			self::assertSame([200, $uid], [$paused['status'], $paused['data']['madeBy']['id']], 'every Member with Share changes it, but what it shows stays bound to the Member who made it (ADR 0017)');
 		} finally {
+			$this->nc->deleteProject($project);
+			$this->nc->delete($folder);
 			$this->nc->ocsForm('DELETE', "/ocs/v2.php/cloud/users/$uid");
 		}
 	}

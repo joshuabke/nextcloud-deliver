@@ -308,7 +308,7 @@ Nextcloud hands a deleted account's user id to the next account created under it
 
 ### Permissions
 
-- Which Assets a person sees follows each Version's file (ADR 0009); what they do with them is their Access level in the Project (ADR 0016), defaulting to read giving Comment and write giving Manage. Whatever touches a file (upload, rename, delete it) also needs write access in Files.
+- Which Assets a person sees follows each Version's file (ADR 0009); what they do with them is their Access level in the Project (ADR 0016), defaulting to read giving Comment and write giving Manage. Whatever touches a file (upload, rename, delete it) also needs write access in Files. The Project as a whole (its settings, its Members, deleting it) takes Manage there: by default write access to a Folder Project's folder, and on any other Project only the owner, while write access to a single file lets a Member manage that Asset. Someone with None gets 404 for the Project and its Versions, nothing is notified to them and they are not offered as a Mention.
 - View: see the review, export view. Notified and mentionable.
 - Comment: everything above plus comment, reply, edit and delete own Comments. A Comment that someone else has replied to is deleted only with Manage, so nobody deletes another person's Reply along with their own Comment.
 - Manage: everything above plus enable and disable files, assign them to a Project, stack and unstack (on both Assets), set Version Numbers, override metadata, resolve and unresolve, delete any Comment, regenerate derived media, export, the Project's settings and its Members' levels, never above their own.
