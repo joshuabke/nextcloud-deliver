@@ -6,6 +6,7 @@ services:
       context: ./deploy
       args:
         NEXTCLOUD_VERSION: "34"
+        GROUPFOLDERS_VERSION: "22.0.6"
     image: deliver-nextcloud:34-ffmpeg
     # Bound, not published to the world: the dev instance carries a known admin
     # password, and the trusted-domain check falls to a forged Host header.
