@@ -185,7 +185,7 @@ class AccessTest extends TestCase {
 		self::assertSame(403, $member->ocs('DELETE', "/comments/$mine")['status']);
 		$read = $member->ocs('GET', "/versions/{$this->versionId}/comments")['data'];
 		self::assertSame(['first, better', 'second'], array_column($read['comments'], 'body'));
-		self::assertFalse($read['canChangeOwn'], 'the client offers no Edit or Delete');
+		self::assertSame([false, false], [$read['canEditOwn'], $read['canDeleteOwn']], 'the client offers no Edit or Delete');
 
 		// Comment gives them back their own
 		self::assertSame(200, $this->setLevel('user', $user, 'comment')['status']);

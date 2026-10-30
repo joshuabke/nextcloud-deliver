@@ -134,7 +134,7 @@ class CommentService {
 	/** @throws AccessDeniedException the Comment belongs to someone else, or they may no longer comment */
 	public function update(Viewer $viewer, Version $version, int $id, string $body): array {
 		$comment = $this->reach($version, $id);
-		if (!$viewer->owns($comment) || !$viewer->mayChangeOwn()) {
+		if (!$viewer->owns($comment) || !$viewer->mayEditOwn()) {
 			throw new AccessDeniedException('Only the author can change a Comment, and only with Comment');
 		}
 		$body = trim($body);
@@ -155,7 +155,7 @@ class CommentService {
 		$comment = $this->reach($version, $id);
 		$replies = $this->comments->findByParent($comment->getId());
 		if (!$viewer->manages) {
-			if (!$viewer->owns($comment) || !$viewer->mayChangeOwn()) {
+			if (!$viewer->owns($comment) || !$viewer->mayDeleteOwn()) {
 				throw new AccessDeniedException('Only the author with Comment or a Member with Manage can delete this Comment');
 			}
 			foreach ($replies as $reply) {
@@ -383,7 +383,8 @@ class CommentService {
 			'canComment' => ($viewer->canComment || $viewer->canCommentOnceNamed) && $this->window->open($viewer, $version),
 			'canApprove' => $viewer->canApprove && $this->window->open($viewer, $version),
 			// Edit and delete what they wrote, also where the Version takes no new Comments
-			'canChangeOwn' => $viewer->mayChangeOwn(),
+			'canEditOwn' => $viewer->mayEditOwn(),
+			'canDeleteOwn' => $viewer->mayDeleteOwn(),
 			// So that the Comment field refuses a file that would not fit before uploading it
 			'attachmentLimit' => $this->attachmentLimit(),
 			'seenUntil' => $seen?->getSeenUntil() ?? 0,
