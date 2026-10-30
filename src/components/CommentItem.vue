@@ -57,7 +57,9 @@ const fresh = computed(() => store.now - props.comment.createdAt < FRESH)
 const beforeOverwrite = computed(() => store.overwrittenAt !== null && props.comment.createdAt <= store.overwrittenAt)
 const overwriteDay = computed(() => new Date((store.overwrittenAt ?? 0) * 1000).toLocaleDateString(getCanonicalLocale(), { dateStyle: 'medium' }))
 const canReply = computed(() => !props.isReply && store.canComment === true && store.me?.type !== 'unnamed')
-const canDelete = computed(() => mine.value || store.canWrite)
+/** A Member needs Comment to edit or delete their own Comments (ADR 0016), also on a Version closed for new ones; a Reviewer keeps theirs */
+const canChange = computed(() => mine.value && store.canChangeOwn)
+const canDelete = computed(() => canChange.value || store.canWrite)
 /** Reactions need a name to put on them, like Comments (story 91) */
 const canReact = computed(() => store.canComment === true && store.me?.type !== 'unnamed')
 
@@ -149,8 +151,8 @@ function saveReply() {
 					:svg="resolvedIcon"
 					:size="18"
 					:name="t('deliver', 'Resolved')" />
-				<NcActions v-if="mine || canDelete" :forceMenu="true" variant="tertiary">
-					<NcActionButton v-if="mine" @click="startEdit">
+				<NcActions v-if="canDelete" :forceMenu="true" variant="tertiary">
+					<NcActionButton v-if="canChange" @click="startEdit">
 						{{ t('deliver', 'Edit') }}
 					</NcActionButton>
 					<NcActionButton v-if="canDelete" @click="run(() => store.remove(comment.id))">

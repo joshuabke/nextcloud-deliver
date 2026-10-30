@@ -131,11 +131,11 @@ class CommentService {
 		return $serialized;
 	}
 
-	/** @throws AccessDeniedException the Comment belongs to someone else */
+	/** @throws AccessDeniedException the Comment belongs to someone else, or they may no longer comment */
 	public function update(Viewer $viewer, Version $version, int $id, string $body): array {
 		$comment = $this->reach($version, $id);
-		if (!$viewer->owns($comment)) {
-			throw new AccessDeniedException('Only the author can change a Comment');
+		if (!$viewer->owns($comment) || !$viewer->mayChangeOwn()) {
+			throw new AccessDeniedException('Only the author can change a Comment, and only with Comment');
 		}
 		$body = trim($body);
 		if ($body === '') {
@@ -149,14 +149,14 @@ class CommentService {
 	 * Deletes a Comment with its Replies. Manage deletes any; an author
 	 * deletes their own as long as nobody else has replied to it.
 	 *
-	 * @throws AccessDeniedException not the author, or others have replied
+	 * @throws AccessDeniedException not the author, or they may no longer comment, or others have replied
 	 */
 	public function remove(Viewer $viewer, Version $version, int $id): void {
 		$comment = $this->reach($version, $id);
 		$replies = $this->comments->findByParent($comment->getId());
 		if (!$viewer->canWrite) {
-			if (!$viewer->owns($comment)) {
-				throw new AccessDeniedException('Only the author or a Member with Manage can delete this Comment');
+			if (!$viewer->owns($comment) || !$viewer->mayChangeOwn()) {
+				throw new AccessDeniedException('Only the author with Comment or a Member with Manage can delete this Comment');
 			}
 			foreach ($replies as $reply) {
 				if (!$viewer->owns($reply)) {
@@ -382,6 +382,8 @@ class CommentService {
 			'canWrite' => $viewer->canWrite,
 			'canComment' => ($viewer->canComment || $viewer->canCommentOnceNamed) && $this->window->open($viewer, $version),
 			'canApprove' => $viewer->canApprove && $this->window->open($viewer, $version),
+			// Edit and delete what they wrote, also where the Version takes no new Comments
+			'canChangeOwn' => $viewer->mayChangeOwn(),
 			// So that the Comment field refuses a file that would not fit before uploading it
 			'attachmentLimit' => $this->attachmentLimit(),
 			'seenUntil' => $seen?->getSeenUntil() ?? 0,
