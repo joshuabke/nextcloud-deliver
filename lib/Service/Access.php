@@ -15,8 +15,9 @@ use OCP\IUserManager;
  * Manage, Share and Approve, then what a Member with Manage set for them (their
  * own entry before their groups', the highest of several groups), and else what
  * Files gives (read Comment, write Manage, Approve for Manage only) or, for
- * someone newly given access, what the Project says. Which Assets they see is
- * not decided here: that follows the files (ADR 0009).
+ * someone who got access after the Project's newcomers setting was last
+ * changed, what the Project says. Which Assets they see is not decided here:
+ * that follows the files (ADR 0009).
  */
 class Access {
 	/** Named, not imported: the Group folders app need not be there */
@@ -24,6 +25,8 @@ class Access {
 
 	/** @var array<int, list<array{type: string, id: string, level: string, share: bool, approve: bool}>> stored entries by Project, for this request */
 	private array $entries = [];
+	/** @var array<int, array<string, ?string>> the newcomers setting each person or group was first seen under, by Project and "type/id" */
+	private array $seen = [];
 	/** @var array<string, list<string>> */
 	private array $groups = [];
 	/** @var array<int, ?string> */
@@ -53,19 +56,43 @@ class Access {
 		if ($stored !== null) {
 			return new Grant($stored['level'], $stored['share'] && $reshare(), $stored['approve']);
 		}
-		return $this->byDefault($project, $write);
+		return $this->byDefault($project, MemberMapper::USER, $uid, $write);
 	}
 
 	/**
 	 * What someone has with nothing set for them (nor for their groups): the
-	 * level the Project gives newcomers, else what Files gives. The one place
-	 * of that rule, for people and for groups.
+	 * level the Project gives newcomers if they came after it was last
+	 * changed, else what Files gives. The one place of that rule, for people
+	 * and for groups.
 	 */
-	public function byDefault(Project $project, bool $write): Grant {
-		return match ($project->getNewcomers()) {
-			Grant::NONE, Grant::VIEW => new Grant($project->getNewcomers(), false, false),
+	public function byDefault(Project $project, string $type, string $id, bool $write): Grant {
+		$seen = $this->seen($project);
+		$newcomers = array_key_exists($type . '/' . $id, $seen) ? $seen[$type . '/' . $id] : $project->getNewcomers();
+		return match ($newcomers) {
+			Grant::NONE, Grant::VIEW => new Grant($newcomers, false, false),
 			default => new Grant($write ? Grant::MANAGE : Grant::COMMENT, false, $write),
 		};
+	}
+
+	/**
+	 * Notes under which newcomers setting a person or group is first seen as a
+	 * Member of the Project: later changes of the setting do not reach them.
+	 * Called for everyone listed as a Member when the setting changes, so
+	 * whoever came since the last change is noted under the setting they came
+	 * under; nothing is written while reading.
+	 */
+	public function see(Project $project, string $type, string $id): void {
+		$seen = $this->seen($project);
+		if (array_key_exists($type . '/' . $id, $seen)) {
+			return;
+		}
+		$this->members->see($project->getId(), $type, $id, $project->getNewcomers());
+		$this->seen[$project->getId()][$type . '/' . $id] = $project->getNewcomers();
+	}
+
+	/** @return array<string, ?string> */
+	private function seen(Project $project): array {
+		return $this->seen[$project->getId()] ??= $this->members->seen($project->getId());
 	}
 
 	/** Whether the Project is theirs to see in Deliver: not None. Needs no file, for recipients of notifications and Mentions */
@@ -73,7 +100,7 @@ class Access {
 		if ($project === null || $this->ownerOf($project) === $uid) {
 			return true;
 		}
-		return ($this->stored($uid, $project)['level'] ?? $this->byDefault($project, false)->level) !== Grant::NONE;
+		return ($this->stored($uid, $project)['level'] ?? $this->byDefault($project, MemberMapper::USER, $uid, false)->level) !== Grant::NONE;
 	}
 
 	/**
@@ -107,7 +134,7 @@ class Access {
 
 	/** Forget what was read, after the entries changed */
 	public function forget(Project $project): void {
-		unset($this->entries[$project->getId()]);
+		unset($this->entries[$project->getId()], $this->seen[$project->getId()]);
 	}
 
 	/**

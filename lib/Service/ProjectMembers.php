@@ -94,10 +94,9 @@ class ProjectMembers {
 	}
 
 	/**
-	 * What someone newly given access in Files starts with. Changed away from
-	 * "as in Files", everyone who is a Member now and has nothing set gets
-	 * what they have at this moment set, so only people who come later start
-	 * from the new default.
+	 * What someone newly given access in Files starts with. A change reaches
+	 * only people who come after it: everyone who is a Member now is noted
+	 * first, under the setting they have had so far, and nobody gets an entry.
 	 *
 	 * @throws InvalidRequestException unknown
 	 */
@@ -109,13 +108,8 @@ class ProjectMembers {
 		if (($project->getNewcomers() ?? 'files') === $newcomers) {
 			return;
 		}
-		if ($project->getNewcomers() === null) {
-			foreach ($this->rows($project) as $row) {
-				if ($row['type'] === MemberMapper::USER && !$row['owner'] && $this->access->stored($row['id'], $project) === null) {
-					$this->entries->set($project->getId(), MemberMapper::USER, $row['id'], $row['level'], $row['share'], $row['approve']);
-				}
-			}
-			$this->access->forget($project);
+		foreach ($this->rows($project) as $row) {
+			$this->access->see($project, $row['type'], $row['id']);
 		}
 		$project->setNewcomers($newcomers === 'files' ? null : $newcomers);
 		$this->projectMapper->update($project);
@@ -231,7 +225,7 @@ class ProjectMembers {
 		$write = ($permissions & Constants::PERMISSION_UPDATE) !== 0;
 		$grant = match (true) {
 			$stored !== null => new Grant($stored['level'], $stored['share'] && $canShare, $stored['approve']),
-			default => $this->access->byDefault($project, $write),
+			default => $this->access->byDefault($project, MemberMapper::GROUP, $gid, $write),
 		};
 		return [
 			'type' => MemberMapper::GROUP,
