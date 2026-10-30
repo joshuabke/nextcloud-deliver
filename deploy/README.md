@@ -13,8 +13,8 @@ mkdir -p data && sudo chown 33:33 data   # www-data in the image
 docker compose up -d --build
 ```
 
-The image also holds the Team folders app (groupfolders), disabled; enable
-it with `occ app:enable groupfolders` if you want it.
+The image holds no Team folders app (groupfolders); install it from the app
+store if you want it.
 
 Nextcloud listens on `127.0.0.1:8080`; point your reverse proxy there.
 When the instance runs, let cron do the background jobs:

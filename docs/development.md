@@ -14,7 +14,7 @@ services:
     devices: !reset []
 ```
 
-The deploy example builds the same Dockerfile (Nextcloud 33, so groupfolders 21.x); it carries the app disabled and nothing changes unless someone enables it. Raise `GROUPFOLDERS_VERSION` together with `NEXTCLOUD_VERSION` (the release for a major is named in the app's `info.xml`, `min-version`). A dev instance installed before this keeps the store copy in `custom_apps`; `make up` enables it all the same.
+The deploy example builds the same Dockerfile without `GROUPFOLDERS_VERSION` (its default is empty and nothing is downloaded), so it carries no groupfolders; only `docker-compose.yml` passes the version for the dev image. Raise `GROUPFOLDERS_VERSION` there together with `NEXTCLOUD_VERSION` (the release for a major is named in the app's `info.xml`, `min-version`). A dev instance installed before this keeps the store copy in `custom_apps`; `make up` enables it all the same.
 
 ```sh
 make up               # Nextcloud 34 + ffmpeg + Postgres + Team folders on http://localhost:8080 (admin / adminadmin123), enables the app
