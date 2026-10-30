@@ -206,7 +206,7 @@ function upload(event) {
 						v-if="isMobile && context.asset.dueDate"
 						class="deliver-review__due"
 						:modelValue="context.asset.dueDate"
-						:editable="context.canWrite"
+						:editable="context.manages"
 						@update:modelValue="setDue" />
 				</div>
 				<h2 class="deliver-layout__title deliver-review__title" tabindex="-1">
@@ -216,7 +216,7 @@ function upload(event) {
 			<DueDate
 				v-if="!isMobile"
 				:modelValue="context.asset.dueDate"
-				:editable="context.canWrite"
+				:editable="context.manages"
 				@update:modelValue="setDue" />
 		</template>
 		<template #center>
@@ -235,7 +235,7 @@ function upload(event) {
 				</template>
 			</NcButton>
 			<VersionPicker :versions="context.versions" :current="id" @select="$router.push(`/versions/${$event}`)" />
-			<template v-if="context.canWrite && context.filesWrite">
+			<template v-if="context.manages && context.filesWrite">
 				<NcButton
 					v-if="folderUrl && !isMobile"
 					:title="t('deliver', 'Upload a new cut and stack it on top')"
@@ -274,7 +274,7 @@ function upload(event) {
 				{{ t('deliver', 'Next Asset') }}
 			</NcActionButton>
 			<NcActionButton
-				v-if="context.canWrite && context.filesWrite && folderUrl"
+				v-if="context.manages && context.filesWrite && folderUrl"
 				closeAfterClick
 				@click="fileInput.click()">
 				<template #icon>
@@ -282,7 +282,7 @@ function upload(event) {
 				</template>
 				{{ t('deliver', 'New Version') }}
 			</NcActionButton>
-			<NcActionButton v-if="context.canWrite && !context.asset.dueDate" closeAfterClick @click="pickingDue = true">
+			<NcActionButton v-if="context.manages && !context.asset.dueDate" closeAfterClick @click="pickingDue = true">
 				<template #icon>
 					<NcIconSvgWrapper :svg="dueIcon" />
 				</template>
@@ -339,7 +339,7 @@ function upload(event) {
 				@cleared="release">
 				<template #tools>
 					<ExportMenu
-						v-if="context.canWrite && !isMobile"
+						v-if="context.manages && !isMobile"
 						:versionId="id"
 						:audioOnly="version?.audioOnly ?? false"
 						:wavExport="version?.wavExport ?? false"

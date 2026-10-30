@@ -161,7 +161,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 							{{ t('deliver', 'Try again') }}
 						</NcButton>
 						<NcButton
-							v-if="processingFailed(item) && item.version.canWrite"
+							v-if="processingFailed(item) && item.version.manages"
 							variant="secondary"
 							@click="store.processAgain(item)">
 							{{ t('deliver', 'Process again') }}

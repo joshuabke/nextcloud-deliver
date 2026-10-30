@@ -172,7 +172,7 @@ class CommentApiTest extends TestCase {
 		$listed = $this->nc->ocs('GET', "/versions/{$this->versionId}/comments");
 		self::assertSame(200, $listed['status']);
 		self::assertSame([120, 300], array_column($listed['data']['comments'], 'inFrame'), 'Frame order, the way the marker strip reads');
-		self::assertTrue($listed['data']['canWrite']);
+		self::assertTrue($listed['data']['manages']);
 
 		self::assertSame(400, $this->nc->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 10, 'body' => '  '])['status'], 'an empty body is refused');
 		self::assertSame(400, $this->nc->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 400, 'outFrame' => 200, 'body' => 'backwards'])['status'], 'a Range runs forwards');
@@ -197,7 +197,7 @@ class CommentApiTest extends TestCase {
 	public function testReadAccessCommentsWriteAccessResolves(): void {
 		$asReader = $this->member(1);
 		$readerComment = $this->comment($asReader, ['inFrame' => 42, 'body' => 'from the client']);
-		self::assertFalse($asReader->ocs('GET', "/versions/{$this->versionId}/comments")['data']['canWrite']);
+		self::assertFalse($asReader->ocs('GET', "/versions/{$this->versionId}/comments")['data']['manages']);
 
 		$edited = $asReader->ocs('PUT', "/comments/{$readerComment['id']}", ['body' => 'from the client, corrected']);
 		self::assertSame('from the client, corrected', $edited['data']['body'], 'authors edit their own');

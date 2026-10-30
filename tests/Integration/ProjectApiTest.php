@@ -95,7 +95,7 @@ class ProjectApiTest extends TestCase {
 		self::assertSame(201, $named['status'], json_encode($named['data']));
 		$projectId = $named['data']['id'];
 		$this->projects[] = [$this->nc, $projectId];
-		self::assertSame(['Showreel 2026', null, true], [$named['data']['name'], $named['data']['folderId'], $named['data']['canWrite']]);
+		self::assertSame(['Showreel 2026', null, true], [$named['data']['name'], $named['data']['folderId'], $named['data']['manages']]);
 		self::assertSame(400, $this->nc->ocs('POST', '/projects', ['name' => '  '])['status'], 'a Project needs a name');
 
 		$intro = $this->nc->ocs('POST', '/assets', ['fileId' => $this->nc->fileId("{$this->root}/scenes/intro.mov"), 'projectId' => $projectId]);
@@ -190,7 +190,7 @@ class ProjectApiTest extends TestCase {
 		// An Asset whose file is in the trash already is still the Members' to delete, and goes without a trace
 		$this->nc->delete("{$this->root}/other.mp4");
 		[$missing] = $shown($this->nc)['assets'];
-		self::assertSame(['missing', true], [$missing['versions'][0]['state'], $missing['canWrite']]);
+		self::assertSame(['missing', true], [$missing['versions'][0]['state'], $missing['manages']]);
 		self::assertSame(200, $this->nc->ocs('DELETE', "/assets/{$ids['other']}/files")['status']);
 		self::assertSame([], $shown($this->nc)['assets']);
 	}
@@ -445,7 +445,7 @@ class ProjectApiTest extends TestCase {
 		$project = $this->createProject($this->nc, $folderId);
 		self::assertSame($this->root, $project['name']);
 		self::assertSame($folderId, $project['folderId']);
-		self::assertTrue($project['canWrite']);
+		self::assertTrue($project['manages']);
 
 		$byFolder = $this->nc->ocs('GET', "/folders/$folderId/project");
 		self::assertSame(200, $byFolder['status']);

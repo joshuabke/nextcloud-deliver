@@ -154,7 +154,7 @@ class CommentService {
 	public function remove(Viewer $viewer, Version $version, int $id): void {
 		$comment = $this->reach($version, $id);
 		$replies = $this->comments->findByParent($comment->getId());
-		if (!$viewer->canWrite) {
+		if (!$viewer->manages) {
 			if (!$viewer->owns($comment) || !$viewer->mayChangeOwn()) {
 				throw new AccessDeniedException('Only the author with Comment or a Member with Manage can delete this Comment');
 			}
@@ -298,7 +298,7 @@ class CommentService {
 	/** @throws AccessDeniedException only Manage resolves */
 	public function setResolved(Viewer $viewer, Version $version, int $id, bool $resolved): array {
 		$comment = $this->reach($version, $id);
-		if (!$viewer->canWrite) {
+		if (!$viewer->manages) {
 			throw new AccessDeniedException('Manage is required to resolve a Comment');
 		}
 		if ($comment->getParentId() !== null) {
@@ -379,7 +379,7 @@ class CommentService {
 			'state' => $version->getState(),
 			// Comments made before it are marked (ADR 0018)
 			'overwrittenAt' => $version->getOverwrittenAt(),
-			'canWrite' => $viewer->canWrite,
+			'manages' => $viewer->manages,
 			'canComment' => ($viewer->canComment || $viewer->canCommentOnceNamed) && $this->window->open($viewer, $version),
 			'canApprove' => $viewer->canApprove && $this->window->open($viewer, $version),
 			// So that the Comment field refuses a file that would not fit before uploading it

@@ -419,7 +419,7 @@ export const useUploadsStore = defineStore('uploads', {
 		async refresh(item) {
 			try {
 				const context = await getVersion(item.version.id)
-				item.version = { ...context.versions.find((each) => each.id === item.version.id), canWrite: context.canWrite }
+				item.version = { ...context.versions.find((each) => each.id === item.version.id), manages: context.manages }
 			} catch (error) {
 				// Its Version is gone, deleted or taken out of Deliver: nothing is left to show; anything else is read again on the next round
 				if (error.response?.status === 404) {

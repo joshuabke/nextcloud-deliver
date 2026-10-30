@@ -24,7 +24,7 @@ const props = defineProps({
 	/** The Assets its filename could join (story 14) */
 	candidates: { type: Array, default: () => [] },
 	/** Whether the Stack may be managed here */
-	canWrite: { type: Boolean, default: false },
+	manages: { type: Boolean, default: false },
 	/** Whether its checkbox is ticked (story 141) */
 	selected: { type: Boolean, default: false },
 	/** Whether any card is ticked, so every checkbox shows */
@@ -54,7 +54,7 @@ const review = computed(() => `/versions/${newest.value.id}`)
  */
 function onClick(event) {
 	const add = event.ctrlKey || event.metaKey
-	if (!props.canWrite || isMobile.value || event.detail === 0) {
+	if (!props.manages || isMobile.value || event.detail === 0) {
 		if (!add && !event.shiftKey) {
 			event.preventDefault()
 			router.push(review.value)
@@ -65,7 +65,7 @@ function onClick(event) {
 	emit('pick', { range: event.shiftKey, add })
 }
 /** A Version stacked by its name waits here until a Member keeps or undoes it (story 13) */
-const autoStacked = computed(() => props.canWrite && !isMobile.value && props.asset.versions.some((version) => version.autoStacked))
+const autoStacked = computed(() => props.manages && !isMobile.value && props.asset.versions.some((version) => version.autoStacked))
 /** Comments by others on any Version of the Stack that I have not had on screen */
 const unseen = computed(() => props.asset.versions.reduce((sum, version) => sum + version.unseen, 0))
 const audio = computed(() => newest.value.mimeType?.startsWith('audio/'))
@@ -101,7 +101,7 @@ const status = computed(() => {
 <template>
 	<li
 		class="deliver-card deliver-card__menu-host"
-		:class="{ 'deliver-card--selecting': canWrite && (selecting || isMobile), 'deliver-card--selected': selected }"
+		:class="{ 'deliver-card--selecting': manages && (selecting || isMobile), 'deliver-card--selected': selected }"
 		v-on="press">
 		<a
 			class="deliver-card__link"
@@ -147,7 +147,7 @@ const status = computed(() => {
 		</a>
 		<!-- Outside the link, so ticking it does not open the Asset -->
 		<input
-			v-if="canWrite"
+			v-if="manages"
 			class="deliver-card__select"
 			type="checkbox"
 			:checked="selected"

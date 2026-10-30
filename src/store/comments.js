@@ -21,7 +21,7 @@ export const useCommentsStore = defineStore('comments', {
 	state: () => ({
 		versionId: null,
 		comments: [],
-		canWrite: false,
+		manages: false,
 		/** When the Version's file was overwritten under Comments, or null; Comments made up to then are marked */
 		overwrittenAt: null,
 		/** Null until the first answer; false where the person may only read */
@@ -112,7 +112,7 @@ export const useCommentsStore = defineStore('comments', {
 				return
 			}
 			this.comments = mergeComments([], answer.comments, null)
-			this.canWrite = answer.canWrite
+			this.manages = answer.manages
 			this.overwrittenAt = answer.overwrittenAt
 			this.canComment = answer.canComment
 			this.canApprove = answer.canApprove

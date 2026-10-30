@@ -76,7 +76,7 @@ function openMenu(event, project) {
 				? { label: t('deliver', 'Notify me again'), icon: unmuteIcon, action: () => save(project, { muted: false }) }
 				: { label: t('deliver', 'Mute notifications'), icon: muteIcon, action: () => save(project, { muted: true }) },
 			project.path && { label: t('deliver', 'Open in Files'), icon: filesIcon, href: generateUrl('/apps/files/') + '?' + new URLSearchParams({ dir: projectDir(project.path) }) },
-			project.canWrite && { label: t('deliver', 'Delete Project'), icon: removeIcon, danger: true, action: () => remove(project) },
+			project.manages && { label: t('deliver', 'Delete Project'), icon: removeIcon, danger: true, action: () => remove(project) },
 		].filter(Boolean),
 	}
 }

@@ -21,7 +21,7 @@ const props = defineProps({
 	reviewer: { type: Object, required: true },
 	/** The Project's Review Links with the title the navigation gives them, to name each Personal Link */
 	links: { type: Array, required: true },
-	canWrite: { type: Boolean, default: false },
+	canShare: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['changed', 'close', 'remove'])
@@ -107,7 +107,7 @@ async function renew() {
 <template>
 	<NcDialog :name="reviewer.name" size="normal" @closing="emit('close')">
 		<div class="deliver-reviewer">
-			<form v-if="canWrite" class="deliver-reviewer__form" @submit.prevent="save">
+			<form v-if="canShare" class="deliver-reviewer__form" @submit.prevent="save">
 				<NcTextField v-model="name" :label="t('deliver', 'Name')" :disabled="busy" />
 				<NcTextField
 					v-model="email"
@@ -168,7 +168,7 @@ async function renew() {
 				{{ t('deliver', '{name} is on no Review Link.', { name: reviewer.name }) }}
 			</p>
 			<NcSelect
-				v-if="canWrite && otherLinks.length"
+				v-if="canShare && otherLinks.length"
 				:modelValue="null"
 				:options="otherLinks"
 				label="title"
@@ -183,7 +183,7 @@ async function renew() {
 			:reviewer="reviewer"
 			:link="openRights.reviewLink"
 			@close="openRights = null" />
-		<template v-if="canWrite" #actions>
+		<template v-if="canShare" #actions>
 			<NcButton variant="tertiary" :disabled="busy" @click="emit('remove')">
 				{{ t('deliver', 'Remove Reviewer') }}
 			</NcButton>

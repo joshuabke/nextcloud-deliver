@@ -47,7 +47,7 @@ class ExportService {
 	 * @return array{name: string, mime: string, body?: string, path?: string} the file, as content or as a temporary file the caller deletes
 	 */
 	public function export(Viewer $viewer, Version $version, Project $project, string $format, bool $unresolvedOnly, bool $zeroBased, ?string $liveSet = null): array {
-		if (!$viewer->canWrite) {
+		if (!$viewer->manages) {
 			throw new AccessDeniedException('Exporting needs Manage');
 		}
 		if (!isset(self::FORMATS[$format])) {

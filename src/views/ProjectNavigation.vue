@@ -355,7 +355,7 @@ function personalLink(reviewer) {
 				v-if="person"
 				:reviewer="person"
 				:links="links"
-				:canWrite="canShare"
+				:canShare="canShare"
 				@changed="load()"
 				@remove="dropReviewer(person)"
 				@close="person = null" />
