@@ -274,7 +274,9 @@ Files is the source of truth (ADR 0002). Deliver's tables hold only review state
 
 File identity is always the Nextcloud file id, so renames and moves are free and never change a Version's Project. A move to trash sets the Version to Missing and notifies; permanent deletion purges Version and Comments. A Folder Project whose folder is deleted becomes a plain Project. Attachments live in app data under the Comment; one person's on one Version add up to the admin's limit (20 MB unless changed), counted with the new file in, so that uploads at the same moment cannot pass it together.
 
-Nextcloud hands a deleted account's user id to the next account created under it, so a deleted account leaves nothing tied to its id: a Folder Project it made passes to whoever owns the folder, any other Project it made is deleted for good at once (story 152), the Review Links it made go and its Reviewers on No Project are removed, while the Reviewers of a Project stay with it, their inviter forgotten, and its Comments, Approvals and Reactions stay, by a Deleted user that nobody can edit. A removed Reviewer stays removed.
+Nextcloud hands a deleted account's user id to the next account created under it, so a deleted account leaves nothing tied to its id: a Folder Project it made passes to whoever owns the folder, any other Project it made is deleted for good at once (story 152), the Review Links it made and the Project Member entries set for it go, its Reviewers on No Project are removed, while the Reviewers of a Project stay with it, their inviter forgotten, and its Comments, Approvals and Reactions stay, by a Deleted user that nobody can edit. A removed Reviewer stays removed.
+
+A group id is given again the same way, so deleting a group removes its Project Member entries, and a group later created under the id starts as anyone newly given access does.
 
 ### Discovery and stacking
 

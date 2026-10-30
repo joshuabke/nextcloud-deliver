@@ -18,6 +18,7 @@ Deliver now keeps Project Members, each with an Access level of their own: None 
 
 - The Project Members are whoever can open one of the Project's files, listed as Files grants it: a person or a group. A person's own entry always wins over their groups; across several groups, the highest level and every switch any of them has count.
 - A Project setting decides what someone newly given access in Files starts with: as in Files (the default), View or None.
+- A group id can be given to the next group created, so deleting a group removes its Project Member entries; a group later created under the id starts as anyone newly given access does.
 - Members with Manage set the levels and switches, never above their own. The Project's owner (the folder's owner for a Folder Project, whoever made any other Project) always has Manage, Share and Approve and cannot be lowered. A Folder Project in a group folder has no owner; there the last Member with Manage cannot be lowered.
 - Share is offered only where Files lets the Member reshare: on a Folder Project its folder, on any other Project at least one of its files. A Review Link still shows only files its maker may reshare (ADR 0010).
 - Approve is on by default for Manage only, so read access in Files no longer decides on Approvals unless a Member with Manage switches it on. Reviewers still decide where their link lets them comment.
