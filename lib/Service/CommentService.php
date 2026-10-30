@@ -382,6 +382,8 @@ class CommentService {
 			'manages' => $viewer->manages,
 			'canComment' => ($viewer->canComment || $viewer->canCommentOnceNamed) && $this->window->open($viewer, $version),
 			'canApprove' => $viewer->canApprove && $this->window->open($viewer, $version),
+			// Edit and delete what they wrote, also where the Version takes no new Comments
+			'canChangeOwn' => $viewer->mayChangeOwn(),
 			// So that the Comment field refuses a file that would not fit before uploading it
 			'attachmentLimit' => $this->attachmentLimit(),
 			'seenUntil' => $seen?->getSeenUntil() ?? 0,

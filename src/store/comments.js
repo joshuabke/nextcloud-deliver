@@ -28,6 +28,8 @@ export const useCommentsStore = defineStore('comments', {
 		canComment: null,
 		/** Null until the first answer; whether this person may approve or request changes */
 		canApprove: null,
+		/** Whether this person may edit and delete what they wrote: a Member with Comment, a Reviewer (ADR 0016) */
+		canChangeOwn: false,
 		/** Me, in the shape of a Comment's author */
 		me: null,
 		/**
@@ -116,6 +118,7 @@ export const useCommentsStore = defineStore('comments', {
 			this.overwrittenAt = answer.overwrittenAt
 			this.canComment = answer.canComment
 			this.canApprove = answer.canApprove
+			this.canChangeOwn = answer.canChangeOwn
 			this.me = answer.me
 			this.seenUntil = answer.seenUntil
 			this.approvals = answer.approvals

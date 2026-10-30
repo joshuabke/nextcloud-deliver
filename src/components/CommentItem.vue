@@ -57,8 +57,8 @@ const fresh = computed(() => store.now - props.comment.createdAt < FRESH)
 const beforeOverwrite = computed(() => store.overwrittenAt !== null && props.comment.createdAt <= store.overwrittenAt)
 const overwriteDay = computed(() => new Date((store.overwrittenAt ?? 0) * 1000).toLocaleDateString(getCanonicalLocale(), { dateStyle: 'medium' }))
 const canReply = computed(() => !props.isReply && store.canComment === true && store.me?.type !== 'unnamed')
-/** A Member needs Comment to edit or delete their own Comments (ADR 0016); a Reviewer keeps theirs */
-const canChange = computed(() => mine.value && (store.canComment === true || store.me?.type === 'reviewer'))
+/** A Member needs Comment to edit or delete their own Comments (ADR 0016), also on a Version closed for new ones; a Reviewer keeps theirs */
+const canChange = computed(() => mine.value && store.canChangeOwn)
 const canDelete = computed(() => canChange.value || store.manages)
 /** Reactions need a name to put on them, like Comments (story 91) */
 const canReact = computed(() => store.canComment === true && store.me?.type !== 'unnamed')

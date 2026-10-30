@@ -252,6 +252,9 @@ class CommentApiTest extends TestCase {
 
 		$listed = $this->nc->ocs('GET', "/versions/{$this->versionId}/comments");
 		self::assertFalse($listed['data']['canComment'], 'the client knows before it tries');
+		// What they wrote there stays theirs to change
+		self::assertTrue($listed['data']['canChangeOwn']);
+		self::assertSame(200, $this->nc->ocs('PUT', "/comments/{$older['id']}", ['body' => 'on Version 1, corrected'])['status']);
 		self::assertSame(409, $this->nc->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 2, 'body' => 'late'])['status']);
 		self::assertSame(409, $this->nc->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 1, 'body' => 'late', 'parentId' => $older['id']])['status'], 'a Reply is a Comment too');
 		self::assertSame(201, $this->nc->ocs('POST', "/versions/{$newest['id']}/comments", ['inFrame' => 2, 'body' => 'on the newest'])['status']);

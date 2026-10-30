@@ -168,8 +168,9 @@ class AccessTest extends TestCase {
 		self::assertSame(200, $this->setLevel('user', $user, 'view')['status']);
 		self::assertSame(403, $member->ocs('PUT', "/comments/$mine", ['body' => 'changed'])['status']);
 		self::assertSame(403, $member->ocs('DELETE', "/comments/$mine")['status']);
-		$read = $member->ocs('GET', "/versions/{$this->versionId}/comments")['data']['comments'];
-		self::assertSame(['first, better', 'second'], array_column($read, 'body'));
+		$read = $member->ocs('GET', "/versions/{$this->versionId}/comments")['data'];
+		self::assertSame(['first, better', 'second'], array_column($read['comments'], 'body'));
+		self::assertFalse($read['canChangeOwn'], 'the client offers no Edit or Delete');
 
 		// Comment gives them back their own
 		self::assertSame(200, $this->setLevel('user', $user, 'comment')['status']);
@@ -431,6 +432,20 @@ class AccessTest extends TestCase {
 		self::assertSame('view', $this->listed()[$after]['level']);
 		[$later] = $this->member(1);
 		self::assertSame('none', $this->listed()[$later]['level']);
+	}
+
+	public function testATakenBackEntryLeavesWhatTheyCameUnder(): void {
+		[$before] = $this->member(1);
+		self::assertSame(200, $this->setLevel('user', $before, 'view')['status']);
+		$this->setNewcomers('none');
+		[$after] = $this->member(1);
+		self::assertSame(200, $this->setLevel('user', $after, 'comment')['status']);
+
+		foreach ([$before, $after] as $user) {
+			self::assertSame(200, $this->admin->ocs('DELETE', "/projects/{$this->projectId}/members?type=user&principal=$user")['status']);
+		}
+		// Who was there before the change has what Files gives, who came after it what the setting gave
+		self::assertSame(['comment', 'none'], [$this->listed()[$before]['level'], $this->listed()[$after]['level']]);
 	}
 
 	public function testOnlyManageSeesAndSetsMembers(): void {
