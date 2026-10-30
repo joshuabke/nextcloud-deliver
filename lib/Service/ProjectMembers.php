@@ -231,8 +231,7 @@ class ProjectMembers {
 		$write = ($permissions & Constants::PERMISSION_UPDATE) !== 0;
 		$grant = match (true) {
 			$stored !== null => new Grant($stored['level'], $stored['share'] && $canShare, $stored['approve']),
-			in_array($project->getNewcomers(), [Grant::VIEW, Grant::NONE], true) => new Grant((string)$project->getNewcomers(), false, false),
-			default => new Grant($write ? Grant::MANAGE : Grant::COMMENT, false, $write),
+			default => $this->access->byDefault($project, $write),
 		};
 		return [
 			'type' => MemberMapper::GROUP,

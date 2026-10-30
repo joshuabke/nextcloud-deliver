@@ -53,6 +53,15 @@ class Access {
 		if ($stored !== null) {
 			return new Grant($stored['level'], $stored['share'] && $reshare(), $stored['approve']);
 		}
+		return $this->byDefault($project, $write);
+	}
+
+	/**
+	 * What someone has with nothing set for them (nor for their groups): the
+	 * level the Project gives newcomers, else what Files gives. The one place
+	 * of that rule, for people and for groups.
+	 */
+	public function byDefault(Project $project, bool $write): Grant {
 		return match ($project->getNewcomers()) {
 			Grant::NONE, Grant::VIEW => new Grant($project->getNewcomers(), false, false),
 			default => new Grant($write ? Grant::MANAGE : Grant::COMMENT, false, $write),
@@ -64,7 +73,7 @@ class Access {
 		if ($project === null || $this->ownerOf($project) === $uid) {
 			return true;
 		}
-		return ($this->stored($uid, $project)['level'] ?? $project->getNewcomers() ?? Grant::VIEW) !== Grant::NONE;
+		return ($this->stored($uid, $project)['level'] ?? $this->byDefault($project, false)->level) !== Grant::NONE;
 	}
 
 	/**
