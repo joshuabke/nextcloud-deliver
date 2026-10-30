@@ -242,6 +242,42 @@ class AccessTest extends TestCase {
 		self::assertSame(403, $member->ocs('POST', "/files/$fileId/rename", ['name' => 'renamed.mp4'])['status'], 'the file is read-only for them');
 	}
 
+	public function testRenamingAndReplacingNeedFilesWriteAndManageInTheProject(): void {
+		$fileId = $this->admin->fileId("{$this->root}/cut.mp4");
+		$this->admin->put("{$this->root}/.deliver-replace-1", 'the new cut');
+		$uploadId = $this->admin->fileId("{$this->root}/.deliver-replace-1");
+		$rename = fn (NextcloudClient $as, ?int $id = null, string $name = 'renamed.mp4') => $as->ocs('POST', '/files/' . ($id ?? $fileId) . '/rename', ['name' => $name])['status'];
+		$replace = fn (NextcloudClient $as) => $as->ocs('POST', "/versions/{$this->versionId}/replace", ['fileId' => $uploadId])['status'];
+
+		// Files' write access alone is not enough: the Access level decides what is done with the review
+		[$user, $member] = $this->member(15);
+		foreach (['view', 'comment'] as $level) {
+			self::assertSame(200, $this->setLevel('user', $user, $level)['status']);
+			self::assertSame([403, 403], [$rename($member), $replace($member)], "$level may not run the review");
+		}
+		self::assertSame(200, $this->setLevel('user', $user, 'none')['status']);
+		self::assertSame([404, 404], [$rename($member), $replace($member)], 'None does not see the Project');
+		self::assertSame('not really a video', $this->admin->get("{$this->root}/cut.mp4"));
+
+		// Files has the say over the file itself, whatever the Access level
+		[$reader, $readOnly] = $this->member(1);
+		self::assertSame(200, $this->setLevel('user', $reader, 'manage')['status']);
+		self::assertSame([403, 403], [$rename($readOnly), $replace($readOnly)], 'the file is read-only for them');
+
+		// A file that is no Version takes Files' write access only
+		$this->admin->put("{$this->root}/notes.txt", 'x');
+		$notes = $this->admin->fileId("{$this->root}/notes.txt");
+		self::assertSame(200, $this->setLevel('user', $user, 'view')['status']);
+		self::assertSame([403, 200], [$rename($readOnly, $notes, 'a.txt'), $rename($member, $notes, 'b.txt')]);
+
+		// Both together
+		self::assertSame(200, $this->setLevel('user', $user, 'manage')['status']);
+		self::assertSame(200, $replace($member));
+		self::assertSame('the new cut', $this->admin->get("{$this->root}/cut.mp4"));
+		self::assertSame(200, $rename($member));
+		self::assertSame($fileId, $this->admin->fileId("{$this->root}/renamed.mp4"));
+	}
+
 	public function testShareIsOfferedWhereFilesLetsThemReshare(): void {
 		[$reshares, $withShare] = $this->member(17);
 		[$onlyReads, $reads] = $this->member(1);
