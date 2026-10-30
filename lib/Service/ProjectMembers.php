@@ -113,24 +113,25 @@ class ProjectMembers {
 		?string $name = null,
 		?bool $lockFiles = null,
 	): array {
-		if ($newcomers !== null) {
-			$this->setNewcomers($uid, $id, $newcomers);
+		if ($newcomers !== null && !in_array($newcomers, self::NEWCOMERS, true)) {
+			throw new InvalidRequestException('Newcomers start with ' . implode(', ', self::NEWCOMERS));
 		}
-		return $this->projects->updateSettings($uid, $id, $autoIntake, $allowOlder, $fpsNum, $fpsDen, $timecodeMode, $name, $lockFiles);
+		// The rest is checked before anything is saved, so the newcomers go last: a refused setting leaves them as they were
+		$settings = $this->projects->updateSettings($uid, $id, $autoIntake, $allowOlder, $fpsNum, $fpsDen, $timecodeMode, $name, $lockFiles);
+		if ($newcomers === null) {
+			return $settings;
+		}
+		$this->setNewcomers($uid, $id, $newcomers);
+		return ['newcomers' => $newcomers] + $settings;
 	}
 
 	/**
 	 * What someone newly given access in Files starts with. A change reaches
 	 * only people who come after it: everyone who is a Member now is noted
 	 * first, under the setting they have had so far, and nobody gets an entry.
-	 *
-	 * @throws InvalidRequestException unknown
 	 */
 	private function setNewcomers(string $uid, int $id, string $newcomers): void {
 		[$project] = $this->projects->editable($uid, $id);
-		if (!in_array($newcomers, self::NEWCOMERS, true)) {
-			throw new InvalidRequestException('Newcomers start with ' . implode(', ', self::NEWCOMERS));
-		}
 		if ($project->newcomersSetting() === $newcomers) {
 			return;
 		}
