@@ -211,7 +211,8 @@ class ReviewLink {
 		return $this->stacks;
 	}
 
-	private function project(): ?Project {
+	/** Its Project; null for No Project */
+	public function project(): ?Project {
 		$id = $this->link->getProjectId();
 		if ($id === null) {
 			return null;
