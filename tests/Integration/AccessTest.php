@@ -158,6 +158,25 @@ class AccessTest extends TestCase {
 		self::assertContains($user, array_column($this->admin->ocs('GET', "/versions/{$this->versionId}/members")['data'], 'id'));
 	}
 
+	public function testViewDoesNotEditOrDeleteOwnComments(): void {
+		[$user, $member] = $this->member(1);
+		$mine = $member->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 1, 'body' => 'first'])['data']['id'];
+		$other = $member->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 2, 'body' => 'second'])['data']['id'];
+		self::assertSame(200, $member->ocs('PUT', "/comments/$mine", ['body' => 'first, better'])['status']);
+
+		// Lowered to View, they read what they wrote but change nothing of it
+		self::assertSame(200, $this->setLevel('user', $user, 'view')['status']);
+		self::assertSame(403, $member->ocs('PUT', "/comments/$mine", ['body' => 'changed'])['status']);
+		self::assertSame(403, $member->ocs('DELETE', "/comments/$mine")['status']);
+		$read = $member->ocs('GET', "/versions/{$this->versionId}/comments")['data']['comments'];
+		self::assertSame(['first, better', 'second'], array_column($read, 'body'));
+
+		// Comment gives them back their own
+		self::assertSame(200, $this->setLevel('user', $user, 'comment')['status']);
+		self::assertSame(200, $member->ocs('PUT', "/comments/$mine", ['body' => 'changed'])['status']);
+		self::assertSame(200, $member->ocs('DELETE', "/comments/$other")['status']);
+	}
+
 	public function testNoneOnAReviewLinkReviewsAsAReviewer(): void {
 		[$user, $member] = $this->member(1);
 		$token = $this->admin->ocs('POST', "/projects/{$this->projectId}/links")['data']['token'];

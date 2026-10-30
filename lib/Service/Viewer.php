@@ -52,6 +52,14 @@ final class Viewer {
 			: $comment->getReviewerId() === $this->reviewerId;
 	}
 
+	/**
+	 * Whether the Comments they wrote are still theirs to edit and delete: a
+	 * Member needs Comment (ADR 0016), a Reviewer keeps theirs.
+	 */
+	public function mayChangeOwn(): bool {
+		return $this->canComment || $this->reviewerId !== null;
+	}
+
 	/** In the shape of a Comment's author, so the client recognises its own Comments */
 	public function identity(): array {
 		return match (true) {
