@@ -17,12 +17,13 @@ describe('filters', () => {
 		expect([passes(through, 'approved'), passes(through, 'due')]).toEqual([true, false])
 	})
 
-	it('finds what I delivered by the newest Version', () => {
+	it('finds what I delivered in any Version', () => {
 		const mine = { type: 'user', id: 'anna', name: 'Anna' }
 		const older = version({ deliveredBy: mine })
 		const newer = version({ deliveredBy: { type: 'user', id: 'ben', name: 'Ben' } })
 		expect(passes(asset({}, [version({ deliveredBy: mine })]), 'mine', 'anna')).toBe(true)
-		expect(passes(asset({}, [newer, older]), 'mine', 'anna')).toBe(false)
+		expect(passes(asset({}, [newer, older]), 'mine', 'anna')).toBe(true)
+		expect(passes(asset({}, [newer]), 'mine', 'anna')).toBe(false)
 		expect(passes(asset({}, [version({ deliveredBy: null })]), 'mine', 'anna')).toBe(false)
 		expect(passes(asset({}, [version({ deliveredBy: null })]), 'mine', '')).toBe(false)
 	})

@@ -2,8 +2,8 @@ import { t } from './l10n.js'
 
 /**
  * The filters of the Project view (story 99). Each looks at the newest
- * Version of an Asset, except Unseen, which looks for Unseen Comments
- * anywhere in the Stack.
+ * Version of an Asset, except Unseen, which looks for Unseen Comments, and
+ * Delivered by me, which looks for a Version I delivered, anywhere in the Stack.
  */
 export const FILTERS = ['all', 'unseen', 'changes', 'approved', 'due', 'mine']
 
@@ -37,7 +37,7 @@ export function passes(asset, filter, me = '') {
 		// Due and not yet through, like the next Due Date on the Project's tile
 			return asset.dueDate !== null && !(approved > 0 && changes === 0)
 		case 'mine':
-			return me !== '' && newest.deliveredBy?.type === 'user' && newest.deliveredBy.id === me
+			return me !== '' && asset.versions.some((version) => version.deliveredBy?.type === 'user' && version.deliveredBy.id === me)
 		default:
 			return true
 	}
