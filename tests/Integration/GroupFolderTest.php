@@ -37,7 +37,7 @@ class GroupFolderTest extends TestCase {
 		);
 		$created = $this->admin->ocsForm('POST', '/apps/groupfolders/folders', ['mountpoint' => 'Team-' . bin2hex(random_bytes(4))]);
 		if ($created['status'] !== 200) {
-			self::markTestSkipped('The groupfolders app is not installed in this instance (make up installs it): ' . $created['status']);
+			self::markTestSkipped('The groupfolders app is not installed in this instance (make up enables it): ' . $created['status']);
 		}
 		$this->folderId = (int)$created['data']['id'];
 		[$this->alice, $this->asAlice] = $this->user();
