@@ -272,7 +272,7 @@ class ProjectLinksTest extends TestCase {
 		$this->sql("INSERT INTO *PREFIX*deliver_seen (version_id, reviewer_id, seen_until) VALUES ($v, $k, 50), ($v, $kimmy, 70)");
 		$this->sql("INSERT INTO *PREFIX*deliver_link_activity (token, reviewer_id, kind, version_id, created_at) VALUES ('{$second['token']}', $again, 'viewed', $v, $at)");
 
-		$merged = $this->inNextcloud('echo \\OCP\\Server::get(\\OCA\\Deliver\\Db\\ReviewerMapper::class)->mergeSameAddress();');
+		$merged = $this->inNextcloud('echo (new \\OCA\\Deliver\\Migration\\Version1016Date20261028000002(\\OCP\\Server::get(\\OCP\\IDBConnection::class)))->mergeSameAddress();');
 		self::assertSame('2', $merged, 'two Reviewers went into the oldest');
 
 		$reviewers = $this->listed($this->anna)['reviewers'];
@@ -294,6 +294,6 @@ class ProjectLinksTest extends TestCase {
 		self::assertSame([], $this->rows("SELECT id FROM *PREFIX*deliver_reviewers WHERE id IN ($kimmy, $again)"), 'the merged rows are gone');
 		self::assertSame($lee['id'], $this->rows("SELECT id FROM *PREFIX*deliver_reviewers WHERE name = 'Lee' AND project_id = $project")[0]['id'] + 0, 'others stay');
 
-		self::assertSame('0', $this->inNextcloud('echo \\OCP\\Server::get(\\OCA\\Deliver\\Db\\ReviewerMapper::class)->mergeSameAddress();'), 'and a second run finds nothing');
+		self::assertSame('0', $this->inNextcloud('echo (new \\OCA\\Deliver\\Migration\\Version1016Date20261028000002(\\OCP\\Server::get(\\OCP\\IDBConnection::class)))->mergeSameAddress();'), 'and a second run finds nothing');
 	}
 }
