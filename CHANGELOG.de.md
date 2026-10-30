@@ -10,6 +10,7 @@
 - In der Navigation angezeigt, von wem ein Review-Link stammt.
 - Festgelegt, was jedes Mitglied in einem Projekt darf: Keine, Ansehen, Kommentieren oder Verwalten, mit Teilen und Abnehmen, standardmäßig wie Dateien es erlaubt.
 - Wählbar gemacht, womit jemand startet, der neu Zugriff in Dateien bekommt: wie in Dateien, Ansehen oder Keine; gilt nur für Personen, die nach der Änderung dazukommen.
+- Jemanden, der neu in eine Gruppe kommt, dort starten lassen, wo die Gruppe im Projekt steht.
 - Die Mitglieder eines Projekts, Personen und Gruppen, mit `GET /projects/{id}/members` aufgelistet und mit `PUT` und `DELETE` einstellbar gemacht.
 - Die Gruppen eines Gruppenordners als Mitglieder seines Projekts aufgelistet.
 
@@ -19,7 +20,7 @@
 - Eine E-Mail-Adresse zu einem Reviewer je Projekt gemacht, egal wer ihn eingeladen hat; doppelt eingeladene Reviewer zusammengeführt.
 - Persönlichen Link eines zusammengeführten Reviewers ungültig gemacht, wo auch der Reviewer, in den er aufging, auf dem Link war.
 - Bei jeder Liste geprüft, ob ein Reviewer in den Kontakten dessen ist, der sie ansieht, statt einmal je Reviewer.
-- Lesezugriff in Dateien nimmt Versionen nicht mehr ab, solange ein Mitglied mit Verwalten es nicht erlaubt.
+- Abnahmen mit Lesezugriff in Dateien beendet, sofern ein Mitglied mit Verwalten sie nicht erlaubt.
 - Das Bearbeiten und Löschen eigener Kommentare auf Mitglieder mit Kommentieren beschränkt.
 - Projekt, Versionen, Benachrichtigungen und Erwähnungen vor Mitgliedern mit Keine verborgen; in der Dateien-Seitenleiste steht nur noch, dass die Datei im Review ist.
 - Ein Mitglied mit Keine auf einem Review-Link wie einen Reviewer behandelt.
