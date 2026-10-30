@@ -529,7 +529,7 @@ class ProjectService {
 	 * Version with Comments needs the confirmation first.
 	 *
 	 * @param int $uploadId the file id of the upload, in the folder of the Version's file
-	 * @throws AccessDeniedException they do not manage the Version's Project, or its file or the upload is read-only for them
+	 * @throws AccessDeniedException they do not manage the Version's Project, its file or the upload is read-only for them, or they may not delete the upload
 	 * @throws NotFoundException no such Version or upload for this user
 	 * @throws InvalidRequestException the upload is not a file in the Version's folder
 	 * @throws ProjectConflictException the Version has Comments and nobody confirmed
@@ -547,6 +547,10 @@ class ProjectService {
 			throw new InvalidRequestException('The upload must be a file of its own next to the Version\'s file');
 		}
 		self::assertWritable($upload);
+		// It goes once streamed over: refused only then, the Version's file would be replaced and the upload left behind
+		if (!$upload->isDeletable()) {
+			throw new AccessDeniedException('Deleting the upload is not allowed');
+		}
 		if (!$confirm && $this->comments->findByVersion($versionId) !== []) {
 			throw new ProjectConflictException($this->l->t('This Version has Comments, so replacing its file needs a confirmation.'), 'confirm');
 		}
