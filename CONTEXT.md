@@ -96,6 +96,10 @@ _Avoid_: Like, vote
 One person's decision on a Version: approved, or changes requested. Whoever may comment decides; a decision can be changed or taken back.
 _Avoid_: Sign-off, status, vote
 
+**Locked**:
+The state of the file of a Version with Comments or Approvals: Deliver holds a lock on it, so that nothing outside Deliver overwrites, renames or deletes it (ADR 0018). Files shows it as locked by Deliver. A Project setting switches it off.
+_Avoid_: Frozen, protected, read-only
+
 ### People
 
 **Member**:
@@ -188,6 +192,7 @@ The German translation (`l10n/de` with "du", `l10n/de_DE` with "Sie") uses these
 | Proxy, Thumbnail Strip, Waveform | Proxy, Vorschauleiste, Wellenform |
 | Processing | Verarbeitung (on cards „Wird verarbeitet“) |
 | Missing | Fehlt |
+| Locked | Gesperrt |
 | Export | Export |
 | Delivery | Delivery |
 | Take, Take Folder, Session Time | Take, Take-Ordner, Session-Zeit (never „Aufnahme“, which is Auto Intake) |

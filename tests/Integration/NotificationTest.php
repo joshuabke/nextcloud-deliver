@@ -73,6 +73,8 @@ class NotificationTest extends TestCase {
 	}
 
 	public function testMembersHearOfCommentsVersionsAndMissingFiles(): void {
+		// The lock would stop the file going to the trash, which this tests
+		$this->nc->ocs('PUT', "/projects/{$this->projectId}", ['lockFiles' => false]);
 		$comment = $this->member->ocs('POST', "/versions/{$this->versionId}/comments", ['inFrame' => 5, 'body' => 'warmer please']);
 		self::assertSame(201, $comment['status'], json_encode($comment['data']));
 		self::assertSame(["{$this->user} commented on cut, Version 1"], $this->subjects($this->nc));

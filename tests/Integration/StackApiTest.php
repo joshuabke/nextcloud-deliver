@@ -190,6 +190,8 @@ class StackApiTest extends TestCase {
 	public function testTrashKeepsTheCommentsAndPermanentDeletionDoesNot(): void {
 		$this->put('cut.mp4');
 		$versionId = $this->stack('cut')[0]['id'];
+		// The lock would stop what this tests: the file going to the trash under its Comments
+		$this->nc->ocs('PUT', "/projects/{$this->projectId}", ['lockFiles' => false]);
 		$comment = $this->nc->ocs('POST', "/versions/$versionId/comments", ['inFrame' => 12, 'body' => 'still here?']);
 		self::assertSame(201, $comment['status'], json_encode($comment['data']));
 
@@ -205,6 +207,8 @@ class StackApiTest extends TestCase {
 	public function testRenamingInsideTheProjectKeepsTheVersion(): void {
 		$this->put('cut.mp4');
 		$before = $this->stack('cut')[0];
+		// The lock would stop what this tests: a rename in Files under Comments
+		$this->nc->ocs('PUT', "/projects/{$this->projectId}", ['lockFiles' => false]);
 		$comment = $this->nc->ocs('POST', "/versions/{$before['id']}/comments", ['inFrame' => 3, 'body' => 'keep me']);
 		self::assertSame(201, $comment['status']);
 

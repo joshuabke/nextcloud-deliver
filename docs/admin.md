@@ -9,6 +9,10 @@ For admins: what Deliver needs, what it does in the background, and how to tune 
 - ffmpeg/ffprobe are optional and only needed for derived media (Proxies, Thumbnail Strips, Waveforms)
 - For the still that identifies an Asset in a list, Nextcloud's own Movie preview provider has to be enabled by an admin (`occ config:system:set enabledPreviewProviders N --value 'OC\Preview\Movie'`); without it the list falls back to an icon
 
+## File locks
+
+Deliver locks the file of every Version with Comments or Approvals through Nextcloud's file locking app `files_lock` (shipped, enabled by default; ADR 0018). Without it, or with a Project's switch off, nothing is locked and an overwrite is marked and notified instead. The lock shows in Files as held by Deliver; the file's owner lifts it there, and `occ files:lock --unlock <file id>` lifts it from the command line. A lifted lock comes back with the next Comment or Approval on that Version, or when the Project's setting is switched off and on. If you set a lock timeout in `files_lock`, Deliver's locks expire with it.
+
 ## Derived media
 
 `ffprobe` reads the frame rate as a fraction, the start timecode and the duration in Frames; `ffmpeg` makes a Proxy for anything a browser will not play, a WebP Thumbnail Strip for the timeline and a Waveform for the audio. Everything lands in app data, never in a user folder, and is served with byte ranges so the player can seek.

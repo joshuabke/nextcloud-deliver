@@ -25,6 +25,7 @@ class ApprovalService {
 		private NotificationService $notifications,
 		private LiveUpdates $live,
 		private CommentWindow $window,
+		private FileLock $fileLock,
 	) {
 	}
 
@@ -57,6 +58,7 @@ class ApprovalService {
 		if ($status === null) {
 			if ($mine !== null) {
 				$this->approvals->delete($mine);
+				$this->fileLock->sync($version);
 				$this->live->changed($version);
 			}
 			return $this->list($version);
@@ -81,6 +83,7 @@ class ApprovalService {
 				throw $e;
 			}
 		}
+		$this->fileLock->sync($version);
 		$this->notifications->decided($version, $status, $viewer->uid, $this->authors->of($viewer->uid, $viewer->reviewerId)['name']);
 		$this->live->changed($version);
 		return $this->list($version);

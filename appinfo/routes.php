@@ -76,6 +76,8 @@ return [
 		['name' => 'project_api#updateVersion', 'url' => '/api/v1/versions/{id}', 'verb' => 'PUT'],
 		['name' => 'project_api#stackVersion', 'url' => '/api/v1/versions/{id}/stack', 'verb' => 'POST'],
 		['name' => 'project_api#unstackVersion', 'url' => '/api/v1/versions/{id}/unstack', 'verb' => 'POST'],
+		['name' => 'project_api#replace', 'url' => '/api/v1/versions/{id}/replace', 'verb' => 'POST'],
+		['name' => 'project_api#renameFile', 'url' => '/api/v1/files/{fileId}/rename', 'verb' => 'POST'],
 		['name' => 'project_api#regenerate', 'url' => '/api/v1/versions/{id}/regenerate', 'verb' => 'POST'],
 		['name' => 'project_api#waveform', 'url' => '/api/v1/versions/{id}/waveform', 'verb' => 'POST'],
 		['name' => 'project_api#members', 'url' => '/api/v1/versions/{id}/members', 'verb' => 'GET'],

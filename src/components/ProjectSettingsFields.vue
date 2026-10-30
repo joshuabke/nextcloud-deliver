@@ -54,4 +54,11 @@ const mode = computed(() => MODES.find((each) => each.id === props.project.timec
 		@update:modelValue="emit('save', { allowOlder: $event })">
 		{{ t('deliver', 'Members may comment on older Versions') }}
 	</NcCheckboxRadioSwitch>
+	<NcCheckboxRadioSwitch
+		v-if="project.lockAvailable"
+		:modelValue="project.lockFiles"
+		:disabled="disabled"
+		@update:modelValue="emit('save', { lockFiles: $event })">
+		{{ t('deliver', 'Lock files with Comments') }}
+	</NcCheckboxRadioSwitch>
 </template>

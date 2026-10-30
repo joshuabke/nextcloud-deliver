@@ -61,6 +61,7 @@ class StackService {
 		private AttachmentStore $attachmentFiles,
 		private ReviewLinkMapper $linkRecords,
 		private ReviewerMapper $reviewers,
+		private FileLock $fileLock,
 	) {
 	}
 
@@ -281,6 +282,10 @@ class StackService {
 		}
 		$asset = $this->assets->update($asset);
 		$this->versions->setProjectOfAsset($asset->getId(), $project?->getId());
+		// The new Project may lock files or not
+		foreach ($this->versions->findByAsset($asset->getId()) as $version) {
+			$this->fileLock->sync($version);
+		}
 		return $asset;
 	}
 
@@ -328,6 +333,22 @@ class StackService {
 		self::$deleting[$fileId] = true;
 	}
 
+	/**
+	 * The file was written again in place under a Version with Comments, so they
+	 * may be on another picture now: the Version notes when, and the Members hear
+	 * of it, unless it was Deliver's own confirmed replace (ADR 0018).
+	 */
+	public function overwritten(Version $version, bool $tell): void {
+		if ($this->comments->findByVersion($version->getId()) === []) {
+			return;
+		}
+		$version->setOverwrittenAt($this->time->getTime());
+		$this->versions->update($version);
+		if ($tell) {
+			$this->notifications->overwritten($version);
+		}
+	}
+
 	/** The file went to the trash: the Version is Missing, its Comments stay (story 18) */
 	public function markMissing(Version $version): void {
 		if ($version->getState() === Version::STATE_MISSING || isset(self::$deleting[$version->getFileId()])) {
@@ -343,6 +364,7 @@ class StackService {
 	 * its Asset if that was the last Version (stories 4 and 19). The file stays.
 	 */
 	public function purge(Version $version): void {
+		$this->fileLock->release($version);
 		$this->media->forget($version->getId());
 		$commentIds = array_map(static fn ($comment) => $comment->getId(), $this->comments->findByVersion($version->getId()));
 		$this->notifications->versionGone($version, $commentIds);

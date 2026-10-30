@@ -8,6 +8,7 @@ import penIcon from '@mdi/svg/svg/draw.svg?raw'
 import reactIcon from '@mdi/svg/svg/emoticon-plus-outline.svg?raw'
 import fileIcon from '@mdi/svg/svg/file-outline.svg?raw'
 import { formatFileSize } from '@nextcloud/files'
+import { getCanonicalLocale } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
@@ -52,6 +53,9 @@ const { busy, error, run } = useBusy()
 const mine = computed(() => store.mine(props.comment))
 const unseen = computed(() => props.comment.createdAt > store.seenUntil && !mine.value)
 const fresh = computed(() => store.now - props.comment.createdAt < FRESH)
+/** Written before the file was overwritten, so perhaps about another picture (ADR 0018); a Comment of the same second counts, as timestamps count whole seconds */
+const beforeOverwrite = computed(() => store.overwrittenAt !== null && props.comment.createdAt <= store.overwrittenAt)
+const overwriteDay = computed(() => new Date((store.overwrittenAt ?? 0) * 1000).toLocaleDateString(getCanonicalLocale(), { dateStyle: 'medium' }))
 const canReply = computed(() => !props.isReply && store.canComment === true && store.me?.type !== 'unnamed')
 const canDelete = computed(() => mine.value || store.canWrite)
 /** Reactions need a name to put on them, like Comments (story 91) */
@@ -154,6 +158,13 @@ function saveReply() {
 					</NcActionButton>
 				</NcActions>
 			</div>
+
+			<span
+				v-if="beforeOverwrite && !isReply"
+				class="deliver-comment__overwritten"
+				:title="t('deliver', 'The file was overwritten after this Comment was made')">
+				{{ t('deliver', 'before the overwrite on {date}', { date: overwriteDay }) }}
+			</span>
 
 			<button
 				v-if="!isReply && !clock.still"
@@ -385,6 +396,14 @@ function saveReply() {
 
 .deliver-comment__spacer {
 	flex: 1;
+}
+
+.deliver-comment__overwritten {
+	padding: 0 6px;
+	border-radius: var(--border-radius-pill);
+	background: var(--color-background-dark);
+	color: var(--color-text-maxcontrast);
+	font-size: 11px;
 }
 
 .deliver-comment__new {

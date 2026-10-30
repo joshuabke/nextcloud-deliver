@@ -227,19 +227,14 @@ export async function makeFolder(path) {
 }
 
 /**
- * Renames a file in its folder through Nextcloud's own WebDAV (story 131);
- * Deliver follows the rename. It never replaces a file of the same name.
+ * Renames a file in its folder (story 131) through Deliver, since WebDAV cannot
+ * pass the lock on a file in review (ADR 0018). It never replaces a file of the
+ * same name.
  *
- * @param {string} url - WebDAV URL of the file
+ * @param {number} fileId - the file
  * @param {string} name - its new name
  */
-export function renameFile(url, name) {
-	return axios.request({
-		method: 'MOVE',
-		url,
-		headers: { Destination: url.slice(0, url.lastIndexOf('/') + 1) + encodeURIComponent(name), Overwrite: 'F' },
-	})
-}
+export const renameFile = (fileId, name) => axios.post(url(`/files/${fileId}/rename`), { name })
 
 /**
  * @param {Error} error - an axios error

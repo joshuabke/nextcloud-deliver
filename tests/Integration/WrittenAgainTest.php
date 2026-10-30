@@ -84,6 +84,8 @@ class WrittenAgainTest extends TestCase {
 		$mix = $this->versionId();
 		$this->drainQueue();
 		self::assertSame(3600000, $this->version($mix)['startFrame']);
+		// The lock would stop what this tests: a file written again under its Comments
+		$this->nc->ocs('PUT', "/projects/{$this->projectId}", ['lockFiles' => false]);
 		self::assertSame(201, $this->nc->ocs('POST', "/versions/$mix/comments", ['inFrame' => 500, 'body' => 'louder here'])['status']);
 
 		$this->write('mix.wav', '-f lavfi -i sine=frequency=880:duration=1 -f wav');

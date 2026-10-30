@@ -51,6 +51,7 @@ class CommentService {
 		private CommentWindow $window,
 		private Members $members,
 		private IAppConfig $config,
+		private FileLock $fileLock,
 	) {
 	}
 
@@ -120,6 +121,7 @@ class CommentService {
 		$comment->setCreatedAt($now);
 		$comment->setUpdatedAt($now);
 		$comment = $this->comments->insert($comment);
+		$this->fileLock->sync($version);
 		$serialized = $this->serialize($version, $comment);
 		$author = $serialized['author']['name'];
 		$this->notifications->commented($comment, $version, $author);
@@ -171,6 +173,7 @@ class CommentService {
 			$this->comments->delete($gone);
 			$this->notifications->commentDeleted($gone->getId());
 		}
+		$this->fileLock->sync($version);
 		$this->live->changed($version);
 	}
 
@@ -377,6 +380,8 @@ class CommentService {
 		return [
 			'versionId' => $version->getId(),
 			'state' => $version->getState(),
+			// Comments made before it are marked (ADR 0018)
+			'overwrittenAt' => $version->getOverwrittenAt(),
 			'canWrite' => $viewer->canWrite,
 			'canComment' => ($viewer->canComment || $viewer->canCommentOnceNamed) && $this->window->open($viewer, $version),
 			// So that the Comment field refuses a file that would not fit before uploading it

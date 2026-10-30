@@ -8,6 +8,7 @@ use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\Version;
 use OCA\Deliver\Db\VersionMapper;
 use OCA\Deliver\Service\DerivedMedia;
+use OCA\Deliver\Service\FileLock;
 use OCA\Deliver\Service\Reviewable;
 use OCA\Deliver\Service\StackService;
 use OCA\Files_Trashbin\Events\MoveToTrashEvent;
@@ -57,6 +58,7 @@ class FileEventsListener implements IEventListener {
 		private StackService $stacks,
 		private DerivedMedia $media,
 		private IUserSession $userSession,
+		private FileLock $fileLock,
 	) {
 	}
 
@@ -107,6 +109,7 @@ class FileEventsListener implements IEventListener {
 		if ($version !== null) {
 			// Whoever writes it again delivers it now; a write without an account leaves the name as it was
 			$version->setDeliveredBy($this->actor() ?? $version->getDeliveredBy());
+			$this->stacks->overwritten($version, !$this->fileLock->inOwnScope());
 			$this->media->reread($version);
 		}
 	}

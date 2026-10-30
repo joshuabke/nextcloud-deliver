@@ -74,9 +74,10 @@ class ProjectApiController extends OCSController {
 		?int $fpsDen = null,
 		?string $timecodeMode = null,
 		?string $name = null,
+		?bool $lockFiles = null,
 	): Response {
 		return $this->guard(fn () => $this->service->updateSettings(
-			(string)$this->userId, $id, $autoIntake, $allowOlder, $fpsNum, $fpsDen, $timecodeMode, $name,
+			(string)$this->userId, $id, $autoIntake, $allowOlder, $fpsNum, $fpsDen, $timecodeMode, $name, $lockFiles,
 		));
 	}
 
@@ -98,6 +99,21 @@ class ProjectApiController extends OCSController {
 	#[NoAdminRequired]
 	public function unstackVersion(int $id): Response {
 		return $this->guard(fn () => $this->service->unstackVersion((string)$this->userId, $id));
+	}
+
+	/** Renames a file from inside Deliver's lock, which WebDAV cannot pass (ADR 0018) */
+	#[NoAdminRequired]
+	public function renameFile(int $fileId, string $name): Response {
+		return $this->guard(function () use ($fileId, $name) {
+			$this->service->renameFile((string)$this->userId, $fileId, $name);
+			return [];
+		});
+	}
+
+	/** Replaces a Version's file with an upload next to it, keeping its Comments (ADR 0018) */
+	#[NoAdminRequired]
+	public function replace(int $id, int $fileId, bool $confirm = false): Response {
+		return $this->guard(fn () => $this->service->replaceFile((string)$this->userId, $id, $fileId, $confirm));
 	}
 
 	#[NoAdminRequired]

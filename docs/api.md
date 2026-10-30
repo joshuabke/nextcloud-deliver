@@ -8,7 +8,7 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | POST | `/projects` `{folderId, autoIntake}` or `{name}` | Turn a folder into a Folder Project, or make a Project by name; 409 `{reason: deleted, projectId, projectName}` when a Deleted Project the user may change holds the folder, one inside it or one around it, a plain 409 for anyone else |
 | GET | `/folders/{folderId}/project` | The Folder Project of a folder, or 404 |
 | GET | `/projects/{id}` | Project with the Assets the user can open; Auto Intake looks at the folder first. `/projects/0` is the user's No Project |
-| PUT | `/projects/{id}` `{autoIntake, allowOlder, fpsNum, fpsDen, timecodeMode, name}` | Project settings, each field optional; `autoIntake` only for a Folder Project, `name` only for any other |
+| PUT | `/projects/{id}` `{autoIntake, allowOlder, lockFiles, fpsNum, fpsDen, timecodeMode, name}` | Project settings, each field optional; `autoIntake` only for a Folder Project, `name` only for any other; `lockFiles` (on unless switched off) locks the files of Versions with Comments or Approvals against overwriting, renaming and deleting outside Deliver (ADR 0018), and `lockAvailable` in the answer says whether Nextcloud can lock at all |
 | PUT | `/projects/{id}/mute` `{muted}` | Mute or unmute the Project's notifications for oneself; 0 mutes No Project |
 | DELETE | `/projects/{id}` | Delete the Project: it becomes a Deleted Project, whole (ADR 0015); 403 naming the Assets the user may not change but can open, and counting the others |
 | GET | `/deleted-projects` | `{projects, days}`: the Deleted Projects the user may restore, each with `name`, `deletedAt`, `deletedBy` and `goesAt`, when it is deleted for good; `days` they are kept |
@@ -19,6 +19,7 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | PUT | `/assets/{id}/project` `{projectId}` | Put an Asset into another Project, or 0 for No Project; no file moves |
 | DELETE | `/assets/{id}` | Take a file out of Deliver, the file stays |
 | DELETE | `/assets/{id}/files` | Delete an Asset with its files: they go to the trash of Files, the Asset with its review data at once |
+| POST | `/files/{fileId}/rename` `{name}` | Rename a file in its folder from inside Deliver's lock, which WebDAV cannot pass; 409 for a name the folder holds, 400 for an empty name or one with a slash |
 | GET | `/versions/{id}/members` | Who can be @mentioned on a Version: whoever can open its file |
 | GET | `/versions/{id}` | Project, Asset and Version Stack for the Review view |
 | PUT | `/versions/{id}` `{number, autoStacked}` | Set the Version Number, or take note of an automatic stack |
@@ -26,6 +27,7 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | POST | `/versions/{id}/unstack` | Take a Version out of its Stack, which is also the undo |
 | POST | `/versions/{id}/regenerate` | Delete the Version's derived media and queue it again |
 | POST | `/versions/{id}/waveform` `{peaks, durationFrames}` | Hand in a Waveform (1 to 2000 peaks from 0 to 1) and the duration in Frames, for audio milliseconds, also before the probe ran; 409 once the Version has one or the server is making one, which then replaces it (ADR 0012) |
+| POST | `/versions/{id}/replace` `{fileId, confirm}` | Replace the content of the Version's file with the file `fileId` and delete that file, keeping the Version's file id, so its Comments stay (spec: Delivering again); see below. 409 `{reason: confirm}` when the Version has Comments and `confirm` is not true, 400 for a file that is not next to the Version's file or is a Version itself, 403 without write access |
 | GET | `/admin/settings` | Pipeline settings and status, admins only |
 | PUT | `/admin/settings` `{ffmpegPath, ffprobePath, maxJobs, maxHeight, thumbCap, hwEncoder, hwDevice, extraArgs, projectFolder, attachmentLimit, deletedDays}` | Save and test the encoder, admins only; `attachmentLimit` in MB per person and Version; `deletedDays` how long Deleted Projects are kept, 1 to 365 |
 | GET | `/apps/deliver/versions/{id}/export/{format}` `?unresolvedOnly=1&zeroBased=1` | The Comments as `edl` (DaVinci Resolve markers), `fcpxml` (FCP7 XML, Premiere Pro), `fcpx` (FCPXML, Final Cut Pro) or `csv`, and for audio as `wav` (embedded markers), `midi` (marker meta events) or `reaper` (Region/Marker Manager CSV); needs write access |
@@ -56,6 +58,8 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | GET/PUT | `/settings` `{addressBook}` | My Deliver settings: the address book Reviewers are saved to, of `addressBooks` I can write to |
 
 Every Version a Member gets, in a Project's Assets, in the Review view's Version Stack and in the Files sidebar's Asset, carries `deliveredBy`: `{type, id, name}` of the account whose request wrote its file or enabled it for review, or null when nobody's did. Reviewers are not told.
+
+A Version with Comments or Approvals has its file locked by Deliver (ADR 0018): WebDAV `PUT`, `MOVE` and `DELETE` on it answer 423 for everybody, and Files shows it as locked by Deliver. A delivering tool therefore replaces a Version's file in three steps. It reads the Version's Comments first and asks its user when there are any, `GET /versions/{id}/comments`. It uploads the new content as it uploads any file (chunked where it does), but to a temporary file next to the Version's file, named without a media extension, such as `.deliver-replace-<random>`, so that Auto Intake ignores it. It then calls `POST /versions/{id}/replace {fileId: <the temporary file's id>, confirm: <true once the user agreed>}`. Deliver streams the content into the Version's file inside its lock, keeps its file id, deletes the temporary file and reads the file again as on intake, so the tool hands in a Waveform afterwards as for any delivery. The Version's `overwrittenAt` (unix seconds, null if never) is set when it had Comments, and the Comments made until then show as made before the overwrite. Nobody is notified of a confirmed replace; an overwrite that is not one, where there is no lock (files_lock missing, the Project's switch off, or the owner lifted it in Files), is taken as it comes, sets `overwrittenAt` and notifies the Version's Members. There is no general unlock in the API.
 
 Rights follow each Version's file (ADR 0009): read access views and comments, write access manages. Missing write access answers 403; a request that clashes with the current state (a nested Folder Project, a taken Version Number, an older Version closed for Comments) answers 409.
 

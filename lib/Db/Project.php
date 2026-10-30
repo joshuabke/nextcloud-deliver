@@ -17,6 +17,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setAutoIntake(bool $autoIntake)
  * @method ?bool getAllowOlder()
  * @method void setAllowOlder(bool $allowOlder)
+ * @method ?bool getLockFiles()
+ * @method void setLockFiles(bool $lockFiles)
  * @method void setFpsNum(int $fpsNum)
  * @method void setFpsDen(int $fpsDen)
  * @method void setTimecodeMode(string $timecodeMode)
@@ -38,6 +40,8 @@ class Project extends Entity {
 	/** Null and false mean the same thing; Entity setters skip values equal to the default */
 	protected ?bool $autoIntake = null;
 	protected ?bool $allowOlder = null;
+	/** Whether files with Comments or Approvals are locked (ADR 0018); on unless false, which null stands for too, as the column defaults to on */
+	protected ?bool $lockFiles = null;
 	protected int $fpsNum = 25;
 	protected int $fpsDen = 1;
 	protected string $timecodeMode = 'smpte';
@@ -51,9 +55,14 @@ class Project extends Entity {
 		$this->addType('deletedAt', 'integer');
 		$this->addType('autoIntake', 'boolean');
 		$this->addType('allowOlder', 'boolean');
+		$this->addType('lockFiles', 'boolean');
 		$this->addType('fpsNum', 'integer');
 		$this->addType('fpsDen', 'integer');
 		$this->addType('createdAt', 'integer');
+	}
+
+	public function locksFiles(): bool {
+		return $this->lockFiles !== false;
 	}
 
 	/** A Deleted Project (ADR 0015): nobody opens it, nothing runs for it, and it still holds its files */
