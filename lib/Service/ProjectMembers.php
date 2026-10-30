@@ -40,6 +40,7 @@ class ProjectMembers {
 		private IUserManager $users,
 		private IUserMountCache $mounts,
 		private IRootFolder $root,
+		private GroupFolders $groupFolders,
 	) {
 	}
 
@@ -271,6 +272,10 @@ class ProjectMembers {
 			}
 			if ($node->getOwner() !== null) {
 				$users[$node->getOwner()->getUID()] = true;
+			}
+			// The groups of a group folder give access to everything in it
+			foreach ($this->groupFolders->groupsOf($node) as $gid => $permissions) {
+				$groups[$gid] = ($groups[$gid] ?? 0) | $permissions;
 			}
 			// A share on the node or on a folder above it
 			for ($above = $node; $above instanceof Node && preg_match('#^/[^/]+/files/#', $above->getPath()) === 1; $above = $this->parent($above)) {

@@ -15,7 +15,7 @@ services:
 ```
 
 ```sh
-make up               # Nextcloud 34 + ffmpeg + Postgres on http://localhost:8080 (admin / adminadmin123), enables the app
+make up               # Nextcloud 34 + ffmpeg + Postgres + Team folders on http://localhost:8080 (admin / adminadmin123), enables the app
 make build            # npm ci && vite build → js/
 npm run watch         # rebuild on change
 make test-integration # PHPUnit over the HTTP API, run inside the Nextcloud container
