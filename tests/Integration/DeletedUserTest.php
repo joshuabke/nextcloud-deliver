@@ -92,7 +92,7 @@ class DeletedUserTest extends TestCase {
 		// Comments and Approvals stay, by a Deleted user the new account is not
 		$this->shareSharedWith($this->goneId);
 		self::assertSame('view', $again->ocs('GET', "/projects/$folderProject")['data']['access']['level'], 'a newcomer, not who the old account was seen as');
-		$listed =$again->ocs('GET', "/versions/{$cut['versionId']}/comments")['data'];
+		$listed = $again->ocs('GET', "/versions/{$cut['versionId']}/comments")['data'];
 		self::assertSame('logo late', $listed['comments'][0]['body']);
 		self::assertSame('deleted', $listed['comments'][0]['author']['type']);
 		self::assertSame('deleted', $listed['comments'][0]['reactions'][0]['authors'][0]['type']);
