@@ -16,7 +16,7 @@ Deliver now keeps Project Members, each with an Access level of their own: None 
 
 ## Consequences
 
-- The Project Members are whoever can open one of the Project's files, listed as Files grants it: a person or a group. A person's own entry always wins over their groups; across several groups, the highest level and every switch any of them has count.
+- The Project Members are whoever can open one of the Project's files, listed as Files grants it: a person or a group. A person's own entry always wins over their groups; across several groups, the highest level and every switch any of them has count, each group at its entry or, once noted, where it stands, whether or not the person was noted themselves; only a person none of whose groups has an entry or a note starts from the newcomers setting.
 - A Project setting decides what someone newly given access in Files starts with: as in Files (the default), View or None.
 - A group id can be given to the next group created, so deleting a group removes its Project Member entries; a group later created under the id starts as anyone newly given access does.
 - Members with Manage set the levels and switches, never above their own. The Project's owner (the folder's owner for a Folder Project, whoever made any other Project) always has Manage, Share and Approve and cannot be lowered. A Folder Project in a group folder has no owner; there the last Member with Manage cannot be lowered.

@@ -135,9 +135,9 @@ class Access {
 
 	/**
 	 * What someone has in the Project before Files' limit on sharing: their own
-	 * entry; else, across their groups that have an entry or were noted (the
-	 * notes only while they were not noted themselves), the highest level and
-	 * every switch, each group at its entry or its note; else their own default.
+	 * entry; else, across their groups that have an entry or were noted, the
+	 * highest level and every switch, each group at its entry or its note,
+	 * whether or not they were noted themselves; else their own default.
 	 */
 	private function standing(string $uid, Project $project, bool $write): Grant {
 		$entries = $this->entries($project);
@@ -149,7 +149,7 @@ class Access {
 		$merged = null;
 		foreach ($this->groupsOf($uid) as $gid) {
 			$key = MemberMapper::key(MemberMapper::GROUP, $gid);
-			$grant = $entries[$key] ?? (array_key_exists($key, $seen) && !array_key_exists($own, $seen) ? $this->startingWith($seen[$key], $write) : null);
+			$grant = $entries[$key] ?? (array_key_exists($key, $seen) ? $this->startingWith($seen[$key], $write) : null);
 			if ($grant !== null) {
 				$merged = $merged?->merge($grant) ?? $grant;
 			}
