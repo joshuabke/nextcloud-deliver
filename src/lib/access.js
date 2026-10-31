@@ -28,7 +28,7 @@ export function shareLocked(member, mine) {
 		return t('deliver', 'The owner of a Project keeps Manage, Share and Approve.')
 	}
 	if (!member.canShare) {
-		return t('deliver', 'Their access in Files does not allow resharing. Allow it on the share in Files to switch this on.')
+		return t('deliver', 'Their share in Files does not allow resharing.')
 	}
 	if (member.level === 'none') {
 		return t('deliver', 'They do not see the Project.')

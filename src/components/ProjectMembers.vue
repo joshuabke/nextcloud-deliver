@@ -204,19 +204,35 @@ function setNewcomers(event) {
 }
 
 .deliver-members__list {
-	display: flex;
-	flex-direction: column;
+	display: grid;
+	/* Who, level, Share, Approve, Reset: the same columns in every row */
+	grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+	column-gap: calc(2 * var(--default-grid-baseline));
 	max-height: 40vh;
 	overflow-y: auto;
 }
 
 .deliver-members__row {
-	display: flex;
-	flex-wrap: wrap;
+	display: grid;
+	grid-column: 1 / -1;
+	grid-template-columns: subgrid;
 	align-items: center;
-	gap: calc(2 * var(--default-grid-baseline));
 	padding-block: var(--default-grid-baseline);
 	border-bottom: 1px solid var(--color-border);
+}
+
+/* Too narrow for the columns: each row wraps on its own */
+@media (max-width: 600px) {
+	.deliver-members__list {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.deliver-members__row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: calc(2 * var(--default-grid-baseline));
+	}
 }
 
 .deliver-members__who {

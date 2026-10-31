@@ -40,7 +40,7 @@ const mode = computed(() => MODES.find((each) => each.id === props.project.timec
 			:options="RATES"
 			:clearable="false"
 			:disabled="disabled"
-			:inputLabel="t('deliver', 'Frame rate when a file does not tell')"
+			:inputLabel="t('deliver', 'Default frame rate')"
 			@update:modelValue="emit('save', { fpsNum: Number($event.id.split('/')[0]), fpsDen: Number($event.id.split('/')[1]) })" />
 		<NcSelect
 			:modelValue="mode"
