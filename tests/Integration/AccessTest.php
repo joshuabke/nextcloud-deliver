@@ -558,6 +558,20 @@ class AccessTest extends TestCase {
 		self::assertSame(403, $this->comment($member));
 	}
 
+	public function testAGroupNotedLaterDoesNotLowerWhoCameBefore(): void {
+		[$writer, $asWriter] = $this->member(15);
+		// The writer is noted under "as in Files"
+		$this->setNewcomers('view');
+		$group = $this->group($writer);
+		$this->share(1, $group, 1);
+		// and their group, which came later, under "View"
+		$this->setNewcomers('none');
+
+		$listed = $this->listed();
+		self::assertSame(['view', 'manage'], [$listed[$group]['level'], $listed[$writer]['level']], 'a note is no decision: it never lowers');
+		self::assertSame(200, $this->approve($asWriter));
+	}
+
 	public function testSwitchingNewcomersChangesNothingForExistingMembers(): void {
 		[$reader, $asReader] = $this->member(1);
 		[$writer, $asWriter] = $this->member(15);
