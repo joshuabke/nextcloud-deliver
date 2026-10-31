@@ -177,11 +177,16 @@ class Access {
 	/**
 	 * Forgets how everyone came who is not among those who reach the Project
 	 * now, so that gaining access again makes them newcomers under the setting
-	 * of that day. What a Member with Manage set for them stays.
+	 * of that day. What a Member with Manage set for them stays. Nobody is
+	 * forgotten while no one reaches the Project at all: all its files in the
+	 * trash or storage briefly unavailable says nothing about who lost access.
 	 *
 	 * @param list<string> $reaching MemberMapper::key() of everyone who reaches the Project
 	 */
 	public function forgetLost(Project $project, array $reaching): void {
+		if ($reaching === []) {
+			return;
+		}
 		foreach (array_keys(array_diff_key($this->seen($project), array_flip($reaching))) as $key) {
 			[$type, $id] = explode('/', $key, 2);
 			$this->members->unsee($project->getId(), $type, $id);

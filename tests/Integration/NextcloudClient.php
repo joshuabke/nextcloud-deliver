@@ -164,6 +164,19 @@ class NextcloudClient {
 		$this->request('DELETE', '/remote.php/dav/trashbin/' . rawurlencode($this->user) . '/trash');
 	}
 
+	/** Puts a deleted top-level file or folder back where it was */
+	public function restoreFromTrash(string $name): void {
+		$user = rawurlencode($this->user);
+		$trash = $this->request('PROPFIND', "/remote.php/dav/trashbin/$user/trash", null, ['Depth: 1'])['body'];
+		if (preg_match('#/trash/(' . preg_quote(rawurlencode($name), '#') . '\.d\d+)/?<#', $trash, $m) !== 1) {
+			throw new \RuntimeException("$name is not in the trash");
+		}
+		$status = $this->request('MOVE', "/remote.php/dav/trashbin/$user/trash/{$m[1]}", null, ['Destination: ' . $this->baseUrl . "/remote.php/dav/trashbin/$user/restore/{$m[1]}"])['status'];
+		if ($status !== 201) {
+			throw new \RuntimeException("Restoring $name failed: $status");
+		}
+	}
+
 	public function fileId(string $path): int {
 		$response = $this->request(
 			'PROPFIND',

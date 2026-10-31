@@ -566,6 +566,18 @@ class AccessTest extends TestCase {
 		self::assertSame('comment', $this->listed()[$other]['level'], 'a newcomer of "as in Files" now');
 	}
 
+	public function testNobodyIsForgottenWhileNoFileOfTheProjectCanBeFound(): void {
+		[$user] = $this->member(1);
+		$this->setNewcomers('none');
+		self::assertSame('comment', $this->listed()[$user]['level'], 'noted under "as in Files"');
+
+		// Every file in the trash: nobody reaches the Project, which is not the same as nobody having access
+		$this->admin->delete($this->root);
+		$this->inNextcloud('\\OCP\\Server::get(\\OCA\\Deliver\\Service\\ProjectMembers::class)->forgetLostAll();');
+		$this->admin->restoreFromTrash($this->root);
+		self::assertSame('comment', $this->listed()[$user]['level'], 'still noted under "as in Files", not a newcomer of "none"');
+	}
+
 	public function testWhoLosesAccessKeepsTheEntryAMemberSetForThem(): void {
 		[$user] = $this->member(1);
 		self::assertSame(200, $this->setLevel('user', $user, 'view')['status']);
