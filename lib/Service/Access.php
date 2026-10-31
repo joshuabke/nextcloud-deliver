@@ -135,9 +135,9 @@ class Access {
 
 	/**
 	 * What someone has in the Project before Files' limit on sharing: their own
-	 * entry; else, across their groups that have an entry or that they were
-	 * noted in (unless they were noted themselves), the highest level and every
-	 * switch, each group at its entry or its default; else their own default.
+	 * entry; else, across their groups that have an entry or were noted (the
+	 * notes only while they were not noted themselves), the highest level and
+	 * every switch, each group at its entry or its note; else their own default.
 	 */
 	private function standing(string $uid, Project $project, bool $write): Grant {
 		$entries = $this->entries($project);
@@ -207,10 +207,7 @@ class Access {
 
 	/** Whether the Project is theirs to see in Deliver: not None. Needs no file, for recipients of notifications and Mentions */
 	public function sees(string $uid, ?Project $project): bool {
-		if ($project === null || $this->ownerOf($project) === $uid) {
-			return true;
-		}
-		return $this->standing($uid, $project, false)->sees();
+		return $this->grant($uid, $project, false, fn () => false)->sees();
 	}
 
 	/** @return array<string, Grant> what was set for each person and group, by MemberMapper::key() */
