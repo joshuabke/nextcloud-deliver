@@ -652,10 +652,45 @@ class AccessTest extends TestCase {
 		[$user] = $this->member(1);
 		self::assertSame(200, $this->setLevel('user', $user, 'view')['status']);
 		$this->unshare($user);
-		self::assertArrayNotHasKey($user, $this->listed());
+		self::assertFalse($this->listed()[$user]['reaches'], 'listed for the entry, though they no longer reach the Project');
 		$this->inNextcloud('\\OCP\\Server::get(\\OCA\\Deliver\\Service\\ProjectMembers::class)->forgetLostAll();');
 		$this->share(0, $user, 1);
 		self::assertSame('view', $this->listed()[$user]['level'], 'a decision about them, not a default');
+		self::assertTrue($this->listed()[$user]['reaches']);
+	}
+
+	public function testAGroupThatLostItsShareStaysListedWithItsEntryUntilItIsReset(): void {
+		[$user] = $this->member(1);
+		$group = $this->group($user);
+		$this->share(1, $group, 1);
+		self::assertSame(200, $this->setLevel('group', $group, 'view')['status']);
+		self::assertTrue($this->listed()[$group]['reaches']);
+
+		$this->unshare($group);
+		$row = $this->listed()[$group];
+		self::assertFalse($row['reaches']);
+		self::assertSame('view', $row['level']);
+		self::assertSame('view', $row['stored']['level']);
+		self::assertSame('view', $this->listed()[$user]['level'], 'the entry keeps lowering its members');
+
+		$reset = $this->admin->ocs('DELETE', "/projects/{$this->projectId}/members?type=group&principal=$group");
+		self::assertSame(200, $reset['status'], json_encode($reset['data']));
+		self::assertArrayNotHasKey($group, $this->listed());
+		self::assertSame('comment', $this->listed()[$user]['level']);
+	}
+
+	public function testANoteOfAGroupWithAnEntryIsForgottenWhenItLosesItsShare(): void {
+		[$user] = $this->member(1);
+		$group = $this->group($user);
+		$this->share(1, $group, 1);
+		self::assertSame(200, $this->setLevel('group', $group, 'comment')['status']);
+		$this->setNewcomers('none');
+		$this->unshare($group);
+		self::assertFalse($this->listed()[$group]['reaches']);
+		// Gone from the notes though still listed: sharing again makes the group a newcomer of the setting of that day
+		$this->share(1, $group, 1);
+		self::assertSame(200, $this->admin->ocs('DELETE', "/projects/{$this->projectId}/members?type=group&principal=$group")['status']);
+		self::assertSame('none', $this->listed()[$group]['level']);
 	}
 
 	public function testOnlyManageSeesAndSetsMembers(): void {

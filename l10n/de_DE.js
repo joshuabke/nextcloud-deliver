@@ -610,6 +610,7 @@ OC.L10N.register(
 		"Access level of {name}": "Zugriffsstufe von {name}",
 		"Back to what Files gives": "Zurück zu dem, was Dateien gibt",
 		"Reset": "Zurücksetzen",
+		"No longer reaches the Project": "Erreicht das Projekt nicht mehr",
 		"This file is in review in a Project.": "Diese Datei ist in einem Projekt im Review."
 	},
 	"nplurals=2; plural=(n != 1);"

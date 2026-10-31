@@ -24,7 +24,9 @@ use OCP\Share\IShare;
  * A Project's Members as a Member with Manage sees and sets them (ADR 0016):
  * everyone who can open one of its files as Files grants it, people and
  * groups, each with what a Member with Manage set for them, if anything, and
- * what they have as a result.
+ * what they have as a result. A person or group who no longer reaches any of
+ * them stays listed while a Member with Manage has set something for them
+ * (`reaches` false), so the entry, which keeps applying, can be seen and reset.
  */
 class ProjectMembers {
 	public const NEWCOMERS = [Project::NEWCOMERS_FILES, Grant::VIEW, Grant::NONE];
@@ -145,7 +147,9 @@ class ProjectMembers {
 			return;
 		}
 		foreach ($this->rows($project) as $row) {
-			$this->access->see($project, $row['type'], $row['id']);
+			if ($row['reaches']) {
+				$this->access->see($project, $row['type'], $row['id']);
+			}
 		}
 		$project->setNewcomers($newcomers === Project::NEWCOMERS_FILES ? null : $newcomers);
 		$this->projectMapper->update($project);
@@ -178,7 +182,7 @@ class ProjectMembers {
 
 	private function managed(Project $project): bool {
 		foreach ($this->rows($project) as $row) {
-			if ($row['type'] === MemberMapper::USER && $row['level'] === Grant::MANAGE) {
+			if ($row['reaches'] && $row['type'] === MemberMapper::USER && $row['level'] === Grant::MANAGE) {
 				return true;
 			}
 		}
@@ -203,7 +207,7 @@ class ProjectMembers {
 		if (!$exists) {
 			throw new InvalidRequestException('No such ' . $type);
 		}
-		return $type === MemberMapper::USER ? $this->userRow($project, $principal, []) : $this->groupRow($project, $principal, 0);
+		return ($type === MemberMapper::USER ? $this->userRow($project, $principal, []) : $this->groupRow($project, $principal, 0)) + ['reaches' => false];
 	}
 
 	/** @return list<array<string, mixed>> */
@@ -230,6 +234,17 @@ class ProjectMembers {
 			}
 		}
 		$this->access->forgetLost($project, array_map(static fn (array $row) => MemberMapper::key($row['type'], $row['id']), $rows));
+		$rows = array_map(static fn (array $row) => $row + ['reaches' => true], $rows);
+		// Entries of those who no longer reach it: still decisions about them, so still shown, and resettable
+		$listed = array_flip(array_map(static fn (array $row) => MemberMapper::key($row['type'], $row['id']), $rows));
+		foreach (array_keys(array_diff_key($this->access->entries($project), $listed)) as $key) {
+			[$type, $id] = explode('/', (string)$key, 2);
+			if ($type === MemberMapper::GROUP && $this->groups->groupExists($id)) {
+				$rows[] = $this->groupRow($project, $id, 0) + ['reaches' => false];
+			} elseif ($type === MemberMapper::USER && $this->users->userExists($id)) {
+				$rows[] = $this->userRow($project, $id, []) + ['reaches' => false];
+			}
+		}
 		usort($rows, static fn (array $a, array $b) => [$a['id'] === $owner ? 0 : 1, $a['type'] === MemberMapper::GROUP ? 0 : 1, mb_strtolower($a['name'])]
 			<=> [$b['id'] === $owner ? 0 : 1, $b['type'] === MemberMapper::GROUP ? 0 : 1, mb_strtolower($b['name'])]);
 		return $rows;

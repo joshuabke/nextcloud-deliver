@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { approveLocked, clampSwitches, shareLocked } from './access.js'
+import { afterReset, approveLocked, clampSwitches, shareLocked } from './access.js'
 
 const row = (over) => ({ owner: false, canShare: true, level: 'comment', share: false, approve: false, ...over })
 const all = { share: true, approve: true }
@@ -59,5 +59,18 @@ describe('approveLocked', () => {
 	it('locks giving what I lack, but lets me take it away', () => {
 		expect(approveLocked(row(), nothing)).not.toBeNull()
 		expect(approveLocked(row({ approve: true }), nothing)).toBeNull()
+	})
+})
+
+describe('afterReset', () => {
+	const rows = [{ type: 'group', id: 'a', reaches: true }, { type: 'user', id: 'a', reaches: false }]
+
+	it('replaces a row that still reaches the Project', () => {
+		const saved = { type: 'group', id: 'a', reaches: true, stored: null }
+		expect(afterReset(rows, saved)).toEqual([saved, rows[1]])
+	})
+
+	it('drops a row that no longer reaches it, and only that one', () => {
+		expect(afterReset(rows, { type: 'user', id: 'a', reaches: false })).toEqual([rows[0]])
 	})
 })
