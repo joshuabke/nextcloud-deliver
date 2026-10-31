@@ -526,6 +526,52 @@ class AccessTest extends TestCase {
 		self::assertSame('manage', $this->listed()[$user]['level']);
 	}
 
+	public function testNotedOrNotAPersonGetsTheHighestOfTheirGroups(): void {
+		[$earlier, $asEarlier] = $this->member();
+		$entry = $this->group($earlier);
+		$files = $this->group($earlier);
+		$this->share(1, $entry, 1);
+		$this->share(1, $files, 1);
+		self::assertSame(200, $this->setLevel('group', $entry, 'view')['status']);
+		self::assertSame('view', $this->listed()[$earlier]['level'], 'the group without an entry counts for nothing yet');
+
+		// Everyone listed is noted, the earlier person and both groups, under "as in Files"
+		$this->setNewcomers('none');
+		[$later, $asLater] = $this->member();
+		foreach ([$entry, $files] as $group) {
+			$this->admin->ocsForm('POST', "/ocs/v2.php/cloud/users/$later/groups", ['groupid' => $group]);
+		}
+
+		$listed = $this->listed();
+		self::assertSame(['comment', 'comment'], [$listed[$earlier]['level'], $listed[$later]['level']], 'noted or not, the second group counts');
+		self::assertSame([201, 201], [$this->comment($asEarlier), $this->comment($asLater)]);
+	}
+
+	public function testAnOwnEntryBeatsAGroupThatWasNoted(): void {
+		[$user, $member] = $this->member();
+		$group = $this->group($user);
+		$this->share(1, $group, 1);
+		$this->setNewcomers('none');
+		self::assertSame(201, $this->comment($member), 'Comment from the noted group');
+
+		self::assertSame(200, $this->setLevel('user', $user, 'view')['status']);
+		self::assertSame(403, $this->comment($member));
+	}
+
+	public function testAGroupNotedLaterDoesNotLowerWhoCameBefore(): void {
+		[$writer, $asWriter] = $this->member(15);
+		// The writer is noted under "as in Files"
+		$this->setNewcomers('view');
+		$group = $this->group($writer);
+		$this->share(1, $group, 1);
+		// and their group, which came later, under "View"
+		$this->setNewcomers('none');
+
+		$listed = $this->listed();
+		self::assertSame(['view', 'manage'], [$listed[$group]['level'], $listed[$writer]['level']], 'a note is no decision: it never lowers');
+		self::assertSame(200, $this->approve($asWriter));
+	}
+
 	public function testSwitchingNewcomersChangesNothingForExistingMembers(): void {
 		[$reader, $asReader] = $this->member(1);
 		[$writer, $asWriter] = $this->member(15);
