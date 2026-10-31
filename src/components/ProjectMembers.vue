@@ -6,7 +6,7 @@ import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { listProjectMembers, resetProjectMember, setProjectMember } from '../api.js'
 import { useBusy } from '../composables/busy.js'
-import { approveLocked, clampSwitches, shareLocked } from '../lib/access.js'
+import { afterReset, approveLocked, clampSwitches, shareLocked } from '../lib/access.js'
 import { t } from '../lib/l10n.js'
 import { useProjectsStore } from '../store/projects.js'
 
@@ -83,8 +83,7 @@ function change(member, fields) {
  */
 function reset(member) {
 	return run(async () => {
-		const saved = await resetProjectMember(props.project.id, member.type, member.id)
-		members.value = members.value.map((each) => each.type === member.type && each.id === member.id ? saved : each)
+		members.value = afterReset(members.value, await resetProjectMember(props.project.id, member.type, member.id))
 	})
 }
 
@@ -129,6 +128,7 @@ function setNewcomers(event) {
 					<span v-else-if="member.via.length" class="deliver-members__hint">
 						{{ t('deliver', 'through group {group}', { group: member.via.map((each) => each.name).join(', ') }) }}
 					</span>
+					<span v-if="!member.reaches" class="deliver-members__hint">{{ t('deliver', 'No longer reaches the Project') }}</span>
 				</div>
 				<select
 					class="deliver-members__level"

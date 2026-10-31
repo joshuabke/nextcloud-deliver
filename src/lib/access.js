@@ -56,3 +56,13 @@ export function approveLocked(member, mine) {
 	}
 	return null
 }
+
+/**
+ * @param {Array<{type: string, id: string, reaches: boolean}>} members - the listed rows
+ * @param {{type: string, id: string, reaches: boolean}} saved - the row after a reset
+ * @return {Array} the rows with that one replaced, or gone when it no longer reaches the Project: only its entry kept it listed
+ */
+export function afterReset(members, saved) {
+	const same = (each) => each.type === saved.type && each.id === saved.id
+	return saved.reaches ? members.map((each) => same(each) ? saved : each) : members.filter((each) => !same(each))
+}

@@ -175,7 +175,7 @@ class Access {
 	/**
 	 * Notes under which newcomers setting a person or group is first seen as a
 	 * Member of the Project: later changes of the setting do not reach them.
-	 * Called for everyone listed as a Member when the setting changes, so
+	 * Called for everyone who is a Member when the setting changes, so
 	 * whoever came since the last change is noted under the setting they came
 	 * under; nothing is written while reading.
 	 */

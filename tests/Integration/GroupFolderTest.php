@@ -161,6 +161,17 @@ class GroupFolderTest extends TestCase {
 		self::assertSame(409, $this->setLevel('user', $this->bob, 'comment', $this->asBob)['status'], 'bob is the last now');
 	}
 
+	public function testWhoNoLongerReachesTheFolderDoesNotKeepItManaged(): void {
+		self::assertSame(200, $this->setLevel('user', $this->dana, 'manage')['status']);
+		self::assertSame(200, $this->setLevel('user', $this->bob, 'view')['status']);
+		// Dana leaves the folder's group, her entry stays
+		self::assertSame(200, $this->admin->ocsForm('DELETE', "/ocs/v2.php/cloud/users/{$this->dana}/groups", ['groupid' => $this->readers])['status']);
+		self::assertSame([false, 'manage'], [$this->listed()[$this->dana]['reaches'], $this->listed()[$this->dana]['level']]);
+
+		$last = $this->setLevel('user', $this->alice, 'view');
+		self::assertSame(409, $last['status'], 'a Member with Manage who no longer reaches the Project does not run it: ' . json_encode($last['data']));
+	}
+
 	public function testALevelForTheGroupReachesItsPeople(): void {
 		self::assertSame(200, $this->setLevel('group', $this->readers, 'view')['status']);
 		self::assertSame('view', $this->listed()[$this->dana]['level']);
