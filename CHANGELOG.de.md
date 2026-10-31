@@ -1,6 +1,6 @@
 # Änderungen
 
-## Unveröffentlicht
+## 0.10.0 – 2026-10-31
 
 ### Neu
 - Angezeigt, wer jede Version geliefert hat, und nach dem Gelieferten gefiltert.
