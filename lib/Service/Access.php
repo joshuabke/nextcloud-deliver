@@ -18,11 +18,11 @@ use OCP\IUserManager;
 /**
  * What a person may do in a Project, in one place (ADR 0016): the owner's
  * Manage, Share and Approve, then what a Member with Manage set for them (their
- * own entry before their groups', the highest of several groups), and else what
- * Files gives (read Comment, write Manage, Approve for Manage only) or, for
- * someone who got access after the Project's newcomers setting was last
- * changed, what the Project says. Which Assets they see is not decided here:
- * that follows the files (ADR 0009).
+ * own entry before their groups', the highest of several groups, each at its
+ * entry or its default), and else what Files gives (read Comment, write Manage,
+ * Approve for Manage only) or, for someone who got access after the Project's
+ * newcomers setting was last changed, what the Project says. Which Assets they
+ * see is not decided here: that follows the files (ADR 0009).
  */
 class Access {
 	/** @var array<int, array<string, Grant>> what was set, by Project and MemberMapper::key(), for this request */
@@ -58,11 +58,8 @@ class Access {
 		if ($this->ownerOf($project) === $uid) {
 			return new Grant(Grant::MANAGE, true, true);
 		}
-		$stored = $this->stored($uid, $project);
-		if ($stored !== null) {
-			return $stored->share && !$reshare() ? $stored->withoutShare() : $stored;
-		}
-		return $this->byDefault($project, MemberMapper::USER, $uid, $write);
+		$grant = $this->standing($uid, $project, $write);
+		return $grant->share && !$reshare() ? $grant->withoutShare() : $grant;
 	}
 
 	/** What Files and the Project's Members give this person on one of its files */
@@ -126,29 +123,38 @@ class Access {
 	}
 
 	/**
-	 * What someone has with nothing set for them (nor for their groups): the
-	 * level the Project gives newcomers if they came after it was last
-	 * changed, else what Files gives. A person not noted themselves who is in
-	 * groups that were stands where those stand, the highest of them. The one
-	 * place of that rule, for people and for groups.
+	 * What someone has with nothing set for them: the level the Project gives
+	 * newcomers if they came after it was last changed, else what Files gives.
+	 * The one place of that rule, for people and for groups.
 	 */
 	public function byDefault(Project $project, string $type, string $id, bool $write): Grant {
 		$seen = $this->seen($project);
 		$key = MemberMapper::key($type, $id);
-		if (!array_key_exists($key, $seen) && $type === MemberMapper::USER) {
-			$inherited = null;
-			foreach ($this->groupsOf($id) as $gid) {
-				$groupKey = MemberMapper::key(MemberMapper::GROUP, $gid);
-				if (array_key_exists($groupKey, $seen)) {
-					$grant = $this->startingWith($seen[$groupKey], $write);
-					$inherited = $inherited?->merge($grant) ?? $grant;
-				}
-			}
-			if ($inherited !== null) {
-				return $inherited;
+		return $this->startingWith(array_key_exists($key, $seen) ? $seen[$key] : $project->getNewcomers(), $write);
+	}
+
+	/**
+	 * What someone has in the Project before Files' limit on sharing: their own
+	 * entry; else, across their groups that have an entry or were noted (the
+	 * notes only while they were not noted themselves), the highest level and
+	 * every switch, each group at its entry or its note; else their own default.
+	 */
+	private function standing(string $uid, Project $project, bool $write): Grant {
+		$entries = $this->entries($project);
+		$own = MemberMapper::key(MemberMapper::USER, $uid);
+		if (isset($entries[$own])) {
+			return $entries[$own];
+		}
+		$seen = $this->seen($project);
+		$merged = null;
+		foreach ($this->groupsOf($uid) as $gid) {
+			$key = MemberMapper::key(MemberMapper::GROUP, $gid);
+			$grant = $entries[$key] ?? (array_key_exists($key, $seen) && !array_key_exists($own, $seen) ? $this->startingWith($seen[$key], $write) : null);
+			if ($grant !== null) {
+				$merged = $merged?->merge($grant) ?? $grant;
 			}
 		}
-		return $this->startingWith(array_key_exists($key, $seen) ? $seen[$key] : $project->getNewcomers(), $write);
+		return $merged ?? $this->byDefault($project, MemberMapper::USER, $uid, $write);
 	}
 
 	private function startingWith(?string $newcomers, bool $write): Grant {
@@ -201,29 +207,7 @@ class Access {
 
 	/** Whether the Project is theirs to see in Deliver: not None. Needs no file, for recipients of notifications and Mentions */
 	public function sees(string $uid, ?Project $project): bool {
-		if ($project === null || $this->ownerOf($project) === $uid) {
-			return true;
-		}
-		return ($this->stored($uid, $project) ?? $this->byDefault($project, MemberMapper::USER, $uid, false))->sees();
-	}
-
-	/**
-	 * What a Member with Manage set for this person: their own entry, else the
-	 * highest level of their groups' with every switch any of them has.
-	 */
-	public function stored(string $uid, Project $project): ?Grant {
-		$entries = $this->entries($project);
-		if (isset($entries[MemberMapper::key(MemberMapper::USER, $uid)])) {
-			return $entries[MemberMapper::key(MemberMapper::USER, $uid)];
-		}
-		$merged = null;
-		foreach ($this->groupsOf($uid) as $gid) {
-			$entry = $entries[MemberMapper::key(MemberMapper::GROUP, $gid)] ?? null;
-			if ($entry !== null) {
-				$merged = $merged?->merge($entry) ?? $entry;
-			}
-		}
-		return $merged;
+		return $this->grant($uid, $project, false, fn () => false)->sees();
 	}
 
 	/** @return array<string, Grant> what was set for each person and group, by MemberMapper::key() */

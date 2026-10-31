@@ -502,6 +502,30 @@ class AccessTest extends TestCase {
 		self::assertSame('none', $this->listed()[$loner]['level']);
 	}
 
+	public function testTheHighestOfSeveralGroupsCountsWhetherItComesFromAnEntryOrADefault(): void {
+		[$old] = $this->member();
+		$entry = $this->group($old);
+		$noted = $this->group($old);
+		$this->share(1, $entry, 1);
+		$this->share(1, $noted, 1);
+		self::assertSame(200, $this->setLevel('group', $entry, 'view')['status']);
+		// Both groups are noted under "as in Files"; the second has no entry
+		$this->setNewcomers('none');
+
+		[$user, $member] = $this->member();
+		foreach ([$entry, $noted] as $group) {
+			$this->admin->ocsForm('POST', "/ocs/v2.php/cloud/users/$user/groups", ['groupid' => $group]);
+		}
+		self::assertSame('comment', $this->listed()[$user]['level'], 'Comment by the second group, not View by the first');
+		self::assertSame(201, $this->comment($member));
+
+		// Every switch counts as well, and a higher entry beats the default of the other
+		self::assertSame(200, $this->setLevel('group', $entry, 'comment', approve: true)['status']);
+		self::assertSame(['comment', true], [$this->listed()[$user]['level'], $this->listed()[$user]['approve']]);
+		self::assertSame(200, $this->setLevel('group', $entry, 'manage')['status']);
+		self::assertSame('manage', $this->listed()[$user]['level']);
+	}
+
 	public function testSwitchingNewcomersChangesNothingForExistingMembers(): void {
 		[$reader, $asReader] = $this->member(1);
 		[$writer, $asWriter] = $this->member(15);
