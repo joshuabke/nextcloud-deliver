@@ -34,20 +34,22 @@ const mode = computed(() => MODES.find((each) => each.id === props.project.timec
 </script>
 
 <template>
-	<NcSelect
-		:modelValue="rate"
-		:options="RATES"
-		:clearable="false"
-		:disabled="disabled"
-		:inputLabel="t('deliver', 'Frame rate when a file does not tell')"
-		@update:modelValue="emit('save', { fpsNum: Number($event.id.split('/')[0]), fpsDen: Number($event.id.split('/')[1]) })" />
-	<NcSelect
-		:modelValue="mode"
-		:options="MODES"
-		:clearable="false"
-		:disabled="disabled"
-		:inputLabel="t('deliver', 'Show time as')"
-		@update:modelValue="emit('save', { timecodeMode: $event.id })" />
+	<div class="deliver-settings-pair">
+		<NcSelect
+			:modelValue="rate"
+			:options="RATES"
+			:clearable="false"
+			:disabled="disabled"
+			:inputLabel="t('deliver', 'Frame rate when a file does not tell')"
+			@update:modelValue="emit('save', { fpsNum: Number($event.id.split('/')[0]), fpsDen: Number($event.id.split('/')[1]) })" />
+		<NcSelect
+			:modelValue="mode"
+			:options="MODES"
+			:clearable="false"
+			:disabled="disabled"
+			:inputLabel="t('deliver', 'Show time as')"
+			@update:modelValue="emit('save', { timecodeMode: $event.id })" />
+	</div>
 	<NcCheckboxRadioSwitch
 		:modelValue="project.allowOlder"
 		:disabled="disabled"
@@ -59,6 +61,20 @@ const mode = computed(() => MODES.find((each) => each.id === props.project.timec
 		:modelValue="project.lockFiles"
 		:disabled="disabled"
 		@update:modelValue="emit('save', { lockFiles: $event })">
-		{{ t('deliver', 'Lock files with Comments') }}
+		{{ t('deliver', 'Protect files with Comments against deleting and renaming') }}
 	</NcCheckboxRadioSwitch>
 </template>
+
+<style scoped>
+/* Side by side where there is room, one under the other on a phone or in the sidebar */
+.deliver-settings-pair {
+	display: flex;
+	flex-wrap: wrap;
+	gap: calc(2 * var(--default-grid-baseline));
+}
+
+.deliver-settings-pair > * {
+	flex: 1 1 14em;
+	min-width: 0;
+}
+</style>

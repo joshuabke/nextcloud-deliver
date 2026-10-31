@@ -717,7 +717,7 @@ test.describe('Review view', () => {
 			await page.goto(`/apps/deliver/projects/${projectId}`)
 			await page.getByRole('button', { name: 'Project settings' }).click()
 			const settings = page.getByRole('dialog', { name: /^Settings of/ })
-			await settings.getByText('Lock files with Comments').click()
+			await settings.getByText('Protect files with Comments against deleting and renaming').click()
 			await expect.poll(async () => (await api.fetch(clip, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(204)
 			await page.keyboard.press('Escape')
 

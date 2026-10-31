@@ -1,7 +1,9 @@
 <script setup>
+import infoIcon from '@mdi/svg/svg/information-outline.svg?raw'
 import { computed, onMounted, ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
+import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { listProjectMembers, resetProjectMember, setProjectMember } from '../api.js'
@@ -141,21 +143,36 @@ function setNewcomers(event) {
 						{{ level.label }}
 					</option>
 				</select>
-				<span :title="shareLocked(member, mine) ?? ''">
+				<span class="deliver-members__switch">
 					<NcCheckboxRadioSwitch
 						:modelValue="member.share"
 						:disabled="busy || shareLocked(member, mine) !== null"
 						@update:modelValue="change(member, { share: $event })">
 						{{ t('deliver', 'Share') }}
 					</NcCheckboxRadioSwitch>
+					<!-- A disabled switch shows no tooltip of its own, so the reason sits on an icon next to it -->
+					<NcIconSvgWrapper
+						v-if="shareLocked(member, mine)"
+						class="deliver-members__why"
+						:svg="infoIcon"
+						:size="16"
+						:name="shareLocked(member, mine)"
+						:title="shareLocked(member, mine)" />
 				</span>
-				<span :title="approveLocked(member, mine) ?? ''">
+				<span class="deliver-members__switch">
 					<NcCheckboxRadioSwitch
 						:modelValue="member.approve"
 						:disabled="busy || approveLocked(member, mine) !== null"
 						@update:modelValue="change(member, { approve: $event })">
 						{{ t('deliver', 'Approve') }}
 					</NcCheckboxRadioSwitch>
+					<NcIconSvgWrapper
+						v-if="approveLocked(member, mine)"
+						class="deliver-members__why"
+						:svg="infoIcon"
+						:size="16"
+						:name="approveLocked(member, mine)"
+						:title="approveLocked(member, mine)" />
 				</span>
 				<NcButton
 					v-if="member.stored && !member.owner"
@@ -211,6 +228,16 @@ function setNewcomers(event) {
 
 .deliver-members__hint {
 	color: var(--color-text-maxcontrast);
+}
+
+.deliver-members__switch {
+	display: inline-flex;
+	align-items: center;
+}
+
+.deliver-members__why {
+	color: var(--color-text-maxcontrast);
+	cursor: help;
 }
 
 .deliver-members__level {
