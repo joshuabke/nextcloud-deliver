@@ -23,7 +23,7 @@ export function browserName(userAgent) {
 	if (/Firefox\/|FxiOS\//.test(userAgent)) {
 		return 'Firefox'
 	}
-	if (/OPR\/|Opera/.test(userAgent)) {
+	if (/OPR\/|Opera|SamsungBrowser|Vivaldi|YaBrowser/.test(userAgent)) {
 		return null
 	}
 	if (/Chrome\/|Chromium\/|CriOS\//.test(userAgent)) {
@@ -38,13 +38,20 @@ export function browserName(userAgent) {
  * @return {string} why this browser cannot make a Proxy of the file
  */
 export function unsupported(seen, userAgent) {
-	const name = browserName(userAgent)
-	if (seen?.readable && !seen.codec) {
-		// The codec decodes, so it is the encoder, or the server's reading of the container, that is missing
-		return t('deliver', '{browser} cannot make Proxies. Please use another browser.', { browser: name ?? t('deliver', 'This browser') })
+	if (!seen) {
+		return t('deliver', 'Could not read the file.')
 	}
-	const where = name ?? t('deliver', 'this browser')
-	return seen?.readable
-		? t('deliver', '{codec} is not supported in {browser}. Please use another browser.', { codec: codecName(seen.codec), browser: where })
-		: t('deliver', 'This format is not supported in {browser}. Please use another browser.', { browser: where })
+	if (seen.reason === 'format') {
+		return t('deliver', 'This format needs ffmpeg, which this server does not have.')
+	}
+	// Every browser on an iPhone or iPad is WebKit, so another one would not help
+	if (/iPhone|iPad|iPod/.test(userAgent)) {
+		return seen.reason === 'codec'
+			? t('deliver', '{codec} is not supported on this device.', { codec: codecName(seen.codec) })
+			: t('deliver', 'This device cannot make Proxies.')
+	}
+	const name = browserName(userAgent)
+	return seen.reason === 'codec'
+		? t('deliver', '{codec} is not supported in {browser}. Please use another browser.', { codec: codecName(seen.codec), browser: name ?? t('deliver', 'this browser') })
+		: t('deliver', '{browser} cannot make Proxies. Please use another browser.', { browser: name ?? t('deliver', 'This browser') })
 }

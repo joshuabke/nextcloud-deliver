@@ -13,7 +13,7 @@
 - Make the Thumbnail Strip and the Waveform in the same pass as a Proxy from the browser.
 - Add `POST /versions/{id}/thumbs`.
 - Name the phase of a Proxy, Encoding or Upload, and of a Waveform, Decoding, made in the browser next to it.
-- Shorten the refusal of a file the browser cannot make a Proxy of to the codec and the browser.
+- Shorten the refusal of a file the browser cannot make a Proxy of, naming the codec and the browser, or ffmpeg where no browser helps.
 
 ## 0.10.0 – 2026-10-31
 

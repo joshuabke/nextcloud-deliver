@@ -6,9 +6,11 @@ const SAFARI = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.
 const CHROME = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
 const EDGE = `${CHROME} Edg/130.0.0.0`
 const OPERA = `${CHROME} OPR/115.0.0.0`
+const SAMSUNG = `${CHROME.replace('X11; Linux x86_64', 'Linux; Android 14')} SamsungBrowser/25.0`
+const IPHONE_CHROME = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/130.0.0.0 Mobile/15E148 Safari/604.1'
 
 describe('what a browser is called', () => {
-	it.each([[FIREFOX, 'Firefox'], [SAFARI, 'Safari'], [CHROME, 'Chrome'], [EDGE, 'Edge'], [OPERA, null], ['curl/8', null]])('%s', (agent, name) => {
+	it.each([[FIREFOX, 'Firefox'], [SAFARI, 'Safari'], [CHROME, 'Chrome'], [EDGE, 'Edge'], [IPHONE_CHROME, 'Chrome'], [OPERA, null], [SAMSUNG, null], ['curl/8', null]])('%s', (agent, name) => {
 		expect(browserName(agent)).toBe(name)
 	})
 
@@ -18,18 +20,26 @@ describe('what a browser is called', () => {
 })
 
 describe('why a file does not become a Proxy', () => {
-	it('names the codec and the browser', () => {
-		expect(unsupported({ readable: true, codec: 'hevc' }, FIREFOX)).toBe('H.265 is not supported in Firefox. Please use another browser.')
-		expect(unsupported({ readable: true, codec: 'prores' }, 'curl/8')).toBe('ProRes is not supported in this browser. Please use another browser.')
+	it('names the codec and the browser where another browser may decode it', () => {
+		expect(unsupported({ reason: 'codec', codec: 'hevc' }, FIREFOX)).toBe('H.265 is not supported in Firefox. Please use another browser.')
+		expect(unsupported({ reason: 'codec', codec: 'prores' }, 'curl/8')).toBe('ProRes is not supported in this browser. Please use another browser.')
 	})
 
-	it('names no codec of a format it cannot read', () => {
-		expect(unsupported({ readable: false, codec: null }, SAFARI)).toBe('This format is not supported in Safari. Please use another browser.')
-		expect(unsupported(null, CHROME)).toBe('This format is not supported in Chrome. Please use another browser.')
+	it('sends nobody to another browser on an iPhone, where all are WebKit', () => {
+		expect(unsupported({ reason: 'codec', codec: 'av1' }, IPHONE_CHROME)).toBe('AV1 is not supported on this device.')
+		expect(unsupported({ reason: 'encoder' }, IPHONE_CHROME)).toBe('This device cannot make Proxies.')
 	})
 
-	it('says the browser cannot make Proxies where the codec decodes', () => {
-		expect(unsupported({ readable: true, codec: null }, EDGE)).toBe('Edge cannot make Proxies. Please use another browser.')
-		expect(unsupported({ readable: true, codec: null }, 'curl/8')).toBe('This browser cannot make Proxies. Please use another browser.')
+	it('says the browser cannot make Proxies where it has no H.264 encoder', () => {
+		expect(unsupported({ reason: 'encoder', codec: null }, EDGE)).toBe('Edge cannot make Proxies. Please use another browser.')
+		expect(unsupported({ reason: 'encoder', codec: null }, OPERA)).toBe('This browser cannot make Proxies. Please use another browser.')
+	})
+
+	it('needs ffmpeg where no browser helps', () => {
+		expect(unsupported({ reason: 'format', codec: null }, CHROME)).toBe('This format needs ffmpeg, which this server does not have.')
+	})
+
+	it('claims nothing about a file it could not look at', () => {
+		expect(unsupported(null, CHROME)).toBe('Could not read the file.')
 	})
 })
