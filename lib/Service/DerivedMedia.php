@@ -42,7 +42,8 @@ class DerivedMedia {
 	/** Codecs a browser plays in each container family, by their ffprobe names */
 	private const PLAYABLE = [
 		'mp4' => ['video' => ['h264'], 'audio' => ['aac', 'mp3']],
-		'webm' => ['video' => ['vp8', 'vp9', 'av1'], 'audio' => ['opus', 'vorbis']],
+		// AV1 plays only on recent Apple hardware, so it gets a Proxy (ADR 0019)
+		'webm' => ['video' => ['vp8', 'vp9'], 'audio' => ['opus', 'vorbis']],
 		// Audio files: a picture in them is cover art at most, and anything else is no audio file
 		'mp3' => ['video' => [], 'audio' => ['mp3']],
 		'aac' => ['video' => [], 'audio' => ['aac']],
@@ -50,13 +51,20 @@ class DerivedMedia {
 		'ogg' => ['video' => [], 'audio' => ['vorbis', 'opus', 'flac']],
 		'wav' => ['video' => [], 'audio' => ['pcm_u8', 'pcm_s16le', 'pcm_s24le', 'pcm_s32le', 'pcm_f32le']],
 		// Only read without ffmpeg (ffprobe says matroska,webm): Chrome and Firefox play these, Safari tells its user to switch
-		'matroska' => ['video' => ['h264', 'vp8', 'vp9', 'av1'], 'audio' => ['aac', 'opus', 'vorbis', 'flac', 'mp3']],
+		'matroska' => ['video' => ['h264', 'vp8', 'vp9'], 'audio' => ['aac', 'opus', 'vorbis', 'flac', 'mp3']],
 	];
 
 	private const THUMB_WIDTH = 160;
+	/** The Proxy's AAC, which counts towards the Proxy bitrate threshold with the picture */
+	private const AUDIO_KBPS = 160;
 	private const WAVEFORM_BUCKETS = 2000;
 	/** Seconds between two progress writes to the job row */
 	private const PROGRESS_INTERVAL = 2;
+
+	/** Who works on a Proxy that the uploading browser makes (ADR 0019) */
+	public const BROWSER = 'browser';
+	/** Seconds after the last report of a browser making a Proxy, when its tab counts as closed */
+	public const BROWSER_LAPSE = 120;
 
 	/** @var array{job: Job, seconds: float, percent: int, written: int}|null the job ffmpeg is working on */
 	private ?array $running = null;
@@ -218,8 +226,7 @@ class DerivedMedia {
 			}
 			return;
 		}
-		// A Proxy either makes the Version playable at all or is the lighter choice next to a large original
-		if ($version->getHasVideo() && (!$playable || $this->oversized($probed))) {
+		if ($this->needsProxy($version, $probed, $path)) {
 			$this->enqueue($version->getId(), Job::KIND_PROXY);
 		}
 		if ($version->getHasVideo()) {
@@ -254,7 +261,13 @@ class DerivedMedia {
 	private function runProxy(Version $version, string $path): void {
 		$encoder = $this->encoder->active();
 		try {
-			$this->store($version, 'proxy', fn (string $output) => $this->ffmpeg($this->proxyArgs($version, $path, $encoder, $output)));
+			$this->store($version, 'proxy', function (string $output) use ($version, $path, $encoder): void {
+				$this->ffmpeg($this->proxyArgs($version, $path, $encoder, $output));
+				// A hardware encoder may know only a constant quality and ignore the ceiling
+				if ($encoder !== Encoder::NONE && $this->heavy((int)filesize($output), $this->durationSeconds($version))) {
+					throw new \RuntimeException('The hardware encoder went above the Proxy bitrate threshold');
+				}
+			});
 		} catch (\RuntimeException $e) {
 			if ($encoder === Encoder::NONE) {
 				throw $e;
@@ -267,8 +280,8 @@ class DerivedMedia {
 	private function proxyArgs(Version $version, string $path, string $encoder, string $output): array {
 		$num = $version->getFpsNum();
 		$den = $version->getFpsDen();
-		// A keyframe every second, so seeking stays quick
-		$args = $this->encoder->args($encoder, $this->maxHeight(), $num && $den ? (int)round($num / $den) : 25);
+		// A keyframe every second, so seeking stays quick; a tenth below the threshold leaves room for the encoder's overshoot
+		$args = $this->encoder->args($encoder, $this->maxHeight(), $num && $den ? (int)round($num / $den) : 25, (int)($this->maxBitrate() * 900) - self::AUDIO_KBPS);
 		return [
 			...$args['input'],
 			...Ffmpeg::input($path),
@@ -276,7 +289,7 @@ class DerivedMedia {
 			'-vf', $args['filter'],
 			...($num && $den ? ['-r', "$num/$den"] : []),
 			...$args['codec'],
-			'-c:a', 'aac', '-b:a', '160k',
+			'-c:a', 'aac', '-b:a', self::AUDIO_KBPS . 'k',
 			...$this->extraArgs(),
 			'-movflags', '+faststart',
 			'-f', 'mp4', $output,
@@ -373,6 +386,165 @@ class DerivedMedia {
 		$this->versions->update($version);
 	}
 
+	/** Whether the server lacks ffmpeg, so browsers make Waveforms and Proxies (ADRs 0012, 0019); ffmpeg may have come since the last look */
+	public function withoutFfmpeg(): bool {
+		return !$this->ffmpeg->available() && $this->ffmpeg->probe() === null;
+	}
+
+	/**
+	 * How far the uploading browser has got with a Proxy (ADR 0019). Its
+	 * report keeps a running job of its own on the Version, so everyone sees
+	 * the progress; a browser that stops reporting has gone (lapse).
+	 *
+	 * @throws ProjectConflictException the server makes Proxies, or the Version has one
+	 */
+	public function proxyProgress(Version $version, int $percent): void {
+		$this->assertBrowserProxy($version);
+		$job = $this->jobs->findPending($version->getId(), Job::KIND_PROXY);
+		if ($job === null) {
+			$job = new Job();
+			$job->setKind(Job::KIND_PROXY);
+			$job->setVersionId($version->getId());
+			$job->setState(Job::STATE_RUNNING);
+			$job->setClaimedBy(self::BROWSER);
+			$job->setCreatedAt($this->time->getTime());
+			$job = $this->jobs->insert($job);
+		} elseif ($job->getClaimedBy() !== self::BROWSER) {
+			throw new ProjectConflictException('The server makes this Proxy');
+		}
+		$job->setProgress(max(0, min(99, $percent)));
+		$job->setStartedAt($this->time->getTime());
+		$this->jobs->update($job);
+		$version->setProxyState(self::STATE_RUNNING);
+		$version->setDerivedError(null);
+		$this->versions->update($version);
+	}
+
+	/** A browser that has not reported for a while closed its tab: its Proxy counts as missing again (spec: Proxies from the browser) */
+	public function lapse(Version $version): void {
+		if ($version->getProxyState() !== self::STATE_RUNNING) {
+			return;
+		}
+		$job = $this->jobs->findPending($version->getId(), Job::KIND_PROXY);
+		if ($job?->getClaimedBy() === self::BROWSER && $job->getStartedAt() < $this->time->getTime() - self::BROWSER_LAPSE) {
+			$this->jobs->delete($job);
+			$version->setProxyState(self::STATE_NONE);
+			$this->versions->update($version);
+		}
+	}
+
+	/**
+	 * Takes the Proxy the uploading browser made (ADR 0019) after checking it
+	 * as the browser did: H.264/AAC MP4 that browsers play, within the Proxy
+	 * resolution, with as many Frames as the original at its rate, so that
+	 * every Frame anchor holds. A Proxy that does not match is refused, and
+	 * the Version shows that its Proxy failed.
+	 *
+	 * @throws ProjectConflictException the server makes Proxies, the Version needs none, has one, or is not read yet
+	 * @throws InvalidRequestException the upload is no Proxy of this Version
+	 */
+	public function acceptProxy(Version $version, File $original, File $upload): void {
+		$this->assertBrowserProxy($version);
+		$source = $this->probe->localPath($original);
+		$candidate = $this->probe->localPath($upload);
+		if ($source === null || $candidate === null) {
+			throw new \RuntimeException('The files are not readable');
+		}
+		// The upload may be quicker than the background job that reads the original
+		if ($version->getPlayable() === null) {
+			$job = $this->jobs->findPending($version->getId(), Job::KIND_PROBE);
+			// Claimed as by any worker: should the request die, the probe is queued again like theirs
+			if ($job !== null && $this->jobs->claim($job, 'request', $this->time->getTime())) {
+				$this->process($job);
+			}
+			$version = $this->versions->find($version->getId()) ?? throw new \RuntimeException('The Version is gone');
+			if ($version->getPlayable() === null) {
+				throw new ProjectConflictException('The original is not read yet');
+			}
+		}
+		$probed = $this->container->read($source) ?? [];
+		if (!$this->needsProxy($version, $probed, $source)) {
+			throw new ProjectConflictException('This Version plays without a Proxy');
+		}
+		$error = $this->mismatch($version, $probed, $this->container->read($candidate));
+		if ($error === null) {
+			$stream = $upload->fopen('r');
+			try {
+				$this->put($version, 'proxy', $stream);
+			} finally {
+				if (is_resource($stream)) {
+					fclose($stream);
+				}
+			}
+		}
+		// Only now: should storing fail, the browser's job lapses and the Proxy counts as missing again
+		$job = $this->jobs->findPending($version->getId(), Job::KIND_PROXY);
+		if ($job !== null) {
+			$this->jobs->delete($job);
+		}
+		$this->mark($version->getId(), Job::KIND_PROXY, $error === null ? self::STATE_READY : self::STATE_FAILED, $error);
+		if ($error !== null) {
+			throw new InvalidRequestException($error);
+		}
+	}
+
+	/** @throws ProjectConflictException the server makes Proxies, or the Version has one */
+	private function assertBrowserProxy(Version $version): void {
+		if (!$this->withoutFfmpeg()) {
+			throw new ProjectConflictException('This server makes Proxies with ffmpeg');
+		}
+		if ($version->getProxyState() === self::STATE_READY) {
+			throw new ProjectConflictException('This Version has its Proxy');
+		}
+	}
+
+	/**
+	 * @param array<string, mixed> $original what the original's headers say
+	 * @param ?array<string, mixed> $proxy what the Proxy's headers say
+	 * @return ?string why the Proxy does not fit the Version, null when it does
+	 */
+	private function mismatch(Version $version, array $original, ?array $proxy): ?string {
+		$picture = $this->videoOf($proxy);
+		if ($proxy === null || $picture === null || !str_contains((string)($proxy['format']['format_name'] ?? ''), 'mp4') || !$this->browserPlays($proxy)) {
+			return 'The Proxy is no H.264/AAC MP4 that browsers play';
+		}
+		if (min((int)($picture['width'] ?? 0), (int)($picture['height'] ?? 0)) > $this->maxHeight()) {
+			return 'The Proxy is larger than the Proxy resolution';
+		}
+		if ($version->getHasAudio() && !array_filter($this->probe->streams($proxy), static fn (array $stream) => ($stream['codec_type'] ?? '') === 'audio')) {
+			return 'The Proxy has no sound, the original has';
+		}
+		$num = (int)$version->getFpsNum();
+		$den = (int)$version->getFpsDen();
+		$made = (int)($picture['nb_frames'] ?? -1);
+		$frames = $this->videoOf($original)['nb_frames'] ?? null;
+		if ($num < 1 || $den < 1 || $frames !== null && $made !== (int)$frames) {
+			return "The Proxy has other Frames than the original's $frames";
+		}
+		// WebM and MKV do not count their Frames, and their length includes the sound, which may run on a little
+		if ($frames === null && abs($made - (int)$version->getDurationFrames()) > max(1, (int)round($num / $den / 5))) {
+			return 'The Proxy has other Frames than the original\'s ' . (int)$version->getDurationFrames();
+		}
+		// Within half a Frame over the whole length, so the rate cannot drift a Frame anywhere
+		if (abs((float)($picture['duration'] ?? 0) - $made * $den / $num) > $den / $num / 2) {
+			return 'The Proxy runs at another frame rate than the original';
+		}
+		return null;
+	}
+
+	/**
+	 * @param ?array<string, mixed> $probed
+	 * @return ?array<string, mixed> the first video stream
+	 */
+	private function videoOf(?array $probed): ?array {
+		foreach ($probed === null ? [] : $this->probe->streams($probed) as $stream) {
+			if (($stream['codec_type'] ?? '') === 'video') {
+				return $stream;
+			}
+		}
+		return null;
+	}
+
 	/**
 	 * Reads the PCM in chunks, one per bucket, so an hour of audio does not
 	 * have to fit into memory.
@@ -424,15 +596,19 @@ class DerivedMedia {
 		return true;
 	}
 
-	/** Whether the picture is larger than the Proxy limit, measured on its short side (1080p also for portrait) */
-	private function oversized(array $probed): bool {
-		foreach ($this->probe->streams($probed) as $stream) {
-			if (($stream['codec_type'] ?? '') === 'video'
-				&& min((int)($stream['width'] ?? 0), (int)($stream['height'] ?? 0)) > $this->maxHeight()) {
-				return true;
-			}
-		}
-		return false;
+	/**
+	 * Whether a Version gets a Proxy: browsers do not play its original, or
+	 * it is heavier than the Proxy bitrate threshold, so that slow connections
+	 * get a lighter choice (ADR 0019).
+	 */
+	private function needsProxy(Version $version, array $probed, string $path): bool {
+		return $version->getHasVideo()
+			&& (!$version->getPlayable() || $this->heavy((int)filesize($path), (float)($probed['format']['duration'] ?? 0)));
+	}
+
+	/** Whether a file of this size and length goes above the Proxy bitrate threshold */
+	private function heavy(int $bytes, float $seconds): bool {
+		return $seconds > 0 && $bytes * 8 / $seconds > $this->maxBitrate() * 1_000_000;
 	}
 
 	/**
@@ -552,6 +728,11 @@ class DerivedMedia {
 		} catch (NotFoundException) {
 			// nothing was generated
 		}
+	}
+
+	/** The Proxy bitrate threshold in Mbit/s: what goes above it gets a Proxy, and no Proxy goes above it */
+	public function maxBitrate(): int {
+		return max(PipelineSettings::MIN_BITRATE, $this->config->getValueInt(Application::APP_ID, 'max_bitrate', PipelineSettings::BITRATE));
 	}
 
 	public function maxHeight(): int {

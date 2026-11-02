@@ -1,5 +1,11 @@
 # Änderungen
 
+## Unveröffentlicht
+
+- Originalen, die Browser abspielen, einen Proxy nach der neuen Proxy-Bitratengrenze statt nach ihrer Auflösung gegeben und jeden Proxy unter ihr gehalten.
+- AV1 einen Proxy gegeben.
+- `POST /versions/{id}/proxy` und `POST /versions/{id}/proxy/progress` für Proxies ergänzt, die der hochladende Browser macht, wo der Server kein ffmpeg hat.
+
 ## 0.10.0 – 2026-10-31
 
 ### Neu

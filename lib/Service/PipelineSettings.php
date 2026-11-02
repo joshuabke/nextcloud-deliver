@@ -15,12 +15,16 @@ use OCP\IAppConfig;
 class PipelineSettings {
 	/** Below 720p nobody reviews professionally */
 	public const MIN_HEIGHT = 720;
+	/** The Proxy bitrate threshold in Mbit/s (ADR 0019): its default and the lowest a Proxy can still be made below */
+	public const BITRATE = 20;
+	public const MIN_BITRATE = 2;
 	/** Setting => [type, default]; empty paths mean "whatever is on PATH" */
 	private const SETTINGS = [
 		'ffmpegPath' => ['ffmpeg_path', 'string', ''],
 		'ffprobePath' => ['ffprobe_path', 'string', ''],
 		'maxJobs' => ['max_jobs', 'int', 1],
 		'maxHeight' => ['max_height', 'int', 1080],
+		'maxBitrate' => ['max_bitrate', 'int', self::BITRATE],
 		'thumbCap' => ['thumb_cap', 'int', 600],
 		'hwEncoder' => ['hw_encoder', 'string', Encoder::NONE],
 		'hwDevice' => ['hw_device', 'string', Encoder::DEFAULT_DEVICE],
@@ -36,6 +40,7 @@ class PipelineSettings {
 	private const BOUNDS = [
 		'maxJobs' => [1, 16],
 		'maxHeight' => [self::MIN_HEIGHT, 2160],
+		'maxBitrate' => [self::MIN_BITRATE, 200],
 		'thumbCap' => [10, 5000],
 		'attachmentLimit' => [1, 1024],
 		'deletedDays' => [1, 365],
