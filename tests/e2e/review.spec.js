@@ -1,7 +1,7 @@
 import { chromium, expect, test } from '@playwright/test'
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { CLIP } from './fixtures.js'
+import { CLIP, DNXHR } from './fixtures.js'
 
 const URL = process.env.DELIVER_TEST_URL ?? 'http://localhost:8080'
 const ADMIN = process.env.DELIVER_TEST_USER ?? 'admin'
@@ -726,6 +726,45 @@ test.describe('Review view', () => {
 		} finally {
 			await lock(true)
 			await api.dispose()
+		}
+	})
+})
+
+test.describe('Uploads without ffmpeg', () => {
+	let admin
+	let projectId
+
+	test.beforeAll(async ({ playwright }) => {
+		await testUser(playwright)
+		admin = await playwright.request.newContext({ baseURL: URL, httpCredentials: { username: ADMIN, password: ADMIN_PASSWORD, send: 'always' }, extraHTTPHeaders: ocsHeaders })
+		expect((await admin.put('/ocs/v2.php/apps/deliver/api/v1/admin/settings?format=json', { data: { ffmpegPath: '/nonexistent/ffmpeg', ffprobePath: '/nonexistent/ffprobe' } })).ok()).toBe(true)
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const dav = `/remote.php/dav/files/${USER}/deliver-e2e-${randomBytes(4).toString('hex')}`
+		expect((await api.fetch(dav, { method: 'MKCOL' })).status()).toBe(201)
+		const created = await api.post('/ocs/v2.php/apps/deliver/api/v1/projects?format=json', { data: { folderId: await fileId(api, dav) } })
+		projectId = (await created.json()).ocs.data.id
+		await api.dispose()
+	})
+
+	test.afterAll(async () => {
+		await admin.put('/ocs/v2.php/apps/deliver/api/v1/admin/settings?format=json', { data: { ffmpegPath: '', ffprobePath: '' } })
+		await admin.dispose()
+	})
+
+	test('refuses what this browser can neither play nor convert, before it goes up', async () => {
+		const browser = await chromium.connectOverCDP(CDP)
+		const context = await browser.newContext({ baseURL: BROWSER_URL })
+		const page = await context.newPage()
+		try {
+			await login(page)
+			await page.goto(`/apps/deliver/projects/${projectId}`)
+			await page.getByRole('button', { name: 'Upload', exact: true }).click()
+			const uploads = page.getByRole('dialog', { name: 'Uploads' })
+			await uploads.locator('input[type=file][multiple]').setInputFiles({ name: 'master.mov', mimeType: 'video/quicktime', buffer: readFileSync(DNXHR) })
+			await expect(uploads.locator('.deliver-uploads__status--error')).toContainText('without ffmpeg the server cannot convert it')
+			await expect(uploads.getByText('Open', { exact: true })).toHaveCount(0)
+		} finally {
+			await context.close()
 		}
 	})
 })
