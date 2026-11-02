@@ -79,7 +79,8 @@ function follow(name, job) {
 	const toast = showMessage(text, { timeout: TOAST_PERMANENT_TIMEOUT })
 	const stop = watchEffect(() => {
 		const { state, progress, error } = job.status
-		if (state === 'running' || state === 'uploading') {
+		// Handing: the server takes the uploaded Proxy, still uploading for whoever watches
+		if (['running', 'uploading', 'handing'].includes(state)) {
 			text.textContent = state === 'running'
 				? t('deliver', 'Deliver is making the Proxy of {name} in this browser: {percent} %. Keep this tab open.', { name, percent: progress })
 				: t('deliver', 'Deliver is uploading the Proxy of {name}: {percent} %. Keep this tab open.', { name, percent: progress })

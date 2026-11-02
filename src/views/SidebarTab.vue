@@ -61,6 +61,7 @@ const proxy = computed(() => {
 		checking: null,
 		running: `${status.progress} %`,
 		uploading: t('deliver', 'Uploading, {percent} %', { percent: status.progress }),
+		handing: t('deliver', 'Uploading, {percent} %', { percent: 100 }),
 		ready: t('deliver', 'Done'),
 		failed: status.error ?? t('deliver', 'Failed'),
 	}[status.state]
