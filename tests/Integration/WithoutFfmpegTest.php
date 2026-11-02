@@ -308,7 +308,7 @@ class WithoutFfmpegTest extends TestCase {
 		$this->nc->mkdir("{$this->root}/day1");
 		$intake = $this->nc->ocs('GET', '/folders/' . $this->nc->fileId("{$this->root}/day1") . '/intake');
 		self::assertSame(200, $intake['status'], json_encode($intake['data']));
-		self::assertSame(['maxHeight' => 1080, 'maxBitrate' => 20], $intake['data']['proxy'], 'below the Folder Project, with the settings to make them to');
+		self::assertSame(['maxHeight' => 1080, 'maxBitrate' => 20, 'thumbCap' => 600], $intake['data']['proxy'], 'below the Folder Project, with the settings to make them and their Thumbnail Strip to');
 
 		$elsewhere = 'deliver-test-' . bin2hex(random_bytes(4));
 		$this->nc->mkdir($elsewhere);
