@@ -41,7 +41,7 @@ describe('why a file does not become a Proxy', () => {
 	})
 
 	it('needs ffmpeg where no browser helps', () => {
-		expect(unsupported({ reason: 'format', codec: null }, CHROME)).toBe('This format needs ffmpeg, which this server does not have.')
+		expect(unsupported({ reason: 'format', codec: null }, CHROME)).toBe('This format needs ffmpeg, which this Nextcloud lacks.')
 	})
 
 	it('claims nothing about a file it could not look at', () => {

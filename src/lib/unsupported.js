@@ -43,7 +43,7 @@ export function unsupported(seen, userAgent, touchPoints = 0) {
 		return t('deliver', 'Could not read the file.')
 	}
 	if (seen.reason === 'format') {
-		return t('deliver', 'This format needs ffmpeg, which this server does not have.')
+		return t('deliver', 'This format needs ffmpeg, which this Nextcloud lacks.')
 	}
 	// Every browser on an iPhone or iPad is WebKit, so another one would not help
 	if (/iPhone|iPad|iPod/.test(userAgent) || (/Macintosh/.test(userAgent) && touchPoints > 1)) {
