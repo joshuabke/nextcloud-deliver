@@ -31,6 +31,21 @@ For VAAPI in Docker, pass `/dev/dri` into the container **and** put the web serv
 
 An hourly scan compares every Project with its folder, next to the file listener: it catches deletions from the trash, which fire no event Deliver can hear, and turns a Folder Project whose folder is gone for good into a plain Project.
 
+### How long a Proxy from the browser takes
+
+Measured on a MacBook Pro with an M4 Max (64 GB, macOS 26.5) in Google Chrome 156, Firefox 156.0.1 and Safari 26.5, from synthetic ProRes 422 HQ masters (test pattern with noise) at 25 fps with 24-bit PCM stereo: 1080p at 194 Mbit/s for 60 s, 2160p at 773 Mbit/s for 30 s; real footage decodes at other speeds. The Proxy used the default Proxy bitrate threshold; the time includes the Thumbnail Strip, the Waveform and the check of the finished Proxy. Seconds per minute of master and Frames per second; most cells are single runs, only Safari's 2160p → 1080p ran five times (57–62 s), and Safari's 4K runs varied once memory ran short (one 2160p → 2160p run took 99 s). Memory is what the browser's processes took on top while converting (resident size, summed over its processes, so an upper bound) in fresh Chrome and Firefox instances; Safari's was the growth of an already running Safari, process by process, so it is rough and not comparable. "Isolated" is a page with COOP/COEP (cross-origin isolation), which lets the ProRes decoder share memory between its threads; Deliver's page is not isolated. Safari makes no Thumbnail Strip, as its canvas encodes no WebP; hover previews then come from the file itself.
+
+| Browser | Isolated | 1080p → 1080p | 2160p → 1080p | 2160p → 2160p | Memory | Thumbnail Strip |
+|---|---|---|---|---|---|---|
+| Chrome | no | 4.0 s · 371 fps | 8.2 s · 184 fps | 14.9 s · 100 fps | 2.3–3.9 GB | yes |
+| Chrome | yes | 3.8 s · 393 fps | 7.2 s · 207 fps | 14.7 s · 102 fps | 1.5–2.1 GB | yes |
+| Firefox | no | 6.8 s · 222 fps | 19.4 s · 77 fps | 30.3 s · 50 fps | 4.9–6.0 GB | yes |
+| Firefox | yes | 6.7 s · 223 fps | 20.4 s · 73 fps | 28.1 s · 53 fps | 3.0–4.5 GB | yes |
+| Safari | no | 3.6 s · 414 fps | 60 s · 25 fps | 14.1 s · 107 fps | 1.3–3.4 GB | no |
+| Safari | yes | 3.7 s · 411 fps | 59 s · 25 fps | 14.0 s · 107 fps | 1.5–2.4 GB | no |
+
+Extrapolated to a 10-minute master: a 1080p one has its Proxy in well under a minute and a half in any of the three, faster than uploading its 15 GB over a gigabit line (about two minutes). A 4K one (58 GB) takes about 1¼ minutes to a 1080p Proxy in Chrome, just over 3 in Firefox and 10 in Safari, whose scaling is the slow part (its 2160p Proxy, unscaled, takes 2½ minutes, as in Chrome; Firefox 5). The ProRes decoder runs on the CPU, while the H.264 encoding ran in the M4 Max's hardware encoder, so a smaller machine takes correspondingly longer, more so without a hardware encoder. Give the browser a few GB of free memory, Firefox the most: a laptop with 8 GB is tight for 4K there. Firefox brings no AAC encoder, so Deliver loads its own, as it does for Chrome on Linux; on macOS Chrome and Safari use the system's. Cross-origin isolation made Chrome at most an eighth faster (2160p → 1080p) and Firefox and Safari no faster beyond the spread of single runs; Chrome took 0.8–1.8 GB less memory with it, Firefox about as much.
+
 ## Live updates
 
 The Review view asks for changes every five seconds (thirty in a hidden tab). Where Nextcloud runs the [notify_push](https://github.com/nextcloud/notify_push) app, every new or changed Comment, Reaction or Approval is pushed to the Project's Members as well, and their open Review views update at once. Reviewers on a Review Link have no account to push to and keep polling.
