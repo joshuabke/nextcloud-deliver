@@ -14,6 +14,7 @@
 - `POST /versions/{id}/thumbs` ergänzt.
 - Die Phase eines im Browser erzeugten Proxys, Encoding oder Upload, und einer Wellenform, Decoding, neben ihnen genannt.
 - Die Ablehnung einer Datei, aus der der Browser keinen Proxy erzeugen kann, gekürzt, mit Codec und Browser oder mit ffmpeg, wo kein Browser hilft.
+- Im Player gesagt, dass dieser Nextcloud ffmpeg fehlt, wo eine Datei es zum Abspielen braucht.
 
 ## 0.10.0 – 2026-10-31
 

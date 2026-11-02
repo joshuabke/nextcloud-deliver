@@ -14,6 +14,7 @@
 - Add `POST /versions/{id}/thumbs`.
 - Name the phase of a Proxy, Encoding or Upload, and of a Waveform, Decoding, made in the browser next to it.
 - Shorten the refusal of a file the browser cannot make a Proxy of, naming the codec and the browser, or ffmpeg where no browser helps.
+- Say in the player that this Nextcloud lacks ffmpeg, where a file needs it to play.
 
 ## 0.10.0 – 2026-10-31
 

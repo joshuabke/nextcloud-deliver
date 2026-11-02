@@ -36,7 +36,7 @@
 		"Bookmark your Personal Link. It makes you \"{name}\" again on any device:": "Speichere deinen Persönlichen Link als Lesezeichen. Mit ihm bist du auf jedem Gerät wieder „{name}“:",
 		"Box": "Rahmen",
 		"Browsers cannot play this file, and Deliver could not convert it.": "Browser können diese Datei nicht abspielen, und Deliver konnte sie nicht umwandeln.",
-		"Browsers cannot play this file, and without ffmpeg on the server Deliver cannot convert it.": "Browser können diese Datei nicht abspielen, und ohne ffmpeg auf dem Server kann Deliver sie nicht umwandeln.",
+		"Browsers cannot play this file, and this Nextcloud lacks ffmpeg to convert it.": "Browser können diese Datei nicht abspielen, und dieser Nextcloud fehlt ffmpeg, um sie umzuwandeln.",
 		"C comments on the Frame, I and O set a Range": "C kommentiert den Frame, I und O setzen einen Bereich",
 		"Contacts": "Kontakte",
 		"CSV": "CSV",

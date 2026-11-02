@@ -91,7 +91,7 @@ const unplayableReason = computed(() => {
 	}
 	return props.version.derived?.proxy?.state === 'failed'
 		? t('deliver', 'Browsers cannot play this file, and Deliver could not convert it.')
-		: t('deliver', 'Browsers cannot play this file, and without ffmpeg on the server Deliver cannot convert it.')
+		: t('deliver', 'Browsers cannot play this file, and this Nextcloud lacks ffmpeg to convert it.')
 })
 const proxyPending = computed(() => ['queued', 'running'].includes(props.version.derived?.proxy?.state))
 const lastFrame = computed(() => Math.max(0, durationFrames.value - 1))
