@@ -10,6 +10,8 @@
 - „Proxy in diesem Browser erzeugen“ auf der Asset-Karte für Versionen ohne ihren Proxy ergänzt, wo der Server kein ffmpeg hat.
 - Den Proxy eines Videos, das in der Dateien-App in ein Ordnerprojekt mit Automatischer Aufnahme hochgeladen wird, im hochladenden Browser erzeugt, wo der Server kein ffmpeg hat.
 - `GET /folders/{folderId}/intake` ergänzt.
+- Vorschauleiste und Wellenform im selben Durchgang wie einen Proxy aus dem Browser erzeugt.
+- `POST /versions/{id}/thumbs` ergänzt.
 
 ## 0.10.0 – 2026-10-31
 

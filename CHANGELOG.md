@@ -10,6 +10,8 @@
 - Add "Make Proxy in this browser" on the Asset card for Versions without their Proxy, where the server has no ffmpeg.
 - Make the Proxy of a video uploaded in the Files app into a Folder Project with Auto Intake in the uploading browser, where the server has no ffmpeg.
 - Add `GET /folders/{folderId}/intake`.
+- Make the Thumbnail Strip and the Waveform in the same pass as a Proxy from the browser.
+- Add `POST /versions/{id}/thumbs`.
 
 ## 0.10.0 – 2026-10-31
 
