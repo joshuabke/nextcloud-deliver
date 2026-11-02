@@ -83,11 +83,16 @@ describe('the Thumbnail Strip the browser makes in the same pass', () => {
 		expect(thumbGrid(10, 600, { width: 2048, height: 858 }).tileHeight).toBe(68)
 	})
 
-	it('takes the first picture at or around each mark', () => {
-		const grid = { every: 2, count: 3 }
-		expect(thumbSlot(grid, 0, 0.04)).toBe(0)
-		expect(thumbSlot(grid, 1.96, 0.04)).toBe(0)
-		expect(thumbSlot(grid, 1.98, 0.04)).toBe(1)
-		expect(thumbSlot(grid, 6, 0.04)).toBeNull()
+	it('puts each picture where the fps filter of ffmpeg does, the last before half past each mark winning', () => {
+		// fps=1 on 25 fps takes frames 12, 37, 62: 0.48 s, 1.48 s, 2.48 s
+		const second = { every: 1, count: 3 }
+		expect(thumbSlot(second, 0)).toBe(0)
+		expect(thumbSlot(second, 0.48)).toBe(0)
+		expect(thumbSlot(second, 0.52)).toBe(1)
+		expect(thumbSlot(second, 1.48)).toBe(1)
+		expect(thumbSlot(second, 2.52)).toBeNull()
+		// fps=1/6 takes 2.96 s, 8.96 s
+		expect(thumbSlot({ every: 6, count: 600 }, 2.96)).toBe(0)
+		expect(thumbSlot({ every: 6, count: 600 }, 3)).toBe(1)
 	})
 })

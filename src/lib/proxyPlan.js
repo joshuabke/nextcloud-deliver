@@ -127,12 +127,16 @@ export function thumbGrid(seconds, cap, { width, height }) {
 }
 
 /**
+ * Which picture of the strip a decoded picture stands for, as ffmpeg's fps
+ * filter (rounding=near) picks them: mark n takes the last picture before
+ * (n + ½) · every, so each picture drawn into its slot replaces the one
+ * before and the last one stays.
+ *
  * @param {{every: number, count: number}} grid - from thumbGrid
  * @param {number} time - when a decoded picture shows, in seconds from the start
- * @param {number} duration - how long it shows
- * @return {?number} the picture of the strip it is the first candidate for, as ffmpeg's fps filter picks the nearest; null past the last
+ * @return {?number} its slot; null past the last
  */
-export function thumbSlot({ every, count }, time, duration) {
-	const slot = Math.floor((time + duration / 2) / every)
+export function thumbSlot({ every, count }, time) {
+	const slot = Math.round(time / every)
 	return slot < count ? slot : null
 }

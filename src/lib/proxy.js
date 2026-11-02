@@ -213,9 +213,8 @@ export async function makeProxy(source, { maxHeight, maxBitrate, thumbCap }, onP
 		const bitrate = videoBitrate(size, maxBitrate)
 		await makeRoom(proxyBytes(seconds, bitrate))
 		const grid = thumbGrid(seconds, thumbCap, size)
-		const strip = new OffscreenCanvas(grid.columns * THUMB_WIDTH, grid.rows * grid.tileHeight).getContext('2d', { alpha: false })
-		// Black where the grid has no picture, as ffmpeg's tile filter leaves it
-		strip.fillRect(0, 0, strip.canvas.width, strip.canvas.height)
+		// The Thumbnail Strip never costs the Proxy: none where the browser encodes no WebP, or has no canvas that large
+		let strip = await encodesWebp() ? stripCanvas(grid) : null
 		let drawn = -1
 		const peaks = new Float32Array(BUCKETS)
 		let heard = false
@@ -242,10 +241,14 @@ export async function makeProxy(source, { maxHeight, maxBitrate, thumbCap }, onP
 				forceTranscode: true,
 				// The picture, already at the Proxy's size, also goes into the Thumbnail Strip
 				process: (sample) => {
-					const slot = thumbSlot(grid, sample.timestamp, sample.duration)
-					if (slot !== null && slot > drawn) {
+					const slot = thumbSlot(grid, sample.timestamp)
+					if (strip && slot !== null && slot >= drawn) {
 						drawn = slot
-						sample.draw(strip, (slot % grid.columns) * THUMB_WIDTH, Math.floor(slot / grid.columns) * grid.tileHeight, THUMB_WIDTH, grid.tileHeight)
+						try {
+							sample.draw(strip, (slot % grid.columns) * THUMB_WIDTH, Math.floor(slot / grid.columns) * grid.tileHeight, THUMB_WIDTH, grid.tileHeight)
+						} catch {
+							strip = null
+						}
 					}
 					return sample
 				},
@@ -284,8 +287,7 @@ export async function makeProxy(source, { maxHeight, maxBitrate, thumbCap }, onP
 
 		const file = await (await dir.getFileHandle(name)).getFile()
 		await check(file, { frames, seconds })
-		// Safari's canvas encodes no WebP and gives a PNG instead, which the server does not take
-		const image = drawn < 0 ? null : await strip.canvas.convertToBlob({ type: 'image/webp', quality: 0.75 }).catch(() => null)
+		const image = strip && drawn >= 0 ? await strip.canvas.convertToBlob({ type: 'image/webp', quality: 0.75 }).catch(() => null) : null
 		return {
 			file,
 			done,
@@ -298,6 +300,27 @@ export async function makeProxy(source, { maxHeight, maxBitrate, thumbCap }, onP
 		throw error
 	} finally {
 		input.dispose()
+	}
+}
+
+let webp = null
+/** @return {Promise<boolean>} whether this browser's canvas encodes WebP; Safari's gives a PNG instead, which the server does not take */
+function encodesWebp() {
+	webp ??= new OffscreenCanvas(1, 1).convertToBlob({ type: 'image/webp' }).then((blob) => blob.type === 'image/webp', () => false)
+	return webp
+}
+
+/**
+ * @param {{columns: number, rows: number, tileHeight: number}} grid - from thumbGrid
+ * @return {?OffscreenCanvasRenderingContext2D} the Thumbnail Strip's canvas, black where the grid has no picture as ffmpeg's tile filter leaves it; null where the browser has none that large (iOS: 16.7 Mpx)
+ */
+function stripCanvas(grid) {
+	try {
+		const context = new OffscreenCanvas(grid.columns * THUMB_WIDTH, grid.rows * grid.tileHeight).getContext('2d', { alpha: false })
+		context.fillRect(0, 0, context.canvas.width, context.canvas.height)
+		return context
+	} catch {
+		return null
 	}
 }
 
