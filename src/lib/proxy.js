@@ -60,18 +60,27 @@ async function open(source) {
 }
 
 /**
+ * @param {object} video - Mediabunny's video track of the original
+ * @param {number} maxHeight - the Proxy resolution
+ * @return {{width: number, height: number}} the Proxy's size
+ */
+const proxyOf = (video, maxHeight) => proxySize({ width: video.displayWidth, height: video.displayHeight }, maxHeight)
+
+/**
  * What the browser can do with a file, read from its headers only, so a
  * file on the server costs a few range requests (ADR 0019).
  *
  * @param {Blob|string} source - the file, or its URL
  * @param {number} bytes - its size
- * @param {number} maxBitrate - the Proxy bitrate threshold in Mbit/s
+ * @param {object} settings - the server's
+ * @param {number} settings.maxHeight - the Proxy resolution
+ * @param {number} settings.maxBitrate - the Proxy bitrate threshold in Mbit/s
  * @return {Promise<{readable: boolean, playable: boolean, convertible: boolean, needsProxy: boolean, codec: ?string}>}
  *   whether Mediabunny reads it at all, whether browsers play it as it is, whether this browser can make its Proxy
  *   (it decodes the first picture and sound, encodes H.264, and the server reads the container's Frames), whether it
  *   gets one, and the codec it cannot decode, if that is what stands in the way
  */
-export async function inspect(source, bytes, maxBitrate) {
+export async function inspect(source, bytes, { maxHeight, maxBitrate }) {
 	const { canEncodeVideo } = await mediabunny()
 	const input = await open(source)
 	try {
@@ -95,7 +104,8 @@ export async function inspect(source, bytes, maxBitrate) {
 			readable: true,
 			playable,
 			convertible: Boolean(video) && !undecodable && convertible(format.name)
-				&& await canEncodeVideo('avc', { width: video.displayWidth, height: video.displayHeight }),
+				// Asked for the Proxy, not the original: an 8K master or an odd anamorphic width still makes a 1080p Proxy
+				&& await canEncodeVideo('avc', { ...proxyOf(video, maxHeight), bitrate: videoBitrate(proxyOf(video, maxHeight), maxBitrate) }),
 			needsProxy: Boolean(video) && needsProxy(playable, bytes, await input.computeDuration(), maxBitrate),
 			codec: undecodable?.codec ?? null,
 		}
@@ -194,7 +204,7 @@ export async function makeProxy(source, { maxHeight, maxBitrate }, onProgress, s
 		const frames = (await video.computePacketStats()).packetCount
 		// Not from 0: an edit may start a little later
 		const seconds = await video.computeDuration() - await video.getFirstTimestamp()
-		const size = proxySize({ width: video.displayWidth, height: video.displayHeight }, maxHeight)
+		const size = proxyOf(video, maxHeight)
 		const bitrate = videoBitrate(size, maxBitrate)
 		await makeRoom(proxyBytes(seconds, bitrate))
 		signal.throwIfAborted()
@@ -297,7 +307,7 @@ export function convertInTurn(source, settings, status, signal) {
  *
  * @param {number} versionId - the Version
  * @param {Promise<?{file: File, done: () => Promise<void>}>} making - from convertInTurn
- * @param {{state: string, progress: number, error: ?string}} status - its, as convertInTurn keeps it, then uploading, ready or failed
+ * @param {{state: string, progress: number, error: ?string}} status - its, as convertInTurn keeps it, then uploading, handing, ready or failed
  * @param {AbortController} controller - stops the Proxy
  * @return {Promise<boolean>} false when this Member may not hand it in
  */
@@ -310,8 +320,12 @@ export async function handInProxy(versionId, making, status, controller) {
 		return false
 	}
 	// Also while the Proxy uploads, which takes minutes for a long one: silent for two minutes, the server takes this tab as gone
-	const report = () => ['running', 'uploading'].includes(status.state)
-		&& reportProxy(versionId, Math.min(99, status.state === 'running' ? status.progress : 99)).catch(() => {})
+	let reported = Promise.resolve()
+	const report = () => {
+		if (['running', 'uploading'].includes(status.state)) {
+			reported = reportProxy(versionId, Math.min(99, status.state === 'running' ? status.progress : 99)).catch(() => {})
+		}
+	}
 	report()
 	const beat = setInterval(report, REPORT * 1000)
 	try {
@@ -325,6 +339,9 @@ export async function handInProxy(versionId, making, status, controller) {
 			for (let attempt = 0; ; attempt++) {
 				Object.assign(status, { state: 'uploading', progress: 0 })
 				const fileId = await uploadNextTo(url, made.file, status, controller.signal)
+				// No report may land while the server takes it: it would mark the Proxy as running again
+				status.state = 'handing'
+				await reported
 				try {
 					await giveProxy(versionId, fileId)
 					break

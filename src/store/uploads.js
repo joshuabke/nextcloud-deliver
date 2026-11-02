@@ -26,7 +26,7 @@ const CANCEL = 'deliver.upload-cancel'
 /** Whether the server has ffmpeg (story 138); without it the uploading browser decodes the Waveform */
 export const hasFfmpeg = loadState('deliver', 'ffmpeg', true)
 /** The Proxy resolution and the Proxy bitrate threshold, for the Proxies this browser makes without ffmpeg (ADR 0019) */
-const proxySettings = loadState('deliver', 'proxy', { maxHeight: 1080, maxBitrate: 20 })
+export const proxySettings = loadState('deliver', 'proxy', { maxHeight: 1080, maxBitrate: 20 })
 /**
  * Why a file is not taken where the server has no ffmpeg: this browser can
  * neither play nor convert it (ADR 0019), so it would not play for anyone.
@@ -122,7 +122,7 @@ export const useUploadsStore = defineStore('uploads', {
 		 * @param {object} state - the store's
 		 * @return {boolean} whether this browser is making or uploading a Proxy, which a closed tab would lose
 		 */
-		converting: (state) => [...state.items.map((item) => item.proxy), ...Object.values(state.proxies)].some((proxy) => ['running', 'uploading'].includes(proxy?.state)),
+		converting: (state) => [...state.items.map((item) => item.proxy), ...Object.values(state.proxies)].some((proxy) => ['running', 'uploading', 'handing'].includes(proxy?.state)),
 		/** Whether the card may be closed: nothing sends, here or in another tab, and nothing is being made */
 		closable() {
 			return this.active.length === 0 && this.items.every((item) => item.status !== 'elsewhere' && (item.status !== 'done' || settled(item)))
@@ -312,7 +312,7 @@ export const useUploadsStore = defineStore('uploads', {
 			// Without ffmpeg, what this browser can neither play nor convert is refused before it goes up (ADR 0019)
 			if (!hasFfmpeg && !item.fileId && /^(video|audio)\//.test(item.type) && !item.seen) {
 				item.status = 'checking'
-				item.seen = await inspect(item.file, item.size, proxySettings.maxBitrate).catch(() => null)
+				item.seen = await inspect(item.file, item.size, proxySettings).catch(() => null)
 				const why = refusal(item.seen, item.type)
 				if (why) {
 					Object.assign(item, { status: 'failed', error: why, file: null })

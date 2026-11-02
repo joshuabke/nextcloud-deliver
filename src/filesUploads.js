@@ -52,7 +52,7 @@ function start(upload) {
 	}
 	const job = { status: reactive({ state: 'checking', progress: 0, error: null }), controller: new AbortController() }
 	job.settings = folders.get(folder.fileid).then(async (settings) => {
-		const seen = settings && await inspect(file, file.size, settings.maxBitrate).catch(() => null)
+		const seen = settings && await inspect(file, file.size, settings).catch(() => null)
 		return seen?.needsProxy && seen.convertible ? settings : null
 	})
 	job.making = job.settings.then((settings) => {
@@ -150,7 +150,7 @@ setInterval(() => uploader?.queue?.forEach(start), 1000)
 
 // The browser asks before a closed tab loses a Proxy, as the Files app does for its uploads
 window.addEventListener('beforeunload', (event) => {
-	if ([...making].some((status) => ['running', 'uploading'].includes(status.state))) {
+	if ([...making].some((status) => ['running', 'uploading', 'handing'].includes(status.state))) {
 		event.preventDefault()
 	}
 })

@@ -51,7 +51,7 @@ import { acceptFor, mediaKind, stackKind } from '../lib/media.js'
 import { cannotConvert, inspect } from '../lib/proxy.js'
 import { stackSuggestions } from '../lib/suggestions.js'
 import { useProjectsStore } from '../store/projects.js'
-import { useUploadsStore } from '../store/uploads.js'
+import { proxySettings, useUploadsStore } from '../store/uploads.js'
 
 const props = defineProps({
 	id: { type: Number, required: true },
@@ -419,7 +419,7 @@ function proxyItem(asset) {
 	if (check === undefined) {
 		proxyChecks.value[version.id] = null
 		// A few range requests for the headers, not the whole file
-		inspect(version.url, 0, 0).catch(() => null).then((seen) => {
+		inspect(version.url, 0, proxySettings).catch(() => null).then((seen) => {
 			proxyChecks.value[version.id] = seen?.convertible ? '' : cannotConvert(seen)
 			if (menu.value && menuFor === asset) {
 				menu.value.items = assetItems(asset).filter(Boolean)

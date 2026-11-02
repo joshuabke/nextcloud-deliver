@@ -18,7 +18,7 @@ export function settled(item) {
 		return false
 	}
 	const running = KINDS.some((kind) => ['queued', 'running'].includes(version.derived[kind]?.state))
-		|| ['running', 'uploading'].includes(item.proxy?.state)
+		|| ['running', 'uploading', 'handing'].includes(item.proxy?.state)
 	return !running && (version.playable !== null || Boolean(version.derived.error))
 }
 
@@ -107,6 +107,7 @@ export function processingOf(item) {
 			text: {
 				running: `${item.proxy.progress} %`,
 				uploading: t('deliver', 'Uploading, {percent} %', { percent: item.proxy.progress }),
+				handing: t('deliver', 'Finishing on the server'),
 				ready: t('deliver', 'Done'),
 				failed: item.proxy.error ?? t('deliver', 'Failed'),
 			}[item.proxy.state],
