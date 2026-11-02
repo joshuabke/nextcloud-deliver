@@ -306,7 +306,12 @@ export async function makeProxy(source, { maxHeight, maxBitrate, thumbCap }, onP
 let webp = null
 /** @return {Promise<boolean>} whether this browser's canvas encodes WebP; Safari's gives a PNG instead, which the server does not take */
 function encodesWebp() {
-	webp ??= new OffscreenCanvas(1, 1).convertToBlob({ type: 'image/webp' }).then((blob) => blob.type === 'image/webp', () => false)
+	webp ??= (async () => {
+		// A canvas encodes nothing before it has a context
+		const canvas = new OffscreenCanvas(1, 1)
+		canvas.getContext('2d')
+		return (await canvas.convertToBlob({ type: 'image/webp' })).type === 'image/webp'
+	})().catch(() => false)
 	return webp
 }
 
