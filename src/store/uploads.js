@@ -481,8 +481,14 @@ export const useUploadsStore = defineStore('uploads', {
 		 * @return {Promise<object>} how it ended: ready or failed, with the reason
 		 */
 		async makeProxy(version) {
-			this.proxies[version.id] = { state: 'running', progress: 0, error: null }
+			this.proxies[version.id] = { state: 'checking', progress: 0, error: null }
 			const status = this.proxies[version.id]
+			// Another tab or Member may have started it since this view was read
+			const now = (await getVersion(version.id).catch(() => null))?.versions.find((each) => each.id === version.id)
+			if (!now?.proxyFromBrowser) {
+				delete this.proxies[version.id]
+				return { state: 'failed', error: t('deliver', 'Another browser is making this Proxy, or it is there already.') }
+			}
 			const controller = new AbortController()
 			await handInProxy(version.id, convertInTurn(version.url, proxySettings, status, controller.signal), status, controller)
 			delete this.proxies[version.id]

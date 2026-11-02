@@ -15,7 +15,7 @@ import { showError, showMessage, TOAST_PERMANENT_TIMEOUT } from '@nextcloud/dial
 import { reactive, watchEffect } from 'vue'
 import { getAssetForFile, getIntake, handInWaveform } from './api.js'
 import { t } from './lib/l10n.js'
-import { convertInTurn, handInProxy, inspect } from './lib/proxy.js'
+import { convertInTurn, dropProxy, handInProxy, inspect } from './lib/proxy.js'
 import { uploaded } from './lib/waveform.js'
 
 /** The Proxies this tab makes of uploads, by file id once the file is there, for Deliver's sidebar tab */
@@ -108,8 +108,10 @@ async function handIn(fileId, job) {
 	}
 	proxiesByFile[fileId] = job.status
 	const asset = await getAssetForFile(fileId).catch(() => null)
+	if (!asset?.versionId) {
+		dropProxy(job.making, job.status, job.controller)
+	}
 	if (!asset?.versionId || !await handInProxy(asset.versionId, job.making, job.status, job.controller)) {
-		job.controller.abort()
 		delete proxiesByFile[fileId]
 	}
 }
@@ -131,7 +133,7 @@ function onUpload(upload) {
 		handIn(video, job)
 	} else if (job) {
 		// Failed or cancelled: its Proxy has no Version to go to
-		job.controller.abort()
+		dropProxy(job.making, job.status, job.controller)
 	}
 }
 

@@ -299,6 +299,21 @@ export function convertInTurn(source, settings, status, signal) {
 }
 
 /**
+ * Stops a Proxy that is not handed in, deletes it once it is made and
+ * settles its status, so nothing waits on it and the tab closes without a
+ * warning.
+ *
+ * @param {Promise<?{done: () => Promise<void>}>} making - from convertInTurn
+ * @param {{state: string}} status - its; stopped
+ * @param {AbortController} controller - stops the conversion
+ */
+export function dropProxy(making, status, controller) {
+	controller.abort()
+	making.then((made) => made?.done())
+	status.state = 'stopped'
+}
+
+/**
  * Hands in a Proxy this browser makes, the same way for an upload in
  * Deliver, one in the Files app and the fallback on the Asset card (ADR
  * 0019): it reports the progress while the Proxy is made and uploaded,
@@ -307,7 +322,7 @@ export function convertInTurn(source, settings, status, signal) {
  *
  * @param {number} versionId - the Version
  * @param {Promise<?{file: File, done: () => Promise<void>}>} making - from convertInTurn
- * @param {{state: string, progress: number, error: ?string}} status - its, as convertInTurn keeps it, then uploading, handing, ready or failed
+ * @param {{state: string, progress: number, error: ?string}} status - its, as convertInTurn keeps it, then uploading, handing, ready, failed or stopped
  * @param {AbortController} controller - stops the Proxy
  * @return {Promise<boolean>} false when this Member may not hand it in
  */
@@ -315,8 +330,7 @@ export async function handInProxy(versionId, making, status, controller) {
 	const context = await getVersion(versionId).catch(() => null)
 	const url = context?.versions.find((each) => each.id === versionId)?.url
 	if (!context?.manages || !url) {
-		controller.abort()
-		making.then((made) => made?.done())
+		dropProxy(making, status, controller)
 		return false
 	}
 	// Also while the Proxy uploads, which takes minutes for a long one: silent for two minutes, the server takes this tab as gone

@@ -695,7 +695,14 @@ class ProjectService {
 		$file = $file instanceof File ? $file : null;
 		$media = $this->urls->linkToRoute('deliver.media.show', ['id' => $version->getId(), 'kind' => '__kind__']);
 		return $this->describeVersion($version, $this->settingsOf($version), $file === null ? null : $this->davUrl($uid, $file), $media)
-			+ ['mimeType' => $file?->getMimeType(), 'manages' => $grant->manages(), 'deliveredBy' => $this->deliveredBy($version), 'createdAt' => $version->getCreatedAt()];
+			+ [
+				'mimeType' => $file?->getMimeType(),
+				'manages' => $grant->manages(),
+				'deliveredBy' => $this->deliveredBy($version),
+				'createdAt' => $version->getCreatedAt(),
+				// Read again before a browser starts the Proxy, as another may have meanwhile (ADR 0019)
+				'proxyFromBrowser' => $file !== null && $this->media->proxyFromBrowser($version, (int)$file->getSize()),
+			];
 	}
 
 	/** Who delivered the Version, for Members only; null when nobody's request did */

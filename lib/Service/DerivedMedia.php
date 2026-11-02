@@ -55,6 +55,8 @@ class DerivedMedia {
 	];
 
 	private const THUMB_WIDTH = 160;
+	/** Whether the server lacks ffmpeg, as proxyFromBrowser found once for this request */
+	private ?bool $withoutFfmpegNow = null;
 	/** The Proxy's AAC, which counts towards the Proxy bitrate threshold with the picture */
 	private const AUDIO_KBPS = 160;
 	private const WAVEFORM_BUCKETS = 2000;
@@ -432,7 +434,8 @@ class DerivedMedia {
 		return $version->getHasVideo() && $version->getPlayable() !== null
 			&& in_array($version->getProxyState(), [self::STATE_NONE, self::STATE_FAILED], true)
 			&& (!$version->getPlayable() || $this->heavy($bytes, $this->durationSeconds($version)))
-			&& $this->withoutFfmpeg();
+			// Once per request: a Project read asks for each of its Versions, and each look at ffmpeg starts a process
+			&& ($this->withoutFfmpegNow ??= $this->withoutFfmpeg());
 	}
 
 	/** A browser that has not reported for a while closed its tab: its Proxy counts as missing again (spec: Proxies from the browser) */
