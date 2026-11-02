@@ -6,7 +6,7 @@ import { defineStore } from 'pinia'
 import { chunkSizeFor, decodeInTurn, enableFile, errorMessage, getVersion, giveAudioWaveform, regenerateVersion } from '../api.js'
 import { t } from '../lib/l10n.js'
 import { mediaKind, reviewable } from '../lib/media.js'
-import { cannotConvert, convertInTurn, handInProxy, inspect } from '../lib/proxy.js'
+import { cannotConvert, clearProxies, convertInTurn, handInProxy, inspect } from '../lib/proxy.js'
 import { current, HEARTBEAT, sameFile, uploadFile } from '../lib/upload.js'
 import { ACTIVE, mergeBoard, totals } from '../lib/uploadBoard.js'
 import { settled } from '../lib/uploadStatus.js'
@@ -27,7 +27,6 @@ const CANCEL = 'deliver.upload-cancel'
 export const hasFfmpeg = loadState('deliver', 'ffmpeg', true)
 /** The Proxy resolution and the Proxy bitrate threshold, for the Proxies this browser makes without ffmpeg (ADR 0019) */
 const proxySettings = loadState('deliver', 'proxy', { maxHeight: 1080, maxBitrate: 20 })
-
 /**
  * Why a file is not taken where the server has no ffmpeg: this browser can
  * neither play nor convert it (ADR 0019), so it would not play for anyone.
@@ -37,7 +36,7 @@ const proxySettings = loadState('deliver', 'proxy', { maxHeight: 1080, maxBitrat
  * @return {?string} the reason, or null when it is taken
  */
 function refusal(seen, type) {
-	if (seen === null || seen.playable || (seen.decodable && type.startsWith('video/'))) {
+	if (seen === null || seen.playable || (seen.convertible && type.startsWith('video/'))) {
 		return null
 	}
 	// Mediabunny reads no such container; the browser may still play it as it is, as Safari does AIFF
@@ -133,6 +132,8 @@ export const useUploadsStore = defineStore('uploads', {
 		/** Shows what every tab has, now and whenever another tab changes it; once, by the dialog */
 		start() {
 			const now = Date.now()
+			// What closed tabs left of their Proxies in the browser's private file system
+			clearProxies()
 			// Older than a day: the server no longer has the chunks, and the Processing is long over
 			for (const { key, value } of [...readAll(RECORD), ...readAll(DONE)]) {
 				if (!current(value, now)) {
@@ -257,6 +258,7 @@ export const useUploadsStore = defineStore('uploads', {
 			}
 			item.controller?.abort()
 			item.proxyController?.abort()
+			item.proxying?.then((made) => made?.done())
 			if (item.folder) {
 				axios.delete(item.folder).catch(() => {})
 			}
@@ -413,6 +415,7 @@ export const useUploadsStore = defineStore('uploads', {
 				this.forget(item)
 				// Its Proxy has no Version to go to; a retry makes it again
 				item.proxyController?.abort()
+				item.proxying?.then((made) => made?.done())
 				Object.assign(item, { proxy: null, proxying: null })
 				if (!signal.aborted) {
 					Object.assign(item, { status: 'failed', error: errorMessage(error) })

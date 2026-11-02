@@ -53,7 +53,7 @@ function start(upload) {
 	const job = { status: reactive({ state: 'checking', progress: 0, error: null }), controller: new AbortController() }
 	job.settings = folders.get(folder.fileid).then(async (settings) => {
 		const seen = settings && await inspect(file, file.size, settings.maxBitrate).catch(() => null)
-		return seen?.needsProxy && seen.decodable ? settings : null
+		return seen?.needsProxy && seen.convertible ? settings : null
 	})
 	job.making = job.settings.then((settings) => {
 		if (!settings) {

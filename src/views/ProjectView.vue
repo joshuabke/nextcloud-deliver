@@ -420,7 +420,7 @@ function proxyItem(asset) {
 		proxyChecks.value[version.id] = null
 		// A few range requests for the headers, not the whole file
 		inspect(version.url, 0, 0).catch(() => null).then((seen) => {
-			proxyChecks.value[version.id] = seen?.decodable ? '' : cannotConvert(seen)
+			proxyChecks.value[version.id] = seen?.convertible ? '' : cannotConvert(seen)
 			if (menu.value && menuFor === asset) {
 				menu.value.items = assetItems(asset).filter(Boolean)
 			}
