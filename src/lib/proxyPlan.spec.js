@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { convertible, fits, needsProxy, plays, proxyBytes, proxySize, videoBitrate } from './proxyPlan.js'
+import { convertible, fits, needsProxy, plays, proxyBytes, proxySize, thumbGrid, thumbSlot, videoBitrate } from './proxyPlan.js'
 
 const video = (codec, codecString) => ({ type: 'video', codec, codecString })
 const audio = (codec) => ({ type: 'audio', codec })
@@ -69,5 +69,25 @@ describe('the Proxy', () => {
 		expect(fits({ frames: 1800, seconds: 1800 / 29.9985 + 0.01 }, original)).toBe(true)
 		expect(fits({ frames: 1800, seconds: 1800 * 1001 / 30000 }, original), 'snapped to 29.97, it drifts a Frame').toBe(false)
 		expect(fits({ frames: 1799, seconds: original.seconds }, original)).toBe(false)
+	})
+})
+
+describe('the Thumbnail Strip the browser makes in the same pass', () => {
+	it('has the grid of the server: a picture a second up to the cap, then fewer', () => {
+		expect(thumbGrid(24, 600, { width: 1920, height: 1080 })).toEqual({ every: 1, count: 24, columns: 5, rows: 5, tileHeight: 90 })
+		expect(thumbGrid(3600, 600, { width: 1920, height: 1080 })).toEqual({ every: 6, count: 600, columns: 25, rows: 24, tileHeight: 90 })
+		expect(thumbGrid(0.5, 600, { width: 1080, height: 1920 })).toEqual({ every: 1, count: 1, columns: 1, rows: 1, tileHeight: 284 })
+	})
+
+	it('rounds the height to even as ffmpeg does', () => {
+		expect(thumbGrid(10, 600, { width: 2048, height: 858 }).tileHeight).toBe(68)
+	})
+
+	it('takes the first picture at or around each mark', () => {
+		const grid = { every: 2, count: 3 }
+		expect(thumbSlot(grid, 0, 0.04)).toBe(0)
+		expect(thumbSlot(grid, 1.96, 0.04)).toBe(0)
+		expect(thumbSlot(grid, 1.98, 0.04)).toBe(1)
+		expect(thumbSlot(grid, 6, 0.04)).toBeNull()
 	})
 })

@@ -117,7 +117,7 @@ class ProjectService {
 	 * above it takes them in, the Member manages that Project, and the server
 	 * has no ffmpeg. Asked once per folder, before the upload has a file.
 	 *
-	 * @return array{proxy: ?array{maxHeight: int, maxBitrate: int}} the Proxy resolution and threshold to make them with, null when the browser makes none
+	 * @return array{proxy: ?array{maxHeight: int, maxBitrate: int, thumbCap: int}} the Proxy resolution and threshold to make them with, and the Thumbnail Strip cap, null when the browser makes none
 	 * @throws NotFoundException the folder is out of reach
 	 */
 	public function intake(string $uid, int $folderId): array {
@@ -130,7 +130,7 @@ class ProjectService {
 		$makes = $project !== null && !$project->isDeleted() && $project->getAutoIntake()
 			&& $this->mayEdit($project, $this->access->folderOf($project, $home), $uid)
 			&& $this->media->withoutFfmpeg();
-		return ['proxy' => $makes ? ['maxHeight' => $this->media->maxHeight(), 'maxBitrate' => $this->media->maxBitrate()] : null];
+		return ['proxy' => $makes ? ['maxHeight' => $this->media->maxHeight(), 'maxBitrate' => $this->media->maxBitrate(), 'thumbCap' => $this->media->thumbCap()] : null];
 	}
 
 	/**
@@ -646,6 +646,20 @@ class ProjectService {
 		} finally {
 			$upload->delete();
 		}
+		return $this->versionPayload($this->versions->find($versionId) ?? $version, $uid);
+	}
+
+	/**
+	 * The Thumbnail Strip a browser made with the Proxy (ADR 0019), base64
+	 * WebP; needs Manage, as the Proxy does.
+	 */
+	public function giveThumbs(string $uid, int $versionId, string $image, int $every, int $count): array {
+		$version = $this->writableVersion($uid, $versionId);
+		$bytes = base64_decode($image, true);
+		if ($bytes === false) {
+			throw new InvalidRequestException('The image is not base64');
+		}
+		$this->media->acceptThumbs($version, $bytes, $every, $count);
 		return $this->versionPayload($this->versions->find($versionId) ?? $version, $uid);
 	}
 

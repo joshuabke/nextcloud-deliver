@@ -55,6 +55,8 @@ class DerivedMedia {
 	];
 
 	private const THUMB_WIDTH = 160;
+	/** A Thumbnail Strip from the browser, at most */
+	private const MAX_THUMBS_BYTES = 32 * 1024 * 1024;
 	/** The Proxy's AAC, which counts towards the Proxy bitrate threshold with the picture */
 	private const AUDIO_KBPS = 160;
 	private const WAVEFORM_BUCKETS = 2000;
@@ -314,12 +316,11 @@ class DerivedMedia {
 
 	/** About one Frame per second in a WebP grid, capped by the admin setting */
 	private function runThumbs(Version $version, string $path): void {
-		$cap = max(1, $this->config->getValueInt(Application::APP_ID, 'thumb_cap', 600));
+		$cap = $this->thumbCap();
 		$duration = $this->durationSeconds($version);
 		$every = max(1, (int)ceil($duration / $cap));
 		$count = max(1, min($cap, (int)ceil($duration / $every)));
-		$columns = (int)ceil(sqrt($count));
-		$rows = (int)ceil($count / $columns);
+		[$columns, $rows] = self::grid($count);
 
 		$this->store($version, 'thumbs', fn (string $output) => $this->ffmpeg([
 			...Ffmpeg::input($path),
@@ -327,6 +328,17 @@ class DerivedMedia {
 			'-frames:v', '1',
 			'-f', 'webp', $output,
 		]));
+		$this->putThumbsIndex($version, $every, $count);
+	}
+
+	/** @return array{int, int} the columns and rows of a near square grid of so many pictures */
+	private static function grid(int $count): array {
+		$columns = (int)ceil(sqrt($count));
+		return [$columns, (int)ceil($count / $columns)];
+	}
+
+	private function putThumbsIndex(Version $version, int $every, int $count): void {
+		[$columns, $rows] = self::grid($count);
 		$this->put($version, 'thumbsIndex', json_encode([
 			'every' => $every,
 			'count' => $count,
@@ -335,6 +347,45 @@ class DerivedMedia {
 			'width' => self::THUMB_WIDTH,
 			'fps' => ['num' => $version->getFpsNum(), 'den' => $version->getFpsDen()],
 		], JSON_THROW_ON_ERROR));
+	}
+
+	/**
+	 * A Thumbnail Strip the browser made in the same pass as a Proxy (ADR
+	 * 0019): a WebP grid in the shape runThumbs makes, a picture every so
+	 * many seconds, each 160 wide. The browser measured the length itself, so
+	 * its spacing and count may be one off the server's. Only taken while the
+	 * Version has none and none is on its way: a server-made one wins, and
+	 * replaces it on regeneration.
+	 *
+	 * @throws InvalidRequestException the image or its grid is out of shape
+	 * @throws ProjectConflictException the Version has no picture, is not read yet, or has its Thumbnail Strip or is getting one
+	 */
+	public function acceptThumbs(Version $version, string $image, int $every, int $count): void {
+		if (!$version->getHasVideo() || $version->getPlayable() === null || $version->getThumbsState() !== self::STATE_NONE) {
+			throw new ProjectConflictException('This Version takes no Thumbnail Strip from the browser');
+		}
+		$duration = $this->durationSeconds($version);
+		$cap = $this->thumbCap();
+		$expected = max(1, (int)ceil($duration / $cap));
+		if ($count < 1 || $count > $cap || $every < 1 || abs($every - $expected) > 1 || abs($count - (int)ceil($duration / $every)) > 1) {
+			throw new InvalidRequestException('A picture every ' . $expected . ' seconds, at most ' . $cap);
+		}
+		[$columns, $rows] = self::grid($count);
+		$size = strlen($image) <= self::MAX_THUMBS_BYTES ? getimagesizefromstring($image) : false;
+		$tile = $size === false ? 0 : intdiv($size[1], $rows);
+		// Portrait as high as four widths at most, as a phone's 9:16 is not even two
+		if ($size === false || $size[2] !== IMAGETYPE_WEBP || $size[0] !== $columns * self::THUMB_WIDTH
+			|| $tile * $rows !== $size[1] || $tile < 2 || $tile % 2 !== 0 || $tile > 4 * self::THUMB_WIDTH) {
+			throw new InvalidRequestException('A Thumbnail Strip is a WebP of ' . $columns . ' by ' . $rows . ' pictures, each ' . self::THUMB_WIDTH . ' wide and of even height');
+		}
+		$this->put($version, 'thumbs', $image);
+		$this->putThumbsIndex($version, $every, $count);
+		$this->mark($version->getId(), Job::KIND_THUMBS, self::STATE_READY);
+	}
+
+	/** The Thumbnail Strip cap, which browsers keep to as well */
+	public function thumbCap(): int {
+		return max(1, $this->config->getValueInt(Application::APP_ID, 'thumb_cap', 600));
 	}
 
 	/** Mono 8 kHz PCM from ffmpeg, reduced to peaks without another binary */

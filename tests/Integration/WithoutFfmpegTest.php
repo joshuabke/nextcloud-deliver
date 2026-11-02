@@ -333,6 +333,46 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertStringNotContainsString("'wasm-unsafe-eval'", $this->nc->request('GET', '/settings/user')['headers']['content-security-policy'] ?? '');
 	}
 
+	/** @return string a one-colour image of that size, base64 */
+	private function image(string $size, string $format = 'webp'): string {
+		$file = $this->fixture . '-strip';
+		exec('ffmpeg -v error -y -f lavfi -i color=size=' . $size . ' -frames:v 1 -f ' . $format . ' ' . escapeshellarg($file) . ' 2>&1', $output, $code);
+		self::assertSame(0, $code, implode("\n", $output));
+		try {
+			return base64_encode((string)file_get_contents($file));
+		} finally {
+			@unlink($file);
+		}
+	}
+
+	public function testTheBrowserHandsInTheThumbnailStripOfItsProxyPassInTheServersShape(): void {
+		$this->make(self::PRORES);
+		$version = $this->upload('master.mov');
+		$thumbs = fn (string $image, int $every = 1, int $count = 2) => $this->nc->ocs('POST', "/versions/{$version['id']}/thumbs", ['image' => $image, 'every' => $every, 'count' => $count]);
+
+		// Two seconds: a picture a second, two side by side, 160 wide, 90 high at 16:9
+		self::assertSame(400, $thumbs($this->image('480x90'))['status'], 'three columns where two are');
+		self::assertSame(400, $thumbs($this->image('320x91'))['status'], 'of odd height');
+		self::assertSame(400, $thumbs($this->image('320x90', 'image2 -c:v png'))['status'], 'a PNG');
+		self::assertSame(400, $thumbs($this->image('320x90'), every: 5)['status'], 'a picture every five seconds of two');
+		self::assertSame(400, $thumbs('not base64!')['status']);
+		self::assertSame('none', $this->nc->ocs('GET', "/versions/{$version['id']}")['data']['versions'][0]['derived']['thumbs']['state']);
+
+		$taken = $thumbs($this->image('320x90'));
+		self::assertSame(200, $taken['status'], json_encode($taken['data']));
+		self::assertSame('ready', $taken['data']['derived']['thumbs']['state']);
+		$index = json_decode($this->nc->request('GET', "/apps/deliver/versions/{$version['id']}/media/thumbsIndex")['body'], true);
+		self::assertSame(['every' => 1, 'count' => 2, 'columns' => 2, 'rows' => 1, 'width' => 160, 'fps' => ['num' => 25, 'den' => 1]], $index);
+		self::assertSame(409, $thumbs($this->image('320x90'))['status'], 'it has one');
+	}
+
+	public function testAThumbnailStripTheServerMakesWins(): void {
+		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['ffmpegPath' => '', 'ffprobePath' => ''])['status']);
+		$this->make(self::PRORES);
+		$version = $this->upload('master.mov');
+		self::assertSame(409, $this->nc->ocs('POST', "/versions/{$version['id']}/thumbs", ['image' => $this->image('320x90'), 'every' => 1, 'count' => 2])['status'], 'ffmpeg queued its own');
+	}
+
 	/** Runs PHP inside this Nextcloud, for what no API does: the minutes passing */
 	private function inNextcloud(string $code): void {
 		exec('php -r ' . escapeshellarg('require "/var/www/html/lib/base.php"; ' . $code) . ' 2>&1', $output, $status);
