@@ -5,12 +5,12 @@
  * private file system (OPFS), so neither the original nor the Proxy has to
  * fit into memory. The rules come from proxyPlan.js.
  */
-import { frameRate, needsProxy, plays, proxyBytes, proxySize, videoBitrate } from './proxyPlan.js'
+import { convertible, fits, needsProxy, plays, proxyBytes, proxySize, videoBitrate } from './proxyPlan.js'
 
 /** Deliver's folder in the browser's private file system */
 const FOLDER = 'deliver-proxies'
-/** The files this tab is writing, which clearing leaves alone */
-const writing = new Set()
+/** Each file there is held under a Web Lock of this name and its own until it is handed in, in whichever tab, so clearing passes it by */
+const LOCK = 'deliver-proxy:'
 
 /** Thrown when the browser has no room for the Proxy; `missing` says how many bytes */
 export class NoRoomError extends Error {
@@ -53,37 +53,43 @@ async function open(source) {
 
 /**
  * What the browser can do with a file, read from its headers only, so a
- * file on the server costs a few range requests (stories of ADR 0019).
+ * file on the server costs a few range requests (ADR 0019).
  *
  * @param {Blob|string} source - the file, or its URL
  * @param {number} bytes - its size
  * @param {number} maxBitrate - the Proxy bitrate threshold in Mbit/s
- * @return {Promise<{readable: boolean, decodable: boolean, playable: boolean, needsProxy: boolean, codec: ?string}>} whether
- *   Mediabunny reads it at all, whether this browser decodes its picture (or its sound, for audio), whether browsers
- *   play it as it is, whether it gets a Proxy, and the codec that decides
+ * @return {Promise<{readable: boolean, playable: boolean, convertible: boolean, needsProxy: boolean, codec: ?string}>}
+ *   whether Mediabunny reads it at all, whether browsers play it as it is, whether this browser can make its Proxy
+ *   (it decodes the first picture and sound, encodes H.264, and the server reads the container's Frames), whether it
+ *   gets one, and the codec it cannot decode, if that is what stands in the way
  */
 export async function inspect(source, bytes, maxBitrate) {
+	const { canEncodeVideo } = await mediabunny()
 	const input = await open(source)
 	try {
 		const format = await input.getFormat().catch(() => null)
 		if (!format) {
-			return { readable: false, decodable: false, playable: false, needsProxy: false, codec: null }
+			return { readable: false, playable: false, convertible: false, needsProxy: false, codec: null }
 		}
+		const tracks = (await input.getTracks()).filter((track) => track.type === 'video' || track.type === 'audio')
+		const described = await Promise.all(tracks.map(async (track) => ({
+			type: track.type,
+			codec: track.codec,
+			codecString: await track.getCodecParameterString(),
+			decodable: await track.canDecode(),
+		})))
+		const playable = plays(format.name, described)
 		const video = await input.getPrimaryVideoTrack()
-		const audio = await input.getPrimaryAudioTrack()
-		const decides = video ?? audio
-		const playable = plays({
-			format: format.name,
-			video: video?.codec ?? (video ? 'unknown' : null),
-			videoCodec: await video?.getCodecParameterString() ?? null,
-			audio: audio?.codec ?? (audio ? 'unknown' : null),
-		})
+		// A Proxy carries the first picture and the first sound; the other tracks need not be decodable
+		const primary = [video, await input.getPrimaryAudioTrack()]
+		const undecodable = described.find((track, i) => primary.includes(tracks[i]) && !track.decodable)
 		return {
 			readable: true,
-			decodable: decides ? await decides.canDecode() : false,
 			playable,
+			convertible: Boolean(video) && !undecodable && convertible(format.name)
+				&& await canEncodeVideo('avc', { width: video.displayWidth, height: video.displayHeight }),
 			needsProxy: Boolean(video) && needsProxy(playable, bytes, await input.computeDuration(), maxBitrate),
-			codec: decides?.codec ?? null,
+			codec: undecodable?.codec ?? null,
 		}
 	} finally {
 		input.dispose()
@@ -95,13 +101,13 @@ async function folder() {
 	return (await navigator.storage.getDirectory()).getDirectoryHandle(FOLDER, { create: true })
 }
 
-/** Deletes what is left of Proxies no tab writes any more: closed tabs, failed or handed-in ones */
+/** Deletes what is left of Proxies no tab works on any more: from closed tabs, failed or handed in */
 export async function clearProxies() {
 	try {
 		const dir = await folder()
+		const held = new Set(((await navigator.locks.query()).held ?? []).map((lock) => lock.name))
 		for await (const name of dir.keys()) {
-			if (!writing.has(name)) {
-				// Another tab still writing its file holds it open, and the removal fails
+			if (!held.has(LOCK + name)) {
 				await dir.removeEntry(name).catch(() => {})
 			}
 		}
@@ -144,24 +150,33 @@ async function makeRoom(bytes) {
  */
 export async function makeProxy(source, { maxHeight, maxBitrate }, onProgress, signal) {
 	const { Conversion, Mp4OutputFormat, Output, StreamTarget } = await mediabunny()
-	const input = await open(source)
 	const name = `proxy-${Date.now()}-${Math.random().toString(36).slice(2)}.mp4`
-	writing.add(name)
+	// Held until done(), so no tab clears the file while this one still needs it
+	let release
+	const held = new Promise((resolve) => {
+		navigator.locks.request(LOCK + name, () => new Promise((free) => {
+			release = free
+			resolve()
+		}))
+	})
+	await held
 	const dir = await folder()
 	const done = async () => {
-		writing.delete(name)
 		await dir.removeEntry(name).catch(() => {})
+		release()
 	}
+	const input = await open(source)
 	try {
 		await clearProxies()
+		signal.throwIfAborted()
 		const video = await input.getPrimaryVideoTrack()
-		const original = await video.computePacketStats()
+		const frames = (await video.computePacketStats()).packetCount
 		// Not from 0: an edit may start a little later
 		const seconds = await video.computeDuration() - await video.getFirstTimestamp()
-		const fps = frameRate(original.packetCount, seconds)
 		const size = proxySize({ width: video.displayWidth, height: video.displayHeight }, maxHeight)
 		const bitrate = videoBitrate(size, maxBitrate)
 		await makeRoom(proxyBytes(seconds, bitrate))
+		signal.throwIfAborted()
 
 		const writable = await (await dir.getFileHandle(name, { create: true })).createWritable()
 		const output = new Output({
@@ -173,12 +188,15 @@ export async function makeProxy(source, { maxHeight, maxBitrate }, onProgress, s
 			input,
 			output,
 			tracks: 'primary',
-			video: { codec: 'avc', ...size, fit: 'fill', frameRate: fps.num / fps.den, bitrate, keyFrameInterval: 1, forceTranscode: true },
+			// The original's own average rate, unrounded: the server checks the Proxy against it
+			video: { codec: 'avc', ...size, fit: 'fill', frameRate: frames / seconds, bitrate, keyFrameInterval: 1, forceTranscode: true },
 			audio: { codec: 'aac', bitrate: 160_000 },
 			tags: {},
 			showWarnings: false,
 		})
-		if (!conversion.isValid) {
+		// A track it would leave out makes a Proxy the server refuses: silent, or without a picture
+		if (!conversion.isValid || conversion.discardedTracks.some((each) => ['video', 'audio'].includes(each.track.type))) {
+			await writable.abort?.().catch(() => {})
 			throw new Error(conversion.discardedTracks.map((each) => `${each.track.type}: ${each.reason}`).join(', '))
 		}
 		const stop = () => conversion.cancel()
@@ -191,7 +209,7 @@ export async function makeProxy(source, { maxHeight, maxBitrate }, onProgress, s
 		}
 
 		const file = await (await dir.getFileHandle(name)).getFile()
-		await check(file, original.packetCount, fps)
+		await check(file, { frames, seconds })
 		return { file, done }
 	} catch (error) {
 		await done()
@@ -206,17 +224,15 @@ export async function makeProxy(source, { maxHeight, maxBitrate }, onProgress, s
  * rate; the browser does not upload one in the first place.
  *
  * @param {File} file - the Proxy
- * @param {number} frames - the original's
- * @param {{num: number, den: number}} fps - its rate
+ * @param {{frames: number, seconds: number}} original - its Frames and their length
  */
-async function check(file, frames, fps) {
+async function check(file, original) {
 	const input = await open(file)
 	try {
 		const video = await input.getPrimaryVideoTrack()
-		const made = (await video.computePacketStats()).packetCount
-		const seconds = await video.computeDuration() - await video.getFirstTimestamp()
-		if (made !== frames || Math.abs(seconds - frames * fps.den / fps.num) > fps.den / fps.num / 2) {
-			throw new Error(`The Proxy came out with ${made} Frames instead of ${frames}`)
+		const made = { frames: (await video.computePacketStats()).packetCount, seconds: await video.computeDuration() - await video.getFirstTimestamp() }
+		if (!fits(made, original)) {
+			throw new Error(`The Proxy came out with ${made.frames} Frames in ${made.seconds} s instead of ${original.frames} in ${original.seconds} s`)
 		}
 	} finally {
 		input.dispose()

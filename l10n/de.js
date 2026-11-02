@@ -618,7 +618,8 @@ OC.L10N.register(
 		"Uploading, {percent} %": "Wird hochgeladen, {percent} %",
 		"This browser cannot read this file, and without ffmpeg the server cannot convert it.": "Dieser Browser kann diese Datei nicht lesen, und ohne ffmpeg kann der Server sie nicht umwandeln.",
 		"This browser cannot decode {codec}, and without ffmpeg the server cannot convert it. Another browser may.": "Dieser Browser kann {codec} nicht dekodieren, und ohne ffmpeg kann der Server die Datei nicht umwandeln. Ein anderer Browser kann es vielleicht.",
-		"This browser has no room for the Proxy: {size} MB more are needed on this computer.": "Dieser Browser hat keinen Platz für den Proxy: Auf diesem Computer fehlen noch {size} MB."
+		"This browser has no room for the Proxy: {size} MB more are needed on this computer.": "Dieser Browser hat keinen Platz für den Proxy: Auf diesem Computer fehlen noch {size} MB.",
+		"This browser cannot convert this file, and without ffmpeg the server cannot either. Another browser may.": "Dieser Browser kann diese Datei nicht umwandeln, und ohne ffmpeg kann der Server es auch nicht. Ein anderer Browser kann es vielleicht."
 	},
 	"nplurals=2; plural=(n != 1);"
 );

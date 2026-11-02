@@ -6,7 +6,7 @@ import { defineStore } from 'pinia'
 import { decodeInTurn, enableFile, errorMessage, getVersion, giveAudioWaveform, giveProxy, regenerateVersion, reportProxy } from '../api.js'
 import { t } from '../lib/l10n.js'
 import { mediaKind, reviewable } from '../lib/media.js'
-import { inspect, makeProxy, NoRoomError } from '../lib/proxy.js'
+import { clearProxies, inspect, makeProxy, NoRoomError } from '../lib/proxy.js'
 import { current, HEARTBEAT, sameFile, uploadFile } from '../lib/upload.js'
 import { ACTIVE, mergeBoard, totals } from '../lib/uploadBoard.js'
 import { settled } from '../lib/uploadStatus.js'
@@ -55,7 +55,7 @@ function convertInTurn(file, onProgress, signal) {
  * @return {?string} the reason, or null when it is taken
  */
 function refusal(seen, type) {
-	if (seen === null || seen.playable || (seen.decodable && type.startsWith('video/'))) {
+	if (seen === null || seen.playable || (seen.convertible && type.startsWith('video/'))) {
 		return null
 	}
 	if (!seen.readable) {
@@ -64,7 +64,9 @@ function refusal(seen, type) {
 			? null
 			: t('deliver', 'This browser cannot read this file, and without ffmpeg the server cannot convert it.')
 	}
-	return t('deliver', 'This browser cannot decode {codec}, and without ffmpeg the server cannot convert it. Another browser may.', { codec: seen.codec ?? '?' })
+	return seen.codec
+		? t('deliver', 'This browser cannot decode {codec}, and without ffmpeg the server cannot convert it. Another browser may.', { codec: seen.codec })
+		: t('deliver', 'This browser cannot convert this file, and without ffmpeg the server cannot either. Another browser may.')
 }
 
 /**
@@ -164,6 +166,8 @@ export const useUploadsStore = defineStore('uploads', {
 		/** Shows what every tab has, now and whenever another tab changes it; once, by the dialog */
 		start() {
 			const now = Date.now()
+			// What closed tabs left of their Proxies in the browser's private file system
+			clearProxies()
 			// Older than a day: the server no longer has the chunks, and the Processing is long over
 			for (const { key, value } of [...readAll(RECORD), ...readAll(DONE)]) {
 				if (!current(value, now)) {
@@ -288,6 +292,7 @@ export const useUploadsStore = defineStore('uploads', {
 			}
 			item.controller?.abort()
 			item.proxyController?.abort()
+			item.proxying?.then((made) => made?.done())
 			if (item.folder) {
 				axios.delete(item.folder).catch(() => {})
 			}
@@ -456,6 +461,7 @@ export const useUploadsStore = defineStore('uploads', {
 				this.forget(item)
 				// Its Proxy has no Version to go to; a retry makes it again
 				item.proxyController?.abort()
+				item.proxying?.then((made) => made?.done())
 				Object.assign(item, { proxy: null, proxying: null })
 				if (!signal.aborted) {
 					Object.assign(item, { status: 'failed', error: errorMessage(error) })
@@ -509,27 +515,68 @@ export const useUploadsStore = defineStore('uploads', {
 			}
 			if (!asset.manages) {
 				item.proxyController.abort()
+				item.proxying.then((made) => made?.done())
 				item.proxy = null
 				return
 			}
-			const report = () => item.proxy?.state === 'running' && reportProxy(asset.versionId, item.proxy.progress).catch(() => {})
+			// Also while the Proxy uploads, which takes minutes for a long one: silent for two minutes, the server takes this tab as gone
+			const report = () => ['running', 'uploading'].includes(item.proxy?.state)
+				&& reportProxy(asset.versionId, Math.min(99, item.proxy.state === 'running' ? item.proxy.progress : 99)).catch(() => {})
 			report()
 			const beat = setInterval(report, PROXY_REPORT * 1000)
-			const made = await item.proxying.finally(() => clearInterval(beat))
-			if (made === null) {
-				return
-			}
-			const target = item.target.slice(0, item.target.lastIndexOf('/')) + '/.deliver-proxy-' + Math.random().toString(36).slice(2)
-			item.proxy = { progress: 0, state: 'uploading' }
 			try {
-				const fileId = await uploadFile({
+				const made = await item.proxying
+				if (made === null) {
+					return
+				}
+				try {
+					// The server reads the original first if its background job has not yet, and says so while a worker is at it;
+					// it deletes every upload it looked at, so another try uploads the Proxy again
+					for (let attempt = 0; ; attempt++) {
+						item.proxy = { progress: 0, state: 'uploading' }
+						const fileId = await this.uploadProxy(item, made.file)
+						try {
+							await giveProxy(asset.versionId, fileId)
+							break
+						} catch (error) {
+							if (error.response?.status !== 409 || attempt >= 12 || !/not read yet/.test(errorMessage(error) ?? '')) {
+								throw error
+							}
+							await new Promise((resolve) => setTimeout(resolve, 5000))
+						}
+					}
+					item.proxy = { progress: 100, state: 'ready' }
+				} catch (error) {
+					item.proxy = { state: 'failed', error: error.response ? errorMessage(error) : null }
+				} finally {
+					await made.done()
+				}
+			} finally {
+				clearInterval(beat)
+			}
+			await this.refresh(item)
+			this.watch()
+		},
+		/**
+		 * Uploads a Proxy next to the master, under a name without a media
+		 * extension so that Auto Intake passes it by; deleted again when it
+		 * does not arrive.
+		 *
+		 * @param {object} item - the master's upload
+		 * @param {File} file - the Proxy
+		 * @return {Promise<number>} its file id
+		 */
+		async uploadProxy(item, file) {
+			const target = item.target.slice(0, item.target.lastIndexOf('/')) + '/.deliver-proxy-' + Math.random().toString(36).slice(2)
+			try {
+				return await uploadFile({
 					request: axios.request,
-					file: made.file,
+					file,
 					target,
 					uploadsUrl: generateRemoteUrl('dav') + '/uploads/' + encodeURIComponent(getCurrentUser()?.uid ?? ''),
-					chunkSize: chunkSizeFor(made.file.size),
+					chunkSize: chunkSizeFor(file.size),
 					onProgress: (loaded) => {
-						item.proxy.progress = Math.floor(loaded / Math.max(1, made.file.size) * 100)
+						item.proxy.progress = Math.floor(loaded / Math.max(1, file.size) * 100)
 					},
 					env: {
 						signal: item.proxyController.signal,
@@ -539,28 +586,10 @@ export const useUploadsStore = defineStore('uploads', {
 						onPause: () => {},
 					},
 				})
-				// The server reads the original first if its background job has not yet; meanwhile it says so
-				for (let attempt = 0; ; attempt++) {
-					try {
-						await giveProxy(asset.versionId, fileId)
-						break
-					} catch (error) {
-						if (error.response?.status !== 409 || attempt >= 12 || !/not read yet/.test(error.response?.data?.ocs?.data?.message ?? '')) {
-							throw error
-						}
-						await new Promise((resolve) => setTimeout(resolve, 5000))
-					}
-				}
-				item.proxy = { progress: 100, state: 'ready' }
 			} catch (error) {
-				// The server deletes a Proxy it looked at; one it never got is deleted here
 				axios.delete(target).catch(() => {})
-				item.proxy = { state: 'failed', error: error.response?.data?.ocs?.data?.message ?? null }
-			} finally {
-				await made.done()
+				throw error
 			}
-			await this.refresh(item)
-			this.watch()
 		},
 		/**
 		 * @param {object} item - a finished upload, whose Version is read again

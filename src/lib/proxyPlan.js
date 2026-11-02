@@ -12,39 +12,47 @@ const PLAYABLE = {
 	mp4: { video: ['avc'], audio: ['aac', 'mp3'] },
 	webm: { video: ['vp8', 'vp9'], audio: ['opus', 'vorbis'] },
 	matroska: { video: ['avc', 'vp8', 'vp9'], audio: ['aac', 'opus', 'vorbis', 'flac', 'mp3'] },
+	// Audio files: a picture in them is cover art at most
+	mp3: { video: [], audio: ['mp3'] },
+	adts: { video: [], audio: ['aac'] },
+	flac: { video: [], audio: ['flac'] },
+	ogg: { video: [], audio: ['vorbis', 'opus', 'flac'] },
+	wave: { video: [], audio: ['pcm-u8', 'pcm-s16', 'pcm-s24', 'pcm-s32', 'pcm-f32'] },
 }
 /** H.264 profiles that are 8-bit 4:2:0, the only kind browsers decode */
 const H264_420 = [66, 77, 88, 100]
 
-/** Frame rates a measured rate stands for, so 23.976 becomes 24000/1001 */
-const RATES = [[24000, 1001], [30000, 1001], [60000, 1001], [24, 1], [25, 1], [30, 1], [48, 1], [50, 1], [60, 1], [100, 1], [120, 1]]
-
 /**
- * @param {string} format - Mediabunny's name of the container, such as 'MP4', 'QuickTime File Format', 'WebM' or 'Matroska'
+ * @param {string} format - Mediabunny's name of the container, such as 'MP4', 'QuickTime File Format', 'WebM', 'Matroska' or 'WAVE'
  * @return {?string} its family in PLAYABLE
  */
 export function family(format) {
 	const name = format.toLowerCase()
-	return name.includes('mp4') || name.includes('quicktime') ? 'mp4' : name.includes('webm') ? 'webm' : name.includes('matroska') ? 'matroska' : null
+	if (name.includes('mp4') || name.includes('quicktime')) {
+		return 'mp4'
+	}
+	return ['webm', 'matroska', 'mp3', 'adts', 'flac', 'ogg', 'wave'].find((each) => name.includes(each)) ?? null
 }
 
 /**
- * Whether browsers play a file as it is, as the server decides it.
+ * @param {string} format - the container's name
+ * @return {boolean} whether the server reads its Frames without ffmpeg (ContainerProbe), which a Proxy is checked against
+ */
+export const convertible = (format) => ['mp4', 'webm', 'matroska'].includes(family(format))
+
+/**
+ * Whether browsers play a file as it is, as the server decides it: every
+ * track must be one they play (DerivedMedia::browserPlays).
  *
- * @param {object} file - what Mediabunny read
- * @param {string} file.format - the container's name
- * @param {?string} file.video - the video codec, null without video
- * @param {?string} file.videoCodec - the full codec string, such as avc1.64001f
- * @param {?string} file.audio - the audio codec, null without audio
+ * @param {string} format - the container's name
+ * @param {Array<{type: string, codec: ?string, codecString?: ?string}>} tracks - every video and audio track
  * @return {boolean} whether it plays
  */
-export function plays({ format, video, videoCodec, audio }) {
+export function plays(format, tracks) {
 	const allowed = PLAYABLE[family(format)]
-	if (!allowed || (video && !allowed.video.includes(video)) || (audio && !allowed.audio.includes(audio))) {
-		return false
-	}
-	// avc1.PPCCLL: the profile is the first byte
-	return video !== 'avc' || H264_420.includes(parseInt((videoCodec ?? '').split('.')[1]?.slice(0, 2) ?? '', 16))
+	return Boolean(allowed) && tracks.every(({ type, codec, codecString }) => allowed[type]?.includes(codec)
+		// avc1.PPCCLL: the profile is the first byte
+		&& (codec !== 'avc' || H264_420.includes(parseInt((codecString ?? '').split('.')[1]?.slice(0, 2) ?? '', 16))))
 }
 
 /**
@@ -59,23 +67,23 @@ export const needsProxy = (playable, bytes, seconds, maxBitrate) => !playable ||
 /**
  * @param {{width: number, height: number}} picture - the original's
  * @param {number} maxHeight - the Proxy resolution, on the short side
- * @return {{width: number, height: number}} the Proxy's, even for the encoder
+ * @return {{width: number, height: number}} the Proxy's, even for the encoder and never above the resolution
  */
 export function proxySize({ width, height }, maxHeight) {
 	const scale = Math.min(1, maxHeight / Math.min(width, height))
-	const even = (value) => Math.max(2, Math.round(value * scale / 2) * 2)
+	const even = (value) => Math.max(2, Math.floor(value * scale / 2) * 2)
 	return { width: even(width), height: even(height) }
 }
 
 /**
- * About 8 Mbit/s at 1080p, by the number of pixels, always below the
- * threshold together with the sound.
+ * About 8 Mbit/s at 1080p, by the number of pixels, and like ffmpeg's a
+ * tenth below the threshold with the sound, room for the encoder's overshoot.
  *
  * @param {{width: number, height: number}} size - the Proxy's
  * @param {number} maxBitrate - the Proxy bitrate threshold in Mbit/s
  * @return {number} the picture's bitrate in bit/s
  */
-export const videoBitrate = ({ width, height }, maxBitrate) => Math.round(Math.min(8e6 * width * height / (1920 * 1080), maxBitrate * 1e6 - AUDIO_BITRATE))
+export const videoBitrate = ({ width, height }, maxBitrate) => Math.round(Math.min(8e6 * width * height / (1920 * 1080), maxBitrate * 0.9e6 - AUDIO_BITRATE))
 
 /**
  * @param {number} seconds - the Proxy's length
@@ -85,17 +93,14 @@ export const videoBitrate = ({ width, height }, maxBitrate) => Math.round(Math.m
 export const proxyBytes = (seconds, bitrate) => Math.ceil(seconds * (bitrate + AUDIO_BITRATE) / 8 * 1.25) + 2 * 1024 * 1024
 
 /**
- * @param {number} frames - how many Frames the original has
- * @param {number} seconds - how long they last
- * @return {{num: number, den: number}} the frame rate, as an exact fraction where it is a common one
+ * The server takes a Proxy whose length is within half a Frame of its
+ * Frames at the original's rate (DerivedMedia::mismatch).
+ *
+ * @param {{frames: number, seconds: number}} proxy - what the Proxy has
+ * @param {{frames: number, seconds: number}} original - what the original has
+ * @return {boolean} whether it fits
  */
-export function frameRate(frames, seconds) {
-	const rate = frames / seconds
-	const common = RATES.find(([num, den]) => Math.abs(num / den - rate) < 0.002)
-	if (common) {
-		return { num: common[0], den: common[1] }
-	}
-	const num = Math.round(rate * 1000)
-	const gcd = (a, b) => b === 0 ? a : gcd(b, a % b)
-	return { num: num / gcd(num, 1000), den: 1000 / gcd(num, 1000) }
+export function fits(proxy, original) {
+	return proxy.frames === original.frames
+		&& Math.abs(proxy.seconds - original.seconds) <= original.seconds / original.frames / 2
 }

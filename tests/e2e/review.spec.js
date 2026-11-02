@@ -1,7 +1,7 @@
 import { chromium, expect, test } from '@playwright/test'
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { CLIP, DNXHR } from './fixtures.js'
+import { CLIP, DNXHR, MIX } from './fixtures.js'
 
 const URL = process.env.DELIVER_TEST_URL ?? 'http://localhost:8080'
 const ADMIN = process.env.DELIVER_TEST_USER ?? 'admin'
@@ -751,7 +751,7 @@ test.describe('Uploads without ffmpeg', () => {
 		await admin.dispose()
 	})
 
-	test('refuses what this browser can neither play nor convert, before it goes up', async () => {
+	test('refuses what this browser can neither play nor convert, before it goes up, and takes what plays', async () => {
 		const browser = await chromium.connectOverCDP(CDP)
 		const context = await browser.newContext({ baseURL: BROWSER_URL })
 		const page = await context.newPage()
@@ -761,8 +761,13 @@ test.describe('Uploads without ffmpeg', () => {
 			await page.getByRole('button', { name: 'Upload', exact: true }).click()
 			const uploads = page.getByRole('dialog', { name: 'Uploads' })
 			await uploads.locator('input[type=file][multiple]').setInputFiles({ name: 'master.mov', mimeType: 'video/quicktime', buffer: readFileSync(DNXHR) })
-			await expect(uploads.locator('.deliver-uploads__status--error')).toContainText('without ffmpeg the server cannot convert it')
+			await expect(uploads.locator('.deliver-uploads__status--error')).toContainText('without ffmpeg the server cannot')
 			await expect(uploads.getByText('Open', { exact: true })).toHaveCount(0)
+
+			// What plays as it is goes up as ever
+			await uploads.locator('input[type=file][multiple]').setInputFiles({ name: 'mix.wav', mimeType: 'audio/wav', buffer: readFileSync(MIX) })
+			await expect(uploads.getByText('Open', { exact: true })).toHaveCount(1)
+			await expect(uploads.locator('.deliver-uploads__status--error')).toHaveCount(1)
 		} finally {
 			await context.close()
 		}

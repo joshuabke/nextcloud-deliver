@@ -1,20 +1,36 @@
 import { describe, expect, it } from 'vitest'
-import { frameRate, needsProxy, plays, proxyBytes, proxySize, videoBitrate } from './proxyPlan.js'
+import { convertible, fits, needsProxy, plays, proxyBytes, proxySize, videoBitrate } from './proxyPlan.js'
+
+const video = (codec, codecString) => ({ type: 'video', codec, codecString })
+const audio = (codec) => ({ type: 'audio', codec })
 
 describe('what browsers play, as the server decides it', () => {
 	it.each([
-		[{ format: 'MP4', video: 'avc', videoCodec: 'avc1.64001f', audio: 'aac' }, true],
-		[{ format: 'QuickTime File Format', video: 'avc', videoCodec: 'avc1.4d401e', audio: null }, true],
-		[{ format: 'QuickTime File Format', video: 'prores', videoCodec: 'apch', audio: 'pcm-s16' }, false],
-		[{ format: 'MP4', video: 'avc', videoCodec: 'avc1.6e0028', audio: 'aac' }, false],
-		[{ format: 'MP4', video: 'avc', videoCodec: 'avc1.7a0028', audio: 'aac' }, false],
-		[{ format: 'MP4', video: 'hevc', videoCodec: 'hvc1.1.6.L93.B0', audio: 'aac' }, false],
-		[{ format: 'WebM', video: 'vp9', videoCodec: 'vp09.00.10.08', audio: 'opus' }, true],
-		[{ format: 'WebM', video: 'av1', videoCodec: 'av01.0.04M.08', audio: 'opus' }, false],
-		[{ format: 'Matroska', video: 'avc', videoCodec: 'avc1.640028', audio: 'flac' }, true],
-		[{ format: 'MPEG-TS', video: 'avc', videoCodec: 'avc1.640028', audio: 'aac' }, false],
-	])('%o plays: %s', (file, expected) => {
-		expect(plays(file)).toBe(expected)
+		['MP4', [video('avc', 'avc1.64001f'), audio('aac')], true],
+		['QuickTime File Format', [video('avc', 'avc1.4d401e')], true],
+		['QuickTime File Format', [video('prores', 'apch'), audio('pcm-s16')], false],
+		['MP4', [video('avc', 'avc1.6e0028'), audio('aac')], false],
+		['MP4', [video('avc', 'avc1.7a0028'), audio('aac')], false],
+		['MP4', [video('hevc', 'hvc1.1.6.L93.B0'), audio('aac')], false],
+		['MP4', [video('avc', 'avc1.640028'), audio('aac'), audio('ac3')], false],
+		['WebM', [video('vp9', 'vp09.00.10.08'), audio('opus')], true],
+		['WebM', [video('av1', 'av01.0.04M.08'), audio('opus')], false],
+		['Matroska', [video('avc', 'avc1.640028'), audio('flac')], true],
+		['MPEG Transport Stream', [video('avc', 'avc1.640028'), audio('aac')], false],
+		['WAVE', [audio('pcm-s24')], true],
+		['MP3', [audio('mp3')], true],
+		['FLAC', [audio('flac')], true],
+		['Ogg', [audio('opus')], true],
+		['ADTS', [audio('aac')], true],
+		['WAVE', [audio('ulaw')], false],
+	])('%s %o plays: %s', (format, tracks, expected) => {
+		expect(plays(format, tracks)).toBe(expected)
+	})
+
+	it('converts only what the server reads the Frames of without ffmpeg', () => {
+		expect(convertible('QuickTime File Format')).toBe(true)
+		expect(convertible('Matroska')).toBe(true)
+		expect(convertible('MPEG Transport Stream')).toBe(false)
 	})
 })
 
@@ -34,27 +50,24 @@ describe('the Proxy', () => {
 		expect(proxySize({ width: 1080, height: 1920 }, 720)).toEqual({ width: 720, height: 1280 })
 		expect(proxySize({ width: 2048, height: 858 }, 720)).toEqual({ width: 1718, height: 720 })
 		expect(proxySize({ width: 640, height: 360 }, 1080)).toEqual({ width: 640, height: 360 })
+		expect(proxySize({ width: 3840, height: 2160 }, 1081).height).toBe(1080)
 	})
 
-	it('takes about 8 Mbit/s at 1080p and stays below the threshold with its sound', () => {
+	it('takes about 8 Mbit/s at 1080p and stays a tenth below the threshold with its sound', () => {
 		expect(videoBitrate({ width: 1920, height: 1080 }, 20)).toBe(8e6)
 		expect(videoBitrate({ width: 1280, height: 720 }, 20)).toBeCloseTo(3.56e6, -4)
-		expect(videoBitrate({ width: 3840, height: 2160 }, 20)).toBe(20e6 - 160e3)
-		expect(videoBitrate({ width: 1920, height: 1080 }, 5)).toBe(5e6 - 160e3)
+		expect(videoBitrate({ width: 3840, height: 2160 }, 20)).toBe(18e6 - 160e3)
+		expect(videoBitrate({ width: 1920, height: 1080 }, 5)).toBe(4.5e6 - 160e3)
 	})
 
 	it('needs room for ten minutes at 1080p of about 750 MB', () => {
 		expect(proxyBytes(600, 8e6) / 1e6).toBeCloseTo(767, -1)
 	})
-})
 
-describe('the frame rate', () => {
-	it('stays an exact fraction for the rates of film and broadcast', () => {
-		expect(frameRate(48, 2.002)).toEqual({ num: 24000, den: 1001 })
-		expect(frameRate(2997, 100)).toEqual({ num: 30000, den: 1001 })
-		expect(frameRate(50, 2)).toEqual({ num: 25, den: 1 })
-	})
-	it('keeps another rate to a thousandth', () => {
-		expect(frameRate(125, 10)).toEqual({ num: 25, den: 2 })
+	it('fits when it has the Frames of the original within half a Frame of its length', () => {
+		const original = { frames: 1800, seconds: 1800 / 29.9985 }
+		expect(fits({ frames: 1800, seconds: 1800 / 29.9985 + 0.01 }, original)).toBe(true)
+		expect(fits({ frames: 1800, seconds: 1800 * 1001 / 30000 }, original), 'snapped to 29.97, it drifts a Frame').toBe(false)
+		expect(fits({ frames: 1799, seconds: original.seconds }, original)).toBe(false)
 	})
 })
