@@ -7,6 +7,9 @@
 - Den Proxy eines Videos im Browser erzeugt, der es in Deliver hochlädt, wo der Server kein ffmpeg hat.
 - Uploads abgelehnt, die der Browser weder abspielen noch umwandeln kann, wo der Server kein ffmpeg hat.
 - `POST /versions/{id}/proxy` und `POST /versions/{id}/proxy/progress` für Proxies ergänzt, die der hochladende Browser macht, wo der Server kein ffmpeg hat.
+- „Proxy in diesem Browser erzeugen“ auf der Asset-Karte für Versionen ohne ihren Proxy ergänzt, wo der Server kein ffmpeg hat.
+- Den Proxy eines Videos, das in der Dateien-App in ein Ordnerprojekt mit Automatischer Aufnahme hochgeladen wird, im hochladenden Browser erzeugt, wo der Server kein ffmpeg hat.
+- `GET /folders/{folderId}/intake` ergänzt.
 
 ## 0.10.0 – 2026-10-31
 
