@@ -761,7 +761,7 @@ test.describe('Uploads without ffmpeg', () => {
 			await page.getByRole('button', { name: 'Upload', exact: true }).click()
 			const uploads = page.getByRole('dialog', { name: 'Uploads' })
 			await uploads.locator('input[type=file][multiple]').setInputFiles({ name: 'master.mov', mimeType: 'video/quicktime', buffer: readFileSync(DNXHR) })
-			await expect(uploads.locator('.deliver-uploads__status--error')).toContainText('This format needs ffmpeg, which this server does not have.')
+			await expect(uploads.locator('.deliver-uploads__status--error')).toContainText('This format needs ffmpeg, which this Nextcloud lacks.')
 			await expect(uploads.getByText('Open', { exact: true })).toHaveCount(0)
 
 			// What plays as it is goes up as ever
