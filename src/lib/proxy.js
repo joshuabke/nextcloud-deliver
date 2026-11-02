@@ -213,7 +213,9 @@ export async function makeProxy(source, { maxHeight, maxBitrate, thumbCap }, onP
 		const bitrate = videoBitrate(size, maxBitrate)
 		await makeRoom(proxyBytes(seconds, bitrate))
 		const grid = thumbGrid(seconds, thumbCap, size)
-		const strip = new OffscreenCanvas(grid.columns * THUMB_WIDTH, grid.rows * grid.tileHeight).getContext('2d')
+		const strip = new OffscreenCanvas(grid.columns * THUMB_WIDTH, grid.rows * grid.tileHeight).getContext('2d', { alpha: false })
+		// Black where the grid has no picture, as ffmpeg's tile filter leaves it
+		strip.fillRect(0, 0, strip.canvas.width, strip.canvas.height)
 		let drawn = -1
 		const peaks = new Float32Array(BUCKETS)
 		let heard = false
