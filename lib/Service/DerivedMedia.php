@@ -35,6 +35,8 @@ class DerivedMedia {
 	public const FILES = [
 		'proxy' => 'proxy.mp4',
 		'thumbs' => 'thumbs.webp',
+		// The Thumbnail Strip of a Safari, which draws no WebP; `thumbs` is served from here where there is no WebP
+		'thumbsJpeg' => 'thumbs.jpg',
 		'thumbsIndex' => 'thumbs.json',
 		'waveform' => 'waveform.json',
 	];
@@ -353,8 +355,9 @@ class DerivedMedia {
 
 	/**
 	 * A Thumbnail Strip the browser made in the same pass as a Proxy (ADR
-	 * 0019): a WebP grid in the shape runThumbs makes, a picture every so
-	 * many seconds, each 160 wide. The browser measured the length itself, so
+	 * 0019): a WebP grid in the shape runThumbs makes (a JPEG one from a
+	 * browser that encodes no WebP), a picture every so many seconds, each 160
+	 * wide. The browser measured the length itself, so
 	 * its spacing and count may be one off the server's. Only taken while the
 	 * Version has none and none is on its way: a server-made one wins, and
 	 * replaces it on regeneration.
@@ -376,11 +379,11 @@ class DerivedMedia {
 		$size = strlen($image) <= self::MAX_THUMBS_BYTES ? getimagesizefromstring($image) : false;
 		$tile = $size === false ? 0 : intdiv($size[1], $rows);
 		// Portrait as high as four widths at most, as a phone's 9:16 is not even two
-		if ($size === false || $size[2] !== IMAGETYPE_WEBP || $size[0] !== $columns * self::THUMB_WIDTH
+		if ($size === false || !in_array($size[2], [IMAGETYPE_WEBP, IMAGETYPE_JPEG], true) || $size[0] !== $columns * self::THUMB_WIDTH
 			|| $tile * $rows !== $size[1] || $tile < 2 || $tile % 2 !== 0 || $tile > 4 * self::THUMB_WIDTH) {
-			throw new InvalidRequestException('A Thumbnail Strip is a WebP of ' . $columns . ' by ' . $rows . ' pictures, each ' . self::THUMB_WIDTH . ' wide and of even height');
+			throw new InvalidRequestException('A Thumbnail Strip is a WebP or JPEG of ' . $columns . ' by ' . $rows . ' pictures, each ' . self::THUMB_WIDTH . ' wide and of even height');
 		}
-		$this->put($version, 'thumbs', $image);
+		$this->put($version, $size[2] === IMAGETYPE_JPEG ? 'thumbsJpeg' : 'thumbs', $image);
 		$this->putThumbsIndex($version, $every, $count);
 		$this->mark($version->getId(), Job::KIND_THUMBS, self::STATE_READY);
 	}
@@ -778,7 +781,16 @@ class DerivedMedia {
 			throw new NotFoundException('Unknown kind of derived media: ' . $kind);
 		}
 		// Looking must not create the folder
-		return $this->appDataFactory->get(Application::APP_ID)->getFolder((string)$version->getId())->getFile(self::FILES[$kind]);
+		$folder = $this->appDataFactory->get(Application::APP_ID)->getFolder((string)$version->getId());
+		try {
+			return $folder->getFile(self::FILES[$kind]);
+		} catch (NotFoundException $e) {
+			// A server-made WebP wins, so the JPEG from a browser is only the fallback
+			if ($kind !== 'thumbs') {
+				throw $e;
+			}
+			return $folder->getFile(self::FILES['thumbsJpeg']);
+		}
 	}
 
 	/** Deletes the derived media and open jobs of a Version */

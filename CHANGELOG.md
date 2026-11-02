@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Accept a JPEG Thumbnail Strip from the browser besides WebP, so Safari makes one with its Proxy.
 - Give originals that browsers play a Proxy by the new Proxy bitrate threshold instead of their resolution, and keep every Proxy below it.
 - Give AV1 a Proxy.
 - Make the Proxy of a video in the browser that uploads it in Deliver, where the server has no ffmpeg.
