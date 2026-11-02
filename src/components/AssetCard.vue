@@ -17,6 +17,7 @@ import { useLongPress } from '../composables/longpress.js'
 import { n, t } from '../lib/l10n.js'
 import { isStill } from '../lib/media.js'
 import { runtime } from '../lib/timecode.js'
+import { useUploadsStore } from '../store/uploads.js'
 
 const props = defineProps({
 	/** An Asset with its Version Stack, newest first */
@@ -79,9 +80,20 @@ const decision = computed(() => {
 })
 /** Bottom right of the still, unless a status takes the place (story 130) */
 const length = computed(() => isStill(newest.value) ? null : runtime(newest.value.durationFrames, newest.value.fps))
+const uploads = useUploadsStore()
 const status = computed(() => {
 	if (newest.value.state === 'missing') {
 		return { text: t('deliver', 'Missing'), kind: 'warning' }
+	}
+	// Its Proxy, made in this browser (ADR 0019)
+	const making = uploads.proxies[newest.value.id]
+	if (making) {
+		return {
+			text: making.state === 'uploading'
+				? t('deliver', 'Uploading the Proxy, {percent} %', { percent: making.progress })
+				: t('deliver', 'Making the Proxy, {percent} %', { percent: making.progress }),
+			kind: 'info',
+		}
 	}
 	if (newest.value.processingFailed) {
 		return { text: t('deliver', 'Processing failed'), kind: 'warning' }

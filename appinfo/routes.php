@@ -41,6 +41,7 @@ return [
 		['name' => 'project_api#index', 'url' => '/api/v1/projects', 'verb' => 'GET'],
 		['name' => 'project_api#create', 'url' => '/api/v1/projects', 'verb' => 'POST'],
 		['name' => 'project_api#byFolder', 'url' => '/api/v1/folders/{folderId}/project', 'verb' => 'GET'],
+		['name' => 'project_api#intake', 'url' => '/api/v1/folders/{folderId}/intake', 'verb' => 'GET'],
 		['name' => 'project_api#show', 'url' => '/api/v1/projects/{id}', 'verb' => 'GET'],
 		['name' => 'project_api#update', 'url' => '/api/v1/projects/{id}', 'verb' => 'PUT'],
 		['name' => 'project_api#destroy', 'url' => '/api/v1/projects/{id}', 'verb' => 'DELETE'],

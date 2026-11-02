@@ -269,6 +269,76 @@ class WithoutFfmpegTest extends TestCase {
 		}
 	}
 
+	/** @return array<string, mixed> the newest Version of the Project's only Asset, as its card has it */
+	private function card(): array {
+		return $this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'][0]['versions'][0];
+	}
+
+	public function testTheCardOffersTheProxyFromTheBrowserUntilOneIsOnItsWay(): void {
+		$this->make(self::PRORES);
+		$version = $this->upload('master.mov');
+		self::assertTrue($this->card()['proxyFromBrowser'], 'no Proxy, and none can come from the server');
+
+		self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy/progress", ['percent' => 10])['status']);
+		self::assertFalse($this->card()['proxyFromBrowser'], 'another browser is making it');
+
+		// Two minutes without a report: that tab is gone, as the card sees too
+		$this->inNextcloud('$q = \\OCP\\Server::get(\\OCP\\IDBConnection::class)->getQueryBuilder(); $q->update("deliver_jobs")->set("started_at", $q->createNamedParameter(1))->where($q->expr()->eq("version_id", $q->createNamedParameter(' . $version['id'] . ')))->executeStatement();');
+		self::assertTrue($this->card()['proxyFromBrowser']);
+
+		self::assertSame(400, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom('-f lavfi -i testsrc=size=640x360:rate=25:duration=1 -c:v libx264 -pix_fmt yuv420p')[0]])['status']);
+		self::assertTrue($this->card()['proxyFromBrowser'], 'after a failed one too');
+		self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom(self::PROXY)[0]])['status']);
+		self::assertFalse($this->card()['proxyFromBrowser'], 'it has its Proxy');
+	}
+
+	public function testOnlyAHeavyOrUnplayableVideoIsOfferedAProxyFromTheBrowser(): void {
+		$this->make('-f lavfi -i "testsrc=size=640x360:rate=25:duration=2,noise=alls=40:allf=t" -f lavfi -i sine=duration=2 -c:v libx264 -crf 23 -pix_fmt yuv420p -c:a aac -shortest -f mp4');
+		$this->upload('cut.mp4');
+		self::assertFalse($this->card()['proxyFromBrowser'], 'it plays as it is');
+		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['maxBitrate' => 2])['status']);
+		try {
+			self::assertTrue($this->card()['proxyFromBrowser'], 'above the Proxy bitrate threshold');
+		} finally {
+			$this->nc->ocs('PUT', '/admin/settings', ['maxBitrate' => 20]);
+		}
+	}
+
+	public function testUploadsInTheFilesAppGetTheirProxyFromTheBrowserWhereAutoIntakeTakesThem(): void {
+		$this->nc->mkdir("{$this->root}/day1");
+		$intake = $this->nc->ocs('GET', '/folders/' . $this->nc->fileId("{$this->root}/day1") . '/intake');
+		self::assertSame(200, $intake['status'], json_encode($intake['data']));
+		self::assertSame(['maxHeight' => 1080, 'maxBitrate' => 20], $intake['data']['proxy'], 'below the Folder Project, with the settings to make them to');
+
+		$elsewhere = 'deliver-test-' . bin2hex(random_bytes(4));
+		$this->nc->mkdir($elsewhere);
+		try {
+			self::assertNull($this->nc->ocs('GET', '/folders/' . $this->nc->fileId($elsewhere) . '/intake')['data']['proxy'], 'no Project takes the files in there');
+		} finally {
+			$this->nc->delete($elsewhere);
+		}
+		self::assertSame(200, $this->nc->ocs('PUT', "/projects/{$this->projectId}", ['autoIntake' => false])['status']);
+		self::assertNull($this->nc->ocs('GET', '/folders/' . $this->nc->fileId($this->root) . '/intake')['data']['proxy'], 'without Auto Intake they become no Assets');
+		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['ffmpegPath' => '', 'ffprobePath' => ''])['status']);
+		self::assertSame(200, $this->nc->ocs('PUT', "/projects/{$this->projectId}", ['autoIntake' => true])['status']);
+		self::assertNull($this->nc->ocs('GET', '/folders/' . $this->nc->fileId($this->root) . '/intake')['data']['proxy'], 'ffmpeg makes them');
+	}
+
+	public function testOnlyThePagesWithDeliversScriptAllowItsDecoders(): void {
+		$files = $this->nc->request('GET', '/apps/files/');
+		self::assertSame(200, $files['status']);
+		$policy = $files['headers']['content-security-policy'] ?? '';
+		self::assertStringContainsString("'wasm-unsafe-eval'", $policy, 'the ProRes decoder and AAC encoder are WebAssembly');
+		self::assertMatchesRegularExpression('/worker-src[^;]*blob:/', $policy, 'running in workers made from blobs');
+		self::assertStringNotContainsString("'wasm-unsafe-eval'", $this->nc->request('GET', '/settings/user')['headers']['content-security-policy'] ?? '');
+	}
+
+	/** Runs PHP inside this Nextcloud, for what no API does: the minutes passing */
+	private function inNextcloud(string $code): void {
+		exec('php -r ' . escapeshellarg('require "/var/www/html/lib/base.php"; ' . $code) . ' 2>&1', $output, $status);
+		self::assertSame(0, $status, implode("\n", $output));
+	}
+
 	public function testAWebmKeepsItsFrameRate(): void {
 		$this->make('-f lavfi -i testsrc=size=320x180:rate=24000/1001:duration=2 -f lavfi -i sine=duration=2 -c:v libvpx-vp9 -c:a libopus -shortest -f webm');
 		$version = $this->upload('cut.webm');

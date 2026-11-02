@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addPeaks, peaksOf, roundPeaks, uploadedAudio } from './waveform.js'
+import { addPeaks, peaksOf, roundPeaks, uploaded } from './waveform.js'
 
 describe('a Waveform from decoded audio', () => {
 	it('keeps the loudest sample of each bucket over all channels', () => {
@@ -36,15 +36,16 @@ describe('a Waveform decoded piece by piece', () => {
 describe('an upload in the Files app', () => {
 	const upload = (fields) => ({ status: 3, file: { type: 'audio/mpeg' }, response: { headers: { 'oc-fileid': '00000123ocabc123' } }, ...fields })
 
-	it('names the file id of finished audio', () => {
-		expect(uploadedAudio(upload({}))).toBe(123)
+	it('names the file id of a finished file of the kind asked for', () => {
+		expect(uploaded(upload({}), 'audio')).toBe(123)
+		expect(uploaded(upload({ file: { type: 'video/quicktime' } }), 'video')).toBe(123)
 	})
 
-	it('leaves out what is not audio, not finished or has no file id', () => {
-		expect(uploadedAudio(upload({ file: { type: 'video/mp4' } }))).toBeNull()
-		expect(uploadedAudio(upload({ file: { type: '' } }))).toBeNull()
-		expect(uploadedAudio(upload({ status: 5 }))).toBeNull()
-		expect(uploadedAudio(upload({ response: { headers: {} } }))).toBeNull()
-		expect(uploadedAudio(upload({ response: undefined }))).toBeNull()
+	it('leaves out another kind, what is not finished or has no file id', () => {
+		expect(uploaded(upload({ file: { type: 'video/mp4' } }), 'audio')).toBeNull()
+		expect(uploaded(upload({ file: { type: '' } }), 'audio')).toBeNull()
+		expect(uploaded(upload({ status: 5 }), 'audio')).toBeNull()
+		expect(uploaded(upload({ response: { headers: {} } }), 'audio')).toBeNull()
+		expect(uploaded(upload({ response: undefined }), 'audio')).toBeNull()
 	})
 })

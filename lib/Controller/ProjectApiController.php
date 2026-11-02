@@ -38,6 +38,12 @@ class ProjectApiController extends OCSController {
 		return $this->guard(fn () => $this->service->getForFolder((string)$this->userId, $folderId));
 	}
 
+	/** Whether the browser makes the Proxies of what the Files app uploads into the folder (ADR 0019) */
+	#[NoAdminRequired]
+	public function intake(int $folderId): Response {
+		return $this->guard(fn () => $this->service->intake((string)$this->userId, $folderId));
+	}
+
 	#[NoAdminRequired]
 	public function show(int $id): Response {
 		return $this->guard(fn () => $this->service->get((string)$this->userId, $id));

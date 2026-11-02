@@ -420,6 +420,21 @@ class DerivedMedia {
 		$this->versions->update($version);
 	}
 
+	/**
+	 * Whether a browser is to make the Proxy of this Version (ADR 0019): the
+	 * server has no ffmpeg, and the Version, once read, needs a Proxy and has
+	 * none, also after one failed. Without ffmpeg the probe stops before it
+	 * would queue one, so this is where the rule is applied.
+	 *
+	 * @param int $bytes the size of the Version's file, for the Proxy bitrate threshold
+	 */
+	public function proxyFromBrowser(Version $version, int $bytes): bool {
+		return $version->getHasVideo() && $version->getPlayable() !== null
+			&& in_array($version->getProxyState(), [self::STATE_NONE, self::STATE_FAILED], true)
+			&& (!$version->getPlayable() || $this->heavy($bytes, $this->durationSeconds($version)))
+			&& $this->withoutFfmpeg();
+	}
+
 	/** A browser that has not reported for a while closed its tab: its Proxy counts as missing again (spec: Proxies from the browser) */
 	public function lapse(Version $version): void {
 		if ($version->getProxyState() !== self::STATE_RUNNING) {

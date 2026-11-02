@@ -144,13 +144,14 @@ const FINISHED = 3
 
 /**
  * An upload of the Files app (its @nextcloud/upload 1.x uploader) whose
- * Waveform the uploading browser may hand in.
+ * Waveform or Proxy the uploading browser may hand in.
  *
  * @param {{status: number, file?: File, response?: {headers?: object}}} upload - as the uploader's notifier gets it
- * @return {number|null} the file id of an uploaded audio file; null for anything else
+ * @param {string} kind - audio or video
+ * @return {number|null} the file id of an uploaded file of that kind; null for anything else
  */
-export function uploadedAudio(upload) {
+export function uploaded(upload, kind) {
 	// OC-FileId carries the instance id after the number, as in 00000123ocabc123
 	const fileId = parseInt(upload.response?.headers?.['oc-fileid'], 10)
-	return upload.status === FINISHED && upload.file?.type?.startsWith('audio/') && fileId > 0 ? fileId : null
+	return upload.status === FINISHED && upload.file?.type?.startsWith(kind + '/') && fileId > 0 ? fileId : null
 }

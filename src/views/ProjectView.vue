@@ -14,6 +14,7 @@ import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
 import stackIcon from '@mdi/svg/svg/layers-outline.svg?raw'
 import newVersionIcon from '@mdi/svg/svg/layers-plus.svg?raw'
 import searchIcon from '@mdi/svg/svg/magnify.svg?raw'
+import proxyIcon from '@mdi/svg/svg/movie-cog-outline.svg?raw'
 import openIcon from '@mdi/svg/svg/open-in-app.svg?raw'
 import retryIcon from '@mdi/svg/svg/refresh.svg?raw'
 import renameIcon from '@mdi/svg/svg/rename-outline.svg?raw'
@@ -47,6 +48,7 @@ import { allMissing, between, FILTER_LABELS, FILTERS, found, passes, selectAll, 
 import { groupByFolder, inFolder, projectDavPath, projectDir } from '../lib/folders.js'
 import { n, t } from '../lib/l10n.js'
 import { acceptFor, mediaKind, stackKind } from '../lib/media.js'
+import { cannotConvert, inspect } from '../lib/proxy.js'
 import { stackSuggestions } from '../lib/suggestions.js'
 import { useProjectsStore } from '../store/projects.js'
 import { useUploadsStore } from '../store/uploads.js'
@@ -66,6 +68,8 @@ const uploads = useUploadsStore()
 const versionInput = ref(null)
 /** The right-click menu: where, and its entries */
 const menu = ref(null)
+/** The Asset whose own menu is open, so it can show what the browser found out meanwhile */
+let menuFor = null
 /** The Assets whose Due Date is being set */
 const dueFor = ref(null)
 /** The Asset a new Version is picked for */
@@ -389,12 +393,54 @@ function davFolder(path) {
  */
 function openMenu(event, asset) {
 	const many = selected.value.length > 1 && selected.value.includes(asset.id)
+	menuFor = many ? null : asset
 	menu.value = {
 		x: event.clientX,
 		y: event.clientY,
 		title: many ? n('deliver', '%n Asset selected', '%n Assets selected', selected.value.length) : null,
 		items: (many ? selectionItems() : assetItems(asset)).filter(Boolean),
 	}
+}
+
+/** What this browser can do with a Version's file, by Version id: null while it reads the headers, then the reason it cannot, or '' */
+const proxyChecks = ref({})
+
+/**
+ * The fallback for a Version whose Proxy is missing or failed where the
+ * server has no ffmpeg (ADR 0019): offered once this browser has read the
+ * headers of the file and can decode it; otherwise it says why not.
+ *
+ * @param {object} asset - an Asset whose newest Version has no Proxy
+ * @return {object} its menu entry
+ */
+function proxyItem(asset) {
+	const version = asset.versions[0]
+	const check = proxyChecks.value[version.id]
+	if (check === undefined) {
+		proxyChecks.value[version.id] = null
+		// A few range requests for the headers, not the whole file
+		inspect(version.url, 0, 0).catch(() => null).then((seen) => {
+			proxyChecks.value[version.id] = seen?.decodable ? '' : cannotConvert(seen)
+			if (menu.value && menuFor === asset) {
+				menu.value.items = assetItems(asset).filter(Boolean)
+			}
+		})
+	}
+	return check === ''
+		? { label: t('deliver', 'Make Proxy in this browser'), icon: proxyIcon, action: () => makeProxy(version) }
+		: { label: check ?? t('deliver', 'Checking whether this browser can convert it'), icon: proxyIcon, disabled: true }
+}
+
+/**
+ * @param {object} version - the newest Version of an Asset, which gets its Proxy from this browser
+ */
+async function makeProxy(version) {
+	error.value = null
+	const status = await uploads.makeProxy(version)
+	if (status.state === 'failed') {
+		error.value = status.error ?? t('deliver', 'This browser could not make the Proxy.')
+	}
+	await store.fetch(props.id).catch(() => {})
 }
 
 /**
@@ -409,6 +455,7 @@ function assetItems(asset) {
 		previous && { label: t('deliver', 'Compare with the Version before'), icon: compareIcon, action: () => router.push(`/compare/${previous.id}/${newest.id}`) },
 		asset.manages && asset.filesWrite && { label: t('deliver', 'Upload a new Version'), icon: newVersionIcon, action: () => pickVersion(asset) },
 		asset.manages && newest.processingFailed && { label: t('deliver', 'Process again'), icon: retryIcon, action: () => processAgain([asset]) },
+		asset.manages && newest.proxyFromBrowser && newest.url && !uploads.proxies[newest.id] && proxyItem(asset),
 		asset.manages && { label: asset.dueDate ? t('deliver', 'Change the Due Date') : t('deliver', 'Set a Due Date'), icon: dueIcon, action: () => { dueFor.value = [asset] } },
 		asset.manages && !isMobile.value && { label: t('deliver', 'Manage Versions'), icon: stackIcon, action: () => { managing.value = asset.id } },
 		asset.manages && { label: t('deliver', 'Move to Project…'), icon: moveIcon, action: () => openAssign([asset]) },

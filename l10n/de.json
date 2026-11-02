@@ -617,7 +617,14 @@
 		"Uploading, {percent} %": "Wird hochgeladen, {percent} %",
 		"This browser cannot read this file, and without ffmpeg the server cannot convert it.": "Dieser Browser kann diese Datei nicht lesen, und ohne ffmpeg kann der Server sie nicht umwandeln.",
 		"This browser cannot decode {codec}, and without ffmpeg the server cannot convert it. Another browser may.": "Dieser Browser kann {codec} nicht dekodieren, und ohne ffmpeg kann der Server die Datei nicht umwandeln. Ein anderer Browser kann es vielleicht.",
-		"This browser has no room for the Proxy: {size} MB more are needed on this computer.": "Dieser Browser hat keinen Platz für den Proxy: Auf diesem Computer fehlen noch {size} MB."
+		"This browser has no room for the Proxy: {size} MB more are needed on this computer.": "Dieser Browser hat keinen Platz für den Proxy: Auf diesem Computer fehlen noch {size} MB.",
+		"Deliver is making the Proxy of {name} in this browser: {percent} %. Keep this tab open.": "Deliver erzeugt den Proxy von {name} in diesem Browser: {percent} %. Lass diesen Tab offen.",
+		"Deliver is uploading the Proxy of {name}: {percent} %. Keep this tab open.": "Deliver lädt den Proxy von {name} hoch: {percent} %. Lass diesen Tab offen.",
+		"Deliver could not make the Proxy of {name} in this browser.": "Deliver konnte den Proxy von {name} in diesem Browser nicht erzeugen.",
+		"Uploading the Proxy, {percent} %": "Proxy wird hochgeladen, {percent} %",
+		"Making the Proxy, {percent} %": "Proxy wird erzeugt, {percent} %",
+		"Make Proxy in this browser": "Proxy in diesem Browser erzeugen",
+		"This browser could not make the Proxy.": "Dieser Browser konnte den Proxy nicht erzeugen."
 	},
 	"pluralForm": "nplurals=2; plural=(n != 1);"
 }

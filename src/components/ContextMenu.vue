@@ -6,7 +6,7 @@ const props = defineProps({
 	/** Where the right click was, in viewport pixels */
 	x: { type: Number, required: true },
 	y: { type: Number, required: true },
-	/** [{ label, icon, action or href (download: a filename to save it under), danger }] */
+	/** [{ label, icon, action or href (download: a filename to save it under), danger, disabled }] */
 	items: { type: Array, required: true },
 	/** A heading above the entries, saying what they act on */
 	title: { type: String, default: null },
@@ -96,8 +96,9 @@ function close() {
 					:download="item.download"
 					role="menuitem"
 					class="deliver-context-menu__item"
-					:class="{ 'deliver-context-menu__item--danger': item.danger }"
-					@click="item.href ? emit('close') : ($event.preventDefault(), choose(item))">
+					:class="{ 'deliver-context-menu__item--danger': item.danger, 'deliver-context-menu__item--disabled': item.disabled }"
+					:aria-disabled="item.disabled || undefined"
+					@click="item.href ? emit('close') : ($event.preventDefault(), item.disabled || choose(item))">
 					<NcIconSvgWrapper :svg="item.icon" :size="20" />
 					{{ item.label }}
 				</a>
@@ -134,6 +135,12 @@ function close() {
 	border-radius: var(--border-radius);
 	color: var(--color-main-text);
 	cursor: pointer;
+}
+
+/* Says why something cannot be done here, rather than leaving it out */
+.deliver-context-menu__item--disabled {
+	color: var(--color-text-maxcontrast);
+	cursor: default;
 }
 
 .deliver-context-menu__item :deep(.icon-vue) {
