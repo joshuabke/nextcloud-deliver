@@ -181,7 +181,7 @@ async function makeRoom(bytes) {
  * @param {(percent: number) => void} onProgress - how far it is, 0 to 99
  * @param {AbortSignal} signal - stops it
  * @return {Promise<{file: File, done: () => Promise<void>, frames: number, thumbs: ?{image: Blob, every: number, count: number}, peaks: ?number[]}>}
- *   the Proxy, what deletes it once handed in, the Frames of the original, its Thumbnail Strip (null where the browser encodes no WebP) and its Waveform (null without sound)
+ *   the Proxy, what deletes it once handed in, the Frames of the original, its Thumbnail Strip (WebP, JPEG where the browser encodes no WebP) and its Waveform (null without sound)
  */
 export async function makeProxy(source, { maxHeight, maxBitrate, thumbCap }, onProgress, signal) {
 	const { Conversion, Mp4OutputFormat, Output, StreamTarget } = await mediabunny()
@@ -212,8 +212,9 @@ export async function makeProxy(source, { maxHeight, maxBitrate, thumbCap }, onP
 		const bitrate = videoBitrate(size, maxBitrate)
 		await makeRoom(proxyBytes(seconds, bitrate))
 		const grid = thumbGrid(seconds, thumbCap, size)
-		// The Thumbnail Strip never costs the Proxy: none where the browser encodes no WebP, or has no canvas that large
-		let strip = await encodesWebp() ? stripCanvas(grid) : null
+		// The Thumbnail Strip never costs the Proxy: none where the browser encodes neither WebP nor JPEG, or has no canvas that large
+		const stripType = await stripImageType()
+		let strip = stripType ? stripCanvas(grid) : null
 		let drawn = -1
 		const peaks = new Float32Array(BUCKETS)
 		let heard = false
@@ -286,12 +287,12 @@ export async function makeProxy(source, { maxHeight, maxBitrate, thumbCap }, onP
 
 		const file = await (await dir.getFileHandle(name)).getFile()
 		await check(file, { frames, seconds })
-		const image = strip && drawn >= 0 ? await strip.canvas.convertToBlob({ type: 'image/webp', quality: 0.75 }).catch(() => null) : null
+		const image = strip && drawn >= 0 ? await strip.canvas.convertToBlob({ type: stripType, quality: stripType === 'image/webp' ? 0.75 : 0.8 }).catch(() => null) : null
 		return {
 			file,
 			done,
 			frames,
-			thumbs: image?.type === 'image/webp' ? { image, every: grid.every, count: grid.count } : null,
+			thumbs: image?.type === stripType ? { image, every: grid.every, count: grid.count } : null,
 			peaks: heard ? roundPeaks(peaks) : null,
 		}
 	} catch (error) {
@@ -302,16 +303,21 @@ export async function makeProxy(source, { maxHeight, maxBitrate, thumbCap }, onP
 	}
 }
 
-let webp = null
-/** @return {Promise<boolean>} whether this browser's canvas encodes WebP; Safari's gives a PNG instead, which the server does not take */
-function encodesWebp() {
-	webp ??= (async () => {
+let probedType = null
+/** @return {Promise<?string>} the type the Thumbnail Strip is exported as: WebP, JPEG where the browser's canvas gives another type for WebP (Safari's a PNG), null where it encodes neither */
+function stripImageType() {
+	probedType ??= (async () => {
 		// A canvas encodes nothing before it has a context
 		const canvas = new OffscreenCanvas(1, 1)
 		canvas.getContext('2d')
-		return (await canvas.convertToBlob({ type: 'image/webp' })).type === 'image/webp'
-	})().catch(() => false)
-	return webp
+		for (const type of ['image/webp', 'image/jpeg']) {
+			if ((await canvas.convertToBlob({ type })).type === type) {
+				return type
+			}
+		}
+		return null
+	})().catch(() => null)
+	return probedType
 }
 
 /**

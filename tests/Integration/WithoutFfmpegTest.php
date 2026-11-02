@@ -389,6 +389,22 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertSame(409, $thumbs($this->image('320x90'))['status'], 'it has one');
 	}
 
+	public function testASafariHandsInItsThumbnailStripAsJpegAndItIsServedAsSuch(): void {
+		$this->make(self::PRORES);
+		$version = $this->upload('master.mov');
+		$thumbs = fn (string $image) => $this->nc->ocs('POST', "/versions/{$version['id']}/thumbs", ['image' => $image, 'every' => 1, 'count' => 2]);
+		$jpeg = fn (string $size) => $this->image($size, 'image2 -c:v mjpeg -pix_fmt yuvj420p');
+
+		self::assertSame(400, $thumbs($jpeg('480x90'))['status'], 'three columns where two are');
+		self::assertSame(404, $this->nc->request('GET', "/apps/deliver/versions/{$version['id']}/media/thumbs")['status']);
+
+		self::assertSame(200, $thumbs($jpeg('320x90'))['status']);
+		$strip = $this->nc->request('GET', "/apps/deliver/versions/{$version['id']}/media/thumbs");
+		self::assertSame(200, $strip['status']);
+		self::assertStringStartsWith('image/jpeg', $strip['headers']['content-type']);
+		self::assertStringStartsWith("\xFF\xD8", $strip['body']);
+	}
+
 	public function testOnlyWhoManagesAReadVideoHandsInItsThumbnailStrip(): void {
 		$thumbs = fn (NextcloudClient $as, int $id) => $as->ocs('POST', "/versions/$id/thumbs", ['image' => $this->image('320x90'), 'every' => 1, 'count' => 2])['status'];
 		$this->make('-f lavfi -i sine=duration=2 -f wav');

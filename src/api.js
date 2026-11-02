@@ -131,7 +131,7 @@ export const giveWaveform = (versionId, peaks, durationFrames) => axios.post(url
  * Hands in the Thumbnail Strip the browser made with a Proxy (ADR 0019)
  *
  * @param {number} versionId - the Version
- * @param {Blob} image - the WebP grid
+ * @param {Blob} image - the WebP or JPEG grid
  * @param {number} every - seconds between two pictures
  * @param {number} count - how many pictures
  */

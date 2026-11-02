@@ -2,6 +2,7 @@
 
 ## Unveröffentlicht
 
+- Eine Vorschauleiste als JPEG neben WebP vom Browser angenommen, damit Safari mit seinem Proxy eine erzeugt.
 - Originalen, die Browser abspielen, einen Proxy nach der neuen Proxy-Bitratengrenze statt nach ihrer Auflösung gegeben und jeden Proxy unter ihr gehalten.
 - AV1 einen Proxy gegeben.
 - Den Proxy eines Videos im Browser erzeugt, der es in Deliver hochlädt, wo der Server kein ffmpeg hat.
