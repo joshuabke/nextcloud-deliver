@@ -52,6 +52,13 @@ async function open(source) {
 }
 
 /**
+ * @param {object} video - Mediabunny's video track of the original
+ * @param {number} maxHeight - the Proxy resolution
+ * @return {{width: number, height: number}} the Proxy's size
+ */
+const proxyOf = (video, maxHeight) => proxySize({ width: video.displayWidth, height: video.displayHeight }, maxHeight)
+
+/**
  * What the browser can do with a file, read from its headers only, so a
  * file on the server costs a few range requests (ADR 0019).
  *
@@ -98,13 +105,6 @@ export async function inspect(source, bytes, { maxHeight, maxBitrate }) {
 		input.dispose()
 	}
 }
-
-/**
- * @param {object} video - Mediabunny's video track of the original
- * @param {number} maxHeight - the Proxy resolution
- * @return {{width: number, height: number}} the Proxy's size
- */
-const proxyOf = (video, maxHeight) => proxySize({ width: video.displayWidth, height: video.displayHeight }, maxHeight)
 
 /** @return {Promise<FileSystemDirectoryHandle>} Deliver's folder in the browser's private file system */
 async function folder() {
