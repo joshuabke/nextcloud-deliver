@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { convertible, fits, needsProxy, plays, proxyBytes, proxySize, thumbGrid, thumbSlot, videoBitrate } from './proxyPlan.js'
+import { convertible, fits, needsProxy, plays, proxyBytes, proxySize, thumbGrid, thumbSlot, videoBitrate, whyNot } from './proxyPlan.js'
 
 const video = (codec, codecString) => ({ type: 'video', codec, codecString })
 const audio = (codec) => ({ type: 'audio', codec })
@@ -94,5 +94,18 @@ describe('the Thumbnail Strip the browser makes in the same pass', () => {
 		// fps=1/6 takes 2.96 s, 8.96 s
 		expect(thumbSlot({ every: 6, count: 600 }, 2.96)).toBe(0)
 		expect(thumbSlot({ every: 6, count: 600 }, 3)).toBe(1)
+	})
+})
+
+describe('why this browser makes no Proxy', () => {
+	const hevc = { codec: 'hevc' }
+	it.each([
+		['a codec other browsers may decode', { video: true, container: 'MP4', undecodable: hevc }, 'codec'],
+		['a track Mediabunny cannot name', { video: true, container: 'QuickTime File Format', undecodable: { codec: null } }, 'format'],
+		['HEVC in MPEG-TS, which the server cannot read', { video: true, container: 'MPEG Transport Stream', undecodable: hevc }, 'format'],
+		['E-AC-3 in an audio-only .m4a', { video: false, container: 'MP4', undecodable: { codec: 'eac3' } }, 'format'],
+		['nothing in the way before the encoder', { video: true, container: 'MP4', undecodable: undefined }, null],
+	])('%s', (_, file, reason) => {
+		expect(whyNot(file)).toBe(reason)
 	})
 })

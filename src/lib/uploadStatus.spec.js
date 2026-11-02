@@ -37,14 +37,17 @@ describe('upload status', () => {
 		expect(lines.map(({ kind, done }) => [kind, done])).toEqual([['proxy', false], ['thumbs', true]])
 		const browser = processingOf({ ...done({ id: 1 }), waveform: { progress: 100, state: 'ready' } })
 		expect(browser.map(({ kind, done }) => [kind, done])).toEqual([['browser', true]])
+		const decoding = processingOf({ ...done({ id: 1 }), waveform: { progress: 40, state: 'running' } })
+		expect(decoding.map(({ label, text }) => [label, text])).toEqual([['Waveform', 'Decoding 40 %']])
 	})
 
 	it('shows the Proxy this browser makes instead of the server\'s report of it, until it is there', () => {
 		const making = { ...done(derived({ proxy: 'running', thumbs: 'none' })), proxy: { progress: 40, state: 'running' } }
-		expect(processingOf(making).map(({ kind, text }) => [kind, text])).toEqual([['browserProxy', '40 %']])
+		expect(processingOf(making).map(({ kind, text }) => [kind, text])).toEqual([['browserProxy', 'Encoding 40 %']])
 		expect(settled(making)).toBe(false)
 		const uploading = { ...done(derived({ proxy: 'none' })), proxy: { progress: 10, state: 'uploading' } }
-		expect(processingOf(uploading)[0].text).toBe('Uploading, 10 %')
+		expect(processingOf(uploading)[0].text).toBe('Upload 10 %')
+		expect(processingOf(uploading)[0].label).toBe('Proxy')
 		expect(settled(uploading)).toBe(false)
 		const handing = { ...done(derived({ proxy: 'none' })), proxy: { progress: 100, state: 'handing' } }
 		expect(processingOf(handing)[0].text).toBe('Finishing on the server')

@@ -10,7 +10,8 @@ import axios from '@nextcloud/axios'
 import { generateRemoteUrl } from '@nextcloud/router'
 import { chunkSizeFor, errorMessage, getVersion, giveProxy, giveThumbs, giveWaveform, reportProxy } from '../api.js'
 import { t } from './l10n.js'
-import { convertible, fits, needsProxy, plays, proxyBytes, proxySize, THUMB_WIDTH, thumbGrid, thumbSlot, videoBitrate } from './proxyPlan.js'
+import { fits, needsProxy, plays, proxyBytes, proxySize, THUMB_WIDTH, thumbGrid, thumbSlot, videoBitrate, whyNot } from './proxyPlan.js'
+import { unsupported } from './unsupported.js'
 import { uploadFile } from './upload.js'
 import { addPeaks, BUCKETS, roundPeaks } from './waveform.js'
 
@@ -76,10 +77,11 @@ const proxyOf = (video, maxHeight) => proxySize({ width: video.displayWidth, hei
  * @param {object} settings - the server's
  * @param {number} settings.maxHeight - the Proxy resolution
  * @param {number} settings.maxBitrate - the Proxy bitrate threshold in Mbit/s
- * @return {Promise<{readable: boolean, playable: boolean, convertible: boolean, needsProxy: boolean, codec: ?string}>}
+ * @return {Promise<{readable: boolean, playable: boolean, convertible: boolean, needsProxy: boolean, reason: ?string, codec: ?string}>}
  *   whether Mediabunny reads it at all, whether browsers play it as it is, whether this browser can make its Proxy
  *   (it decodes the first picture and sound, encodes H.264, and the server reads the container's Frames), whether it
- *   gets one, and the codec it cannot decode, if that is what stands in the way
+ *   gets one, and what stands in the way: `reason` is 'codec' (this browser cannot decode `codec`, others may), 'format'
+ *   (no browser can help) or 'encoder' (this browser has no H.264 encoder)
  */
 export async function inspect(source, bytes, { maxHeight, maxBitrate }) {
 	const { canEncodeVideo } = await mediabunny()
@@ -87,7 +89,7 @@ export async function inspect(source, bytes, { maxHeight, maxBitrate }) {
 	try {
 		const format = await input.getFormat().catch(() => null)
 		if (!format) {
-			return { readable: false, playable: false, convertible: false, needsProxy: false, codec: null }
+			return { readable: false, playable: false, convertible: false, needsProxy: false, reason: 'format', codec: null }
 		}
 		const tracks = (await input.getTracks()).filter((track) => track.type === 'video' || track.type === 'audio')
 		const described = await Promise.all(tracks.map(async (track) => ({
@@ -101,13 +103,15 @@ export async function inspect(source, bytes, { maxHeight, maxBitrate }) {
 		// A Proxy carries the first picture and the first sound; the other tracks need not be decodable
 		const primary = [video, await input.getPrimaryAudioTrack()]
 		const undecodable = described.find((track, i) => primary.includes(tracks[i]) && !track.decodable)
+		// The encoder is asked for the Proxy, not the original: an 8K master or an odd anamorphic width still makes a 1080p Proxy
+		const reason = whyNot({ video: Boolean(video), container: format.name, undecodable })
+			?? (await canEncodeVideo('avc', { ...proxyOf(video, maxHeight), bitrate: videoBitrate(proxyOf(video, maxHeight), maxBitrate) }) ? null : 'encoder')
 		return {
 			readable: true,
 			playable,
-			convertible: Boolean(video) && !undecodable && convertible(format.name)
-				// Asked for the Proxy, not the original: an 8K master or an odd anamorphic width still makes a 1080p Proxy
-				&& await canEncodeVideo('avc', { ...proxyOf(video, maxHeight), bitrate: videoBitrate(proxyOf(video, maxHeight), maxBitrate) }),
+			convertible: reason === null,
 			needsProxy: Boolean(video) && needsProxy(playable, bytes, await input.computeDuration(), maxBitrate),
+			reason,
 			codec: undecodable?.codec ?? null,
 		}
 	} finally {
@@ -120,12 +124,7 @@ export async function inspect(source, bytes, { maxHeight, maxBitrate }) {
  * @return {string} why this browser cannot make a Proxy of the file
  */
 export function cannotConvert(seen) {
-	if (!seen?.readable) {
-		return t('deliver', 'This browser cannot read this file, and without ffmpeg the server cannot convert it.')
-	}
-	return seen.codec
-		? t('deliver', 'This browser cannot decode {codec}, and without ffmpeg the server cannot convert it. Another browser may.', { codec: seen.codec })
-		: t('deliver', 'This browser cannot convert this file, and without ffmpeg the server cannot either. Another browser may.')
+	return unsupported(seen, navigator.userAgent, navigator.maxTouchPoints)
 }
 
 /** @return {Promise<FileSystemDirectoryHandle>} Deliver's folder in the browser's private file system */
