@@ -4,6 +4,8 @@
 
 - Originalen, die Browser abspielen, einen Proxy nach der neuen Proxy-Bitratengrenze statt nach ihrer Auflösung gegeben und jeden Proxy unter ihr gehalten.
 - AV1 einen Proxy gegeben.
+- Den Proxy eines Videos im Browser erzeugt, der es in Deliver hochlädt, wo der Server kein ffmpeg hat.
+- Uploads abgelehnt, die der Browser weder abspielen noch umwandeln kann, wo der Server kein ffmpeg hat.
 - `POST /versions/{id}/proxy` und `POST /versions/{id}/proxy/progress` für Proxies ergänzt, die der hochladende Browser macht, wo der Server kein ffmpeg hat.
 
 ## 0.10.0 – 2026-10-31

@@ -18,6 +18,7 @@ export function settled(item) {
 		return false
 	}
 	const running = KINDS.some((kind) => ['queued', 'running'].includes(version.derived[kind]?.state))
+		|| ['running', 'uploading', 'handing'].includes(item.proxy?.state)
 	return !running && (version.playable !== null || Boolean(version.derived.error))
 }
 
@@ -55,6 +56,7 @@ export function timeLeft(seconds) {
 export function statusOf(item) {
 	switch (item.status) {
 		case 'waiting': return t('deliver', 'Waiting')
+		case 'checking': return t('deliver', 'Checking whether this browser can convert it')
 		case 'uploading': return `${Math.floor(item.loaded / Math.max(1, item.size) * 100)} %`
 		case 'finishing': return t('deliver', 'Finishing on the server')
 		case 'elsewhere': return {
@@ -97,10 +99,26 @@ export function processingOf(item) {
 			done: item.waveform.state === 'ready',
 		})
 	}
+	// The Proxy this browser makes where the server has no ffmpeg, also while the file still uploads (ADR 0019)
+	if (item.proxy && item.version?.derived?.proxy?.state !== 'ready') {
+		lines.push({
+			kind: 'browserProxy',
+			label: t('deliver', 'Proxy, in this browser'),
+			text: {
+				running: `${item.proxy.progress} %`,
+				uploading: t('deliver', 'Uploading, {percent} %', { percent: item.proxy.progress }),
+				handing: t('deliver', 'Finishing on the server'),
+				ready: t('deliver', 'Done'),
+				failed: item.proxy.error ?? t('deliver', 'Failed'),
+			}[item.proxy.state],
+			done: item.proxy.state === 'ready',
+		})
+	}
 	const derived = item.version?.derived
 	for (const kind of derived ? KINDS : []) {
 		const state = derived[kind]?.state
-		if (state === 'none' || state === undefined || (kind === 'waveform' && lines.length && state !== 'ready')) {
+		const fromBrowser = { waveform: item.waveform, proxy: item.proxy }[kind]
+		if (state === 'none' || state === undefined || (fromBrowser && state !== 'ready')) {
 			continue
 		}
 		lines.push({

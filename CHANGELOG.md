@@ -4,6 +4,8 @@
 
 - Give originals that browsers play a Proxy by the new Proxy bitrate threshold instead of their resolution, and keep every Proxy below it.
 - Give AV1 a Proxy.
+- Make the Proxy of a video in the browser that uploads it in Deliver, where the server has no ffmpeg.
+- Refuse uploads the browser can neither play nor convert, where the server has no ffmpeg.
 - Add `POST /versions/{id}/proxy` and `POST /versions/{id}/proxy/progress` for Proxies made by the uploading browser where the server has no ffmpeg.
 
 ## 0.10.0 – 2026-10-31

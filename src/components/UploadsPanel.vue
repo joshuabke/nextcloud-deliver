@@ -96,7 +96,8 @@ function repicked(event) {
  * @param {BeforeUnloadEvent} event - leaving the page
  */
 function warn(event) {
-	if (store.active.length > 0) {
+	// Also while this browser makes a Proxy: it is lost with the tab (ADR 0019)
+	if (store.active.length > 0 || store.converting) {
 		event.preventDefault()
 	}
 }
@@ -219,7 +220,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 						{{ t('deliver', 'MP4 and MOV with H.264, and WebM, play as they are.') }}
 						{{ hasFfmpeg
 							? t('deliver', 'Everything else ffmpeg reads, such as ProRes, H.265, MXF or AVI, plays as a Proxy.')
-							: t('deliver', 'ProRes, H.265, MXF, AVI and other formats need ffmpeg, which this server does not have.') }}
+							: t('deliver', 'ProRes, H.265 and AV1 become a Proxy in your browser while they upload, where it decodes them. MXF, AVI, DNxHD and other formats need ffmpeg, which this server does not have.') }}
 					</dd>
 					<dt>{{ t('deliver', 'Audio') }}</dt>
 					<dd>

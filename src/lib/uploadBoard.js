@@ -7,7 +7,7 @@
 import { sentElsewhere } from './upload.js'
 
 /** Statuses of an upload that is still going on in this tab */
-export const ACTIVE = ['waiting', 'uploading', 'finishing', 'paused']
+export const ACTIVE = ['waiting', 'checking', 'uploading', 'finishing', 'paused']
 /** Statuses of an upload this tab only shows: another tab sends it, or it stopped and waits for its file */
 export const MIRRORED = ['elsewhere', 'interrupted']
 

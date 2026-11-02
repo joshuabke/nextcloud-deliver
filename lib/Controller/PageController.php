@@ -10,6 +10,7 @@ use OCA\Deliver\Service\PipelineSettings;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
+use OCP\AppFramework\Http\ContentSecurityPolicy;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Services\IInitialState;
 use OCP\IRequest;
@@ -34,6 +35,14 @@ class PageController extends Controller {
 		$this->initialState->provideInitialState('ffmpeg', $this->ffmpeg->available());
 		// Where "New Project" makes its folder unless the Member picks another place (story 98)
 		$this->initialState->provideInitialState('projectFolder', $this->settings->get()['projectFolder']);
-		return new TemplateResponse(Application::APP_ID, 'index');
+		// Without ffmpeg the uploading browser makes Proxies to the server's rules (ADR 0019)
+		$this->initialState->provideInitialState('proxy', array_intersect_key($this->settings->get(), ['maxHeight' => 0, 'maxBitrate' => 0]));
+		$response = new TemplateResponse(Application::APP_ID, 'index');
+		// Its ProRes decoder and AAC encoder are WebAssembly, the decoder runs in workers made from blobs
+		$policy = new ContentSecurityPolicy();
+		$policy->allowEvalWasm(true);
+		$policy->addAllowedWorkerSrcDomain('blob:');
+		$response->setContentSecurityPolicy($policy);
+		return $response;
 	}
 }

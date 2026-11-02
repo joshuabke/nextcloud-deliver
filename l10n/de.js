@@ -496,7 +496,6 @@ OC.L10N.register(
 		"Pictures": "Bilder",
 		"Process again": "Erneut verarbeiten",
 		"Processing failed": "Verarbeitung fehlgeschlagen",
-		"ProRes, H.265, MXF, AVI and other formats need ffmpeg, which this server does not have.": "ProRes, H.265, MXF, AVI und andere Formate brauchen ffmpeg, das dieser Server nicht hat.",
 		"Ready": "Fertig",
 		"Running": "Läuft",
 		"Something failed": "Etwas ist fehlgeschlagen",
@@ -612,7 +611,15 @@ OC.L10N.register(
 		"Back to what Files gives": "Zurück zu dem, was Dateien gibt",
 		"Reset": "Zurücksetzen",
 		"No longer reaches the Project": "Erreicht das Projekt nicht mehr",
-		"This file is in review in a Project.": "Diese Datei ist in einem Projekt im Review."
+		"This file is in review in a Project.": "Diese Datei ist in einem Projekt im Review.",
+		"ProRes, H.265 and AV1 become a Proxy in your browser while they upload, where it decodes them. MXF, AVI, DNxHD and other formats need ffmpeg, which this server does not have.": "ProRes, H.265 und AV1 werden beim Hochladen in deinem Browser zum Proxy, wo er sie dekodieren kann. MXF, AVI, DNxHD und andere Formate brauchen ffmpeg, das dieser Server nicht hat.",
+		"Checking whether this browser can convert it": "Prüft, ob dieser Browser sie umwandeln kann",
+		"Proxy, in this browser": "Proxy, in diesem Browser",
+		"Uploading, {percent} %": "Wird hochgeladen, {percent} %",
+		"This browser cannot read this file, and without ffmpeg the server cannot convert it.": "Dieser Browser kann diese Datei nicht lesen, und ohne ffmpeg kann der Server sie nicht umwandeln.",
+		"This browser cannot decode {codec}, and without ffmpeg the server cannot convert it. Another browser may.": "Dieser Browser kann {codec} nicht dekodieren, und ohne ffmpeg kann der Server die Datei nicht umwandeln. Ein anderer Browser kann es vielleicht.",
+		"This browser has no room for the Proxy: {size} MB more are needed on this computer.": "Dieser Browser hat keinen Platz für den Proxy: Auf diesem Computer fehlen noch {size} MB.",
+		"This browser cannot convert this file, and without ffmpeg the server cannot either. Another browser may.": "Dieser Browser kann diese Datei nicht umwandeln, und ohne ffmpeg kann der Server es auch nicht. Ein anderer Browser kann es vielleicht."
 	},
 	"nplurals=2; plural=(n != 1);"
 );

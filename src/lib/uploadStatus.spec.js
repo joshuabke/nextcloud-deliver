@@ -38,4 +38,21 @@ describe('upload status', () => {
 		const browser = processingOf({ ...done({ id: 1 }), waveform: { progress: 100, state: 'ready' } })
 		expect(browser.map(({ kind, done }) => [kind, done])).toEqual([['browser', true]])
 	})
+
+	it('shows the Proxy this browser makes instead of the server\'s report of it, until it is there', () => {
+		const making = { ...done(derived({ proxy: 'running', thumbs: 'none' })), proxy: { progress: 40, state: 'running' } }
+		expect(processingOf(making).map(({ kind, text }) => [kind, text])).toEqual([['browserProxy', '40 %']])
+		expect(settled(making)).toBe(false)
+		const uploading = { ...done(derived({ proxy: 'none' })), proxy: { progress: 10, state: 'uploading' } }
+		expect(processingOf(uploading)[0].text).toBe('Uploading, 10 %')
+		expect(settled(uploading)).toBe(false)
+		const handing = { ...done(derived({ proxy: 'none' })), proxy: { progress: 100, state: 'handing' } }
+		expect(processingOf(handing)[0].text).toBe('Finishing on the server')
+		expect(settled(handing)).toBe(false)
+		const failed = { ...done(derived({ proxy: 'none' })), proxy: { state: 'failed', error: 'No room' } }
+		expect(processingOf(failed)[0].text).toBe('No room')
+		const there = { ...done(derived({ proxy: 'ready' })), proxy: { progress: 100, state: 'ready' } }
+		expect(processingOf(there).map(({ kind }) => kind)).toEqual(['proxy'])
+		expect(settled(there)).toBe(true)
+	})
 })
