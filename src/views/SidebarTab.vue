@@ -22,6 +22,7 @@ import {
 import { useBusy } from '../composables/busy.js'
 import { orDeletedProject } from '../composables/deletedProject.js'
 import { confirmProjectRemoval, confirmRemoval } from '../confirm.js'
+import { proxiesByFile } from '../filesUploads.js'
 import { n, t } from '../lib/l10n.js'
 
 // The Files app also sets folder, view and active on the web component; only node is used
@@ -53,6 +54,18 @@ const projectOptions = computed(() => [
 ])
 const assignedTo = computed(() => projectOptions.value.find((each) => each.id === asset.value?.projectId)
 	?? (asset.value ? { id: asset.value.projectId, label: asset.value.projectName ?? '' } : null))
+/** The Proxy this browser makes of the file it uploaded (ADR 0019), as far as it has got */
+const proxy = computed(() => {
+	const status = proxiesByFile[props.node?.fileid]
+	return status && {
+		checking: null,
+		running: `${status.progress} %`,
+		uploading: t('deliver', 'Uploading, {percent} %', { percent: status.progress }),
+		handing: t('deliver', 'Uploading, {percent} %', { percent: 100 }),
+		ready: t('deliver', 'Done'),
+		failed: status.error ?? t('deliver', 'Failed'),
+	}[status.state]
+})
 const appUrl = computed(() => {
 	if (asset.value) {
 		return generateUrl('/apps/deliver/versions/{id}', { id: asset.value.versionId })
@@ -242,6 +255,9 @@ async function remove() {
 			<template v-if="asset.state === 'missing'">
 				· {{ t('deliver', 'Missing') }}
 			</template>
+		</p>
+		<p v-if="proxy" class="deliver-tab__hint">
+			{{ t('deliver', 'Proxy, in this browser') }}: {{ proxy }}
 		</p>
 
 		<section v-if="isFolder && project && project.manages" class="deliver-tab__section">

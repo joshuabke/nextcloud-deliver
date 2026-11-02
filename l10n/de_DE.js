@@ -619,7 +619,15 @@ OC.L10N.register(
 		"This browser cannot read this file, and without ffmpeg the server cannot convert it.": "Dieser Browser kann diese Datei nicht lesen, und ohne ffmpeg kann der Server sie nicht umwandeln.",
 		"This browser cannot decode {codec}, and without ffmpeg the server cannot convert it. Another browser may.": "Dieser Browser kann {codec} nicht dekodieren, und ohne ffmpeg kann der Server die Datei nicht umwandeln. Ein anderer Browser kann es vielleicht.",
 		"This browser has no room for the Proxy: {size} MB more are needed on this computer.": "Dieser Browser hat keinen Platz für den Proxy: Auf diesem Computer fehlen noch {size} MB.",
-		"This browser cannot convert this file, and without ffmpeg the server cannot either. Another browser may.": "Dieser Browser kann diese Datei nicht umwandeln, und ohne ffmpeg kann der Server es auch nicht. Ein anderer Browser kann es vielleicht."
+		"This browser cannot convert this file, and without ffmpeg the server cannot either. Another browser may.": "Dieser Browser kann diese Datei nicht umwandeln, und ohne ffmpeg kann der Server es auch nicht. Ein anderer Browser kann es vielleicht.",
+		"Deliver is making the Proxy of {name} in this browser: {percent} %. Keep this tab open.": "Deliver erzeugt den Proxy von {name} in diesem Browser: {percent} %. Lassen Sie diesen Tab offen.",
+		"Deliver is uploading the Proxy of {name}: {percent} %. Keep this tab open.": "Deliver lädt den Proxy von {name} hoch: {percent} %. Lassen Sie diesen Tab offen.",
+		"Deliver could not make the Proxy of {name} in this browser.": "Deliver konnte den Proxy von {name} in diesem Browser nicht erzeugen.",
+		"Uploading the Proxy, {percent} %": "Proxy wird hochgeladen, {percent} %",
+		"Making the Proxy, {percent} %": "Proxy wird erzeugt, {percent} %",
+		"Another browser is making this Proxy, or it is there already.": "Ein anderer Browser erzeugt diesen Proxy schon, oder er ist schon da.",
+		"Make Proxy in this browser": "Proxy in diesem Browser erzeugen",
+		"This browser could not make the Proxy.": "Dieser Browser konnte den Proxy nicht erzeugen."
 	},
 	"nplurals=2; plural=(n != 1);"
 );

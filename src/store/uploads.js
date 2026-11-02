@@ -3,10 +3,10 @@ import axios from '@nextcloud/axios'
 import { loadState } from '@nextcloud/initial-state'
 import { generateRemoteUrl } from '@nextcloud/router'
 import { defineStore } from 'pinia'
-import { decodeInTurn, enableFile, errorMessage, getVersion, giveAudioWaveform, giveProxy, regenerateVersion, reportProxy } from '../api.js'
+import { chunkSizeFor, decodeInTurn, enableFile, errorMessage, getVersion, giveAudioWaveform, regenerateVersion } from '../api.js'
 import { t } from '../lib/l10n.js'
 import { mediaKind, reviewable } from '../lib/media.js'
-import { clearProxies, inspect, makeProxy, NoRoomError } from '../lib/proxy.js'
+import { cannotConvert, clearProxies, convertInTurn, handInProxy, inspect } from '../lib/proxy.js'
 import { current, HEARTBEAT, sameFile, uploadFile } from '../lib/upload.js'
 import { ACTIVE, mergeBoard, totals } from '../lib/uploadBoard.js'
 import { settled } from '../lib/uploadStatus.js'
@@ -26,26 +26,7 @@ const CANCEL = 'deliver.upload-cancel'
 /** Whether the server has ffmpeg (story 138); without it the uploading browser decodes the Waveform */
 export const hasFfmpeg = loadState('deliver', 'ffmpeg', true)
 /** The Proxy resolution and the Proxy bitrate threshold, for the Proxies this browser makes without ffmpeg (ADR 0019) */
-const proxySettings = loadState('deliver', 'proxy', { maxHeight: 1080, maxBitrate: 20 })
-/** Seconds between two reports of a Proxy's progress; the server takes a browser silent for two minutes as gone */
-const PROXY_REPORT = 15
-
-let converting = Promise.resolve()
-/**
- * Makes one Proxy after the other, so two masters do not fight over the
- * decoder, the encoder and the disk.
- *
- * @param {File} file - the original
- * @param {(percent: number) => void} onProgress - how far it is
- * @param {AbortSignal} signal - stops it
- * @return {Promise<{file: File, done: () => Promise<void>}>} the Proxy
- */
-function convertInTurn(file, onProgress, signal) {
-	const turn = converting.then(() => signal.aborted ? Promise.reject(new Error('cancelled')) : makeProxy(file, proxySettings, onProgress, signal))
-	converting = turn.catch(() => {})
-	return turn
-}
-
+export const proxySettings = loadState('deliver', 'proxy', { maxHeight: 1080, maxBitrate: 20 })
 /**
  * Why a file is not taken where the server has no ffmpeg: this browser can
  * neither play nor convert it (ADR 0019), so it would not play for anyone.
@@ -58,28 +39,11 @@ function refusal(seen, type) {
 	if (seen === null || seen.playable || (seen.convertible && type.startsWith('video/'))) {
 		return null
 	}
-	if (!seen.readable) {
-		// Mediabunny reads no such container; the browser may still play it as it is, as Safari does AIFF
-		return document.createElement(type.startsWith('audio/') ? 'audio' : 'video').canPlayType(type)
-			? null
-			: t('deliver', 'This browser cannot read this file, and without ffmpeg the server cannot convert it.')
+	// Mediabunny reads no such container; the browser may still play it as it is, as Safari does AIFF
+	if (!seen.readable && document.createElement(type.startsWith('audio/') ? 'audio' : 'video').canPlayType(type)) {
+		return null
 	}
-	return seen.codec
-		? t('deliver', 'This browser cannot decode {codec}, and without ffmpeg the server cannot convert it. Another browser may.', { codec: seen.codec })
-		: t('deliver', 'This browser cannot convert this file, and without ffmpeg the server cannot either. Another browser may.')
-}
-
-/**
- * The server's largest chunk (files.chunked_upload.max_size), at least the
- * 5 MiB an S3 multipart upload needs, at most 10000 chunks per file; 0 when
- * the admin switched chunking off.
- *
- * @param {number} size - the file's size
- * @return {number} the chunk size for it
- */
-function chunkSizeFor(size) {
-	const max = loadState('core', 'capabilities', {})?.files?.chunked_upload?.max_size ?? 10 * 1024 * 1024
-	return max > 0 ? Math.max(max, 5 * 1024 * 1024, Math.ceil(size / 10000)) : 0
+	return cannotConvert(seen)
 }
 
 /**
@@ -135,6 +99,8 @@ export const useUploadsStore = defineStore('uploads', {
 		/** Bytes per second, smoothed */
 		speed: 0,
 		running: false,
+		/** The Proxies this tab makes of Versions on the server, by Version id: { state, progress, error } */
+		proxies: {},
 	}),
 	getters: {
 		/**
@@ -156,7 +122,7 @@ export const useUploadsStore = defineStore('uploads', {
 		 * @param {object} state - the store's
 		 * @return {boolean} whether this browser is making or uploading a Proxy, which a closed tab would lose
 		 */
-		converting: (state) => state.items.some((item) => ['running', 'uploading', 'handing'].includes(item.proxy?.state)),
+		converting: (state) => [...state.items.map((item) => item.proxy), ...Object.values(state.proxies)].some((proxy) => ['running', 'uploading', 'handing'].includes(proxy?.state)),
 		/** Whether the card may be closed: nothing sends, here or in another tab, and nothing is being made */
 		closable() {
 			return this.active.length === 0 && this.items.every((item) => item.status !== 'elsewhere' && (item.status !== 'done' || settled(item)))
@@ -358,21 +324,9 @@ export const useUploadsStore = defineStore('uploads', {
 			const signal = item.controller.signal
 			// ... and the Proxy of a video that needs one is made while it goes up
 			if (!hasFfmpeg && item.seen?.needsProxy && !item.proxying) {
-				item.proxy = { progress: 0, state: 'running' }
+				item.proxy = { state: 'running', progress: 0, error: null }
 				item.proxyController = new AbortController()
-				item.proxying = convertInTurn(item.file, (progress) => {
-					item.proxy.progress = progress
-				}, item.proxyController.signal).catch((error) => {
-					if (item.proxy) {
-						item.proxy = {
-							state: 'failed',
-							error: error instanceof NoRoomError
-								? t('deliver', 'This browser has no room for the Proxy: {size} MB more are needed on this computer.', { size: Math.ceil(error.missing / 1e6) })
-								: null,
-						}
-					}
-					return null
-				})
+				item.proxying = convertInTurn(item.file, proxySettings, item.proxy, item.proxyController.signal)
 			}
 			// Without ffmpeg the browser makes the Waveform while the file goes up (story 137); a WAV's is read on the server
 			if (!hasFfmpeg && item.type.startsWith('audio/') && !/\.(wav|bwf)$/i.test(item.name) && !item.decoding) {
@@ -501,102 +455,44 @@ export const useUploadsStore = defineStore('uploads', {
 			}
 		},
 		/**
-		 * Reports the Proxy's progress while this browser makes it, then
-		 * uploads it next to the Version's file and hands it in (ADR 0019).
-		 * Only for a Version the Member manages: the server takes no Proxy
-		 * from anyone else.
+		 * Hands in the Proxy this browser makes of an upload (ADR 0019)
 		 *
 		 * @param {object} item - the upload
-		 * @param {{versionId: number, manages: boolean}} asset - its Asset
+		 * @param {{versionId: number}} asset - its Asset
 		 */
 		async handInProxy(item, asset) {
 			if (!item.proxying) {
 				return
 			}
-			if (!asset.manages) {
-				item.proxyController.abort()
-				item.proxying.then((made) => made?.done())
+			// The server takes no Proxy from a Member without Manage on the Version
+			if (!await handInProxy(asset.versionId, item.proxying, item.proxy, item.proxyController)) {
 				item.proxy = null
 				return
-			}
-			// Also while the Proxy uploads, which takes minutes for a long one: silent for two minutes, the server takes this tab as gone
-			let reported = Promise.resolve()
-			const report = () => {
-				if (['running', 'uploading'].includes(item.proxy?.state)) {
-					reported = reportProxy(asset.versionId, Math.min(99, item.proxy.state === 'running' ? item.proxy.progress : 99)).catch(() => {})
-				}
-			}
-			report()
-			const beat = setInterval(report, PROXY_REPORT * 1000)
-			try {
-				const made = await item.proxying
-				if (made === null) {
-					return
-				}
-				try {
-					// The server reads the original first if its background job has not yet, and says so while a worker is at it;
-					// it deletes every upload it looked at, so another try uploads the Proxy again
-					for (let attempt = 0; ; attempt++) {
-						item.proxy = { progress: 0, state: 'uploading' }
-						const fileId = await this.uploadProxy(item, made.file)
-						// No report may land while the server takes it: it would mark the Proxy as running again
-						item.proxy.state = 'handing'
-						await reported
-						try {
-							await giveProxy(asset.versionId, fileId)
-							break
-						} catch (error) {
-							if (error.response?.status !== 409 || attempt >= 12 || !/not read yet/.test(errorMessage(error) ?? '')) {
-								throw error
-							}
-							await new Promise((resolve) => setTimeout(resolve, 5000))
-						}
-					}
-					item.proxy = { progress: 100, state: 'ready' }
-				} catch (error) {
-					item.proxy = { state: 'failed', error: error.response ? errorMessage(error) : null }
-				} finally {
-					await made.done()
-				}
-			} finally {
-				clearInterval(beat)
 			}
 			await this.refresh(item)
 			this.watch()
 		},
 		/**
-		 * Uploads a Proxy next to the master, under a name without a media
-		 * extension so that Auto Intake passes it by; deleted again when it
-		 * does not arrive.
+		 * The fallback on the Asset card (ADR 0019): makes the Proxy of a
+		 * Version already on the server in this browser, from its file over
+		 * range requests, and hands it in. Never starts on its own.
 		 *
-		 * @param {object} item - the master's upload
-		 * @param {File} file - the Proxy
-		 * @return {Promise<number>} its file id
+		 * @param {{id: number, url: string}} version - the Version, with the WebDAV URL of its file
+		 * @return {Promise<object>} how it ended: ready or failed, with the reason
 		 */
-		async uploadProxy(item, file) {
-			const target = item.target.slice(0, item.target.lastIndexOf('/')) + '/.deliver-proxy-' + Math.random().toString(36).slice(2)
-			try {
-				return await uploadFile({
-					request: axios.request,
-					file,
-					target,
-					uploadsUrl: generateRemoteUrl('dav') + '/uploads/' + encodeURIComponent(getCurrentUser()?.uid ?? ''),
-					chunkSize: chunkSizeFor(file.size),
-					onProgress: (loaded) => {
-						item.proxy.progress = Math.floor(loaded / Math.max(1, file.size) * 100)
-					},
-					env: {
-						signal: item.proxyController.signal,
-						online: () => navigator.onLine,
-						untilOnline: () => new Promise((resolve) => window.addEventListener('online', resolve, { once: true })),
-						sleep: (seconds) => new Promise((resolve) => setTimeout(resolve, seconds * 1000)),
-						onPause: () => {},
-					},
-				})
-			} catch (error) {
-				axios.delete(target).catch(() => {})
-				throw error
+		async makeProxy(version) {
+			this.proxies[version.id] = { state: 'checking', progress: 0, error: null }
+			const status = this.proxies[version.id]
+			// Another tab or Member may have started it since this view was read
+			const now = (await getVersion(version.id).catch(() => null))?.versions.find((each) => each.id === version.id)
+			if (!now?.proxyFromBrowser) {
+				delete this.proxies[version.id]
+				return { state: 'failed', error: t('deliver', 'Another browser is making this Proxy, or it is there already.') }
 			}
+			const controller = new AbortController()
+			await handInProxy(version.id, convertInTurn(version.url, proxySettings, status, controller.signal), status, controller)
+			delete this.proxies[version.id]
+			return status
 		},
 		/**
 		 * @param {object} item - a finished upload, whose Version is read again

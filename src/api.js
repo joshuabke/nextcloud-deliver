@@ -1,5 +1,6 @@
 import { getCurrentUser } from '@nextcloud/auth'
 import axios from '@nextcloud/axios'
+import { loadState } from '@nextcloud/initial-state'
 import { getLanguage } from '@nextcloud/l10n'
 import { generateOcsUrl, generateRemoteUrl, generateUrl } from '@nextcloud/router'
 import { t } from './lib/l10n.js'
@@ -22,9 +23,24 @@ export function usePublicApi(token) {
 const url = (path) => publicBase === null ? generateOcsUrl('apps/deliver/api/v1' + path) : publicBase + path
 const data = (response) => response.data?.ocs?.data ?? response.data
 
+/**
+ * The server's largest chunk (files.chunked_upload.max_size), at least the
+ * 5 MiB an S3 multipart upload needs, at most 10000 chunks per file; 0 when
+ * the admin switched chunking off.
+ *
+ * @param {number} size - the file's size
+ * @return {number} the chunk size for it
+ */
+export function chunkSizeFor(size) {
+	const max = loadState('core', 'capabilities', {})?.files?.chunked_upload?.max_size ?? 10 * 1024 * 1024
+	return max > 0 ? Math.max(max, 5 * 1024 * 1024, Math.ceil(size / 10000)) : 0
+}
+
 export const listProjects = () => axios.get(url('/projects')).then(data)
 export const getProject = (id) => axios.get(url(`/projects/${id}`)).then(data)
 export const getProjectForFolder = (folderId) => axios.get(url(`/folders/${folderId}/project`)).then(data)
+// Whether the browser makes the Proxies of what the Files app uploads into a folder, and to which settings (ADR 0019)
+export const getIntake = (folderId) => axios.get(url(`/folders/${folderId}/intake`)).then(data)
 export const createProject = (folderId, autoIntake = true) => axios.post(url('/projects'), { folderId, autoIntake }).then(data)
 // A Project by name, which collects files from anywhere (ADR 0009)
 export const createNamedProject = (name) => axios.post(url('/projects'), { name }).then(data)

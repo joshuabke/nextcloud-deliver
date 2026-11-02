@@ -7,6 +7,9 @@
 - Make the Proxy of a video in the browser that uploads it in Deliver, where the server has no ffmpeg.
 - Refuse uploads the browser can neither play nor convert, where the server has no ffmpeg.
 - Add `POST /versions/{id}/proxy` and `POST /versions/{id}/proxy/progress` for Proxies made by the uploading browser where the server has no ffmpeg.
+- Add "Make Proxy in this browser" on the Asset card for Versions without their Proxy, where the server has no ffmpeg.
+- Make the Proxy of a video uploaded in the Files app into a Folder Project with Auto Intake in the uploading browser, where the server has no ffmpeg.
+- Add `GET /folders/{folderId}/intake`.
 
 ## 0.10.0 – 2026-10-31
 

@@ -23,12 +23,20 @@ class NextcloudClient {
 	/** @return array{status: int, body: string} */
 	public function request(string $method, string $path, ?string $body = null, array $headers = []): array {
 		$ch = $this->handle();
+		$received = [];
 		curl_setopt_array($ch, [
 			CURLOPT_URL => $this->baseUrl . $path,
 			CURLOPT_CUSTOMREQUEST => $method,
 			CURLOPT_RETURNTRANSFER => true,
 			CURLOPT_USERPWD => $this->user . ':' . $this->password,
 			CURLOPT_HTTPHEADER => array_merge(['OCS-APIREQUEST: true'], $headers),
+			CURLOPT_HEADERFUNCTION => static function ($ch, string $line) use (&$received): int {
+				$parts = explode(':', $line, 2);
+				if (count($parts) === 2) {
+					$received[strtolower(trim($parts[0]))] = trim($parts[1]);
+				}
+				return strlen($line);
+			},
 		]);
 		if ($body !== null) {
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
@@ -38,7 +46,7 @@ class NextcloudClient {
 			throw new \RuntimeException('curl: ' . curl_error($ch));
 		}
 		$status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-		return ['status' => $status, 'body' => (string)$response];
+		return ['status' => $status, 'body' => (string)$response, 'headers' => $received];
 	}
 
 	/**

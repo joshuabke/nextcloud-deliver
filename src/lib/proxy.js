@@ -5,12 +5,20 @@
  * private file system (OPFS), so neither the original nor the Proxy has to
  * fit into memory. The rules come from proxyPlan.js.
  */
+import { getCurrentUser } from '@nextcloud/auth'
+import axios from '@nextcloud/axios'
+import { generateRemoteUrl } from '@nextcloud/router'
+import { chunkSizeFor, errorMessage, getVersion, giveProxy, reportProxy } from '../api.js'
+import { t } from './l10n.js'
 import { convertible, fits, needsProxy, plays, proxyBytes, proxySize, videoBitrate } from './proxyPlan.js'
+import { uploadFile } from './upload.js'
 
 /** Deliver's folder in the browser's private file system */
 const FOLDER = 'deliver-proxies'
 /** Each file there is held under a Web Lock of this name and its own until it is handed in, in whichever tab, so clearing passes it by */
 const LOCK = 'deliver-proxy:'
+/** Seconds between two reports of a Proxy's progress; the server takes a browser silent for two minutes as gone */
+const REPORT = 15
 
 /** Thrown when the browser has no room for the Proxy; `missing` says how many bytes */
 export class NoRoomError extends Error {
@@ -104,6 +112,19 @@ export async function inspect(source, bytes, { maxHeight, maxBitrate }) {
 	} finally {
 		input.dispose()
 	}
+}
+
+/**
+ * @param {?object} seen - what inspect() found, null when it could not look
+ * @return {string} why this browser cannot make a Proxy of the file
+ */
+export function cannotConvert(seen) {
+	if (!seen?.readable) {
+		return t('deliver', 'This browser cannot read this file, and without ffmpeg the server cannot convert it.')
+	}
+	return seen.codec
+		? t('deliver', 'This browser cannot decode {codec}, and without ffmpeg the server cannot convert it. Another browser may.', { codec: seen.codec })
+		: t('deliver', 'This browser cannot convert this file, and without ffmpeg the server cannot either. Another browser may.')
 }
 
 /** @return {Promise<FileSystemDirectoryHandle>} Deliver's folder in the browser's private file system */
@@ -246,5 +267,150 @@ async function check(file, original) {
 		}
 	} finally {
 		input.dispose()
+	}
+}
+
+let converting = Promise.resolve()
+/**
+ * Makes one Proxy after the other in this tab, so two masters do not fight
+ * over the decoder, the encoder and the disk.
+ *
+ * @param {Blob|string} source - the original, or its URL
+ * @param {{maxHeight: number, maxBitrate: number}} settings - the server's Proxy resolution and threshold
+ * @param {{state: string, progress: number, error: ?string}} status - kept up to date: running, then failed if it does
+ * @param {AbortSignal} signal - stops it
+ * @return {Promise<?{file: File, done: () => Promise<void>}>} the Proxy, null when it failed or was stopped
+ */
+export function convertInTurn(source, settings, status, signal) {
+	Object.assign(status, { state: 'running', progress: 0, error: null })
+	const turn = converting.then(() => signal.aborted
+		? Promise.reject(new Error('cancelled'))
+		: makeProxy(source, settings, (progress) => { status.progress = progress }, signal))
+	converting = turn.catch(() => {})
+	return turn.catch((error) => {
+		Object.assign(status, {
+			state: 'failed',
+			error: error instanceof NoRoomError
+				? t('deliver', 'This browser has no room for the Proxy: {size} MB more are needed on this computer.', { size: Math.ceil(error.missing / 1e6) })
+				: null,
+		})
+		return null
+	})
+}
+
+/**
+ * Stops a Proxy that is not handed in, deletes it once it is made and
+ * settles its status, so nothing waits on it and the tab closes without a
+ * warning.
+ *
+ * @param {Promise<?{done: () => Promise<void>}>} making - from convertInTurn
+ * @param {{state: string}} status - its; stopped
+ * @param {AbortController} controller - stops the conversion
+ */
+export function dropProxy(making, status, controller) {
+	controller.abort()
+	making.then((made) => made?.done())
+	status.state = 'stopped'
+}
+
+/**
+ * Hands in a Proxy this browser makes, the same way for an upload in
+ * Deliver, one in the Files app and the fallback on the Asset card (ADR
+ * 0019): it reports the progress while the Proxy is made and uploaded,
+ * uploads it next to the Version's file and hands it in. Only a Member with
+ * Manage on the Version hands in; for anyone else the Proxy is stopped.
+ *
+ * @param {number} versionId - the Version
+ * @param {Promise<?{file: File, done: () => Promise<void>}>} making - from convertInTurn
+ * @param {{state: string, progress: number, error: ?string}} status - its, as convertInTurn keeps it, then uploading, handing, ready, failed or stopped
+ * @param {AbortController} controller - stops the Proxy
+ * @return {Promise<boolean>} false when this Member may not hand it in
+ */
+export async function handInProxy(versionId, making, status, controller) {
+	const context = await getVersion(versionId).catch(() => null)
+	const url = context?.versions.find((each) => each.id === versionId)?.url
+	if (!context?.manages || !url) {
+		dropProxy(making, status, controller)
+		return false
+	}
+	// Also while the Proxy uploads, which takes minutes for a long one: silent for two minutes, the server takes this tab as gone
+	let reported = Promise.resolve()
+	const report = () => {
+		if (['running', 'uploading'].includes(status.state)) {
+			reported = reportProxy(versionId, Math.min(99, status.state === 'running' ? status.progress : 99)).catch(() => {})
+		}
+	}
+	report()
+	const beat = setInterval(report, REPORT * 1000)
+	try {
+		const made = await making
+		if (made === null) {
+			return true
+		}
+		try {
+			// The server reads the original first if its background job has not yet, and says so while a worker is at it;
+			// it deletes every upload it looked at, so another try uploads the Proxy again
+			for (let attempt = 0; ; attempt++) {
+				Object.assign(status, { state: 'uploading', progress: 0 })
+				const fileId = await uploadNextTo(url, made.file, status, controller.signal)
+				// No report may land while the server takes it: it would mark the Proxy as running again
+				status.state = 'handing'
+				await reported
+				try {
+					await giveProxy(versionId, fileId)
+					break
+				} catch (error) {
+					if (error.response?.status !== 409 || attempt >= 12 || !/not read yet/.test(errorMessage(error) ?? '')) {
+						throw error
+					}
+					await new Promise((resolve) => setTimeout(resolve, 5000))
+				}
+			}
+			Object.assign(status, { state: 'ready', progress: 100 })
+		} catch (error) {
+			Object.assign(status, { state: 'failed', error: error.response ? errorMessage(error) : null })
+		} finally {
+			await made.done()
+		}
+	} finally {
+		clearInterval(beat)
+	}
+	return true
+}
+
+/**
+ * Uploads a Proxy next to the Version's file, under a name without a media
+ * extension so that Auto Intake passes it by; deleted again when it does
+ * not arrive.
+ *
+ * @param {string} url - the WebDAV URL of the Version's file
+ * @param {File} file - the Proxy
+ * @param {{progress: number}} status - gets how much of it is up
+ * @param {AbortSignal} signal - stops it
+ * @return {Promise<number>} its file id
+ */
+async function uploadNextTo(url, file, status, signal) {
+	const target = url.slice(0, url.lastIndexOf('/')) + '/.deliver-proxy-' + Math.random().toString(36).slice(2)
+	try {
+		return await uploadFile({
+			request: axios.request,
+			file,
+			target,
+			uploadsUrl: generateRemoteUrl('dav') + '/uploads/' + encodeURIComponent(getCurrentUser()?.uid ?? ''),
+			chunkSize: chunkSizeFor(file.size),
+			onProgress: (loaded) => {
+				status.progress = Math.floor(loaded / Math.max(1, file.size) * 100)
+			},
+			env: {
+				signal,
+				online: () => navigator.onLine,
+				untilOnline: () => new Promise((resolve) => window.addEventListener('online', resolve, { once: true })),
+				sleep: (seconds) => new Promise((resolve) => setTimeout(resolve, seconds * 1000)),
+				onPause: () => {},
+			},
+		})
+	} catch (error) {
+		axios.delete(target).catch(() => {})
+		throw error
 	}
 }

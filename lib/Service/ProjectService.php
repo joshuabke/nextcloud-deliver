@@ -112,6 +112,28 @@ class ProjectService {
 	}
 
 	/**
+	 * Whether the browser makes the Proxies of the videos the Files app
+	 * uploads into a folder (ADR 0019): Auto Intake of the Folder Project
+	 * above it takes them in, the Member manages that Project, and the server
+	 * has no ffmpeg. Asked once per folder, before the upload has a file.
+	 *
+	 * @return array{proxy: ?array{maxHeight: int, maxBitrate: int}} the Proxy resolution and threshold to make them with, null when the browser makes none
+	 * @throws NotFoundException the folder is out of reach
+	 */
+	public function intake(string $uid, int $folderId): array {
+		$home = $this->root->getUserFolder($uid);
+		$folder = $home->getFirstNodeById($folderId);
+		if (!$folder instanceof Folder) {
+			throw new NotFoundException('Folder not found');
+		}
+		$project = $this->projects->findAbove($folder);
+		$makes = $project !== null && !$project->isDeleted() && $project->getAutoIntake()
+			&& $this->mayEdit($project, $this->access->folderOf($project, $home), $uid)
+			&& $this->media->withoutFfmpeg();
+		return ['proxy' => $makes ? ['maxHeight' => $this->media->maxHeight(), 'maxBitrate' => $this->media->maxBitrate()] : null];
+	}
+
+	/**
 	 * The Project with the Assets this Member can open, after Auto Intake
 	 * looked at its folder and its Missing Versions were looked at again:
 	 * deleting from the trash fires no event Deliver can listen to.
@@ -673,7 +695,14 @@ class ProjectService {
 		$file = $file instanceof File ? $file : null;
 		$media = $this->urls->linkToRoute('deliver.media.show', ['id' => $version->getId(), 'kind' => '__kind__']);
 		return $this->describeVersion($version, $this->settingsOf($version), $file === null ? null : $this->davUrl($uid, $file), $media)
-			+ ['mimeType' => $file?->getMimeType(), 'manages' => $grant->manages(), 'deliveredBy' => $this->deliveredBy($version), 'createdAt' => $version->getCreatedAt()];
+			+ [
+				'mimeType' => $file?->getMimeType(),
+				'manages' => $grant->manages(),
+				'deliveredBy' => $this->deliveredBy($version),
+				'createdAt' => $version->getCreatedAt(),
+				// Read again before a browser starts the Proxy, as another may have meanwhile (ADR 0019)
+				'proxyFromBrowser' => $file !== null && $this->media->proxyFromBrowser($version, (int)$file->getSize()),
+			];
 	}
 
 	/** Who delivered the Version, for Members only; null when nobody's request did */
@@ -1275,6 +1304,8 @@ class ProjectService {
 			$path = null;
 			foreach ($stack as $version) {
 				$file = $files[$version->getId()] ?? null;
+				// A browser that stopped reporting on its Proxy shows here too, so its fallback appears
+				$this->media->lapse($version);
 				if ($file !== null && $path === null) {
 					$path = $this->pathOf($file, $folder, $home);
 				}
@@ -1311,6 +1342,8 @@ class ProjectService {
 						[$version->getProxyState(), $version->getThumbsState(), $version->getWaveformState()],
 						true,
 					) || ($version->getPlayable() === null && $version->getDerivedError() !== null),
+					// Without ffmpeg, a Member with Manage may make its Proxy in the browser (ADR 0019)
+					'proxyFromBrowser' => $file !== null && $this->media->proxyFromBrowser($version, (int)$file->getSize()),
 				];
 			}
 			$newestFile = $files[$newestByAsset[$asset->getId()]->getId()] ?? null;
