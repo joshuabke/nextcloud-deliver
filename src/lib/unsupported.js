@@ -35,9 +35,10 @@ export function browserName(userAgent) {
 /**
  * @param {?object} seen - what inspect() found, null when it could not look
  * @param {string} userAgent - the browser's
+ * @param {number} [touchPoints] - the screen's, to tell an iPad that reports a Mac
  * @return {string} why this browser cannot make a Proxy of the file
  */
-export function unsupported(seen, userAgent) {
+export function unsupported(seen, userAgent, touchPoints = 0) {
 	if (!seen) {
 		return t('deliver', 'Could not read the file.')
 	}
@@ -45,7 +46,7 @@ export function unsupported(seen, userAgent) {
 		return t('deliver', 'This format needs ffmpeg, which this server does not have.')
 	}
 	// Every browser on an iPhone or iPad is WebKit, so another one would not help
-	if (/iPhone|iPad|iPod/.test(userAgent)) {
+	if (/iPhone|iPad|iPod/.test(userAgent) || (/Macintosh/.test(userAgent) && touchPoints > 1)) {
 		return seen.reason === 'codec'
 			? t('deliver', '{codec} is not supported on this device.', { codec: codecName(seen.codec) })
 			: t('deliver', 'This device cannot make Proxies.')

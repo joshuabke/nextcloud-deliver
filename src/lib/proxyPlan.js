@@ -41,6 +41,23 @@ export function family(format) {
 export const convertible = (format) => ['mp4', 'webm', 'matroska'].includes(family(format))
 
 /**
+ * Why this browser makes no Proxy before its encoder is asked. A format no browser
+ * helps with comes first, so no one is sent elsewhere for HEVC in MPEG-TS or E-AC-3 in an .m4a.
+ *
+ * @param {object} file - what the headers say
+ * @param {boolean} file.video - whether it has a picture
+ * @param {string} file.container - Mediabunny's name for its container
+ * @param {?{codec: ?string}} file.undecodable - the first picture or sound this browser cannot decode
+ * @return {?string} 'format' where no browser helps, 'codec' where another may, null where the encoder is next
+ */
+export function whyNot({ video, container, undecodable }) {
+	if (!video || !convertible(container) || (undecodable && !undecodable.codec)) {
+		return 'format'
+	}
+	return undecodable ? 'codec' : null
+}
+
+/**
  * Whether browsers play a file as it is, as the server decides it: every
  * track must be one they play (DerivedMedia::browserPlays).
  *

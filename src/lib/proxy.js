@@ -10,7 +10,7 @@ import axios from '@nextcloud/axios'
 import { generateRemoteUrl } from '@nextcloud/router'
 import { chunkSizeFor, errorMessage, getVersion, giveProxy, giveThumbs, giveWaveform, reportProxy } from '../api.js'
 import { t } from './l10n.js'
-import { convertible, fits, needsProxy, plays, proxyBytes, proxySize, THUMB_WIDTH, thumbGrid, thumbSlot, videoBitrate } from './proxyPlan.js'
+import { fits, needsProxy, plays, proxyBytes, proxySize, THUMB_WIDTH, thumbGrid, thumbSlot, videoBitrate, whyNot } from './proxyPlan.js'
 import { unsupported } from './unsupported.js'
 import { uploadFile } from './upload.js'
 import { addPeaks, BUCKETS, roundPeaks } from './waveform.js'
@@ -103,17 +103,9 @@ export async function inspect(source, bytes, { maxHeight, maxBitrate }) {
 		// A Proxy carries the first picture and the first sound; the other tracks need not be decodable
 		const primary = [video, await input.getPrimaryAudioTrack()]
 		const undecodable = described.find((track, i) => primary.includes(tracks[i]) && !track.decodable)
-		// Why not, in the order the answer matters to the user: a codec other browsers may decode, a format no browser
-		// helps with (a track Mediabunny cannot name, no picture, a container the server cannot read), this browser's encoder
-		// (the encoder is asked for the Proxy, not the original: an 8K master or an odd anamorphic width still makes a 1080p Proxy)
-		let reason = null
-		if (undecodable?.codec) {
-			reason = 'codec'
-		} else if (undecodable || !video || !convertible(format.name)) {
-			reason = 'format'
-		} else if (!await canEncodeVideo('avc', { ...proxyOf(video, maxHeight), bitrate: videoBitrate(proxyOf(video, maxHeight), maxBitrate) })) {
-			reason = 'encoder'
-		}
+		// The encoder is asked for the Proxy, not the original: an 8K master or an odd anamorphic width still makes a 1080p Proxy
+		const reason = whyNot({ video: Boolean(video), container: format.name, undecodable })
+			?? (await canEncodeVideo('avc', { ...proxyOf(video, maxHeight), bitrate: videoBitrate(proxyOf(video, maxHeight), maxBitrate) }) ? null : 'encoder')
 		return {
 			readable: true,
 			playable,
@@ -132,7 +124,7 @@ export async function inspect(source, bytes, { maxHeight, maxBitrate }) {
  * @return {string} why this browser cannot make a Proxy of the file
  */
 export function cannotConvert(seen) {
-	return unsupported(seen, navigator.userAgent)
+	return unsupported(seen, navigator.userAgent, navigator.maxTouchPoints)
 }
 
 /** @return {Promise<FileSystemDirectoryHandle>} Deliver's folder in the browser's private file system */

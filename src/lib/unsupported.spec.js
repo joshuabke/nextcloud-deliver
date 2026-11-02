@@ -30,6 +30,11 @@ describe('why a file does not become a Proxy', () => {
 		expect(unsupported({ reason: 'encoder' }, IPHONE_CHROME)).toBe('This device cannot make Proxies.')
 	})
 
+	it('takes an iPad that reports a Mac for one', () => {
+		expect(unsupported({ reason: 'codec', codec: 'av1' }, SAFARI, 5)).toBe('AV1 is not supported on this device.')
+		expect(unsupported({ reason: 'codec', codec: 'av1' }, SAFARI, 0)).toBe('AV1 is not supported in Safari. Please use another browser.')
+	})
+
 	it('says the browser cannot make Proxies where it has no H.264 encoder', () => {
 		expect(unsupported({ reason: 'encoder', codec: null }, EDGE)).toBe('Edge cannot make Proxies. Please use another browser.')
 		expect(unsupported({ reason: 'encoder', codec: null }, OPERA)).toBe('This browser cannot make Proxies. Please use another browser.')
