@@ -55,7 +55,8 @@ class Encoder {
 		// Keyframes, and the ceiling of the bitrate when there is one
 		$pace = ['-g', (string)max(1, $gop)];
 		if ($maxrate !== null) {
-			array_push($pace, '-maxrate', $maxrate . 'k', '-bufsize', $maxrate . 'k');
+			// A buffer of half a second's worth: the encoder goes above the ceiling by that at most, spread over the whole length
+			array_push($pace, '-maxrate', $maxrate . 'k', '-bufsize', intdiv($maxrate, 2) . 'k');
 		}
 		return match ($kind) {
 			self::VAAPI => [

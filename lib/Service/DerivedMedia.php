@@ -280,8 +280,8 @@ class DerivedMedia {
 	private function proxyArgs(Version $version, string $path, string $encoder, string $output): array {
 		$num = $version->getFpsNum();
 		$den = $version->getFpsDen();
-		// A keyframe every second, so seeking stays quick
-		$args = $this->encoder->args($encoder, $this->maxHeight(), $num && $den ? (int)round($num / $den) : 25, $this->maxBitrate() * 1000 - self::AUDIO_KBPS);
+		// A keyframe every second, so seeking stays quick; a tenth below the threshold leaves room for the encoder's overshoot
+		$args = $this->encoder->args($encoder, $this->maxHeight(), $num && $den ? (int)round($num / $den) : 25, (int)($this->maxBitrate() * 900) - self::AUDIO_KBPS);
 		return [
 			...$args['input'],
 			...Ffmpeg::input($path),
@@ -453,7 +453,8 @@ class DerivedMedia {
 		// The upload may be quicker than the background job that reads the original
 		if ($version->getPlayable() === null) {
 			$job = $this->jobs->findPending($version->getId(), Job::KIND_PROBE);
-			if ($job !== null && $this->jobs->claim($job, self::BROWSER, $this->time->getTime())) {
+			// Claimed as by any worker: should the request die, the probe is queued again like theirs
+			if ($job !== null && $this->jobs->claim($job, 'request', $this->time->getTime())) {
 				$this->process($job);
 			}
 			$version = $this->versions->find($version->getId()) ?? throw new \RuntimeException('The Version is gone');
@@ -466,23 +467,25 @@ class DerivedMedia {
 			throw new ProjectConflictException('This Version plays without a Proxy');
 		}
 		$error = $this->mismatch($version, $probed, $this->container->read($candidate));
+		if ($error === null) {
+			$stream = $upload->fopen('r');
+			try {
+				$this->put($version, 'proxy', $stream);
+			} finally {
+				if (is_resource($stream)) {
+					fclose($stream);
+				}
+			}
+		}
+		// Only now: should storing fail, the browser's job lapses and the Proxy counts as missing again
 		$job = $this->jobs->findPending($version->getId(), Job::KIND_PROXY);
 		if ($job !== null) {
 			$this->jobs->delete($job);
 		}
+		$this->mark($version->getId(), Job::KIND_PROXY, $error === null ? self::STATE_READY : self::STATE_FAILED, $error);
 		if ($error !== null) {
-			$this->mark($version->getId(), Job::KIND_PROXY, self::STATE_FAILED, $error);
 			throw new InvalidRequestException($error);
 		}
-		$stream = $upload->fopen('r');
-		try {
-			$this->put($version, 'proxy', $stream);
-		} finally {
-			if (is_resource($stream)) {
-				fclose($stream);
-			}
-		}
-		$this->mark($version->getId(), Job::KIND_PROXY, self::STATE_READY);
 	}
 
 	/** @throws ProjectConflictException the server makes Proxies, or the Version has one */
@@ -508,15 +511,22 @@ class DerivedMedia {
 		if (min((int)($picture['width'] ?? 0), (int)($picture['height'] ?? 0)) > $this->maxHeight()) {
 			return 'The Proxy is larger than the Proxy resolution';
 		}
+		if ($version->getHasAudio() && !array_filter($this->probe->streams($proxy), static fn (array $stream) => ($stream['codec_type'] ?? '') === 'audio')) {
+			return 'The Proxy has no sound, the original has';
+		}
 		$num = (int)$version->getFpsNum();
 		$den = (int)$version->getFpsDen();
-		// The original's own count where its headers tell, else the length the probe found
-		$frames = (int)($this->videoOf($original)['nb_frames'] ?? $version->getDurationFrames());
-		if ($num < 1 || $den < 1 || (int)($picture['nb_frames'] ?? -1) !== $frames) {
+		$made = (int)($picture['nb_frames'] ?? -1);
+		$frames = $this->videoOf($original)['nb_frames'] ?? null;
+		if ($num < 1 || $den < 1 || $frames !== null && $made !== (int)$frames) {
 			return "The Proxy has other Frames than the original's $frames";
 		}
+		// WebM and MKV do not count their Frames, and their length includes the sound, which may run on a little
+		if ($frames === null && abs($made - (int)$version->getDurationFrames()) > max(1, (int)round($num / $den / 5))) {
+			return 'The Proxy has other Frames than the original\'s ' . (int)$version->getDurationFrames();
+		}
 		// Within half a Frame over the whole length, so the rate cannot drift a Frame anywhere
-		if (abs((float)($picture['duration'] ?? 0) - $frames * $den / $num) > $den / $num / 2) {
+		if (abs((float)($picture['duration'] ?? 0) - $made * $den / $num) > $den / $num / 2) {
 			return 'The Proxy runs at another frame rate than the original';
 		}
 		return null;

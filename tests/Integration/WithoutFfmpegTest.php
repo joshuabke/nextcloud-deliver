@@ -191,10 +191,11 @@ class WithoutFfmpegTest extends TestCase {
 	/** @return array<string, array{string, string}> */
 	public static function wrongProxies(): array {
 		return [
-			'a Frame short' => ['-f lavfi -i testsrc=size=640x360:rate=25:duration=1.96 -c:v libx264 -pix_fmt yuv420p', 'other Frames'],
-			'another frame rate' => ['-f lavfi -i testsrc=size=640x360:rate=50:duration=1 -c:v libx264 -pix_fmt yuv420p -r 50', 'another frame rate'],
-			'not playable' => ['-f lavfi -i testsrc=size=640x360:rate=25:duration=2 -c:v libx264 -pix_fmt yuv422p', 'no H.264/AAC MP4'],
-			'above the Proxy resolution' => ['-f lavfi -i testsrc=size=2560x1440:rate=25:duration=2 -c:v libx264 -pix_fmt yuv420p', 'larger than the Proxy resolution'],
+			'a Frame short' => ['-f lavfi -i testsrc=size=640x360:rate=25:duration=1.96 -f lavfi -i sine=duration=2 -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest', 'other Frames'],
+			'another frame rate' => ['-f lavfi -i testsrc=size=640x360:rate=50:duration=1 -f lavfi -i sine=duration=2 -c:v libx264 -pix_fmt yuv420p -r 50 -c:a aac -shortest', 'another frame rate'],
+			'not playable' => ['-f lavfi -i testsrc=size=640x360:rate=25:duration=2 -f lavfi -i sine=duration=2 -c:v libx264 -pix_fmt yuv422p -c:a aac -shortest', 'no H.264/AAC MP4'],
+			'silent' => ['-f lavfi -i testsrc=size=640x360:rate=25:duration=2 -c:v libx264 -pix_fmt yuv420p', 'no sound'],
+			'above the Proxy resolution' => ['-f lavfi -i testsrc=size=2560x1440:rate=25:duration=2 -f lavfi -i sine=duration=2 -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest', 'larger than the Proxy resolution'],
 		];
 	}
 
@@ -209,6 +210,31 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertSame('failed', $shown['derived']['proxy']['state']);
 		self::assertStringContainsString($why, (string)$shown['derived']['error']);
 		self::assertCount(1, $this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets']);
+	}
+
+	public function testAProxyHandedInBeforeTheBackgroundJobReadTheOriginalReadsItFirst(): void {
+		$this->make(self::PRORES);
+		$this->nc->put("{$this->root}/master.mov", (string)file_get_contents($this->fixture));
+		$id = $this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'][0]['versions'][0]['id'];
+		self::assertNull($this->nc->ocs('GET', "/versions/$id")['data']['versions'][0]['playable'], 'no background job ran yet');
+
+		$given = $this->nc->ocs('POST', "/versions/$id/proxy", ['fileId' => $this->proxyFrom(self::PROXY)[0]]);
+		self::assertSame(200, $given['status'], json_encode($given['data']));
+		self::assertSame('ready', $this->nc->ocs('GET', "/versions/$id")['data']['versions'][0]['derived']['proxy']['state']);
+	}
+
+	public function testABrowserMakingAProxyHoldsUpNoBackgroundJob(): void {
+		$this->make(self::PRORES);
+		$first = $this->upload('master.mov');
+		self::assertSame(200, $this->nc->ocs('POST', "/versions/{$first['id']}/proxy/progress", ['percent' => 5])['status']);
+
+		// One job at a time by default: the browser's must not count as that one
+		$this->make('-f lavfi -i testsrc=size=320x180:rate=25:duration=1 -c:v libx264 -pix_fmt yuv420p -f mp4');
+		$this->nc->put("{$this->root}/other.mp4", (string)file_get_contents($this->fixture));
+		exec('php /var/www/html/occ deliver:worker --once 2>&1', $output, $code);
+		self::assertSame(0, $code, implode("\n", $output));
+		$other = array_values(array_filter($this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'], static fn (array $asset) => $asset['versions'][0]['id'] !== $first['id']))[0]['versions'][0];
+		self::assertTrue($this->nc->ocs('GET', "/versions/{$other['id']}")['data']['versions'][0]['playable'], 'the other file was read');
 	}
 
 	public function testOnlyAHeavyOrUnplayableOriginalTakesAProxy(): void {
@@ -237,6 +263,7 @@ class WithoutFfmpegTest extends TestCase {
 			self::assertSame(200, $share['status'], json_encode($share['data']));
 			$viewer = $this->nc->withUser($user, 'Viewer-pass-123!');
 			self::assertSame(403, $viewer->ocs('POST', "/versions/{$version['id']}/proxy/progress", ['percent' => 10])['status']);
+			self::assertSame(403, $viewer->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom(self::PROXY)[0]])['status']);
 		} finally {
 			$this->nc->ocsForm('DELETE', "/ocs/v2.php/cloud/users/$user");
 		}
