@@ -57,13 +57,15 @@ async function open(source) {
  *
  * @param {Blob|string} source - the file, or its URL
  * @param {number} bytes - its size
- * @param {number} maxBitrate - the Proxy bitrate threshold in Mbit/s
+ * @param {object} settings - the server's
+ * @param {number} settings.maxHeight - the Proxy resolution
+ * @param {number} settings.maxBitrate - the Proxy bitrate threshold in Mbit/s
  * @return {Promise<{readable: boolean, playable: boolean, convertible: boolean, needsProxy: boolean, codec: ?string}>}
  *   whether Mediabunny reads it at all, whether browsers play it as it is, whether this browser can make its Proxy
  *   (it decodes the first picture and sound, encodes H.264, and the server reads the container's Frames), whether it
  *   gets one, and the codec it cannot decode, if that is what stands in the way
  */
-export async function inspect(source, bytes, maxBitrate) {
+export async function inspect(source, bytes, { maxHeight, maxBitrate }) {
 	const { canEncodeVideo } = await mediabunny()
 	const input = await open(source)
 	try {
@@ -87,7 +89,8 @@ export async function inspect(source, bytes, maxBitrate) {
 			readable: true,
 			playable,
 			convertible: Boolean(video) && !undecodable && convertible(format.name)
-				&& await canEncodeVideo('avc', { width: video.displayWidth, height: video.displayHeight }),
+				// Asked for the Proxy, not the original: an 8K master or an odd anamorphic width still makes a 1080p Proxy
+				&& await canEncodeVideo('avc', { ...proxyOf(video, maxHeight), bitrate: videoBitrate(proxyOf(video, maxHeight), maxBitrate) }),
 			needsProxy: Boolean(video) && needsProxy(playable, bytes, await input.computeDuration(), maxBitrate),
 			codec: undecodable?.codec ?? null,
 		}
@@ -95,6 +98,13 @@ export async function inspect(source, bytes, maxBitrate) {
 		input.dispose()
 	}
 }
+
+/**
+ * @param {object} video - Mediabunny's video track of the original
+ * @param {number} maxHeight - the Proxy resolution
+ * @return {{width: number, height: number}} the Proxy's size
+ */
+const proxyOf = (video, maxHeight) => proxySize({ width: video.displayWidth, height: video.displayHeight }, maxHeight)
 
 /** @return {Promise<FileSystemDirectoryHandle>} Deliver's folder in the browser's private file system */
 async function folder() {
@@ -173,7 +183,7 @@ export async function makeProxy(source, { maxHeight, maxBitrate }, onProgress, s
 		const frames = (await video.computePacketStats()).packetCount
 		// Not from 0: an edit may start a little later
 		const seconds = await video.computeDuration() - await video.getFirstTimestamp()
-		const size = proxySize({ width: video.displayWidth, height: video.displayHeight }, maxHeight)
+		const size = proxyOf(video, maxHeight)
 		const bitrate = videoBitrate(size, maxBitrate)
 		await makeRoom(proxyBytes(seconds, bitrate))
 		signal.throwIfAborted()

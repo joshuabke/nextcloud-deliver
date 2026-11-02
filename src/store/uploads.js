@@ -156,7 +156,7 @@ export const useUploadsStore = defineStore('uploads', {
 		 * @param {object} state - the store's
 		 * @return {boolean} whether this browser is making or uploading a Proxy, which a closed tab would lose
 		 */
-		converting: (state) => state.items.some((item) => ['running', 'uploading'].includes(item.proxy?.state)),
+		converting: (state) => state.items.some((item) => ['running', 'uploading', 'handing'].includes(item.proxy?.state)),
 		/** Whether the card may be closed: nothing sends, here or in another tab, and nothing is being made */
 		closable() {
 			return this.active.length === 0 && this.items.every((item) => item.status !== 'elsewhere' && (item.status !== 'done' || settled(item)))
@@ -346,7 +346,7 @@ export const useUploadsStore = defineStore('uploads', {
 			// Without ffmpeg, what this browser can neither play nor convert is refused before it goes up (ADR 0019)
 			if (!hasFfmpeg && !item.fileId && /^(video|audio)\//.test(item.type) && !item.seen) {
 				item.status = 'checking'
-				item.seen = await inspect(item.file, item.size, proxySettings.maxBitrate).catch(() => null)
+				item.seen = await inspect(item.file, item.size, proxySettings).catch(() => null)
 				const why = refusal(item.seen, item.type)
 				if (why) {
 					Object.assign(item, { status: 'failed', error: why, file: null })
@@ -520,8 +520,12 @@ export const useUploadsStore = defineStore('uploads', {
 				return
 			}
 			// Also while the Proxy uploads, which takes minutes for a long one: silent for two minutes, the server takes this tab as gone
-			const report = () => ['running', 'uploading'].includes(item.proxy?.state)
-				&& reportProxy(asset.versionId, Math.min(99, item.proxy.state === 'running' ? item.proxy.progress : 99)).catch(() => {})
+			let reported = Promise.resolve()
+			const report = () => {
+				if (['running', 'uploading'].includes(item.proxy?.state)) {
+					reported = reportProxy(asset.versionId, Math.min(99, item.proxy.state === 'running' ? item.proxy.progress : 99)).catch(() => {})
+				}
+			}
 			report()
 			const beat = setInterval(report, PROXY_REPORT * 1000)
 			try {
@@ -535,6 +539,9 @@ export const useUploadsStore = defineStore('uploads', {
 					for (let attempt = 0; ; attempt++) {
 						item.proxy = { progress: 0, state: 'uploading' }
 						const fileId = await this.uploadProxy(item, made.file)
+						// No report may land while the server takes it: it would mark the Proxy as running again
+						item.proxy.state = 'handing'
+						await reported
 						try {
 							await giveProxy(asset.versionId, fileId)
 							break

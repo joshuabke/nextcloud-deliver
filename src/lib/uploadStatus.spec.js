@@ -46,6 +46,9 @@ describe('upload status', () => {
 		const uploading = { ...done(derived({ proxy: 'none' })), proxy: { progress: 10, state: 'uploading' } }
 		expect(processingOf(uploading)[0].text).toBe('Uploading, 10 %')
 		expect(settled(uploading)).toBe(false)
+		const handing = { ...done(derived({ proxy: 'none' })), proxy: { progress: 100, state: 'handing' } }
+		expect(processingOf(handing)[0].text).toBe('Finishing on the server')
+		expect(settled(handing)).toBe(false)
 		const failed = { ...done(derived({ proxy: 'none' })), proxy: { state: 'failed', error: 'No room' } }
 		expect(processingOf(failed)[0].text).toBe('No room')
 		const there = { ...done(derived({ proxy: 'ready' })), proxy: { progress: 100, state: 'ready' } }
