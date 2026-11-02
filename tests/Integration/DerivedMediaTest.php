@@ -35,7 +35,7 @@ class DerivedMediaTest extends TestCase {
 	}
 
 	protected function tearDown(): void {
-		$this->nc->ocs('PUT', '/admin/settings', ['hwEncoder' => 'none', 'hwDevice' => '', 'extraArgs' => '', 'maxHeight' => 1080]);
+		$this->nc->ocs('PUT', '/admin/settings', ['hwEncoder' => 'none', 'hwDevice' => '', 'extraArgs' => '', 'maxHeight' => 1080, 'maxBitrate' => 20]);
 		$this->nc->deleteProject($this->projectId);
 		$this->nc->delete($this->root);
 		$this->nc->emptyTrash();
@@ -251,13 +251,14 @@ class DerivedMediaTest extends TestCase {
 		}
 	}
 
-	public function testALargeOriginalStaysTheDefaultAndGetsALighterProxy(): void {
+	public function testAHeavyOriginalStaysTheDefaultAndGetsALighterProxy(): void {
 		self::assertSame(400, $this->nc->ocs('PUT', '/admin/settings', ['maxHeight' => 719])['status'], 'no Proxy below 720p');
-		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['maxHeight' => 720])['status']);
-		// Portrait H.264 at 900x1600: browsers play it, but its short side is above the limit
+		self::assertSame(400, $this->nc->ocs('PUT', '/admin/settings', ['maxBitrate' => 1])['status'], 'no Proxy fits below 2 Mbit/s');
+		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['maxHeight' => 720, 'maxBitrate' => 2])['status']);
+		// Portrait H.264 at 900x1600 full of noise: browsers play it, but it is far above 2 Mbit/s
 		[$code, $output] = $this->shell(sprintf(
-			'ffmpeg -loglevel error -y -f lavfi -i testsrc=size=900x1600:rate=25:duration=1 '
-			. '-f lavfi -i sine=frequency=440:duration=1 -c:v libx264 -pix_fmt yuv420p -c:a aac -f mp4 %s',
+			'ffmpeg -loglevel error -y -f lavfi -i "testsrc=size=900x1600:rate=25:duration=2,noise=alls=40:allf=t" '
+			. '-f lavfi -i sine=frequency=440:duration=2 -c:v libx264 -crf 18 -pix_fmt yuv420p -c:a aac -f mp4 %s',
 			escapeshellarg($this->fixture),
 		));
 		self::assertSame(0, $code, $output);
@@ -278,5 +279,37 @@ class DerivedMediaTest extends TestCase {
 		[, $probed] = $this->shell('ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 ' . escapeshellarg($copy));
 		@unlink($copy);
 		self::assertSame('720,1280', trim($probed), 'the limit applies to the short side, so portrait stays portrait');
+		self::assertLessThan(2_200_000, strlen($proxy['body']) * 8 / 2, 'no Proxy goes far above the threshold it is made for');
+	}
+
+	public function testALargeOriginalBelowTheThresholdGetsNoProxy(): void {
+		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['maxHeight' => 720])['status']);
+		[$code, $output] = $this->shell(sprintf(
+			'ffmpeg -loglevel error -y -f lavfi -i testsrc=size=900x1600:rate=25:duration=1 -c:v libx264 -pix_fmt yuv420p -f mp4 %s',
+			escapeshellarg($this->fixture),
+		));
+		self::assertSame(0, $code, $output);
+		$this->nc->put("{$this->root}/portrait.mp4", (string)file_get_contents($this->fixture));
+		$versionId = $this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'][0]['versions'][0]['id'];
+		$this->drainQueue();
+
+		$version = $this->version($versionId);
+		self::assertTrue($version['playable']);
+		self::assertSame('none', $version['derived']['proxy']['state'], 'above the Proxy resolution, but light enough to play as it is');
+	}
+
+	public function testAv1GetsAProxy(): void {
+		[$code, $output] = $this->shell(sprintf(
+			'ffmpeg -loglevel error -y -f lavfi -i testsrc=size=320x180:rate=25:duration=1 -c:v libaom-av1 -cpu-used 8 -crf 40 -f webm %s',
+			escapeshellarg($this->fixture),
+		));
+		self::assertSame(0, $code, $output);
+		$this->nc->put("{$this->root}/cut.webm", (string)file_get_contents($this->fixture));
+		$versionId = $this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'][0]['versions'][0]['id'];
+		$this->drainQueue();
+
+		$version = $this->version($versionId);
+		self::assertFalse($version['playable'], 'AV1 plays only on recent Apple hardware');
+		self::assertSame('ready', $version['derived']['proxy']['state'], (string)$version['derived']['error']);
 	}
 }

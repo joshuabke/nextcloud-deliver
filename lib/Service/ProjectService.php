@@ -396,8 +396,7 @@ class ProjectService {
 			'waveformFromBrowser' => $version->getWaveformState() === DerivedMedia::STATE_NONE
 				&& str_starts_with($file->getMimeType(), 'audio/')
 				&& !self::isWav($version)
-				// ffmpeg may have come since it was last probed
-				&& !$this->ffmpeg->available() && $this->ffmpeg->probe() === null,
+				&& $this->media->withoutFfmpeg(),
 		];
 	}
 
@@ -592,6 +591,42 @@ class ProjectService {
 		return $this->versionPayload($this->versions->find($versionId) ?? $version, $uid);
 	}
 
+	/** How far the uploading browser has got with a Proxy, where the server has no ffmpeg (ADR 0019) */
+	public function proxyProgress(string $uid, int $versionId, int $percent): array {
+		$version = $this->writableVersion($uid, $versionId);
+		$this->media->proxyProgress($version, $percent);
+		return $this->versionPayload($version, $uid);
+	}
+
+	/**
+	 * The Proxy a browser made where the server has no ffmpeg (ADR 0019),
+	 * uploaded next to the Version's file as for a replace; the upload goes
+	 * whether the Proxy is taken or refused.
+	 *
+	 * @throws InvalidRequestException the upload is not a file of its own next to the Version's file, or no Proxy of it
+	 */
+	public function giveProxy(string $uid, int $versionId, int $uploadId): array {
+		$version = $this->writableVersion($uid, $versionId);
+		$home = $this->root->getUserFolder($uid);
+		$file = $home->getFirstNodeById($version->getFileId());
+		$upload = $home->getFirstNodeById($uploadId) ?? throw new NotFoundException('Upload not found');
+		if (!$file instanceof File || !$upload instanceof File) {
+			throw new NotFoundException('File not found');
+		}
+		if ($upload->getId() === $file->getId() || $upload->getParent()->getId() !== $file->getParent()->getId() || $this->versions->findByFile($upload->getId()) !== null) {
+			throw new InvalidRequestException('The upload must be a file of its own next to the Version\'s file');
+		}
+		if (!$upload->isDeletable()) {
+			throw new AccessDeniedException('Deleting the upload is not allowed');
+		}
+		try {
+			$this->media->acceptProxy($version, $file, $upload);
+		} finally {
+			$upload->delete();
+		}
+		return $this->versionPayload($this->versions->find($versionId) ?? $version, $uid);
+	}
+
 	/** What a Member's browser decoded where the server has no ffmpeg (ADR 0003) */
 	public function giveWaveform(string $uid, int $versionId, array $peaks, int $durationFrames): array {
 		[$version] = $this->reachVersion($uid, $versionId);
@@ -679,6 +714,7 @@ class ProjectService {
 	 * @return array<string, mixed>
 	 */
 	public function describeVersion(Version $version, Project $project, ?string $url, string $media): array {
+		$this->media->lapse($version);
 		$link = static fn (string $kind, string $state) => $state === DerivedMedia::STATE_READY
 			? str_replace('__kind__', $kind, $media)
 			: null;

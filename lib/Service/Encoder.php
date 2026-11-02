@@ -45,33 +45,38 @@ class Encoder {
 	 *
 	 * @param int $limit the largest short side, in pixels
 	 * @param int $gop Frames between keyframes
+	 * @param ?int $maxrate the ceiling of the video bitrate in kbit/s, so that no Proxy is heavier than what gets one (ADR 0019)
 	 * @return array{input: list<string>, filter: string, codec: list<string>}
 	 */
-	public function args(string $kind, int $limit, int $gop): array {
+	public function args(string $kind, int $limit, int $gop, ?int $maxrate = null): array {
 		// The limit applies to the short side, so portrait video keeps its detail;
 		// the encoders need even dimensions
 		$scale = "scale='if(gte(iw,ih),-2,min($limit,trunc(iw/2)*2))':'if(gte(iw,ih),min($limit,trunc(ih/2)*2),-2)'";
-		$keyframes = ['-g', (string)max(1, $gop)];
+		// Keyframes, and the ceiling of the bitrate when there is one
+		$pace = ['-g', (string)max(1, $gop)];
+		if ($maxrate !== null) {
+			array_push($pace, '-maxrate', $maxrate . 'k', '-bufsize', $maxrate . 'k');
+		}
 		return match ($kind) {
 			self::VAAPI => [
 				'input' => ['-init_hw_device', 'vaapi=va:' . $this->device(), '-filter_hw_device', 'va'],
 				'filter' => "$scale,format=nv12,hwupload",
-				'codec' => ['-c:v', 'h264_vaapi', '-qp', '20', ...$keyframes],
+				'codec' => ['-c:v', 'h264_vaapi', '-qp', '20', ...$pace],
 			],
 			self::NVENC => [
 				'input' => [],
 				'filter' => $scale,
-				'codec' => ['-c:v', 'h264_nvenc', '-preset', 'p4', '-rc', 'vbr', '-cq', '20', '-pix_fmt', 'yuv420p', ...$keyframes],
+				'codec' => ['-c:v', 'h264_nvenc', '-preset', 'p4', '-rc', 'vbr', '-cq', '20', '-pix_fmt', 'yuv420p', ...$pace],
 			],
 			self::VIDEOTOOLBOX => [
 				'input' => [],
 				'filter' => $scale,
-				'codec' => ['-c:v', 'h264_videotoolbox', '-q:v', '65', '-pix_fmt', 'yuv420p', ...$keyframes],
+				'codec' => ['-c:v', 'h264_videotoolbox', '-q:v', '65', '-pix_fmt', 'yuv420p', ...$pace],
 			],
 			default => [
 				'input' => [],
 				'filter' => $scale,
-				'codec' => ['-c:v', 'libx264', '-crf', '20', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', ...$keyframes],
+				'codec' => ['-c:v', 'libx264', '-crf', '20', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', ...$pace],
 			],
 		};
 	}

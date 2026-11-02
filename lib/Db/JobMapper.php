@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Db;
 
+use OCA\Deliver\Service\DerivedMedia;
+use OCP\DB\QueryBuilder\ICompositeExpression;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 
@@ -75,7 +77,7 @@ class JobMapper extends Mapper {
 			->executeStatement();
 	}
 
-	/** Puts back jobs whose worker died: running, but started before a cutoff */
+	/** Puts back jobs whose worker died: running, but started before a cutoff; a browser's Proxy lapses instead (DerivedMedia::lapse) */
 	public function requeueStale(int $startedBefore): void {
 		$qb = $this->db->getQueryBuilder();
 		$qb->update($this->getTableName())
@@ -83,7 +85,28 @@ class JobMapper extends Mapper {
 			->set('claimed_by', $qb->createNamedParameter(null))
 			->where($qb->expr()->eq('state', $qb->createNamedParameter(Job::STATE_RUNNING)))
 			->andWhere($qb->expr()->lt('started_at', $qb->createNamedParameter($startedBefore, IQueryBuilder::PARAM_INT)))
+			->andWhere($this->onServer($qb))
 			->executeStatement();
+	}
+
+	/** How many jobs the server runs right now, without the Proxies browsers make */
+	public function countRunningOnServer(): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->count('*', 'amount'))
+			->from($this->getTableName())
+			->where($qb->expr()->eq('state', $qb->createNamedParameter(Job::STATE_RUNNING)))
+			->andWhere($this->onServer($qb));
+		$result = $qb->executeQuery();
+		$amount = (int)$result->fetchOne();
+		$result->closeCursor();
+		return $amount;
+	}
+
+	private function onServer(IQueryBuilder $qb): ICompositeExpression {
+		return $qb->expr()->orX(
+			$qb->expr()->isNull('claimed_by'),
+			$qb->expr()->neq('claimed_by', $qb->createNamedParameter(DerivedMedia::BROWSER)),
+		);
 	}
 
 	/** @return Job[] failed jobs, the latest first; all of them without a limit */

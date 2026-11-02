@@ -128,6 +128,17 @@ class ProjectApiController extends OCSController {
 		return $this->guard(fn () => $this->service->regenerate((string)$this->userId, $id));
 	}
 
+	/** @param int $fileId the file id of the Proxy, uploaded next to the Version's file */
+	#[NoAdminRequired]
+	public function proxy(int $id, int $fileId): Response {
+		return $this->guard(fn () => $this->service->giveProxy((string)$this->userId, $id, uploadId: $fileId));
+	}
+
+	#[NoAdminRequired]
+	public function proxyProgress(int $id, int $percent): Response {
+		return $this->guard(fn () => $this->service->proxyProgress((string)$this->userId, $id, $percent));
+	}
+
 	#[NoAdminRequired]
 	public function waveform(int $id, array $peaks = [], int $durationFrames = 0): Response {
 		return $this->guard(fn () => $this->service->giveWaveform((string)$this->userId, $id, $peaks, $durationFrames));

@@ -80,8 +80,14 @@ function save() {
 					type="number"
 					min="720"
 					max="2160"
-					:label="t('deliver', 'Proxy resolution: short side in pixels')"
-					:helperText="t('deliver', 'Originals that browsers play are always available. Larger ones also get a lighter Proxy to switch to.')" />
+					:label="t('deliver', 'Proxy resolution: short side in pixels')" />
+				<NcTextField
+					v-model.number="settings.maxBitrate"
+					type="number"
+					min="2"
+					max="200"
+					:label="t('deliver', 'Proxy bitrate threshold in Mbit/s')"
+					:helperText="t('deliver', 'Originals that browsers play are always available. Heavier ones also get a lighter Proxy to switch to, and no Proxy goes above it.')" />
 				<NcTextField
 					v-model.number="settings.thumbCap"
 					type="number"

@@ -145,6 +145,103 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertSame(409, $this->nc->ocs('POST', "/versions/{$version['id']}/waveform", ['peaks' => [0.2], 'durationFrames' => 2000])['status'], 'once is enough');
 	}
 
+	/** @return array{0: int, 1: string} file id and path of a Proxy made here as the browser makes it, uploaded next to the Version's file under a name without a media extension */
+	private function proxyFrom(string $args): array {
+		$proxy = $this->fixture . '-proxy';
+		exec('ffmpeg -v error -y ' . $args . ' -f mp4 ' . escapeshellarg($proxy) . ' 2>&1', $output, $code);
+		self::assertSame(0, $code, implode("\n", $output));
+		$path = "{$this->root}/.deliver-proxy-" . bin2hex(random_bytes(4));
+		$this->nc->put($path, (string)file_get_contents($proxy));
+		unlink($proxy);
+		return [$this->nc->fileId($path), $path];
+	}
+
+	/** Two seconds of ProRes at 25 fps with PCM, as a master comes out of the edit */
+	private const PRORES = '-f lavfi -i testsrc=size=640x360:rate=25:duration=2 -f lavfi -i sine=duration=2 -c:v prores_ks -profile:v 0 -c:a pcm_s16le -f mov';
+	/** The Proxy of it, as the browser makes it: H.264/AAC at the same rate with as many Frames */
+	private const PROXY = '-f lavfi -i testsrc=size=640x360:rate=25:duration=2 -f lavfi -i sine=duration=2 -c:v libx264 -pix_fmt yuv420p -g 25 -c:a aac -shortest';
+
+	public function testTheUploadingBrowserHandsInTheProxyOfAProResMaster(): void {
+		$this->make(self::PRORES);
+		$version = $this->upload('master.mov');
+		self::assertFalse($version['playable'], 'no browser plays ProRes');
+		self::assertSame('none', $version['derived']['proxy']['state']);
+		self::assertSame(50, $version['durationFrames']);
+
+		// While it converts, everyone sees how far it has got
+		$reported = $this->nc->ocs('POST', "/versions/{$version['id']}/proxy/progress", ['percent' => 40]);
+		self::assertSame(200, $reported['status'], json_encode($reported['data']));
+		$shown = $this->nc->ocs('GET', "/versions/{$version['id']}")['data']['versions'][0];
+		self::assertSame('running', $shown['derived']['proxy']['state']);
+		self::assertSame(40, $shown['derived']['progress']);
+
+		[$upload, $path] = $this->proxyFrom(self::PROXY);
+		$given = $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $upload]);
+		self::assertSame(200, $given['status'], json_encode($given['data']));
+		$shown = $this->nc->ocs('GET', "/versions/{$version['id']}")['data']['versions'][0];
+		self::assertSame('ready', $shown['derived']['proxy']['state']);
+		self::assertNull($shown['derived']['progress']);
+		self::assertStringContainsString('ftyp', substr($this->nc->request('GET', $shown['derived']['proxy']['url'])['body'], 0, 12));
+		self::assertCount(1, $this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'], 'the upload never became an Asset');
+		self::assertSame(404, $this->nc->davStatus('PROPFIND', $path), 'the upload is gone');
+
+		self::assertSame(409, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom(self::PROXY)[0]])['status'], 'a Proxy stays until it is regenerated');
+	}
+
+	/** @return array<string, array{string, string}> */
+	public static function wrongProxies(): array {
+		return [
+			'a Frame short' => ['-f lavfi -i testsrc=size=640x360:rate=25:duration=1.96 -c:v libx264 -pix_fmt yuv420p', 'other Frames'],
+			'another frame rate' => ['-f lavfi -i testsrc=size=640x360:rate=50:duration=1 -c:v libx264 -pix_fmt yuv420p -r 50', 'another frame rate'],
+			'not playable' => ['-f lavfi -i testsrc=size=640x360:rate=25:duration=2 -c:v libx264 -pix_fmt yuv422p', 'no H.264/AAC MP4'],
+			'above the Proxy resolution' => ['-f lavfi -i testsrc=size=2560x1440:rate=25:duration=2 -c:v libx264 -pix_fmt yuv420p', 'larger than the Proxy resolution'],
+		];
+	}
+
+	#[DataProvider('wrongProxies')]
+	public function testAProxyThatDoesNotFitIsRefused(string $args, string $why): void {
+		$this->make(self::PRORES);
+		$version = $this->upload('master.mov');
+
+		$refused = $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom($args)[0]]);
+		self::assertSame(400, $refused['status'], json_encode($refused['data']));
+		$shown = $this->nc->ocs('GET', "/versions/{$version['id']}")['data']['versions'][0];
+		self::assertSame('failed', $shown['derived']['proxy']['state']);
+		self::assertStringContainsString($why, (string)$shown['derived']['error']);
+		self::assertCount(1, $this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets']);
+	}
+
+	public function testOnlyAHeavyOrUnplayableOriginalTakesAProxy(): void {
+		$this->make('-f lavfi -i "testsrc=size=640x360:rate=25:duration=2,noise=alls=40:allf=t" -f lavfi -i sine=duration=2 -c:v libx264 -crf 23 -pix_fmt yuv420p -c:a aac -shortest -f mp4');
+		// About 6 Mbit/s: below the threshold of 20, above one of 2
+		$version = $this->upload('cut.mp4');
+		self::assertTrue($version['playable']);
+
+		self::assertSame(409, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom(self::PROXY)[0]])['status'], 'it plays as it is');
+		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['maxBitrate' => 2])['status']);
+		try {
+			$given = $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom(self::PROXY)[0]]);
+			self::assertSame(200, $given['status'], json_encode($given['data']));
+		} finally {
+			$this->nc->ocs('PUT', '/admin/settings', ['maxBitrate' => 20]);
+		}
+	}
+
+	public function testOnlyWhoManagesTheVersionHandsInItsProxy(): void {
+		$this->make(self::PRORES);
+		$version = $this->upload('master.mov');
+		$user = 'deliver-viewer-' . bin2hex(random_bytes(3));
+		$this->nc->ocsForm('POST', '/ocs/v2.php/cloud/users', ['userid' => $user, 'password' => 'Viewer-pass-123!']);
+		try {
+			$share = $this->nc->ocsForm('POST', '/ocs/v2.php/apps/files_sharing/api/v1/shares', ['path' => $this->root, 'shareType' => 0, 'shareWith' => $user, 'permissions' => 1]);
+			self::assertSame(200, $share['status'], json_encode($share['data']));
+			$viewer = $this->nc->withUser($user, 'Viewer-pass-123!');
+			self::assertSame(403, $viewer->ocs('POST', "/versions/{$version['id']}/proxy/progress", ['percent' => 10])['status']);
+		} finally {
+			$this->nc->ocsForm('DELETE', "/ocs/v2.php/cloud/users/$user");
+		}
+	}
+
 	public function testAWebmKeepsItsFrameRate(): void {
 		$this->make('-f lavfi -i testsrc=size=320x180:rate=24000/1001:duration=2 -f lavfi -i sine=duration=2 -c:v libvpx-vp9 -c:a libopus -shortest -f webm');
 		$version = $this->upload('cut.webm');

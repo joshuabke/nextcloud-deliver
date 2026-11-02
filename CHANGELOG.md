@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Give originals that browsers play a Proxy by the new Proxy bitrate threshold instead of their resolution, and keep every Proxy below it.
+- Give AV1 a Proxy.
+- Add `POST /versions/{id}/proxy` and `POST /versions/{id}/proxy/progress` for Proxies made by the uploading browser where the server has no ffmpeg.
+
 ## 0.10.0 – 2026-10-31
 
 ### Added

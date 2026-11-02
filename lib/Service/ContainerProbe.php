@@ -161,9 +161,14 @@ class ContainerProbe {
 				'width' => $this->u16($entry[0] + 8 + 32),
 				'height' => $this->u16($entry[0] + 8 + 34),
 			];
-			$rate = $this->frameRate($stbl, $timescale);
-			if ($rate !== null) {
-				$stream['avg_frame_rate'] = $rate;
+			$timing = $this->timing($stbl);
+			if ($timing !== null) {
+				// As ffprobe gives them: the rate as a fraction (24000/1001 stays exact), the Frames and their length
+				[$frames, $ticks] = $timing;
+				$gcd = $this->gcd($frames * $timescale, $ticks);
+				$stream['avg_frame_rate'] = intdiv($frames * $timescale, $gcd) . '/' . intdiv($ticks, $gcd);
+				$stream['nb_frames'] = (string)$frames;
+				$stream['duration'] = (string)($ticks / $timescale);
 			}
 			if ($stream['codec_name'] === 'h264') {
 				// The first byte after avcC's version is the profile
@@ -185,8 +190,8 @@ class ContainerProbe {
 		return $track;
 	}
 
-	/** Frames over time, as ffprobe's avg_frame_rate: 24000/1001 stays a fraction */
-	private function frameRate(array $stbl, int $timescale): ?string {
+	/** @return array{0: int, 1: int}|null the samples of a track and their length in its timescale, from its time-to-sample table */
+	private function timing(array $stbl): ?array {
 		$stts = $this->child($stbl[0], $stbl[1], 'stts');
 		if ($stts === null) {
 			return null;
@@ -199,12 +204,7 @@ class ContainerProbe {
 			$frames += $count;
 			$ticks += $count * $this->u32($stts[0] + 12 + $i * 8);
 		}
-		if ($frames === 0 || $ticks === 0) {
-			return null;
-		}
-		$num = $frames * $timescale;
-		$gcd = $this->gcd($num, $ticks);
-		return intdiv($num, $gcd) . '/' . intdiv($ticks, $gcd);
+		return $frames === 0 || $ticks === 0 ? null : [$frames, $ticks];
 	}
 
 	/**
