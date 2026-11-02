@@ -12,6 +12,7 @@
 - `GET /folders/{folderId}/intake` ergänzt.
 - Vorschauleiste und Wellenform im selben Durchgang wie einen Proxy aus dem Browser erzeugt.
 - `POST /versions/{id}/thumbs` ergänzt.
+- Die Phase eines im Browser erzeugten Proxys, Encoding oder Upload, neben ihm genannt.
 
 ## 0.10.0 – 2026-10-31
 

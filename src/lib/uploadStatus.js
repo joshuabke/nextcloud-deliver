@@ -80,6 +80,23 @@ export function statusOf(item) {
 }
 
 /**
+ * Where the Proxy this browser makes has got, to follow "Proxy"
+ *
+ * @param {{state: string, progress?: number, error?: string}} proxy - its status
+ * @return {?string} the phase and its percentage, or null while nothing is to say
+ */
+export function proxyPhase(proxy) {
+	return {
+		checking: null,
+		running: t('deliver', 'Encoding {percent} %', { percent: proxy.progress }),
+		uploading: t('deliver', 'Upload {percent} %', { percent: proxy.progress }),
+		handing: t('deliver', 'Finishing on the server'),
+		ready: t('deliver', 'Done'),
+		failed: proxy.error ?? t('deliver', 'Failed'),
+	}[proxy.state]
+}
+
+/**
  * @param {object} item - a finished upload
  * @return {Array<{kind: string, label: string, text: string, done: boolean}>} its derived media and how far each is (story 136)
  */
@@ -103,14 +120,8 @@ export function processingOf(item) {
 	if (item.proxy && item.version?.derived?.proxy?.state !== 'ready') {
 		lines.push({
 			kind: 'browserProxy',
-			label: t('deliver', 'Proxy, in this browser'),
-			text: {
-				running: `${item.proxy.progress} %`,
-				uploading: t('deliver', 'Uploading, {percent} %', { percent: item.proxy.progress }),
-				handing: t('deliver', 'Finishing on the server'),
-				ready: t('deliver', 'Done'),
-				failed: item.proxy.error ?? t('deliver', 'Failed'),
-			}[item.proxy.state],
+			label: t('deliver', 'Proxy'),
+			text: proxyPhase(item.proxy),
 			done: item.proxy.state === 'ready',
 		})
 	}

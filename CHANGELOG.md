@@ -12,6 +12,7 @@
 - Add `GET /folders/{folderId}/intake`.
 - Make the Thumbnail Strip and the Waveform in the same pass as a Proxy from the browser.
 - Add `POST /versions/{id}/thumbs`.
+- Name the phase of a Proxy made in the browser, Encoding or Upload, next to it.
 
 ## 0.10.0 – 2026-10-31
 

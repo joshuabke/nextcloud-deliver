@@ -24,6 +24,7 @@ import { orDeletedProject } from '../composables/deletedProject.js'
 import { confirmProjectRemoval, confirmRemoval } from '../confirm.js'
 import { proxiesByFile } from '../filesUploads.js'
 import { n, t } from '../lib/l10n.js'
+import { proxyPhase } from '../lib/uploadStatus.js'
 
 // The Files app also sets folder, view and active on the web component; only node is used
 const props = defineProps({
@@ -57,14 +58,7 @@ const assignedTo = computed(() => projectOptions.value.find((each) => each.id ==
 /** The Proxy this browser makes of the file it uploaded (ADR 0019), as far as it has got */
 const proxy = computed(() => {
 	const status = proxiesByFile[props.node?.fileid]
-	return status && {
-		checking: null,
-		running: `${status.progress} %`,
-		uploading: t('deliver', 'Uploading, {percent} %', { percent: status.progress }),
-		handing: t('deliver', 'Uploading, {percent} %', { percent: 100 }),
-		ready: t('deliver', 'Done'),
-		failed: status.error ?? t('deliver', 'Failed'),
-	}[status.state]
+	return status && proxyPhase(status)
 })
 const appUrl = computed(() => {
 	if (asset.value) {
@@ -257,7 +251,7 @@ async function remove() {
 			</template>
 		</p>
 		<p v-if="proxy" class="deliver-tab__hint">
-			{{ t('deliver', 'Proxy, in this browser') }}: {{ proxy }}
+			{{ t('deliver', 'Proxy') }}: {{ proxy }}
 		</p>
 
 		<section v-if="isFolder && project && project.manages" class="deliver-tab__section">
