@@ -15,7 +15,7 @@ import { showError, showMessage, TOAST_PERMANENT_TIMEOUT } from '@nextcloud/dial
 import { reactive, watchEffect } from 'vue'
 import { getAssetForFile, getIntake, handInWaveform } from './api.js'
 import { t } from './lib/l10n.js'
-import { convertInTurn, handInProxy, inspect } from './lib/proxy.js'
+import { convertInTurn, dropProxy, handInProxy, inspect } from './lib/proxy.js'
 import { uploaded } from './lib/waveform.js'
 
 /** The Proxies this tab makes of uploads, by file id once the file is there, for Deliver's sidebar tab */
@@ -25,6 +25,8 @@ export const proxiesByFile = reactive({})
 const folders = new Map()
 /** Uploads looked at, and the Proxy of those that get one from this browser */
 const jobs = new WeakMap()
+/** The uploads whose Proxy waits for them to finish */
+const waiting = new Map()
 /** The Proxies being made, which a closed tab would lose */
 const making = new Set()
 
@@ -64,6 +66,7 @@ function start(upload) {
 		return made
 	})
 	jobs.set(upload, job)
+	waiting.set(upload, job)
 }
 
 /**
@@ -108,8 +111,10 @@ async function handIn(fileId, job) {
 	}
 	proxiesByFile[fileId] = job.status
 	const asset = await getAssetForFile(fileId).catch(() => null)
+	if (!asset?.versionId) {
+		dropProxy(job.making, job.status, job.controller)
+	}
 	if (!asset?.versionId || !await handInProxy(asset.versionId, job.making, job.status, job.controller)) {
-		job.controller.abort()
 		delete proxiesByFile[fileId]
 	}
 }
@@ -126,12 +131,13 @@ function onUpload(upload) {
 	// Quicker than a look at the queue, it converts now from the file the browser still holds
 	start(upload)
 	const job = jobs.get(upload)
+	waiting.delete(upload)
 	const video = uploaded(upload, 'video')
 	if (job && video !== null) {
 		handIn(video, job)
 	} else if (job) {
 		// Failed or cancelled: its Proxy has no Version to go to
-		job.controller.abort()
+		dropProxy(job.making, job.status, job.controller)
 	}
 }
 
@@ -146,8 +152,22 @@ Object.defineProperty(window, '_nc_uploader', {
 })
 window._nc_uploader = existing
 
-// ponytail: a look at the queue every second, as the uploader announces no start; a hook into it if it ever does
-setInterval(() => uploader?.queue?.forEach(start), 1000)
+/**
+ * A look at the queue: the uploader announces no start, and a cancelled
+ * upload only leaves the queue, unannounced, so its Proxy is stopped here.
+ */
+function look() {
+	const queue = uploader?.queue ?? []
+	queue.forEach(start)
+	for (const [upload, job] of waiting) {
+		if (!queue.includes(upload) && uploaded(upload, upload.file.type.split('/')[0]) === null) {
+			waiting.delete(upload)
+			dropProxy(job.making, job.status, job.controller)
+		}
+	}
+}
+// ponytail: a look every second; a hook into the uploader if it ever announces starts and cancels
+setInterval(look, 1000)
 
 // The browser asks before a closed tab loses a Proxy, as the Files app does for its uploads
 window.addEventListener('beforeunload', (event) => {
