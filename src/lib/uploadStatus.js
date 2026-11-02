@@ -111,8 +111,8 @@ export function processingOf(item) {
 	if (item.waveform && item.version?.derived?.waveform?.state !== 'ready') {
 		lines.push({
 			kind: 'browser',
-			label: t('deliver', 'Waveform, in this browser'),
-			text: { running: `${item.waveform.progress} %`, ready: t('deliver', 'Done'), failed: t('deliver', 'Failed') }[item.waveform.state],
+			label: t('deliver', 'Waveform'),
+			text: { running: t('deliver', 'Decoding {percent} %', { percent: item.waveform.progress }), ready: t('deliver', 'Done'), failed: t('deliver', 'Failed') }[item.waveform.state],
 			done: item.waveform.state === 'ready',
 		})
 	}

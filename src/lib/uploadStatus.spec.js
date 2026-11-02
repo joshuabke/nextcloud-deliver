@@ -37,6 +37,8 @@ describe('upload status', () => {
 		expect(lines.map(({ kind, done }) => [kind, done])).toEqual([['proxy', false], ['thumbs', true]])
 		const browser = processingOf({ ...done({ id: 1 }), waveform: { progress: 100, state: 'ready' } })
 		expect(browser.map(({ kind, done }) => [kind, done])).toEqual([['browser', true]])
+		const decoding = processingOf({ ...done({ id: 1 }), waveform: { progress: 40, state: 'running' } })
+		expect(decoding.map(({ label, text }) => [label, text])).toEqual([['Waveform', 'Decoding 40 %']])
 	})
 
 	it('shows the Proxy this browser makes instead of the server\'s report of it, until it is there', () => {

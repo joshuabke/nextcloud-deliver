@@ -11,6 +11,7 @@ import { generateRemoteUrl } from '@nextcloud/router'
 import { chunkSizeFor, errorMessage, getVersion, giveProxy, giveThumbs, giveWaveform, reportProxy } from '../api.js'
 import { t } from './l10n.js'
 import { convertible, fits, needsProxy, plays, proxyBytes, proxySize, THUMB_WIDTH, thumbGrid, thumbSlot, videoBitrate } from './proxyPlan.js'
+import { unsupported } from './unsupported.js'
 import { uploadFile } from './upload.js'
 import { addPeaks, BUCKETS, roundPeaks } from './waveform.js'
 
@@ -120,12 +121,7 @@ export async function inspect(source, bytes, { maxHeight, maxBitrate }) {
  * @return {string} why this browser cannot make a Proxy of the file
  */
 export function cannotConvert(seen) {
-	if (!seen?.readable) {
-		return t('deliver', 'This browser cannot read this file, and without ffmpeg the server cannot convert it.')
-	}
-	return seen.codec
-		? t('deliver', 'This browser cannot decode {codec}, and without ffmpeg the server cannot convert it. Another browser may.', { codec: seen.codec })
-		: t('deliver', 'This browser cannot convert this file, and without ffmpeg the server cannot either. Another browser may.')
+	return unsupported(seen, navigator.userAgent)
 }
 
 /** @return {Promise<FileSystemDirectoryHandle>} Deliver's folder in the browser's private file system */

@@ -12,7 +12,8 @@
 - Add `GET /folders/{folderId}/intake`.
 - Make the Thumbnail Strip and the Waveform in the same pass as a Proxy from the browser.
 - Add `POST /versions/{id}/thumbs`.
-- Name the phase of a Proxy made in the browser, Encoding or Upload, next to it.
+- Name the phase of a Proxy, Encoding or Upload, and of a Waveform, Decoding, made in the browser next to it.
+- Shorten the refusal of a file the browser cannot make a Proxy of to the codec and the browser.
 
 ## 0.10.0 – 2026-10-31
 

@@ -12,7 +12,8 @@
 - `GET /folders/{folderId}/intake` ergänzt.
 - Vorschauleiste und Wellenform im selben Durchgang wie einen Proxy aus dem Browser erzeugt.
 - `POST /versions/{id}/thumbs` ergänzt.
-- Die Phase eines im Browser erzeugten Proxys, Encoding oder Upload, neben ihm genannt.
+- Die Phase eines im Browser erzeugten Proxys, Encoding oder Upload, und einer Wellenform, Decoding, neben ihnen genannt.
+- Die Ablehnung einer Datei, aus der der Browser keinen Proxy erzeugen kann, auf Codec und Browser gekürzt.
 
 ## 0.10.0 – 2026-10-31
 
