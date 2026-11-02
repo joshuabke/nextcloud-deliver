@@ -8,10 +8,11 @@
 import { getCurrentUser } from '@nextcloud/auth'
 import axios from '@nextcloud/axios'
 import { generateRemoteUrl } from '@nextcloud/router'
-import { chunkSizeFor, errorMessage, getVersion, giveProxy, reportProxy } from '../api.js'
+import { chunkSizeFor, errorMessage, getVersion, giveProxy, giveThumbs, giveWaveform, reportProxy } from '../api.js'
 import { t } from './l10n.js'
-import { convertible, fits, needsProxy, plays, proxyBytes, proxySize, videoBitrate } from './proxyPlan.js'
+import { convertible, fits, needsProxy, plays, proxyBytes, proxySize, THUMB_WIDTH, thumbGrid, thumbSlot, videoBitrate } from './proxyPlan.js'
 import { uploadFile } from './upload.js'
+import { addPeaks, BUCKETS, roundPeaks } from './waveform.js'
 
 /** Deliver's folder in the browser's private file system */
 const FOLDER = 'deliver-proxies'
@@ -169,17 +170,21 @@ async function makeRoom(bytes) {
 /**
  * Makes the Proxy of a file, one picture after another into a file of the
  * private file system, and checks it as the server will: as many Frames as
- * the original, at its rate.
+ * the original, at its rate. The same pass draws the Thumbnail Strip from
+ * the pictures and the Waveform from the sound, in the server's shapes, so
+ * the original is decoded once.
  *
  * @param {Blob|string} source - the original, or its URL
  * @param {object} settings - the server's
  * @param {number} settings.maxHeight - the Proxy resolution
  * @param {number} settings.maxBitrate - the Proxy bitrate threshold in Mbit/s
+ * @param {number} settings.thumbCap - the Thumbnail Strip cap
  * @param {(percent: number) => void} onProgress - how far it is, 0 to 99
  * @param {AbortSignal} signal - stops it
- * @return {Promise<{file: File, done: () => Promise<void>}>} the Proxy, and what deletes it once handed in
+ * @return {Promise<{file: File, done: () => Promise<void>, frames: number, thumbs: ?{image: Blob, every: number, count: number}, peaks: ?number[]}>}
+ *   the Proxy, what deletes it once handed in, the Frames of the original, its Thumbnail Strip (null where the browser encodes no WebP) and its Waveform (null without sound)
  */
-export async function makeProxy(source, { maxHeight, maxBitrate }, onProgress, signal) {
+export async function makeProxy(source, { maxHeight, maxBitrate, thumbCap }, onProgress, signal) {
 	const { Conversion, Mp4OutputFormat, Output, StreamTarget } = await mediabunny()
 	const name = `proxy-${Date.now()}-${Math.random().toString(36).slice(2)}.mp4`
 	// Held until done(), so no tab clears the file while this one still needs it
@@ -207,6 +212,11 @@ export async function makeProxy(source, { maxHeight, maxBitrate }, onProgress, s
 		const size = proxyOf(video, maxHeight)
 		const bitrate = videoBitrate(size, maxBitrate)
 		await makeRoom(proxyBytes(seconds, bitrate))
+		const grid = thumbGrid(seconds, thumbCap, size)
+		const strip = new OffscreenCanvas(grid.columns * THUMB_WIDTH, grid.rows * grid.tileHeight).getContext('2d')
+		let drawn = -1
+		const peaks = new Float32Array(BUCKETS)
+		let heard = false
 		signal.throwIfAborted()
 
 		const writable = await (await dir.getFileHandle(name, { create: true })).createWritable()
@@ -220,8 +230,39 @@ export async function makeProxy(source, { maxHeight, maxBitrate }, onProgress, s
 			output,
 			tracks: 'primary',
 			// The original's own average rate, unrounded: the server checks the Proxy against it
-			video: { codec: 'avc', ...size, fit: 'fill', frameRate: frames / seconds, bitrate, keyFrameInterval: 1, forceTranscode: true },
-			audio: { codec: 'aac', bitrate: 160_000 },
+			video: {
+				codec: 'avc',
+				...size,
+				fit: 'fill',
+				frameRate: frames / seconds,
+				bitrate,
+				keyFrameInterval: 1,
+				forceTranscode: true,
+				// The picture, already at the Proxy's size, also goes into the Thumbnail Strip
+				process: (sample) => {
+					const slot = thumbSlot(grid, sample.timestamp, sample.duration)
+					if (slot !== null && slot > drawn) {
+						drawn = slot
+						sample.draw(strip, (slot % grid.columns) * THUMB_WIDTH, Math.floor(slot / grid.columns) * grid.tileHeight, THUMB_WIDTH, grid.tileHeight)
+					}
+					return sample
+				},
+			},
+			audio: {
+				codec: 'aac',
+				bitrate: 160_000,
+				// The sound also goes into the Waveform
+				process: (sample) => {
+					const channels = Array.from({ length: sample.numberOfChannels }, (_, planeIndex) => {
+						const samples = new Float32Array(sample.numberOfFrames)
+						sample.copyTo(samples, { planeIndex, format: 'f32-planar' })
+						return samples
+					})
+					addPeaks(peaks, channels, sample.timestamp, sample.sampleRate, seconds)
+					heard = true
+					return sample
+				},
+			},
 			tags: {},
 			showWarnings: false,
 		})
@@ -241,7 +282,15 @@ export async function makeProxy(source, { maxHeight, maxBitrate }, onProgress, s
 
 		const file = await (await dir.getFileHandle(name)).getFile()
 		await check(file, { frames, seconds })
-		return { file, done }
+		// Safari's canvas encodes no WebP and gives a PNG instead, which the server does not take
+		const image = drawn < 0 ? null : await strip.canvas.convertToBlob({ type: 'image/webp', quality: 0.75 }).catch(() => null)
+		return {
+			file,
+			done,
+			frames,
+			thumbs: image?.type === 'image/webp' ? { image, every: grid.every, count: grid.count } : null,
+			peaks: heard ? roundPeaks(peaks) : null,
+		}
 	} catch (error) {
 		await done()
 		throw error
@@ -358,6 +407,11 @@ export async function handInProxy(versionId, making, status, controller) {
 		} finally {
 			await made.done()
 		}
+		// Whatever became of the Proxy: the server refuses them where it has its own, or makes them
+		await Promise.all([
+			made.thumbs && giveThumbs(versionId, made.thumbs.image, made.thumbs.every, made.thumbs.count).catch(() => {}),
+			made.peaks && giveWaveform(versionId, made.peaks, made.frames).catch(() => {}),
+		])
 	} finally {
 		clearInterval(beat)
 	}

@@ -25,8 +25,8 @@ const DONE = 'deliver.processing:'
 const CANCEL = 'deliver.upload-cancel'
 /** Whether the server has ffmpeg (story 138); without it the uploading browser decodes the Waveform */
 export const hasFfmpeg = loadState('deliver', 'ffmpeg', true)
-/** The Proxy resolution and the Proxy bitrate threshold, for the Proxies this browser makes without ffmpeg (ADR 0019) */
-export const proxySettings = loadState('deliver', 'proxy', { maxHeight: 1080, maxBitrate: 20 })
+/** The Proxy resolution, the Proxy bitrate threshold and the Thumbnail Strip cap, for the Proxies this browser makes without ffmpeg (ADR 0019) */
+export const proxySettings = loadState('deliver', 'proxy', { maxHeight: 1080, maxBitrate: 20, thumbCap: 600 })
 /**
  * Why a file is not taken where the server has no ffmpeg: this browser can
  * neither play nor convert it (ADR 0019), so it would not play for anyone.

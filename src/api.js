@@ -127,6 +127,23 @@ export function attachmentUrl(id) {
 export const resolveComment = (id, resolved) => axios.put(url(`/comments/${id}/resolved`), { resolved }).then(data)
 export const decideVersion = (versionId, status) => axios.put(url(`/versions/${versionId}/approval`), { status }).then(data)
 export const giveWaveform = (versionId, peaks, durationFrames) => axios.post(url(`/versions/${versionId}/waveform`), { peaks, durationFrames }).then(data)
+/**
+ * Hands in the Thumbnail Strip the browser made with a Proxy (ADR 0019)
+ *
+ * @param {number} versionId - the Version
+ * @param {Blob} image - the WebP grid
+ * @param {number} every - seconds between two pictures
+ * @param {number} count - how many pictures
+ */
+export async function giveThumbs(versionId, image, every, count) {
+	const base64 = await new Promise((resolve, reject) => {
+		const reader = new FileReader()
+		reader.onload = () => resolve(reader.result.slice(reader.result.indexOf(',') + 1))
+		reader.onerror = () => reject(reader.error)
+		reader.readAsDataURL(image)
+	})
+	return axios.post(url(`/versions/${versionId}/thumbs`), { image: base64, every, count }).then(data)
+}
 let decoding = Promise.resolve()
 /**
  * Decodes a file's Waveform after the ones before it, one at a time, so a
