@@ -104,3 +104,39 @@ export function fits(proxy, original) {
 	return proxy.frames === original.frames
 		&& Math.abs(proxy.seconds - original.seconds) <= original.seconds / original.frames / 2
 }
+
+/** The width of each picture of a Thumbnail Strip (DerivedMedia::THUMB_WIDTH) */
+export const THUMB_WIDTH = 160
+
+/**
+ * The grid of a Thumbnail Strip, as DerivedMedia::runThumbs makes it: a
+ * picture every few seconds, at most the Thumbnail Strip cap, in a near
+ * square grid, each 160 wide and as high as the aspect ratio says, rounded
+ * to even as ffmpeg's scale=160:-2 does.
+ *
+ * @param {number} seconds - the length of the video
+ * @param {number} cap - the Thumbnail Strip cap
+ * @param {{width: number, height: number}} size - the picture's
+ * @return {{every: number, count: number, columns: number, rows: number, tileHeight: number}} the grid
+ */
+export function thumbGrid(seconds, cap, { width, height }) {
+	const every = Math.max(1, Math.ceil(seconds / cap))
+	const count = Math.max(1, Math.min(cap, Math.ceil(seconds / every)))
+	const columns = Math.ceil(Math.sqrt(count))
+	return { every, count, columns, rows: Math.ceil(count / columns), tileHeight: Math.max(2, Math.round(THUMB_WIDTH * height / width / 2) * 2) }
+}
+
+/**
+ * Which picture of the strip a decoded picture stands for, as ffmpeg's fps
+ * filter (rounding=near) picks them: mark n takes the last picture before
+ * (n + ½) · every, so each picture drawn into its slot replaces the one
+ * before and the last one stays.
+ *
+ * @param {{every: number, count: number}} grid - from thumbGrid
+ * @param {number} time - when a decoded picture shows, in seconds from the start
+ * @return {?number} its slot; null past the last
+ */
+export function thumbSlot({ every, count }, time) {
+	const slot = Math.round(time / every)
+	return slot < count ? slot : null
+}

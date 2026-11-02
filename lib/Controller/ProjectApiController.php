@@ -146,6 +146,11 @@ class ProjectApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	public function thumbs(int $id, string $image = '', int $every = 0, int $count = 0): Response {
+		return $this->guard(fn () => $this->service->giveThumbs((string)$this->userId, $id, $image, $every, $count));
+	}
+
+	#[NoAdminRequired]
 	public function waveform(int $id, array $peaks = [], int $durationFrames = 0): Response {
 		return $this->guard(fn () => $this->service->giveWaveform((string)$this->userId, $id, $peaks, $durationFrames));
 	}
