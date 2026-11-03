@@ -1,18 +1,21 @@
 # Changelog
 
-## Unreleased
+## 0.11.0 – 2026-11-03
 
-- Accept a JPEG Thumbnail Strip from the browser besides WebP, so Safari makes one with its Proxy.
-- Give originals that browsers play a Proxy by the new Proxy bitrate threshold instead of their resolution, and keep every Proxy below it.
-- Give AV1 a Proxy.
+### Added
 - Make the Proxy of a video in the browser that uploads it in Deliver, where the server has no ffmpeg.
-- Refuse uploads the browser can neither play nor convert, where the server has no ffmpeg.
-- Add `POST /versions/{id}/proxy` and `POST /versions/{id}/proxy/progress` for Proxies made by the uploading browser where the server has no ffmpeg.
 - Add "Make Proxy in this browser" on the Asset card for Versions without their Proxy, where the server has no ffmpeg.
 - Make the Proxy of a video uploaded in the Files app into a Folder Project with Auto Intake in the uploading browser, where the server has no ffmpeg.
-- Add `GET /folders/{folderId}/intake`.
 - Make the Thumbnail Strip and the Waveform in the same pass as a Proxy from the browser.
+- Accept a JPEG Thumbnail Strip from the browser besides WebP, so Safari makes one with its Proxy.
+- Add `POST /versions/{id}/proxy` and `POST /versions/{id}/proxy/progress` for Proxies made by the uploading browser where the server has no ffmpeg.
+- Add `GET /folders/{folderId}/intake`.
 - Add `POST /versions/{id}/thumbs`.
+
+### Changed
+- Give originals that browsers play a Proxy by the new Proxy bitrate threshold instead of their resolution, and keep every Proxy below it.
+- Give AV1 a Proxy.
+- Refuse uploads the browser can neither play nor convert, where the server has no ffmpeg.
 - Name the phase of a Proxy, Encoding or Upload, and of a Waveform, Decoding, made in the browser next to it.
 - Shorten the refusal of a file the browser cannot make a Proxy of, naming the codec and the browser, or ffmpeg where no browser helps.
 - Say in the player that this Nextcloud lacks ffmpeg, where a file needs it to play.
