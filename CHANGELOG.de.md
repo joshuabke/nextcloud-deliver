@@ -1,18 +1,21 @@
 # Änderungen
 
-## Unveröffentlicht
+## 0.11.0 – 2026-11-03
 
-- Eine Vorschauleiste als JPEG neben WebP vom Browser angenommen, damit Safari mit seinem Proxy eine erzeugt.
-- Originalen, die Browser abspielen, einen Proxy nach der neuen Proxy-Bitratengrenze statt nach ihrer Auflösung gegeben und jeden Proxy unter ihr gehalten.
-- AV1 einen Proxy gegeben.
+### Neu
 - Den Proxy eines Videos im Browser erzeugt, der es in Deliver hochlädt, wo der Server kein ffmpeg hat.
-- Uploads abgelehnt, die der Browser weder abspielen noch umwandeln kann, wo der Server kein ffmpeg hat.
-- `POST /versions/{id}/proxy` und `POST /versions/{id}/proxy/progress` für Proxies ergänzt, die der hochladende Browser macht, wo der Server kein ffmpeg hat.
 - „Proxy in diesem Browser erzeugen“ auf der Asset-Karte für Versionen ohne ihren Proxy ergänzt, wo der Server kein ffmpeg hat.
 - Den Proxy eines Videos, das in der Dateien-App in ein Ordnerprojekt mit Automatischer Aufnahme hochgeladen wird, im hochladenden Browser erzeugt, wo der Server kein ffmpeg hat.
-- `GET /folders/{folderId}/intake` ergänzt.
 - Vorschauleiste und Wellenform im selben Durchgang wie einen Proxy aus dem Browser erzeugt.
+- Eine Vorschauleiste als JPEG neben WebP vom Browser angenommen, damit Safari mit seinem Proxy eine erzeugt.
+- `POST /versions/{id}/proxy` und `POST /versions/{id}/proxy/progress` für Proxies ergänzt, die der hochladende Browser macht, wo der Server kein ffmpeg hat.
+- `GET /folders/{folderId}/intake` ergänzt.
 - `POST /versions/{id}/thumbs` ergänzt.
+
+### Geändert
+- Originalen, die Browser abspielen, einen Proxy nach der neuen Proxy-Bitratengrenze statt nach ihrer Auflösung gegeben und jeden Proxy unter ihr gehalten.
+- AV1 einen Proxy gegeben.
+- Uploads abgelehnt, die der Browser weder abspielen noch umwandeln kann, wo der Server kein ffmpeg hat.
 - Die Phase eines im Browser erzeugten Proxys, Encoding oder Upload, und einer Wellenform, Decoding, neben ihnen genannt.
 - Die Ablehnung einer Datei, aus der der Browser keinen Proxy erzeugen kann, gekürzt, mit Codec und Browser oder mit ffmpeg, wo kein Browser hilft.
 - Im Player gesagt, dass dieser Nextcloud ffmpeg fehlt, wo eine Datei es zum Abspielen braucht.
