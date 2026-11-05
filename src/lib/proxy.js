@@ -400,7 +400,7 @@ let converting = Promise.resolve()
  *
  * @param {Blob|string} source - the original, or its URL
  * @param {{maxHeight: number, maxBitrate: number, thumbCap: number}} settings - the server's Proxy resolution, threshold and Thumbnail Strip cap
- * @param {{state: string, progress: number, error: ?string}} status - kept up to date: running, then failed if it does
+ * @param {{state: string, progress: number, error: ?string, since?: number}} status - kept up to date: running (since: when the pass that is running began), then failed if it does
  * @param {AbortSignal} signal - stops it
  * @return {Promise<?{file: File, done: () => Promise<void>, frames: number, thumbs: ?{image: Blob, every: number, count: number}, peaks: ?number[]}>} what makeProxy returns, null when it failed or was stopped
  */
@@ -408,7 +408,13 @@ export function convertInTurn(source, settings, status, signal) {
 	Object.assign(status, { state: 'running', progress: 0, error: null })
 	const turn = converting.then(() => signal.aborted
 		? Promise.reject(new Error('cancelled'))
-		: makeProxy(source, settings, (progress) => { status.progress = progress }, signal))
+		: makeProxy(source, settings, (progress) => {
+			// The second pass (a lower bitrate) starts again from 0, and so does the estimate
+				if (status.since === undefined || progress < status.progress) {
+					status.since = Date.now()
+				}
+				status.progress = progress
+			}, signal))
 	converting = turn.catch(() => {})
 	return turn.catch((error) => {
 		Object.assign(status, {

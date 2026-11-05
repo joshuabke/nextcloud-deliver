@@ -16,7 +16,7 @@ import { reactive, watchEffect } from 'vue'
 import { getAssetForFile, getIntake, handInWaveform } from './api.js'
 import { t } from './lib/l10n.js'
 import { convertInTurn, dropProxy, handInProxy, inspect } from './lib/proxy.js'
-import { busy } from './lib/uploadStatus.js'
+import { busy, encodingEta, timeLeft } from './lib/uploadStatus.js'
 import { uploaded } from './lib/waveform.js'
 
 /** The Proxies this tab makes of uploads, by file id once the file is there, for Deliver's sidebar tab */
@@ -83,10 +83,13 @@ function follow(name, job) {
 	const toast = showMessage(text, { timeout: TOAST_PERMANENT_TIMEOUT })
 	const stop = watchEffect(() => {
 		const { state, progress, error } = job.status
+		const left = state === 'running' ? timeLeft(encodingEta(job.status)) : ''
 		// Handing: the server takes the uploaded Proxy, still uploading for whoever watches
 		if (busy(state)) {
 			text.textContent = state === 'running'
-				? t('deliver', 'Deliver is making the Proxy of {name} in this browser: {percent} %. Keep this tab open.', { name, percent: progress })
+				? left
+					? t('deliver', 'Deliver is making the Proxy of {name} in this browser: {percent} %, {left}. Keep this tab open.', { name, percent: progress, left })
+					: t('deliver', 'Deliver is making the Proxy of {name} in this browser: {percent} %. Keep this tab open.', { name, percent: progress })
 				: t('deliver', 'Deliver is uploading the Proxy of {name}: {percent} %. Keep this tab open.', { name, percent: progress })
 			return
 		}
