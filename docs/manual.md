@@ -10,7 +10,7 @@ Your media stays in Files. Deliver keeps the review around it: Comments, Drawing
 
 - Making a **Project**, enabling a file for review, deleting a Project or removing an **Asset** never moves, copies or deletes a file.
 - Deliver changes a file only when you ask it to in Deliver: uploading puts new files into Files, renaming a file renames it there, and **Delete** on an Asset moves its files to the trash of Files.
-- While a video uploads, your browser may put a hidden file `.deliver-proxy-…` next to it for a moment: the Proxy it made, which Deliver takes over and removes.
+- When your browser makes a Proxy, it uploads it as a hidden file `.deliver-proxy-…` next to the video, which Deliver takes in and removes.
 - Whatever you do in Files works as always: sharing, moving, renaming, deleting. Deliver follows.
 - Except for a file with Comments or Approvals: Deliver **locks** it, so that nobody overwrites, renames or deletes it outside Deliver by accident, a sync client included. Files shows it as locked by Deliver. Replacing, renaming and deleting through Deliver still work, and whoever owns the file can lift the lock in Files. A Member with **Manage** can switch the lock off for a Project.
 - Where a file in review is overwritten anyway, without the lock, its Comments stay and are marked as made before the overwrite, and the Project's Members are notified.
