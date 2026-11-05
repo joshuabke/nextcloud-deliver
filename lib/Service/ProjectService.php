@@ -130,7 +130,7 @@ class ProjectService {
 		$makes = $project !== null && !$project->isDeleted() && $project->getAutoIntake()
 			&& $this->mayEdit($project, $this->access->folderOf($project, $home), $uid)
 			&& $this->media->withoutFfmpeg();
-		return ['proxy' => $makes ? ['maxHeight' => $this->media->maxHeight(), 'maxBitrate' => $this->media->maxBitrate(), 'thumbCap' => $this->media->thumbCap()] : null];
+		return ['proxy' => $makes ? $this->settings->proxy() : null];
 	}
 
 	/**
@@ -795,7 +795,7 @@ class ProjectService {
 				'proxy' => [
 					'state' => $version->getProxyState(),
 					'url' => $link('proxy', $version->getProxyState()),
-					'resolution' => $shortSide === null ? null : min($shortSide, $this->media->maxHeight()),
+					'resolution' => $shortSide === null ? null : min($shortSide, $this->settings->proxy()['maxHeight']),
 				],
 				'thumbs' => [
 					'state' => $version->getThumbsState(),

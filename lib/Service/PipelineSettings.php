@@ -69,6 +69,11 @@ class PipelineSettings {
 		];
 	}
 
+	/** @return array{maxHeight: int, maxBitrate: int, thumbCap: int} what a Proxy and a Thumbnail Strip are made to, for the server and the browser alike */
+	public function proxy(): array {
+		return array_intersect_key($this->get(), ['maxHeight' => 0, 'maxBitrate' => 0, 'thumbCap' => 0]);
+	}
+
 	/**
 	 * Saves the settings that are given. A hardware encoder is tested with a
 	 * one-second encode right away; if that fails it stays configured but

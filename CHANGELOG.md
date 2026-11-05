@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Fix the server reading Thumbnail Strip cap, Proxy resolution and Proxy bitrate threshold out of range differently from the browser.
+- Refuse a Proxy from the browser above the Proxy bitrate threshold, and make it again once at a lower bitrate when it comes out above.
+- Report the progress of a Proxy from the browser every 5 seconds instead of 15.
+
 ## 0.11.0 – 2026-11-03
 
 ### Added

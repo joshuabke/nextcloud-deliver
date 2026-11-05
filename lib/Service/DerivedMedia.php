@@ -85,6 +85,7 @@ class DerivedMedia {
 		private IRootFolder $root,
 		private IAppDataFactory $appDataFactory,
 		private IAppConfig $config,
+		private PipelineSettings $settings,
 		private ITimeFactory $time,
 		private LoggerInterface $logger,
 	) {
@@ -389,8 +390,8 @@ class DerivedMedia {
 	}
 
 	/** The Thumbnail Strip cap, which browsers keep to as well */
-	public function thumbCap(): int {
-		return max(1, $this->config->getValueInt(Application::APP_ID, 'thumb_cap', 600));
+	private function thumbCap(): int {
+		return $this->settings->proxy()['thumbCap'];
 	}
 
 	/** Mono 8 kHz PCM from ffmpeg, reduced to peaks without another binary */
@@ -538,7 +539,7 @@ class DerivedMedia {
 		if (!$this->needsProxy($version, $probed, $source)) {
 			throw new ProjectConflictException('This Version plays without a Proxy');
 		}
-		$error = $this->mismatch($version, $probed, $this->container->read($candidate));
+		$error = $this->mismatch($version, $probed, $this->container->read($candidate), (int)filesize($candidate));
 		if ($error === null) {
 			$stream = $upload->fopen('r');
 			try {
@@ -573,15 +574,19 @@ class DerivedMedia {
 	/**
 	 * @param array<string, mixed> $original what the original's headers say
 	 * @param ?array<string, mixed> $proxy what the Proxy's headers say
+	 * @param int $bytes the Proxy's size
 	 * @return ?string why the Proxy does not fit the Version, null when it does
 	 */
-	private function mismatch(Version $version, array $original, ?array $proxy): ?string {
+	private function mismatch(Version $version, array $original, ?array $proxy, int $bytes): ?string {
 		$picture = $this->videoOf($proxy);
 		if ($proxy === null || $picture === null || !str_contains((string)($proxy['format']['format_name'] ?? ''), 'mp4') || !$this->browserPlays($proxy)) {
 			return 'The Proxy is no H.264/AAC MP4 that browsers play';
 		}
 		if (min((int)($picture['width'] ?? 0), (int)($picture['height'] ?? 0)) > $this->maxHeight()) {
 			return 'The Proxy is larger than the Proxy resolution';
+		}
+		if ($this->heavy($bytes, (float)($picture['duration'] ?? 0))) {
+			return 'The Proxy goes above the Proxy bitrate threshold of ' . $this->maxBitrate() . ' Mbit/s';
 		}
 		if ($version->getHasAudio() && !array_filter($this->probe->streams($proxy), static fn (array $stream) => ($stream['codec_type'] ?? '') === 'audio')) {
 			return 'The Proxy has no sound, the original has';
@@ -812,12 +817,12 @@ class DerivedMedia {
 	}
 
 	/** The Proxy bitrate threshold in Mbit/s: what goes above it gets a Proxy, and no Proxy goes above it */
-	public function maxBitrate(): int {
-		return max(PipelineSettings::MIN_BITRATE, $this->config->getValueInt(Application::APP_ID, 'max_bitrate', PipelineSettings::BITRATE));
+	private function maxBitrate(): int {
+		return $this->settings->proxy()['maxBitrate'];
 	}
 
-	public function maxHeight(): int {
-		return max(PipelineSettings::MIN_HEIGHT, $this->config->getValueInt(Application::APP_ID, 'max_height', 1080));
+	private function maxHeight(): int {
+		return $this->settings->proxy()['maxHeight'];
 	}
 
 	/** Only to space the thumbnails; an unknown length counts as a minute */

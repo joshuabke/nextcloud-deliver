@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { convertible, fits, needsProxy, plays, proxyBytes, proxySize, thumbGrid, thumbSlot, videoBitrate, whyNot } from './proxyPlan.js'
+import { convertible, fits, heavy, lowerTarget, needsProxy, plays, proxyBytes, proxySize, thumbGrid, thumbSlot, videoBitrate, whyNot } from './proxyPlan.js'
 
 const video = (codec, codecString) => ({ type: 'video', codec, codecString })
 const audio = (codec) => ({ type: 'audio', codec })
@@ -107,5 +107,21 @@ describe('why this browser makes no Proxy', () => {
 		['nothing in the way before the encoder', { video: true, container: 'MP4', undecodable: undefined }, null],
 	])('%s', (_, file, reason) => {
 		expect(whyNot(file)).toBe(reason)
+	})
+})
+
+describe('a Proxy above the Proxy bitrate threshold', () => {
+	it('is measured by its bytes and length', () => {
+		expect(heavy(3_000_000, 1, 20)).toBe(true)
+		expect(heavy(3_000_000, 1, 25)).toBe(false)
+		expect(heavy(1, 0, 2)).toBe(false)
+	})
+
+	it('is made again with the picture bitrate scaled by the overshoot, below the threshold', () => {
+		// 10 Mbit/s came out as 30 with the sound: a third, aiming at 85 % of 20 Mbit/s
+		const next = lowerTarget(10e6, 3.75e6, 1, 30)
+		expect(next).toBeLessThan(10e6)
+		expect(next).toBeCloseTo(10e6 * (25.5e6 - 160e3) / (30e6 - 160e3), -3)
+		expect(lowerTarget(1, 1e9, 1, 2)).toBe(100_000)
 	})
 })
