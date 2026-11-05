@@ -401,6 +401,10 @@ class WithoutFfmpegTest extends TestCase {
 		$this->make(self::PRORES);
 		$version = $this->upload('master.mov');
 		$folder = $this->nc->fileId($this->root);
+		// Above the range as well
+		$this->occ('thumb_cap', 99999);
+		$this->occ('max_bitrate', 500);
+		self::assertSame(['maxHeight' => 1080, 'maxBitrate' => 200, 'thumbCap' => 5000], $this->nc->ocs('GET', "/folders/$folder/intake")['data']['proxy']);
 		// Out of range: the browser is told the nearest number in range, and the server must keep to that as well
 		$this->occ('thumb_cap', 1);
 		$this->occ('max_bitrate', 1);

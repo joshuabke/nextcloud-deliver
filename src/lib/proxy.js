@@ -189,10 +189,10 @@ async function makeRoom(bytes) {
  * @param {(percent: number) => void} onProgress - how far it is, 0 to 99
  * @param {AbortSignal} signal - stops it
  * @param {number} [target] - the picture's bitrate in bit/s, for the second go after the first came out above the threshold
- * @return {Promise<{file: File, done: () => Promise<void>, frames: number, thumbs: ?{image: Blob, every: number, count: number}, peaks: ?number[]}>}
+ * @return {Promise<{file: File, done: () => Promise<void>, frames: number, seconds: number, bitrate: number, thumbs: ?{image: Blob, every: number, count: number}, peaks: ?number[]}>}
  *   the Proxy, what deletes it once handed in, the Frames of the original, its Thumbnail Strip (WebP, JPEG where the browser encodes no WebP) and its Waveform (null without sound)
  */
-export async function makeProxy(source, { maxHeight, maxBitrate, thumbCap }, onProgress, signal, target) {
+async function convert(source, { maxHeight, maxBitrate, thumbCap }, onProgress, signal, target) {
 	const { Conversion, Mp4OutputFormat, Output, StreamTarget } = await mediabunny()
 	const name = `proxy-${Date.now()}-${Math.random().toString(36).slice(2)}.mp4`
 	// Held until done(), so no tab clears the file while this one still needs it
@@ -296,19 +296,13 @@ export async function makeProxy(source, { maxHeight, maxBitrate, thumbCap }, onP
 
 		const file = await (await dir.getFileHandle(name)).getFile()
 		await check(file, { frames, seconds })
-		// The encoder only aims at its bitrate, and the server refuses a Proxy above the threshold: once more, lower
-		if (heavy(file.size, seconds, maxBitrate)) {
-			if (target !== undefined) {
-				throw new TooHeavyError(maxBitrate)
-			}
-			await done()
-			return await makeProxy(source, { maxHeight, maxBitrate, thumbCap }, onProgress, signal, lowerTarget(bitrate, file.size, seconds, maxBitrate))
-		}
 		const image = strip && drawn >= 0 ? await strip.canvas.convertToBlob({ type: stripType, quality: stripType === 'image/webp' ? 0.75 : 0.8 }).catch(() => null) : null
 		return {
 			file,
 			done,
 			frames,
+			seconds,
+			bitrate,
 			thumbs: image?.type === stripType ? { image, every: grid.every, count: grid.count } : null,
 			peaks: heard ? roundPeaks(peaks) : null,
 		}
@@ -318,6 +312,41 @@ export async function makeProxy(source, { maxHeight, maxBitrate, thumbCap }, onP
 	} finally {
 		input.dispose()
 	}
+}
+
+/**
+ * Makes the Proxy of a file, once more at a lower bitrate when it comes out
+ * above the Proxy bitrate threshold: the encoder only aims at its bitrate,
+ * and the server refuses a Proxy above it. The first go is let go of (input,
+ * strip canvas, peaks) before the second starts.
+ *
+ * @param {Blob|string} source - the original, or its URL
+ * @param {object} settings - the server's, see convert()
+ * @param {(percent: number) => void} onProgress - how far it is, 0 to 99
+ * @param {AbortSignal} signal - stops it
+ * @return {Promise<object>} as convert()
+ * @throws {TooHeavyError} when the second go is above the threshold as well
+ */
+export async function makeProxy(source, settings, onProgress, signal) {
+	// Its own scope, so nothing of the first go outlives it
+	const first = await (async () => {
+		const made = await convert(source, settings, onProgress, signal)
+		if (!heavy(made.file.size, made.seconds, settings.maxBitrate)) {
+			return { made }
+		}
+		const target = lowerTarget(made.bitrate, made.file.size, made.seconds, settings.maxBitrate)
+		await made.done()
+		return { target }
+	})()
+	if (first.made) {
+		return first.made
+	}
+	const again = await convert(source, settings, onProgress, signal, first.target)
+	if (heavy(again.file.size, again.seconds, settings.maxBitrate)) {
+		await again.done()
+		throw new TooHeavyError(settings.maxBitrate)
+	}
+	return again
 }
 
 let probedType = null
