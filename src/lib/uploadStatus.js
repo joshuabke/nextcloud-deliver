@@ -106,6 +106,22 @@ export function encodingEta({ progress, since }, now = Date.now()) {
 }
 
 /**
+ * Takes a progress report of the encoder into the status of a Proxy. The
+ * estimate begins with the first report and again when the percent drops,
+ * which is the second pass at a lower bitrate.
+ *
+ * @param {{progress: number, since?: number}} status - the Proxy's, changed
+ * @param {number} progress - the encoder's percent
+ * @param {number} now - milliseconds
+ */
+export function advance(status, progress, now = Date.now()) {
+	if (status.since === undefined || progress < status.progress) {
+		status.since = now
+	}
+	status.progress = progress
+}
+
+/**
  * Where the Proxy this browser makes has got, to follow "Proxy"
  *
  * @param {{state: string, progress?: number, error?: string, since?: number}} proxy - its status

@@ -11,6 +11,7 @@ import { t } from './l10n.js'
 import { AUDIO_BITRATE, fits, heavy, lowerTarget, needsProxy, plays, proxyBytes, proxySize, THUMB_WIDTH, thumbGrid, thumbSlot, videoBitrate, whyNot } from './proxyPlan.js'
 import { unsupported } from './unsupported.js'
 import { browserEnv, uploadFile } from './upload.js'
+import { advance } from './uploadStatus.js'
 import { addPeaks, BUCKETS, channelsOf, roundPeaks } from './waveform.js'
 
 /** Deliver's folder in the browser's private file system */
@@ -408,13 +409,7 @@ export function convertInTurn(source, settings, status, signal) {
 	Object.assign(status, { state: 'running', progress: 0, error: null })
 	const turn = converting.then(() => signal.aborted
 		? Promise.reject(new Error('cancelled'))
-		: makeProxy(source, settings, (progress) => {
-			// The second pass (a lower bitrate) starts again from 0, and so does the estimate
-				if (status.since === undefined || progress < status.progress) {
-					status.since = Date.now()
-				}
-				status.progress = progress
-			}, signal))
+		: makeProxy(source, settings, (progress) => advance(status, progress), signal))
 	converting = turn.catch(() => {})
 	return turn.catch((error) => {
 		Object.assign(status, {

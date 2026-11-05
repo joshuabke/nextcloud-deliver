@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { encodingEta, processingFailed, processingOf, proxyLine, settled, statusOf, timeLeft } from './uploadStatus.js'
+import { advance, encodingEta, processingFailed, processingOf, proxyLine, settled, statusOf, timeLeft } from './uploadStatus.js'
 
 const done = (version) => ({ status: 'done', loaded: 10, size: 10, version })
 const derived = (states, fields = {}) => ({ playable: true, derived: { error: null, progress: null, ...Object.fromEntries(Object.entries(states).map(([kind, state]) => [kind, { state }])) }, ...fields })
@@ -87,5 +87,23 @@ describe('encodingEta', () => {
 	})
 	it('is part of the running phase only', () => {
 		expect(proxyLine({ state: 'running', progress: 40, since: Date.now() - 120_000 })).toBe('Proxy: Encoding 40 % · 3 minutes left')
+	})
+})
+
+describe('advance', () => {
+	it('starts the estimate with the first report, also at 0, and keeps it on a repeated percent', () => {
+		const status = { progress: 0 }
+		advance(status, 0, 100)
+		expect(status).toEqual({ progress: 0, since: 100 })
+		advance(status, 0, 200)
+		advance(status, 30, 300)
+		advance(status, 30, 400)
+		expect(status).toEqual({ progress: 30, since: 100 })
+	})
+	it('starts it again when the percent drops, for the second pass', () => {
+		const status = { progress: 0 }
+		advance(status, 80, 100)
+		advance(status, 5, 900)
+		expect(status).toEqual({ progress: 5, since: 900 })
 	})
 })
