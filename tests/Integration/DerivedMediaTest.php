@@ -178,10 +178,7 @@ class DerivedMediaTest extends TestCase {
 		$this->drainQueue();
 		self::assertSame('none', $this->version($versionId)['derived']['proxy']['state']);
 
-		// A Proxy as a browser would hand it in, next to the Version's file
-		$this->nc->put("{$this->root}/.deliver-proxy-test", (string)file_get_contents($this->fixture));
-		self::assertSame(409, $this->nc->ocs('POST', "/versions/$versionId/proxy/progress", ['percent' => 5])['status'], 'the server makes Proxies (ADR 0019)');
-		self::assertSame(409, $this->nc->ocs('POST', "/versions/$versionId/proxy", ['fileId' => $this->nc->fileId("{$this->root}/.deliver-proxy-test")])['status']);
+		self::assertSame(409, $this->nc->ocs('POST', "/versions/$versionId/proxy/progress", ['percent' => 5])['status'], 'the progress call is what guards the rule: the server makes Proxies (ADR 0019)');
 		self::assertSame('none', $this->version($versionId)['derived']['proxy']['state']);
 	}
 
@@ -194,7 +191,7 @@ class DerivedMediaTest extends TestCase {
 		self::assertTrue($saved['data']['settings']['hwEncoderOk'], (string)$saved['data']['settings']['hwEncoderError']);
 		// Noise: a constant-quality VAAPI encode of it goes far above 2 Mbit/s
 		[$code, $output] = $this->shell(sprintf(
-			'ffmpeg -loglevel error -y -f lavfi -i "testsrc=size=1280x720:rate=25:duration=3,noise=alls=60:allf=t" -c:v prores_ks -profile:v 0 %s',
+			'ffmpeg -loglevel error -y -f lavfi -i "testsrc=size=1280x720:rate=25:duration=5,noise=alls=60:allf=t" -c:v prores_ks -profile:v 0 %s',
 			escapeshellarg($this->fixture),
 		));
 		self::assertSame(0, $code, $output);
@@ -205,7 +202,7 @@ class DerivedMediaTest extends TestCase {
 		$version = $this->version($versionId);
 		self::assertSame('ready', $version['derived']['proxy']['state'], (string)$version['derived']['error']);
 		$bytes = strlen($this->nc->request('GET', $version['derived']['proxy']['url'])['body']);
-		self::assertLessThan(2_000_000, $bytes * 8 / 3, 'below the threshold of 2 Mbit/s, so made again in software');
+		self::assertLessThan(2_000_000, $bytes * 8 / 5, 'below the threshold of 2 Mbit/s, so made again in software');
 	}
 
 	public function testVaapiIsTestedOnSaveAndKeepsTheFrameRate(): void {

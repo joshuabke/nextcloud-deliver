@@ -371,20 +371,13 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy/progress", ['percent' => 5])['status']);
 		$id = (int)$version['id'];
 		// Started longer ago than the two hours after which a server worker's job counts as dead
-		$this->dbInNextcloud('$db->executeStatement("UPDATE *PREFIX*deliver_jobs SET started_at = started_at - 10800 WHERE kind = \'proxy\' AND version_id = ' . $id . '");');
+		$this->inNextcloud('\\OCP\\Server::get(\\OCP\\IDBConnection::class)->executeStatement("UPDATE *PREFIX*deliver_jobs SET started_at = started_at - 10800 WHERE kind = \'proxy\' AND version_id = ' . $id . '");');
 
 		exec('php /var/www/html/occ deliver:worker --once 2>&1', $output, $code);
 		self::assertSame(0, $code, implode("\n", $output));
 
-		$job = $this->dbInNextcloud('echo json_encode($db->executeQuery("SELECT state, claimed_by FROM *PREFIX*deliver_jobs WHERE kind = \'proxy\' AND version_id = ' . $id . '")->fetchAll());');
+		$job = $this->inNextcloud('echo json_encode(\\OCP\\Server::get(\\OCP\\IDBConnection::class)->executeQuery("SELECT state, claimed_by FROM *PREFIX*deliver_jobs WHERE kind = \'proxy\' AND version_id = ' . $id . '")->fetchAll());');
 		self::assertSame([['state' => 'running', 'claimed_by' => 'browser']], json_decode($job, true), 'a browser job lapses on its own, no server worker takes it');
-	}
-
-	/** Runs PHP inside this Nextcloud with the database as $db, and returns what it printed */
-	private function dbInNextcloud(string $code): string {
-		exec('php -r ' . escapeshellarg('require "/var/www/html/lib/base.php"; $db = \\OCP\\Server::get(\\OCP\\IDBConnection::class); ' . $code) . ' 2>&1', $output, $status);
-		self::assertSame(0, $status, implode("\n", $output));
-		return implode("\n", $output);
 	}
 
 	/** @return string a one-colour image of that size, base64 */
@@ -500,9 +493,10 @@ class WithoutFfmpegTest extends TestCase {
 	}
 
 	/** Runs PHP inside this Nextcloud, for what no API does: the minutes passing */
-	private function inNextcloud(string $code): void {
+	private function inNextcloud(string $code): string {
 		exec('php -r ' . escapeshellarg('require "/var/www/html/lib/base.php"; ' . $code) . ' 2>&1', $output, $status);
 		self::assertSame(0, $status, implode("\n", $output));
+		return implode("\n", $output);
 	}
 
 	public function testAWebmKeepsItsFrameRate(): void {
