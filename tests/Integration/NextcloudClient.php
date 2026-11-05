@@ -20,7 +20,7 @@ class NextcloudClient {
 	) {
 	}
 
-	/** @return array{status: int, body: string} */
+	/** @return array{status: int, body: string, headers: array} */
 	public function request(string $method, string $path, ?string $body = null, array $headers = []): array {
 		$ch = $this->handle();
 		$received = [];

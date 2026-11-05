@@ -217,7 +217,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 				<dl>
 					<dt>{{ t('deliver', 'Video') }}</dt>
 					<dd>
-						{{ t('deliver', 'MP4 and MOV with H.264, and WebM, play as they are.') }}
+						{{ t('deliver', 'MP4 and MOV with H.264, and WebM with VP8 or VP9, play as they are.') }}
 						{{ hasFfmpeg
 							? t('deliver', 'Everything else ffmpeg reads, such as ProRes, H.265, MXF or AVI, plays as a Proxy.')
 							: t('deliver', 'ProRes, H.265 and AV1 become a Proxy in your browser while they upload, where it decodes them. MXF, AVI, DNxHD and other formats need ffmpeg, which this Nextcloud lacks.') }}
