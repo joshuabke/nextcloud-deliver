@@ -627,6 +627,7 @@ OC.L10N.register(
 		"Upload {percent} %": "Upload {percent} %",
 		"The Proxy came out above the Proxy bitrate threshold of {max} Mbit/s, even at a lower bitrate.": "Der Proxy lag auch mit niedrigerer Bitrate über der Proxy-Bitratengrenze von {max} Mbit/s.",
 		"This browser has no room for the Proxy: {size} MB more are needed on this computer.": "Dieser Browser hat keinen Platz für den Proxy: Auf diesem Computer fehlen noch {size} MB.",
+		"Deliver is making the Proxy of {name} in this browser: {percent} %, {left}. Keep this tab open.": "Deliver erzeugt den Proxy von {name} in diesem Browser: {percent} %, {left}. Lass diesen Tab offen.",
 		"Deliver is making the Proxy of {name} in this browser: {percent} %. Keep this tab open.": "Deliver erzeugt den Proxy von {name} in diesem Browser: {percent} %. Lass diesen Tab offen.",
 		"Deliver is uploading the Proxy of {name}: {percent} %. Keep this tab open.": "Deliver lädt den Proxy von {name} hoch: {percent} %. Lass diesen Tab offen.",
 		"Deliver could not make the Proxy of {name} in this browser.": "Deliver konnte den Proxy von {name} in diesem Browser nicht erzeugen.",

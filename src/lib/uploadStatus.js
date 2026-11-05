@@ -89,15 +89,48 @@ export function statusOf(item) {
 }
 
 /**
+ * How long this browser still needs to encode a Proxy, estimated from the
+ * percent over the time since the pass began. Nothing before a few percent
+ * and seconds, and nothing at 99 %, where it only finishes.
+ *
+ * @param {{progress: number, since?: number}} proxy - its status
+ * @param {number} now - milliseconds
+ * @return {?number} seconds, or null while the guess would be wild
+ */
+export function encodingEta({ progress, since }, now = Date.now()) {
+	const elapsed = (now - since) / 1000
+	if (!Number.isFinite(elapsed) || progress < 3 || progress >= 99 || elapsed < 5) {
+		return null
+	}
+	return elapsed * (100 - progress) / progress
+}
+
+/**
+ * Takes a progress report of the encoder into the status of a Proxy. The
+ * estimate begins with the first report and again when the percent drops,
+ * which is the second pass at a lower bitrate.
+ *
+ * @param {{progress: number, since?: number}} status - the Proxy's, changed
+ * @param {number} progress - the encoder's percent
+ * @param {number} now - milliseconds
+ */
+export function advance(status, progress, now = Date.now()) {
+	if (status.since === undefined || progress < status.progress) {
+		status.since = now
+	}
+	status.progress = progress
+}
+
+/**
  * Where the Proxy this browser makes has got, to follow "Proxy"
  *
- * @param {{state: string, progress?: number, error?: string}} proxy - its status
+ * @param {{state: string, progress?: number, error?: string, since?: number}} proxy - its status
  * @return {?string} the phase and its percentage, or null while nothing is to say
  */
 export function proxyPhase(proxy) {
 	return {
 		checking: null,
-		running: t('deliver', 'Encoding {percent} %', { percent: proxy.progress }),
+		running: [t('deliver', 'Encoding {percent} %', { percent: proxy.progress }), timeLeft(encodingEta(proxy))].filter(Boolean).join(' · '),
 		uploading: t('deliver', 'Upload {percent} %', { percent: proxy.progress }),
 		handing: t('deliver', 'Finishing on the server'),
 		ready: t('deliver', 'Done'),

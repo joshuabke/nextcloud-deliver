@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- Show the time left next to the percentage while this browser encodes a Proxy.
+
 ## 0.11.1 – 2026-11-05
 
 ### Changed

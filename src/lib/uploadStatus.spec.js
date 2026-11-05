@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { processingFailed, processingOf, proxyLine, settled, statusOf, timeLeft } from './uploadStatus.js'
+import { advance, encodingEta, processingFailed, processingOf, proxyLine, settled, statusOf, timeLeft } from './uploadStatus.js'
 
 const done = (version) => ({ status: 'done', loaded: 10, size: 10, version })
 const derived = (states, fields = {}) => ({ playable: true, derived: { error: null, progress: null, ...Object.fromEntries(Object.entries(states).map(([kind, state]) => [kind, { state }])) }, ...fields })
@@ -65,5 +65,45 @@ describe('proxyLine', () => {
 		expect(proxyLine({ state: 'running', progress: 40 })).toBe('Proxy: Encoding 40 %')
 		expect(proxyLine({ state: 'checking' })).toBeNull()
 		expect(proxyLine(undefined)).toBeNull()
+	})
+})
+
+describe('encodingEta', () => {
+	const since = 1_000_000
+	const at = (progress, seconds) => encodingEta({ progress, since }, since + seconds * 1000)
+	it('says nothing at 0 %, early or without a start', () => {
+		expect(at(0, 30)).toBeNull()
+		expect(at(2, 30)).toBeNull()
+		expect(at(40, 3)).toBeNull()
+		expect(encodingEta({ progress: 40 }, since)).toBeNull()
+	})
+	it('extrapolates a steady pace', () => {
+		expect(at(40, 120)).toBe(180)
+		expect(at(10, 10)).toBe(90)
+	})
+	it('says nothing at 99 %, and counts a second pass from its own start', () => {
+		expect(at(99, 300)).toBeNull()
+		expect(encodingEta({ progress: 50, since: since + 290_000 }, since + 300_000)).toBe(10)
+	})
+	it('is part of the running phase only', () => {
+		expect(proxyLine({ state: 'running', progress: 40, since: Date.now() - 120_000 })).toBe('Proxy: Encoding 40 % · 3 minutes left')
+	})
+})
+
+describe('advance', () => {
+	it('starts the estimate with the first report, also at 0, and keeps it on a repeated percent', () => {
+		const status = { progress: 0 }
+		advance(status, 0, 100)
+		expect(status).toEqual({ progress: 0, since: 100 })
+		advance(status, 0, 200)
+		advance(status, 30, 300)
+		advance(status, 30, 400)
+		expect(status).toEqual({ progress: 30, since: 100 })
+	})
+	it('starts it again when the percent drops, for the second pass', () => {
+		const status = { progress: 0 }
+		advance(status, 80, 100)
+		advance(status, 5, 900)
+		expect(status).toEqual({ progress: 5, since: 900 })
 	})
 })
