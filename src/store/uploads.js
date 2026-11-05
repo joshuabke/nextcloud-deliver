@@ -6,7 +6,8 @@ import { defineStore } from 'pinia'
 import { chunkSizeFor, decodeInTurn, enableFile, errorMessage, getVersion, giveAudioWaveform, regenerateVersion } from '../api.js'
 import { t } from '../lib/l10n.js'
 import { mediaKind, reviewable } from '../lib/media.js'
-import { cannotConvert, clearProxies, convertInTurn, handInProxy, inspect } from '../lib/proxy.js'
+import { clearProxies, convertInTurn, handInProxy, inspect } from '../lib/proxy.js'
+import { refusal } from '../lib/unsupported.js'
 import { current, HEARTBEAT, sameFile, uploadFile } from '../lib/upload.js'
 import { ACTIVE, mergeBoard, totals } from '../lib/uploadBoard.js'
 import { settled } from '../lib/uploadStatus.js'
@@ -27,25 +28,6 @@ const CANCEL = 'deliver.upload-cancel'
 export const hasFfmpeg = loadState('deliver', 'ffmpeg', true)
 /** The Proxy resolution, the Proxy bitrate threshold and the Thumbnail Strip cap, for the Proxies this browser makes without ffmpeg (ADR 0019) */
 export const proxySettings = loadState('deliver', 'proxy', { maxHeight: 1080, maxBitrate: 20, thumbCap: 600 })
-/**
- * Why a file is not taken where the server has no ffmpeg: this browser can
- * neither play nor convert it (ADR 0019), so it would not play for anyone.
- *
- * @param {?object} seen - what inspect() found, null when it could not look
- * @param {string} type - the file's type
- * @return {?string} the reason, or null when it is taken
- */
-function refusal(seen, type) {
-	if (seen === null || seen.playable || (seen.convertible && type.startsWith('video/'))) {
-		return null
-	}
-	// Mediabunny reads no such container; the browser may still play it as it is, as Safari does AIFF
-	if (!seen.readable && document.createElement(type.startsWith('audio/') ? 'audio' : 'video').canPlayType(type)) {
-		return null
-	}
-	return cannotConvert(seen)
-}
-
 /**
  * @param {string} prefix - RECORD or DONE
  * @return {Array<{key: string, value: object}>} what every tab keeps under it
@@ -312,8 +294,13 @@ export const useUploadsStore = defineStore('uploads', {
 			// Without ffmpeg, what this browser can neither play nor convert is refused before it goes up (ADR 0019)
 			if (!hasFfmpeg && !item.fileId && /^(video|audio)\//.test(item.type) && !item.seen) {
 				item.status = 'checking'
+				// Cancel can come while Mediabunny loads, so the controller is there before
+				item.controller = new AbortController()
 				item.seen = await inspect(item.file, item.size, proxySettings).catch(() => null)
-				const why = refusal(item.seen, item.type)
+				if (item.controller.signal.aborted) {
+					return
+				}
+				const why = refusal(item.seen, item.type, (type) => document.createElement(type.startsWith('audio/') ? 'audio' : 'video').canPlayType(type), { userAgent: navigator.userAgent, touchPoints: navigator.maxTouchPoints, secure: window.isSecureContext })
 				if (why) {
 					Object.assign(item, { status: 'failed', error: why, file: null })
 					return

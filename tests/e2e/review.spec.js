@@ -772,6 +772,43 @@ test.describe('Uploads without ffmpeg', () => {
 			await context.close()
 		}
 	})
+
+	test('a cancel while the file is checked leaves nothing behind', async ({ playwright }) => {
+		const browser = await chromium.connectOverCDP(CDP)
+		const context = await browser.newContext({ baseURL: BROWSER_URL })
+		const page = await context.newPage()
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		try {
+			await login(page)
+			await page.goto(`/apps/deliver/projects/${projectId}`)
+			await page.getByRole('button', { name: 'Upload', exact: true }).click()
+			const uploads = page.getByRole('dialog', { name: 'Uploads' })
+			// Mediabunny loads lazily when the check starts; hold its chunks back so the cancel comes first
+			let release
+			const held = new Promise((resolve) => {
+				release = resolve
+			})
+			await page.route('**/*.chunk.mjs*', async (route) => {
+				await held
+				await route.continue()
+			})
+			await uploads.locator('input[type=file][multiple]').setInputFiles({ name: 'cancelled.wav', mimeType: 'audio/wav', buffer: readFileSync(MIX) })
+			await uploads.getByRole('button', { name: 'Cancel the upload of cancelled.wav' }).click()
+			await expect(uploads.getByText('cancelled.wav')).toHaveCount(0)
+			release()
+			// The next upload only starts once the cancelled one has let go, so when it is done, a stray one would be too
+			await uploads.locator('input[type=file][multiple]').setInputFiles({ name: 'after-cancel.wav', mimeType: 'audio/wav', buffer: readFileSync(MIX) })
+			await expect(uploads.getByText('Open', { exact: true })).toHaveCount(1)
+			const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
+			const names = project.ocs.data.assets.map((asset) => asset.versions[0].name)
+			expect(names).toContain('after-cancel.wav')
+			expect(names).not.toContain('cancelled.wav')
+			await expect(uploads.getByText('cancelled.wav')).toHaveCount(0)
+		} finally {
+			await api.dispose()
+			await context.close()
+		}
+	})
 })
 
 /**

@@ -3,6 +3,8 @@
 ## Unreleased
 
 - Say WebM with VP8 or VP9 plays as it is, in the list of files Deliver takes.
+- Fix cancelling an upload while the browser checks the file, which went up anyway.
+- Say that Proxies need https, instead of suggesting another browser, on a page over plain http.
 
 ## 0.11.0 – 2026-11-03
 

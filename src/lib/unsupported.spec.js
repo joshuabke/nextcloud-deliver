@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { browserName, codecName, unsupported } from './unsupported.js'
+import { browserName, codecName, refusal, unsupported } from './unsupported.js'
 
 const FIREFOX = 'Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0'
 const SAFARI = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15'
@@ -46,5 +46,36 @@ describe('why a file does not become a Proxy', () => {
 
 	it('claims nothing about a file it could not look at', () => {
 		expect(unsupported(null, CHROME)).toBe('Could not read the file.')
+	})
+
+	it('says Proxies need https on a page that is not a secure context, whatever the browser', () => {
+		expect(unsupported({ reason: 'codec', codec: 'hevc' }, FIREFOX, 0, false)).toBe('Proxies need https. Please open Deliver over https.')
+		expect(unsupported({ reason: 'encoder', codec: null }, IPHONE_CHROME, 5, false)).toBe('Proxies need https. Please open Deliver over https.')
+		expect(unsupported({ reason: 'format', codec: null }, CHROME, 0, false)).toBe('This format needs ffmpeg, which this Nextcloud lacks.')
+	})
+})
+
+describe('whether an upload is refused', () => {
+	const browser = { userAgent: CHROME, touchPoints: 0, secure: true }
+	const no = () => ''
+	const yes = () => 'maybe'
+	const seen = (over) => ({ readable: true, playable: false, convertible: false, reason: 'codec', codec: 'hevc', ...over })
+
+	it('takes a file it could not look at', () => {
+		expect(refusal(null, 'video/mp4', no, browser)).toBeNull()
+	})
+
+	it('takes what plays and a video it can convert', () => {
+		expect(refusal(seen({ playable: true }), 'video/mp4', no, browser)).toBeNull()
+		expect(refusal(seen({ convertible: true }), 'video/quicktime', no, browser)).toBeNull()
+	})
+
+	it('refuses audio that only converts, as a Proxy is made of video', () => {
+		expect(refusal(seen({ convertible: true }), 'audio/flac', no, browser)).toBe('H.265 is not supported in Chrome. Please use another browser.')
+	})
+
+	it('takes what Mediabunny cannot read when the browser plays the type, and refuses it otherwise', () => {
+		expect(refusal(seen({ readable: false }), 'audio/aiff', yes, browser)).toBeNull()
+		expect(refusal(seen({ readable: false, reason: 'format', codec: null }), 'audio/aiff', no, browser)).toBe('This format needs ffmpeg, which this Nextcloud lacks.')
 	})
 })

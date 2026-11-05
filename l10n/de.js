@@ -613,6 +613,7 @@ OC.L10N.register(
 		"This file is in review in a Project.": "Diese Datei ist in einem Projekt im Review.",
 		"ProRes, H.265 and AV1 become a Proxy in your browser while they upload, where it decodes them. MXF, AVI, DNxHD and other formats need ffmpeg, which this Nextcloud lacks.": "ProRes, H.265 und AV1 werden beim Hochladen in deinem Browser zum Proxy, wo er sie dekodieren kann. MXF, AVI, DNxHD und andere Formate brauchen ffmpeg, das dieser Nextcloud fehlt.",
 		"Checking whether this browser can convert it": "Prüft, ob dieser Browser sie umwandeln kann",
+		"Proxies need https. Please open Deliver over https.": "Proxies brauchen https. Bitte öffne Deliver über https.",
 		"{browser} cannot make Proxies. Please use another browser.": "{browser} kann keine Proxies erzeugen. Bitte nutze einen anderen Browser.",
 		"{codec} is not supported in {browser}. Please use another browser.": "{codec} wird in {browser} nicht unterstützt. Bitte nutze einen anderen Browser.",
 		"This browser": "Dieser Browser",

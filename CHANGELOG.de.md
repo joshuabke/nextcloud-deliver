@@ -3,6 +3,8 @@
 ## Unveröffentlicht
 
 - Gesagt, dass WebM mit VP8 oder VP9 spielt, wie es ist, in der Liste der Dateien, die Deliver annimmt.
+- Das Abbrechen eines Uploads, während der Browser die Datei prüft, behoben; er lief trotzdem weiter.
+- Gesagt, dass Proxies https brauchen, statt einen anderen Browser vorzuschlagen, auf einer Seite über einfaches http.
 
 ## 0.11.0 – 2026-11-03
 
