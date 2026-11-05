@@ -1,13 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.11.1 – 2026-11-05
 
-- Fix the server reading Thumbnail Strip cap, Proxy resolution and Proxy bitrate threshold out of range differently from the browser.
+### Changed
 - Refuse a Proxy from the browser above the Proxy bitrate threshold, and make it again once at a lower bitrate when it comes out above.
 - Report the progress of a Proxy from the browser every 5 seconds instead of 15.
 - Say WebM with VP8 or VP9 plays as it is, in the list of files Deliver takes.
-- Fix cancelling an upload while the browser checks the file, which went up anyway.
 - Say that Proxies need https, instead of suggesting another browser, on a page over plain http.
+
+### Fixed
+- Keep an out-of-range Thumbnail Strip cap, Proxy resolution or Proxy bitrate threshold in range on the server as in the browser.
+- Stop an upload cancelled while the browser checks the file, which went up anyway.
 
 ## 0.11.0 – 2026-11-03
 
