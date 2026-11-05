@@ -1,13 +1,16 @@
 # Änderungen
 
-## Unveröffentlicht
+## 0.11.1 – 2026-11-05
 
-- Außerhalb des Bereichs liegende Werte für Vorschauleisten-Obergrenze, Proxy-Auflösung und Proxy-Bitratengrenze behoben, die Server und Browser verschieden lasen.
+### Geändert
 - Einen Proxy aus dem Browser über der Proxy-Bitratengrenze abgelehnt und ihn einmal mit niedrigerer Bitrate neu erzeugt, wenn er darüber landet.
 - Den Fortschritt eines Proxys aus dem Browser alle 5 statt 15 Sekunden gemeldet.
 - Gesagt, dass WebM mit VP8 oder VP9 spielt, wie es ist, in der Liste der Dateien, die Deliver annimmt.
-- Das Abbrechen eines Uploads, während der Browser die Datei prüft, behoben; er lief trotzdem weiter.
 - Gesagt, dass Proxies https brauchen, statt einen anderen Browser vorzuschlagen, auf einer Seite über einfaches http.
+
+### Behoben
+- Eine Vorschauleisten-Obergrenze, Proxy-Auflösung oder Proxy-Bitratengrenze außerhalb des Bereichs auf dem Server wie im Browser in den Bereich gebracht.
+- Einen Upload angehalten, der abgebrochen wird, während der Browser die Datei prüft; er lief trotzdem hoch.
 
 ## 0.11.0 – 2026-11-03
 
