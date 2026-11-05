@@ -169,6 +169,45 @@ class DerivedMediaTest extends TestCase {
 		return $this->version($versionId);
 	}
 
+	public function testBrowsersMakeNoProxyWhileTheServerHasFfmpeg(): void {
+		// A light MP4 plays as it is, so it has no Proxy that would make the 409 for another reason
+		[$code, $output] = $this->shell(sprintf('ffmpeg -loglevel error -y -f lavfi -i testsrc=size=320x180:rate=25:duration=1 -c:v libx264 -pix_fmt yuv420p -f mp4 %s', escapeshellarg($this->fixture)));
+		self::assertSame(0, $code, $output);
+		$this->nc->put("{$this->root}/master.mp4", (string)file_get_contents($this->fixture));
+		$versionId = $this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'][0]['versions'][0]['id'];
+		$this->drainQueue();
+		self::assertSame('none', $this->version($versionId)['derived']['proxy']['state']);
+
+		// A Proxy as a browser would hand it in, next to the Version's file
+		$this->nc->put("{$this->root}/.deliver-proxy-test", (string)file_get_contents($this->fixture));
+		self::assertSame(409, $this->nc->ocs('POST', "/versions/$versionId/proxy/progress", ['percent' => 5])['status'], 'the server makes Proxies (ADR 0019)');
+		self::assertSame(409, $this->nc->ocs('POST', "/versions/$versionId/proxy", ['fileId' => $this->nc->fileId("{$this->root}/.deliver-proxy-test")])['status']);
+		self::assertSame('none', $this->version($versionId)['derived']['proxy']['state']);
+	}
+
+	public function testAHardwareProxyAboveTheThresholdIsMadeAgainInSoftware(): void {
+		if (!file_exists('/dev/dri/renderD128')) {
+			self::markTestSkipped('no VAAPI device in this container');
+		}
+		$saved = $this->nc->ocs('PUT', '/admin/settings', ['hwEncoder' => 'vaapi', 'hwDevice' => '/dev/dri/renderD128', 'maxBitrate' => 2]);
+		self::assertSame(200, $saved['status'], json_encode($saved['data']));
+		self::assertTrue($saved['data']['settings']['hwEncoderOk'], (string)$saved['data']['settings']['hwEncoderError']);
+		// Noise: a constant-quality VAAPI encode of it goes far above 2 Mbit/s
+		[$code, $output] = $this->shell(sprintf(
+			'ffmpeg -loglevel error -y -f lavfi -i "testsrc=size=1280x720:rate=25:duration=3,noise=alls=60:allf=t" -c:v prores_ks -profile:v 0 %s',
+			escapeshellarg($this->fixture),
+		));
+		self::assertSame(0, $code, $output);
+		$this->nc->put("{$this->root}/master.mov", (string)file_get_contents($this->fixture));
+		$versionId = $this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'][0]['versions'][0]['id'];
+		$this->drainQueue();
+
+		$version = $this->version($versionId);
+		self::assertSame('ready', $version['derived']['proxy']['state'], (string)$version['derived']['error']);
+		$bytes = strlen($this->nc->request('GET', $version['derived']['proxy']['url'])['body']);
+		self::assertLessThan(2_000_000, $bytes * 8 / 3, 'below the threshold of 2 Mbit/s, so made again in software');
+	}
+
 	public function testVaapiIsTestedOnSaveAndKeepsTheFrameRate(): void {
 		if (!file_exists('/dev/dri/renderD128')) {
 			self::markTestSkipped('no VAAPI device in this container');
