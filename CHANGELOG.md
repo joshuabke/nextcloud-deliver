@@ -9,7 +9,7 @@
 - Say that Proxies need https, instead of suggesting another browser, on a page over plain http.
 
 ### Fixed
-- Keep an out-of-range Thumbnail Strip cap, Proxy resolution or Proxy bitrate threshold in range on the server as in the browser.
+- Bring an out-of-range Thumbnail Strip cap, Proxy resolution or Proxy bitrate threshold into range on the server as in the browser.
 - Stop an upload cancelled while the browser checks the file, which went up anyway.
 
 ## 0.11.0 – 2026-11-03
