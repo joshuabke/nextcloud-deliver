@@ -79,16 +79,6 @@ export async function decodeWaveform(source, onProgress = () => {}) {
 }
 
 /**
- * @param {object} mediabunny - the loaded module
- * @param {Blob|string} source - the file the browser holds, or where the server serves it
- * @return {object} a Mediabunny Input for it
- */
-export function openInput(mediabunny, source) {
-	const { ALL_FORMATS, BlobSource, Input, UrlSource } = mediabunny
-	return new Input({ source: typeof source === 'string' ? new UrlSource(source) : new BlobSource(source), formats: ALL_FORMATS })
-}
-
-/**
  * @param {object} sample - a Mediabunny AudioSample
  * @return {Float32Array[]} its channels
  */
@@ -110,8 +100,8 @@ async function streamWaveform(source, onProgress) {
 		return null
 	}
 	// Loaded only here: most pages never decode a Waveform
-	const mediabunny = await import('mediabunny')
-	const input = openInput(mediabunny, source)
+	const { ALL_FORMATS, AudioSampleSink, BlobSource, Input, UrlSource } = await import('mediabunny')
+	const input = new Input({ formats: ALL_FORMATS, source: typeof source === 'string' ? new UrlSource(source) : new BlobSource(source) })
 	try {
 		const track = await input.getPrimaryAudioTrack()
 		if (!track || !await track.canDecode()) {
@@ -123,7 +113,7 @@ async function streamWaveform(source, onProgress) {
 		}
 		const peaks = new Float32Array(BUCKETS)
 		let end = 0
-		for await (const sample of new mediabunny.AudioSampleSink(track).samples()) {
+		for await (const sample of new AudioSampleSink(track).samples()) {
 			try {
 				addPeaks(peaks, channelsOf(sample), sample.timestamp, sample.sampleRate, seconds)
 				end = Math.max(end, sample.timestamp + sample.duration)

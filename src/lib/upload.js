@@ -2,7 +2,7 @@
  * Uploads into Files through Nextcloud's WebDAV, in chunks once a file is
  * larger than one, so a cut of several gigabytes passes size limits of
  * proxies and goes on where it stopped (spec: Discovery and stacking). The
- * request function is axios or a fake of it, so this stays out of `window`.
+ * request function is axios or a fake of it, so only `browserEnv` touches `window`, when called.
  */
 
 /**

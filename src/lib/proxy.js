@@ -7,12 +7,11 @@
  */
 import axios from '@nextcloud/axios'
 import { chunkSizeFor, errorMessage, getVersion, giveProxy, giveThumbs, giveWaveform, reportProxy, uploadsUrl } from '../api.js'
-import { inTurnQueue } from './inTurn.js'
 import { t } from './l10n.js'
 import { AUDIO_BITRATE, fits, heavy, lowerTarget, needsProxy, plays, proxyBytes, proxySize, THUMB_WIDTH, thumbGrid, thumbSlot, videoBitrate, whyNot } from './proxyPlan.js'
 import { unsupported } from './unsupported.js'
 import { browserEnv, uploadFile } from './upload.js'
-import { addPeaks, BUCKETS, channelsOf, openInput, roundPeaks } from './waveform.js'
+import { addPeaks, BUCKETS, channelsOf, roundPeaks } from './waveform.js'
 
 /** Deliver's folder in the browser's private file system */
 const FOLDER = 'deliver-proxies'
@@ -64,7 +63,8 @@ function mediabunny() {
  * @return {Promise<object>} a Mediabunny Input for it
  */
 async function open(source) {
-	return openInput(await mediabunny(), source)
+	const { ALL_FORMATS, BlobSource, Input, UrlSource } = await mediabunny()
+	return new Input({ source: typeof source === 'string' ? new UrlSource(source) : new BlobSource(source), formats: ALL_FORMATS })
 }
 
 /**
@@ -393,7 +393,7 @@ async function check(file, original) {
 	}
 }
 
-const inTurn = inTurnQueue()
+let converting = Promise.resolve()
 /**
  * Makes one Proxy after the other in this tab, so two masters do not fight
  * over the decoder, the encoder and the disk.
@@ -406,9 +406,11 @@ const inTurn = inTurnQueue()
  */
 export function convertInTurn(source, settings, status, signal) {
 	Object.assign(status, { state: 'running', progress: 0, error: null })
-	return inTurn(() => signal.aborted
+	const turn = converting.then(() => signal.aborted
 		? Promise.reject(new Error('cancelled'))
-		: makeProxy(source, settings, (progress) => { status.progress = progress }, signal)).catch((error) => {
+		: makeProxy(source, settings, (progress) => { status.progress = progress }, signal))
+	converting = turn.catch(() => {})
+	return turn.catch((error) => {
 		Object.assign(status, {
 			state: 'failed',
 			error: error instanceof NoRoomError

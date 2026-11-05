@@ -237,21 +237,12 @@ export const useUploadsStore = defineStore('uploads', {
 				return
 			}
 			item.controller?.abort()
-			this.stopProxy(item)
+			item.proxying && dropProxy(item.proxying, item.proxy, item.proxyController)
 			if (item.folder) {
 				axios.delete(item.folder).catch(() => {})
 			}
 			this.forget(item)
 			this.items = this.items.filter((each) => each !== item)
-		},
-		/**
-		 * @param {object} item - an upload whose Proxy has no Version to go to; a retry makes it again
-		 */
-		stopProxy(item) {
-			if (item.proxying) {
-				dropProxy(item.proxying, item.proxy, item.proxyController)
-			}
-			Object.assign(item, { proxy: null, proxying: null })
 		},
 		/** Takes the uploads off the list whose files and derived media are all there, in every tab */
 		hideFinished() {
@@ -397,7 +388,8 @@ export const useUploadsStore = defineStore('uploads', {
 				// Cancelled or failed, it is nobody's to show elsewhere; a retry here records it again
 				this.forget(item)
 				// Its Proxy has no Version to go to; a retry makes it again
-				this.stopProxy(item)
+				item.proxying && dropProxy(item.proxying, item.proxy, item.proxyController)
+				Object.assign(item, { proxy: null, proxying: null })
 				if (!signal.aborted) {
 					Object.assign(item, { status: 'failed', error: errorMessage(error) })
 				}

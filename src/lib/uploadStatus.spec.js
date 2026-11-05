@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { busy, processingFailed, processingOf, proxyLine, settled, statusOf, timeLeft } from './uploadStatus.js'
+import { processingFailed, processingOf, proxyLine, settled, statusOf, timeLeft } from './uploadStatus.js'
 
 const done = (version) => ({ status: 'done', loaded: 10, size: 10, version })
 const derived = (states, fields = {}) => ({ playable: true, derived: { error: null, progress: null, ...Object.fromEntries(Object.entries(states).map(([kind, state]) => [kind, { state }])) }, ...fields })
@@ -65,8 +65,5 @@ describe('proxyLine', () => {
 		expect(proxyLine({ state: 'running', progress: 40 })).toBe('Proxy: Encoding 40 %')
 		expect(proxyLine({ state: 'checking' })).toBeNull()
 		expect(proxyLine(undefined)).toBeNull()
-	})
-	it('knows the busy states', () => {
-		expect(['running', 'uploading', 'handing', 'ready', undefined].map(busy)).toEqual([true, true, true, false, false])
 	})
 })
