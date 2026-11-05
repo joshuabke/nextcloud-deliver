@@ -677,7 +677,7 @@ class DerivedMedia {
 	 */
 	private function needsProxy(Version $version, int $bytes): bool {
 		return $version->getHasVideo()
-			&& (!$version->getPlayable() || $this->heavy($bytes, $this->durationSeconds($version)));
+			&& (!$version->getPlayable() || $this->heavy($bytes, $this->durationSeconds($version, 0.0)));
 	}
 
 	/** Whether a file of this size and length goes above the Proxy bitrate threshold */
@@ -823,13 +823,13 @@ class DerivedMedia {
 		return $this->settings->proxy()['maxHeight'];
 	}
 
-	/** The length of a Version in seconds, from its Frames and rate; an unknown length counts as a minute */
-	private function durationSeconds(Version $version): float {
+	/** The length of a Version in seconds, from its Frames and rate; an unknown length counts as `$unknown` (a minute for spacing Thumbnails, 0 where it must not count as heavy) */
+	private function durationSeconds(Version $version, float $unknown = 60.0): float {
 		$frames = $version->getDurationFrames();
 		$num = $version->getFpsNum();
 		$den = $version->getFpsDen();
 		if ($frames === null || !$num || !$den) {
-			return 60.0;
+			return $unknown;
 		}
 		return $frames * $den / $num;
 	}
