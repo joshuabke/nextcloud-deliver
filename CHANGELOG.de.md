@@ -1,5 +1,10 @@
 # Änderungen
 
+## Unveröffentlicht
+
+- Das Abbrechen eines Uploads, während der Browser die Datei prüft, behoben; er lief trotzdem weiter.
+- Gesagt, dass Proxies https brauchen, statt einen anderen Browser vorzuschlagen, auf einer Seite über einfaches http.
+
 ## 0.11.0 – 2026-11-03
 
 ### Neu

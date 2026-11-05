@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Fix cancelling an upload while the browser checks the file, which went up anyway.
+- Say that Proxies need https, instead of suggesting another browser, on a page over plain http.
+
 ## 0.11.0 – 2026-11-03
 
 ### Added

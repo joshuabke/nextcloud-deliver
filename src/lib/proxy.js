@@ -124,7 +124,7 @@ export async function inspect(source, bytes, { maxHeight, maxBitrate }) {
  * @return {string} why this browser cannot make a Proxy of the file
  */
 export function cannotConvert(seen) {
-	return unsupported(seen, navigator.userAgent, navigator.maxTouchPoints)
+	return unsupported(seen, navigator.userAgent, navigator.maxTouchPoints, window.isSecureContext)
 }
 
 /** @return {Promise<FileSystemDirectoryHandle>} Deliver's folder in the browser's private file system */
