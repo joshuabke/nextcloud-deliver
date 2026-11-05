@@ -5,6 +5,7 @@
 - Außerhalb des Bereichs liegende Werte für Vorschauleisten-Obergrenze, Proxy-Auflösung und Proxy-Bitratengrenze behoben, die Server und Browser verschieden lasen.
 - Einen Proxy aus dem Browser über der Proxy-Bitratengrenze abgelehnt und ihn einmal mit niedrigerer Bitrate neu erzeugt, wenn er darüber landet.
 - Den Fortschritt eines Proxys aus dem Browser alle 5 statt 15 Sekunden gemeldet.
+- Gesagt, dass WebM mit VP8 oder VP9 spielt, wie es ist, in der Liste der Dateien, die Deliver annimmt.
 
 ## 0.11.0 – 2026-11-03
 
@@ -25,6 +26,7 @@
 - Die Phase eines im Browser erzeugten Proxys, Encoding oder Upload, und einer Wellenform, Decoding, neben ihnen genannt.
 - Die Ablehnung einer Datei, aus der der Browser keinen Proxy erzeugen kann, gekürzt, mit Codec und Browser oder mit ffmpeg, wo kein Browser hilft.
 - Im Player gesagt, dass dieser Nextcloud ffmpeg fehlt, wo eine Datei es zum Abspielen braucht.
+- WebAssembly und Worker aus `blob:` in der CSP der Seiten erlaubt, auf denen das Dateien-Seitenleisten-Skript von Deliver läuft, für die Proxies aus Uploads.
 
 ## 0.10.0 – 2026-10-31
 

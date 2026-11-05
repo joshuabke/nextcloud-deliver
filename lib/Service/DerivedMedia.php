@@ -642,7 +642,7 @@ class DerivedMedia {
 	}
 
 	/**
-	 * Whether browsers play the original: H.264/AAC in MP4 and VP8/VP9/AV1
+	 * Whether browsers play the original: H.264/AAC in MP4 and VP8/VP9
 	 * with Opus/Vorbis in WebM, at any size (spec: Media metadata and derived media).
 	 */
 	private function browserPlays(array $probed): bool {
@@ -825,7 +825,7 @@ class DerivedMedia {
 		return $this->settings->proxy()['maxHeight'];
 	}
 
-	/** Only to space the thumbnails; an unknown length counts as a minute */
+	/** The length of a Version in seconds, from its Frames and rate; an unknown length counts as a minute */
 	private function durationSeconds(Version $version): float {
 		$frames = $version->getDurationFrames();
 		$num = $version->getFpsNum();

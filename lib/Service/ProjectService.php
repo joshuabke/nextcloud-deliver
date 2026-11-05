@@ -651,7 +651,7 @@ class ProjectService {
 
 	/**
 	 * The Thumbnail Strip a browser made with the Proxy (ADR 0019), base64
-	 * WebP; needs Manage, as the Proxy does.
+	 * WebP or JPEG; needs Manage, as the Proxy does.
 	 */
 	public function giveThumbs(string $uid, int $versionId, string $image, int $every, int $count): array {
 		$version = $this->writableVersion($uid, $versionId);

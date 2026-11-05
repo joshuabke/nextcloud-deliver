@@ -164,7 +164,7 @@ _Avoid_: Transcode, preview, rendition
 
 **Proxy bitrate threshold**:
 The bitrate above which an original that browsers play also gets a Proxy, and which no Proxy goes above; an admin setting, 20 Mbit/s by default.
-_Avoid_: Max bitrate, bitrate limit
+_Avoid_: bitrate limit
 
 **Thumbnail Strip**:
 A grid of small frames sampled along a Version, used for hover previews on the timeline.
