@@ -17,7 +17,7 @@ import { useLongPress } from '../composables/longpress.js'
 import { n, t } from '../lib/l10n.js'
 import { isStill } from '../lib/media.js'
 import { runtime } from '../lib/timecode.js'
-import { proxyPhase } from '../lib/uploadStatus.js'
+import { proxyLine } from '../lib/uploadStatus.js'
 import { useUploadsStore } from '../store/uploads.js'
 
 const props = defineProps({
@@ -88,12 +88,9 @@ const status = computed(() => {
 	}
 	// Its Proxy, made in this browser (ADR 0019)
 	const making = uploads.proxies[newest.value.id]
-	const phase = making && proxyPhase(making)
-	if (phase) {
-		return {
-			text: `${t('deliver', 'Proxy')}: ${phase}`,
-			kind: 'info',
-		}
+	const line = proxyLine(making)
+	if (line) {
+		return { text: line, kind: 'info' }
 	}
 	if (newest.value.processingFailed) {
 		return { text: t('deliver', 'Processing failed'), kind: 'warning' }

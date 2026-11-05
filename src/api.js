@@ -3,6 +3,7 @@ import axios from '@nextcloud/axios'
 import { loadState } from '@nextcloud/initial-state'
 import { getLanguage } from '@nextcloud/l10n'
 import { generateOcsUrl, generateRemoteUrl, generateUrl } from '@nextcloud/router'
+import { inTurnQueue } from './lib/inTurn.js'
 import { t } from './lib/l10n.js'
 import { baseLanguage } from './lib/language.js'
 import { fileIdAt } from './lib/upload.js'
@@ -144,7 +145,10 @@ export async function giveThumbs(versionId, image, every, count) {
 	})
 	return axios.post(url(`/versions/${versionId}/thumbs`), { image: base64, every, count }).then(data)
 }
-let decoding = Promise.resolve()
+/** @return {string} WebDAV URL of the user's upload folders */
+export const uploadsUrl = () => generateRemoteUrl('dav') + '/uploads/' + encodeURIComponent(getCurrentUser()?.uid ?? '')
+
+const inTurn = inTurnQueue()
 /**
  * Decodes a file's Waveform after the ones before it, one at a time, so a
  * batch of long mixes is not in memory at once.
@@ -154,9 +158,7 @@ let decoding = Promise.resolve()
  * @return {Promise<{peaks: number[], seconds: number}>} its Waveform
  */
 export function decodeInTurn(file, onProgress) {
-	const turn = decoding.then(() => decodeWaveform(file, onProgress))
-	decoding = turn.catch(() => {})
-	return turn
+	return inTurn(() => decodeWaveform(file, onProgress))
 }
 
 /**

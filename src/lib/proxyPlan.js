@@ -26,7 +26,7 @@ const H264_420 = [66, 77, 88, 100]
  * @param {string} format - Mediabunny's name of the container, such as 'MP4', 'QuickTime File Format', 'WebM', 'Matroska' or 'WAVE'
  * @return {?string} its family in PLAYABLE
  */
-export function family(format) {
+function family(format) {
 	const name = format.toLowerCase()
 	if (name.includes('mp4') || name.includes('quicktime')) {
 		return 'mp4'
