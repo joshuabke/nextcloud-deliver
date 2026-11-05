@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Say WebM with VP8 or VP9 plays as it is, in the list of files Deliver takes.
 - Fix cancelling an upload while the browser checks the file, which went up anyway.
 - Say that Proxies need https, instead of suggesting another browser, on a page over plain http.
 
@@ -24,6 +25,7 @@
 - Name the phase of a Proxy, Encoding or Upload, and of a Waveform, Decoding, made in the browser next to it.
 - Shorten the refusal of a file the browser cannot make a Proxy of, naming the codec and the browser, or ffmpeg where no browser helps.
 - Say in the player that this Nextcloud lacks ffmpeg, where a file needs it to play.
+- Allow WebAssembly and workers from `blob:` in the CSP of the pages Deliver's Files sidebar script runs on, for the Proxies made of uploads.
 
 ## 0.10.0 – 2026-10-31
 

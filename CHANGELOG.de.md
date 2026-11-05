@@ -2,6 +2,7 @@
 
 ## Unveröffentlicht
 
+- Gesagt, dass WebM mit VP8 oder VP9 spielt, wie es ist, in der Liste der Dateien, die Deliver annimmt.
 - Das Abbrechen eines Uploads, während der Browser die Datei prüft, behoben; er lief trotzdem weiter.
 - Gesagt, dass Proxies https brauchen, statt einen anderen Browser vorzuschlagen, auf einer Seite über einfaches http.
 
@@ -24,6 +25,7 @@
 - Die Phase eines im Browser erzeugten Proxys, Encoding oder Upload, und einer Wellenform, Decoding, neben ihnen genannt.
 - Die Ablehnung einer Datei, aus der der Browser keinen Proxy erzeugen kann, gekürzt, mit Codec und Browser oder mit ffmpeg, wo kein Browser hilft.
 - Im Player gesagt, dass dieser Nextcloud ffmpeg fehlt, wo eine Datei es zum Abspielen braucht.
+- WebAssembly und Worker aus `blob:` in der CSP der Seiten erlaubt, auf denen das Dateien-Seitenleisten-Skript von Deliver läuft, für die Proxies aus Uploads.
 
 ## 0.10.0 – 2026-10-31
 

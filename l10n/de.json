@@ -486,7 +486,7 @@
 		"Interrupted. Pick the file again to go on where it stopped.": "Unterbrochen. Wähle die Datei erneut, um dort weiterzumachen, wo es aufgehört hat.",
 		"JPEG, PNG, WebP, GIF and AVIF.": "JPEG, PNG, WebP, GIF und AVIF.",
 		"less than a minute left": "noch weniger als eine Minute",
-		"MP4 and MOV with H.264, and WebM, play as they are.": "MP4 und MOV mit H.264 sowie WebM spielen, wie sie sind.",
+		"MP4 and MOV with H.264, and WebM with VP8 or VP9, play as they are.": "MP4 und MOV mit H.264 sowie WebM mit VP8 oder VP9 spielen, wie sie sind.",
 		"Other audio ffmpeg reads plays as a Proxy.": "Anderes Audio, das ffmpeg liest, spielt als Proxy.",
 		"Other audio needs ffmpeg.": "Anderes Audio braucht ffmpeg.",
 		"Finishing on the server": "Wird auf dem Server fertiggestellt",

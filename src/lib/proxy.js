@@ -360,10 +360,10 @@ let converting = Promise.resolve()
  * over the decoder, the encoder and the disk.
  *
  * @param {Blob|string} source - the original, or its URL
- * @param {{maxHeight: number, maxBitrate: number}} settings - the server's Proxy resolution and threshold
+ * @param {{maxHeight: number, maxBitrate: number, thumbCap: number}} settings - the server's Proxy resolution, threshold and Thumbnail Strip cap
  * @param {{state: string, progress: number, error: ?string}} status - kept up to date: running, then failed if it does
  * @param {AbortSignal} signal - stops it
- * @return {Promise<?{file: File, done: () => Promise<void>}>} the Proxy, null when it failed or was stopped
+ * @return {Promise<?{file: File, done: () => Promise<void>, frames: number, thumbs: ?{image: Blob, every: number, count: number}, peaks: ?number[]}>} what makeProxy returns, null when it failed or was stopped
  */
 export function convertInTurn(source, settings, status, signal) {
 	Object.assign(status, { state: 'running', progress: 0, error: null })
