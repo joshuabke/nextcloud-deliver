@@ -7,6 +7,15 @@ import { n, t } from './l10n.js'
 /** Derived media kinds in the order they are listed */
 export const KINDS = ['waveform', 'proxy', 'thumbs']
 
+/** The states of the Proxy this browser makes in which it is busy, so a closed tab would lose it */
+const BUSY = ['running', 'uploading', 'handing']
+
+/**
+ * @param {?string} state - a Proxy's state
+ * @return {boolean} whether the Proxy is being made, uploaded or taken by the server
+ */
+export const busy = (state) => BUSY.includes(state)
+
 /**
  * @param {object} item - an upload
  * @return {boolean} whether its derived media are all made or failed, so nothing is left to watch
@@ -18,7 +27,7 @@ export function settled(item) {
 		return false
 	}
 	const running = KINDS.some((kind) => ['queued', 'running'].includes(version.derived[kind]?.state))
-		|| ['running', 'uploading', 'handing'].includes(item.proxy?.state)
+		|| busy(item.proxy?.state)
 	return !running && (version.playable !== null || Boolean(version.derived.error))
 }
 
@@ -94,6 +103,15 @@ export function proxyPhase(proxy) {
 		ready: t('deliver', 'Done'),
 		failed: proxy.error ?? t('deliver', 'Failed'),
 	}[proxy.state]
+}
+
+/**
+ * @param {?{state: string, progress?: number, error?: string}} proxy - the status of a Proxy this browser makes
+ * @return {?string} "Proxy: <phase>", or null while nothing is to say
+ */
+export function proxyLine(proxy) {
+	const phase = proxy && proxyPhase(proxy)
+	return phase ? `${t('deliver', 'Proxy')}: ${phase}` : null
 }
 
 /**

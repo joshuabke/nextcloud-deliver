@@ -2,8 +2,27 @@
  * Uploads into Files through Nextcloud's WebDAV, in chunks once a file is
  * larger than one, so a cut of several gigabytes passes size limits of
  * proxies and goes on where it stopped (spec: Discovery and stacking). The
- * request function is axios or a fake of it, so this stays out of `window`.
+ * request function is axios or a fake of it, so only `browserEnv` touches `window`, when called.
  */
+
+/**
+ * @param {AbortSignal} signal - stops the upload; a cancel ends the waiting too
+ * @return {{signal: AbortSignal, online: () => boolean, untilOnline: () => Promise<void>, sleep: (seconds: number) => Promise<void>}} how uploadFile waits in a browser
+ */
+export function browserEnv(signal) {
+	return {
+		signal,
+		online: () => navigator.onLine,
+		untilOnline: () => new Promise((resolve) => {
+			window.addEventListener('online', resolve, { once: true })
+			signal.addEventListener('abort', resolve, { once: true })
+		}),
+		sleep: (seconds) => new Promise((resolve) => {
+			setTimeout(resolve, seconds * 1000)
+			signal.addEventListener('abort', resolve, { once: true })
+		}),
+	}
+}
 
 /**
  * @param {{headers: object}} response - Nextcloud's answer to a finished upload

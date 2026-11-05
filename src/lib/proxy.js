@@ -5,15 +5,13 @@
  * private file system (OPFS), so neither the original nor the Proxy has to
  * fit into memory. The rules come from proxyPlan.js.
  */
-import { getCurrentUser } from '@nextcloud/auth'
 import axios from '@nextcloud/axios'
-import { generateRemoteUrl } from '@nextcloud/router'
-import { chunkSizeFor, errorMessage, getVersion, giveProxy, giveThumbs, giveWaveform, reportProxy } from '../api.js'
+import { chunkSizeFor, errorMessage, getVersion, giveProxy, giveThumbs, giveWaveform, reportProxy, uploadsUrl } from '../api.js'
 import { t } from './l10n.js'
 import { AUDIO_BITRATE, fits, heavy, lowerTarget, needsProxy, plays, proxyBytes, proxySize, THUMB_WIDTH, thumbGrid, thumbSlot, videoBitrate, whyNot } from './proxyPlan.js'
 import { unsupported } from './unsupported.js'
-import { uploadFile } from './upload.js'
-import { addPeaks, BUCKETS, roundPeaks } from './waveform.js'
+import { browserEnv, uploadFile } from './upload.js'
+import { addPeaks, BUCKETS, channelsOf, roundPeaks } from './waveform.js'
 
 /** Deliver's folder in the browser's private file system */
 const FOLDER = 'deliver-proxies'
@@ -23,7 +21,7 @@ const LOCK = 'deliver-proxy:'
 const REPORT = 5
 
 /** Thrown when the browser has no room for the Proxy; `missing` says how many bytes */
-export class NoRoomError extends Error {
+class NoRoomError extends Error {
 	constructor(missing) {
 		super('No room for the Proxy')
 		this.missing = missing
@@ -267,12 +265,7 @@ async function convert(source, { maxHeight, maxBitrate, thumbCap }, onProgress, 
 				bitrate: AUDIO_BITRATE,
 				// The sound also goes into the Waveform
 				process: (sample) => {
-					const channels = Array.from({ length: sample.numberOfChannels }, (_, planeIndex) => {
-						const samples = new Float32Array(sample.numberOfFrames)
-						sample.copyTo(samples, { planeIndex, format: 'f32-planar' })
-						return samples
-					})
-					addPeaks(peaks, channels, sample.timestamp, sample.sampleRate, seconds)
+					addPeaks(peaks, channelsOf(sample), sample.timestamp, sample.sampleRate, seconds)
 					heard = true
 					return sample
 				},
@@ -327,7 +320,7 @@ async function convert(source, { maxHeight, maxBitrate, thumbCap }, onProgress, 
  * @return {Promise<object>} as convert()
  * @throws {TooHeavyError} when the second go is above the threshold as well
  */
-export async function makeProxy(source, settings, onProgress, signal) {
+async function makeProxy(source, settings, onProgress, signal) {
 	// Its own scope, so nothing of the first go outlives it
 	const first = await (async () => {
 		const made = await convert(source, settings, onProgress, signal)
@@ -469,7 +462,7 @@ export async function handInProxy(versionId, making, status, controller) {
 	let reported = Promise.resolve()
 	const report = () => {
 		if (['running', 'uploading'].includes(status.state)) {
-			reported = reportProxy(versionId, Math.min(99, status.state === 'running' ? status.progress : 99)).catch(() => {})
+			reported = reportProxy(versionId, status.state === 'running' ? status.progress : 99).catch(() => {})
 		}
 	}
 	report()
@@ -533,18 +526,12 @@ async function uploadNextTo(url, file, status, signal) {
 			request: axios.request,
 			file,
 			target,
-			uploadsUrl: generateRemoteUrl('dav') + '/uploads/' + encodeURIComponent(getCurrentUser()?.uid ?? ''),
+			uploadsUrl: uploadsUrl(),
 			chunkSize: chunkSizeFor(file.size),
 			onProgress: (loaded) => {
 				status.progress = Math.floor(loaded / Math.max(1, file.size) * 100)
 			},
-			env: {
-				signal,
-				online: () => navigator.onLine,
-				untilOnline: () => new Promise((resolve) => window.addEventListener('online', resolve, { once: true })),
-				sleep: (seconds) => new Promise((resolve) => setTimeout(resolve, seconds * 1000)),
-				onPause: () => {},
-			},
+			env: browserEnv(signal),
 		})
 	} catch (error) {
 		axios.delete(target).catch(() => {})

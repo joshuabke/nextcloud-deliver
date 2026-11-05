@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { chunkPlan, current, HEARTBEAT, parseChunks, sameFile, sentElsewhere, uploadFile } from './upload.js'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { browserEnv, chunkPlan, current, HEARTBEAT, parseChunks, sameFile, sentElsewhere, uploadFile } from './upload.js'
 
 /**
  * Nextcloud's WebDAV, as far as an upload sees it: files by URL, upload
@@ -191,5 +191,18 @@ describe('an upload', () => {
 		const dav = fakeDav()
 		await uploadFile({ request: dav.request, file: file(25), target: TARGET, uploadsUrl: UPLOADS, chunkSize: 10, folder: `${UPLOADS}/deliver-gone`, env: dav.env })
 		expect(dav.log.filter((line) => line.startsWith('PUT'))).toHaveLength(3)
+	})
+})
+
+describe('browserEnv', () => {
+	afterEach(() => vi.unstubAllGlobals())
+
+	it('ends the waiting for the network and the pause between attempts on an abort', async () => {
+		vi.stubGlobal('window', { addEventListener: () => {} })
+		const controller = new AbortController()
+		const env = browserEnv(controller.signal)
+		const waiting = Promise.all([env.untilOnline(), env.sleep(3600)])
+		controller.abort()
+		await waiting
 	})
 })

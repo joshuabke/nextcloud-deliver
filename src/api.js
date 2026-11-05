@@ -144,6 +144,9 @@ export async function giveThumbs(versionId, image, every, count) {
 	})
 	return axios.post(url(`/versions/${versionId}/thumbs`), { image: base64, every, count }).then(data)
 }
+/** @return {string} WebDAV URL of the user's upload folders */
+export const uploadsUrl = () => generateRemoteUrl('dav') + '/uploads/' + encodeURIComponent(getCurrentUser()?.uid ?? '')
+
 let decoding = Promise.resolve()
 /**
  * Decodes a file's Waveform after the ones before it, one at a time, so a

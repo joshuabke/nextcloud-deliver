@@ -79,6 +79,18 @@ export async function decodeWaveform(source, onProgress = () => {}) {
 }
 
 /**
+ * @param {object} sample - a Mediabunny AudioSample
+ * @return {Float32Array[]} its channels
+ */
+export function channelsOf(sample) {
+	return Array.from({ length: sample.numberOfChannels }, (_, planeIndex) => {
+		const samples = new Float32Array(sample.numberOfFrames)
+		sample.copyTo(samples, { planeIndex, format: 'f32-planar' })
+		return samples
+	})
+}
+
+/**
  * @param {string|Blob} source - as decodeWaveform takes it
  * @param {(percent: number) => void} onProgress - gets how far it has got
  * @return {Promise<{peaks: number[], seconds: number}|null>} the Waveform; null where WebCodecs cannot decode the file
@@ -103,12 +115,7 @@ async function streamWaveform(source, onProgress) {
 		let end = 0
 		for await (const sample of new AudioSampleSink(track).samples()) {
 			try {
-				const channels = Array.from({ length: sample.numberOfChannels }, (_, planeIndex) => {
-					const samples = new Float32Array(sample.numberOfFrames)
-					sample.copyTo(samples, { planeIndex, format: 'f32-planar' })
-					return samples
-				})
-				addPeaks(peaks, channels, sample.timestamp, sample.sampleRate, seconds)
+				addPeaks(peaks, channelsOf(sample), sample.timestamp, sample.sampleRate, seconds)
 				end = Math.max(end, sample.timestamp + sample.duration)
 				onProgress(Math.min(99, Math.floor(end / seconds * 100)))
 			} finally {

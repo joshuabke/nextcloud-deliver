@@ -1,16 +1,14 @@
-import { getCurrentUser } from '@nextcloud/auth'
 import axios from '@nextcloud/axios'
 import { loadState } from '@nextcloud/initial-state'
-import { generateRemoteUrl } from '@nextcloud/router'
 import { defineStore } from 'pinia'
-import { chunkSizeFor, decodeInTurn, enableFile, errorMessage, getVersion, giveAudioWaveform, regenerateVersion } from '../api.js'
+import { chunkSizeFor, decodeInTurn, enableFile, errorMessage, getVersion, giveAudioWaveform, regenerateVersion, uploadsUrl } from '../api.js'
 import { t } from '../lib/l10n.js'
 import { mediaKind, reviewable } from '../lib/media.js'
-import { clearProxies, convertInTurn, handInProxy, inspect } from '../lib/proxy.js'
+import { clearProxies, convertInTurn, dropProxy, handInProxy, inspect } from '../lib/proxy.js'
 import { refusal } from '../lib/unsupported.js'
-import { current, HEARTBEAT, sameFile, uploadFile } from '../lib/upload.js'
+import { browserEnv, current, HEARTBEAT, sameFile, uploadFile } from '../lib/upload.js'
 import { ACTIVE, mergeBoard, totals } from '../lib/uploadBoard.js'
-import { settled } from '../lib/uploadStatus.js'
+import { busy, settled } from '../lib/uploadStatus.js'
 import { useProjectsStore } from './projects.js'
 
 /**
@@ -104,7 +102,7 @@ export const useUploadsStore = defineStore('uploads', {
 		 * @param {object} state - the store's
 		 * @return {boolean} whether this browser is making or uploading a Proxy, which a closed tab would lose
 		 */
-		converting: (state) => [...state.items.map((item) => item.proxy), ...Object.values(state.proxies)].some((proxy) => ['running', 'uploading', 'handing'].includes(proxy?.state)),
+		converting: (state) => [...state.items.map((item) => item.proxy), ...Object.values(state.proxies)].some((proxy) => busy(proxy?.state)),
 		/** Whether the card may be closed: nothing sends, here or in another tab, and nothing is being made */
 		closable() {
 			return this.active.length === 0 && this.items.every((item) => item.status !== 'elsewhere' && (item.status !== 'done' || settled(item)))
@@ -239,8 +237,7 @@ export const useUploadsStore = defineStore('uploads', {
 				return
 			}
 			item.controller?.abort()
-			item.proxyController?.abort()
-			item.proxying?.then((made) => made?.done())
+			item.proxying && dropProxy(item.proxying, item.proxy, item.proxyController)
 			if (item.folder) {
 				axios.delete(item.folder).catch(() => {})
 			}
@@ -311,7 +308,7 @@ export const useUploadsStore = defineStore('uploads', {
 			const signal = item.controller.signal
 			// ... and the Proxy of a video that needs one is made while it goes up
 			if (!hasFfmpeg && item.seen?.needsProxy && !item.proxying) {
-				item.proxy = { state: 'running', progress: 0, error: null }
+				item.proxy = {}
 				item.proxyController = new AbortController()
 				item.proxying = convertInTurn(item.file, proxySettings, item.proxy, item.proxyController.signal)
 			}
@@ -337,7 +334,7 @@ export const useUploadsStore = defineStore('uploads', {
 					request: axios.request,
 					file: item.file,
 					target: item.target,
-					uploadsUrl: generateRemoteUrl('dav') + '/uploads/' + encodeURIComponent(getCurrentUser()?.uid ?? ''),
+					uploadsUrl: uploadsUrl(),
 					chunkSize: chunkSizeFor(item.size),
 					folder: item.folder,
 					onFolder: (folder) => {
@@ -365,17 +362,7 @@ export const useUploadsStore = defineStore('uploads', {
 						}
 					},
 					env: {
-						signal,
-						online: () => navigator.onLine,
-						// A cancel ends the waiting too
-						untilOnline: () => new Promise((resolve) => {
-							window.addEventListener('online', resolve, { once: true })
-							signal.addEventListener('abort', resolve, { once: true })
-						}),
-						sleep: (seconds) => new Promise((resolve) => {
-							setTimeout(resolve, seconds * 1000)
-							signal.addEventListener('abort', resolve, { once: true })
-						}),
+						...browserEnv(signal),
 						onPause: (paused) => {
 							item.status = paused ? 'paused' : item.loaded === item.size ? 'finishing' : 'uploading'
 							// Nothing moves while offline, so no time left is known
@@ -401,8 +388,7 @@ export const useUploadsStore = defineStore('uploads', {
 				// Cancelled or failed, it is nobody's to show elsewhere; a retry here records it again
 				this.forget(item)
 				// Its Proxy has no Version to go to; a retry makes it again
-				item.proxyController?.abort()
-				item.proxying?.then((made) => made?.done())
+				item.proxying && dropProxy(item.proxying, item.proxy, item.proxyController)
 				Object.assign(item, { proxy: null, proxying: null })
 				if (!signal.aborted) {
 					Object.assign(item, { status: 'failed', error: errorMessage(error) })
