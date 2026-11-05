@@ -10,7 +10,7 @@ import axios from '@nextcloud/axios'
 import { generateRemoteUrl } from '@nextcloud/router'
 import { chunkSizeFor, errorMessage, getVersion, giveProxy, giveThumbs, giveWaveform, reportProxy } from '../api.js'
 import { t } from './l10n.js'
-import { fits, needsProxy, plays, proxyBytes, proxySize, THUMB_WIDTH, thumbGrid, thumbSlot, videoBitrate, whyNot } from './proxyPlan.js'
+import { AUDIO_BITRATE, fits, heavy, lowerTarget, needsProxy, plays, proxyBytes, proxySize, THUMB_WIDTH, thumbGrid, thumbSlot, videoBitrate, whyNot } from './proxyPlan.js'
 import { unsupported } from './unsupported.js'
 import { uploadFile } from './upload.js'
 import { addPeaks, BUCKETS, roundPeaks } from './waveform.js'
@@ -20,13 +20,21 @@ const FOLDER = 'deliver-proxies'
 /** Each file there is held under a Web Lock of this name and its own until it is handed in, in whichever tab, so clearing passes it by */
 const LOCK = 'deliver-proxy:'
 /** Seconds between two reports of a Proxy's progress; the server takes a browser silent for two minutes as gone */
-const REPORT = 15
+const REPORT = 5
 
 /** Thrown when the browser has no room for the Proxy; `missing` says how many bytes */
 export class NoRoomError extends Error {
 	constructor(missing) {
 		super('No room for the Proxy')
 		this.missing = missing
+	}
+}
+
+/** Thrown when even the second go came out above the Proxy bitrate threshold; `max` is the threshold in Mbit/s */
+export class TooHeavyError extends Error {
+	constructor(max) {
+		super('The Proxy is above the Proxy bitrate threshold')
+		this.max = max
 	}
 }
 
@@ -180,10 +188,11 @@ async function makeRoom(bytes) {
  * @param {number} settings.thumbCap - the Thumbnail Strip cap
  * @param {(percent: number) => void} onProgress - how far it is, 0 to 99
  * @param {AbortSignal} signal - stops it
- * @return {Promise<{file: File, done: () => Promise<void>, frames: number, thumbs: ?{image: Blob, every: number, count: number}, peaks: ?number[]}>}
+ * @param {number} [target] - the picture's bitrate in bit/s, for the second go after the first came out above the threshold
+ * @return {Promise<{file: File, done: () => Promise<void>, frames: number, seconds: number, bitrate: number, thumbs: ?{image: Blob, every: number, count: number}, peaks: ?number[]}>}
  *   the Proxy, what deletes it once handed in, the Frames of the original, its Thumbnail Strip (WebP, JPEG where the browser encodes no WebP) and its Waveform (null without sound)
  */
-export async function makeProxy(source, { maxHeight, maxBitrate, thumbCap }, onProgress, signal) {
+async function convert(source, { maxHeight, maxBitrate, thumbCap }, onProgress, signal, target) {
 	const { Conversion, Mp4OutputFormat, Output, StreamTarget } = await mediabunny()
 	const name = `proxy-${Date.now()}-${Math.random().toString(36).slice(2)}.mp4`
 	// Held until done(), so no tab clears the file while this one still needs it
@@ -209,7 +218,7 @@ export async function makeProxy(source, { maxHeight, maxBitrate, thumbCap }, onP
 		// Not from 0: an edit may start a little later
 		const seconds = await video.computeDuration() - await video.getFirstTimestamp()
 		const size = proxyOf(video, maxHeight)
-		const bitrate = videoBitrate(size, maxBitrate)
+		const bitrate = target ?? videoBitrate(size, maxBitrate)
 		await makeRoom(proxyBytes(seconds, bitrate))
 		const grid = thumbGrid(seconds, thumbCap, size)
 		// The Thumbnail Strip never costs the Proxy: none where the browser encodes neither WebP nor JPEG, or has no canvas that large
@@ -255,7 +264,7 @@ export async function makeProxy(source, { maxHeight, maxBitrate, thumbCap }, onP
 			},
 			audio: {
 				codec: 'aac',
-				bitrate: 160_000,
+				bitrate: AUDIO_BITRATE,
 				// The sound also goes into the Waveform
 				process: (sample) => {
 					const channels = Array.from({ length: sample.numberOfChannels }, (_, planeIndex) => {
@@ -292,6 +301,8 @@ export async function makeProxy(source, { maxHeight, maxBitrate, thumbCap }, onP
 			file,
 			done,
 			frames,
+			seconds,
+			bitrate,
 			thumbs: image?.type === stripType ? { image, every: grid.every, count: grid.count } : null,
 			peaks: heard ? roundPeaks(peaks) : null,
 		}
@@ -301,6 +312,41 @@ export async function makeProxy(source, { maxHeight, maxBitrate, thumbCap }, onP
 	} finally {
 		input.dispose()
 	}
+}
+
+/**
+ * Makes the Proxy of a file, once more at a lower bitrate when it comes out
+ * above the Proxy bitrate threshold: the encoder only aims at its bitrate,
+ * and the server refuses a Proxy above it. The first go is let go of (input,
+ * strip canvas, peaks) before the second starts.
+ *
+ * @param {Blob|string} source - the original, or its URL
+ * @param {object} settings - the server's, see convert()
+ * @param {(percent: number) => void} onProgress - how far it is, 0 to 99
+ * @param {AbortSignal} signal - stops it
+ * @return {Promise<object>} as convert()
+ * @throws {TooHeavyError} when the second go is above the threshold as well
+ */
+export async function makeProxy(source, settings, onProgress, signal) {
+	// Its own scope, so nothing of the first go outlives it
+	const first = await (async () => {
+		const made = await convert(source, settings, onProgress, signal)
+		if (!heavy(made.file.size, made.seconds, settings.maxBitrate)) {
+			return { made }
+		}
+		const target = lowerTarget(made.bitrate, made.file.size, made.seconds, settings.maxBitrate)
+		await made.done()
+		return { target }
+	})()
+	if (first.made) {
+		return first.made
+	}
+	const again = await convert(source, settings, onProgress, signal, first.target)
+	if (heavy(again.file.size, again.seconds, settings.maxBitrate)) {
+		await again.done()
+		throw new TooHeavyError(settings.maxBitrate)
+	}
+	return again
 }
 
 let probedType = null
@@ -376,7 +422,9 @@ export function convertInTurn(source, settings, status, signal) {
 			state: 'failed',
 			error: error instanceof NoRoomError
 				? t('deliver', 'This browser has no room for the Proxy: {size} MB more are needed on this computer.', { size: Math.ceil(error.missing / 1e6) })
-				: null,
+				: error instanceof TooHeavyError
+					? t('deliver', 'The Proxy came out above the Proxy bitrate threshold of {max} Mbit/s, even at a lower bitrate.', { max: error.max })
+					: null,
 		})
 		return null
 	})

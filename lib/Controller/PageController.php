@@ -36,7 +36,7 @@ class PageController extends Controller {
 		// Where "New Project" makes its folder unless the Member picks another place (story 98)
 		$this->initialState->provideInitialState('projectFolder', $this->settings->get()['projectFolder']);
 		// Without ffmpeg the uploading browser makes Proxies to the server's rules (ADR 0019)
-		$this->initialState->provideInitialState('proxy', array_intersect_key($this->settings->get(), ['maxHeight' => 0, 'maxBitrate' => 0, 'thumbCap' => 0]));
+		$this->initialState->provideInitialState('proxy', $this->settings->proxy());
 		$response = new TemplateResponse(Application::APP_ID, 'index');
 		// Its ProRes decoder and AAC encoder are WebAssembly, the decoder runs in workers made from blobs
 		$policy = new ContentSecurityPolicy();

@@ -27,7 +27,7 @@ const CANCEL = 'deliver.upload-cancel'
 /** Whether the server has ffmpeg (story 138); without it the uploading browser decodes the Waveform */
 export const hasFfmpeg = loadState('deliver', 'ffmpeg', true)
 /** The Proxy resolution, the Proxy bitrate threshold and the Thumbnail Strip cap, for the Proxies this browser makes without ffmpeg (ADR 0019) */
-export const proxySettings = loadState('deliver', 'proxy', { maxHeight: 1080, maxBitrate: 20, thumbCap: 600 })
+export const proxySettings = loadState('deliver', 'proxy')
 /**
  * @param {string} prefix - RECORD or DONE
  * @return {Array<{key: string, value: object}>} what every tab keeps under it

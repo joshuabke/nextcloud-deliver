@@ -103,6 +103,33 @@ export function proxySize({ width, height }, maxHeight) {
 export const videoBitrate = ({ width, height }, maxBitrate) => Math.round(Math.min(8e6 * width * height / (1920 * 1080), maxBitrate * 0.9e6 - AUDIO_BITRATE))
 
 /**
+ * A video target is only a target: the encoder may overshoot, and no Proxy
+ * goes above the threshold (DerivedMedia::mismatch).
+ *
+ * @param {number} bytes - the made Proxy's size
+ * @param {number} seconds - its length
+ * @return {number} its bitrate in bit/s with the sound
+ */
+export const measuredBitrate = (bytes, seconds) => bytes * 8 / seconds
+
+/**
+ * @param {number} bytes - the made Proxy's size
+ * @param {number} seconds - its length
+ * @param {number} maxBitrate - the Proxy bitrate threshold in Mbit/s
+ * @return {boolean} whether it goes above the threshold
+ */
+export const heavy = (bytes, seconds, maxBitrate) => seconds > 0 && measuredBitrate(bytes, seconds) > maxBitrate * 1e6
+
+/**
+ * @param {number} target - the picture bitrate that overshot, in bit/s
+ * @param {number} bytes - the made Proxy's size
+ * @param {number} seconds - its length
+ * @param {number} maxBitrate - the Proxy bitrate threshold in Mbit/s
+ * @return {number} a picture bitrate scaled by the overshoot, aiming 15 % below the threshold
+ */
+export const lowerTarget = (target, bytes, seconds, maxBitrate) => Math.max(100_000, Math.round(target * (maxBitrate * 0.85e6 - AUDIO_BITRATE) / Math.max(1, measuredBitrate(bytes, seconds) - AUDIO_BITRATE)))
+
+/**
  * @param {number} seconds - the Proxy's length
  * @param {number} bitrate - its picture's bitrate in bit/s
  * @return {number} the bytes to keep free for it, with room for the encoder's overshoot

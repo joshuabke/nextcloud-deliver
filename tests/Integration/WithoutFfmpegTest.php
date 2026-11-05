@@ -43,6 +43,8 @@ class WithoutFfmpegTest extends TestCase {
 
 	protected function tearDown(): void {
 		$this->nc->ocs('PUT', '/admin/settings', ['ffmpegPath' => '', 'ffprobePath' => '']);
+		$this->nc->ocsForm('DELETE', '/ocs/v2.php/apps/provisioning_api/api/v1/config/apps/deliver/thumb_cap');
+		$this->nc->ocsForm('DELETE', '/ocs/v2.php/apps/provisioning_api/api/v1/config/apps/deliver/max_bitrate');
 		$this->nc->deleteProject($this->projectId);
 		$this->nc->delete($this->root);
 		$this->nc->emptyTrash();
@@ -387,6 +389,36 @@ class WithoutFfmpegTest extends TestCase {
 		$index = json_decode($this->nc->request('GET', "/apps/deliver/versions/{$version['id']}/media/thumbsIndex")['body'], true);
 		self::assertSame(['every' => 1, 'count' => 2, 'columns' => 2, 'rows' => 1, 'width' => 160, 'fps' => ['num' => 25, 'den' => 1]], $index);
 		self::assertSame(409, $thumbs($this->image('320x90'))['status'], 'it has one');
+	}
+
+	/** As an admin sets it through occ, which checks no range (the provisioning API, as occ misses the web server's app-config cache) */
+	private function occ(string $key, int $value): void {
+		$set = $this->nc->ocsForm('POST', '/ocs/v2.php/apps/provisioning_api/api/v1/config/apps/deliver/' . $key, ['value' => (string)$value]);
+		self::assertSame(200, $set['status'], json_encode($set['data']));
+	}
+
+	public function testTheServerHoldsAProxyToTheSettingsTheBrowserWasGiven(): void {
+		$this->make(self::PRORES);
+		$version = $this->upload('master.mov');
+		$folder = $this->nc->fileId($this->root);
+		// Above the range as well
+		$this->occ('thumb_cap', 99999);
+		$this->occ('max_bitrate', 500);
+		self::assertSame(['maxHeight' => 1080, 'maxBitrate' => 200, 'thumbCap' => 5000], $this->nc->ocs('GET', "/folders/$folder/intake")['data']['proxy']);
+		// Out of range: the browser is told the nearest number in range, and the server must keep to that as well
+		$this->occ('thumb_cap', 1);
+		$this->occ('max_bitrate', 1);
+		self::assertSame(['maxHeight' => 1080, 'maxBitrate' => 2, 'thumbCap' => 10], $this->nc->ocs('GET', "/folders/$folder/intake")['data']['proxy']);
+
+		$taken = $this->nc->ocs('POST', "/versions/{$version['id']}/thumbs", ['image' => $this->image('320x90'), 'every' => 1, 'count' => 2]);
+		self::assertSame(200, $taken['status'], 'two pictures of two seconds are within a cap of ten: ' . json_encode($taken['data']));
+
+		// Noise at 640x360 is far above 2 Mbit/s
+		$refused = $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom('-f lavfi -i color=size=640x360:rate=25:duration=2,noise=alls=100:allf=t -f lavfi -i sine=duration=2 -c:v libx264 -crf 10 -pix_fmt yuv420p -c:a aac -shortest')[0]]);
+		self::assertSame(400, $refused['status'], json_encode($refused['data']));
+		$shown = $this->nc->ocs('GET', "/versions/{$version['id']}")['data']['versions'][0];
+		self::assertSame('failed', $shown['derived']['proxy']['state']);
+		self::assertStringContainsString('above the Proxy bitrate threshold of 2 Mbit/s', (string)$shown['derived']['error']);
 	}
 
 	public function testASafariHandsInItsThumbnailStripAsJpegAndItIsServedAsSuch(): void {
