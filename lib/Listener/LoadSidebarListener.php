@@ -22,12 +22,8 @@ class LoadSidebarListener implements IEventListener {
 	public function handle(Event $event): void {
 		if ($event instanceof LoadSidebar) {
 			Util::addScript(Application::APP_ID, 'deliver-sidebar');
-			// Only on the pages Deliver's script runs on: the Proxies it makes of uploads (ADR 0019)
-			// need WebAssembly for the ProRes decoder and the AAC encoder, and workers made from blobs
-			$policy = new EmptyContentSecurityPolicy();
-			$policy->allowEvalWasm(true);
-			$policy->addAllowedWorkerSrcDomain('blob:');
-			$this->policies->addDefaultPolicy($policy);
+			// Only on the pages Deliver's script runs on
+			$this->policies->addDefaultPolicy(Application::allowWasm(new EmptyContentSecurityPolicy()));
 		}
 	}
 }

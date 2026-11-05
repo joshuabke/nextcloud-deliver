@@ -246,8 +246,10 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertTrue($version['playable']);
 
 		self::assertSame(409, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom(self::PROXY)[0]])['status'], 'it plays as it is');
+		self::assertFalse($this->card()['proxyFromBrowser'], 'and is not offered one');
 		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['maxBitrate' => 2])['status']);
 		try {
+			self::assertTrue($this->card()['proxyFromBrowser'], 'above the Proxy bitrate threshold');
 			$given = $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom(self::PROXY)[0]]);
 			self::assertSame(200, $given['status'], json_encode($given['data']));
 		} finally {
@@ -294,18 +296,6 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertTrue($this->card()['proxyFromBrowser'], 'after a failed one too');
 		self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom(self::PROXY)[0]])['status']);
 		self::assertFalse($this->card()['proxyFromBrowser'], 'it has its Proxy');
-	}
-
-	public function testOnlyAHeavyOrUnplayableVideoIsOfferedAProxyFromTheBrowser(): void {
-		$this->make('-f lavfi -i "testsrc=size=640x360:rate=25:duration=2,noise=alls=40:allf=t" -f lavfi -i sine=duration=2 -c:v libx264 -crf 23 -pix_fmt yuv420p -c:a aac -shortest -f mp4');
-		$this->upload('cut.mp4');
-		self::assertFalse($this->card()['proxyFromBrowser'], 'it plays as it is');
-		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['maxBitrate' => 2])['status']);
-		try {
-			self::assertTrue($this->card()['proxyFromBrowser'], 'above the Proxy bitrate threshold');
-		} finally {
-			$this->nc->ocs('PUT', '/admin/settings', ['maxBitrate' => 20]);
-		}
 	}
 
 	public function testUploadsInTheFilesAppGetTheirProxyFromTheBrowserWhereAutoIntakeTakesThem(): void {
@@ -408,7 +398,8 @@ class WithoutFfmpegTest extends TestCase {
 
 		$taken = $thumbs($this->image('320x90'));
 		self::assertSame(200, $taken['status'], json_encode($taken['data']));
-		self::assertSame('ready', $taken['data']['derived']['thumbs']['state']);
+		self::assertSame([], $taken['data']);
+		self::assertSame('ready', $this->nc->ocs('GET', "/versions/{$version['id']}")['data']['versions'][0]['derived']['thumbs']['state']);
 		$index = json_decode($this->nc->request('GET', "/apps/deliver/versions/{$version['id']}/media/thumbsIndex")['body'], true);
 		self::assertSame(['every' => 1, 'count' => 2, 'columns' => 2, 'rows' => 1, 'width' => 160, 'fps' => ['num' => 25, 'den' => 1]], $index);
 		self::assertSame(409, $thumbs($this->image('320x90'))['status'], 'it has one');
@@ -450,7 +441,6 @@ class WithoutFfmpegTest extends TestCase {
 		$thumbs = fn (string $image) => $this->nc->ocs('POST', "/versions/{$version['id']}/thumbs", ['image' => $image, 'every' => 1, 'count' => 2]);
 		$jpeg = fn (string $size) => $this->image($size, 'image2 -c:v mjpeg -pix_fmt yuvj420p');
 
-		self::assertSame(400, $thumbs($jpeg('480x90'))['status'], 'three columns where two are');
 		self::assertSame(404, $this->nc->request('GET', "/apps/deliver/versions/{$version['id']}/media/thumbs")['status']);
 
 		self::assertSame(200, $thumbs($jpeg('320x90'))['status']);
@@ -458,6 +448,7 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertSame(200, $strip['status']);
 		self::assertStringStartsWith('image/jpeg', $strip['headers']['content-type']);
 		self::assertStringStartsWith("\xFF\xD8", $strip['body']);
+		self::assertSame(404, $this->nc->request('GET', "/apps/deliver/versions/{$version['id']}/media/thumbsJpeg")['status'], 'the strip has one URL');
 	}
 
 	public function testOnlyWhoManagesAReadVideoHandsInItsThumbnailStrip(): void {

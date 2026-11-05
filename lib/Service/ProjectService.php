@@ -617,7 +617,7 @@ class ProjectService {
 	public function proxyProgress(string $uid, int $versionId, int $percent): array {
 		$version = $this->writableVersion($uid, $versionId);
 		$this->media->proxyProgress($version, $percent);
-		return $this->versionPayload($version, $uid);
+		return [];
 	}
 
 	/**
@@ -628,10 +628,11 @@ class ProjectService {
 	 * @throws InvalidRequestException the upload is not a file of its own next to the Version's file, or no Proxy of it
 	 */
 	public function giveProxy(string $uid, int $versionId, int $uploadId): array {
-		$version = $this->writableVersion($uid, $versionId);
-		$home = $this->root->getUserFolder($uid);
-		$file = $home->getFirstNodeById($version->getFileId());
-		$upload = $home->getFirstNodeById($uploadId) ?? throw new NotFoundException('Upload not found');
+		[$version, $file, $grant] = $this->reachVersion($uid, $versionId);
+		if (!$grant->manages()) {
+			throw new AccessDeniedException('Manage is required');
+		}
+		$upload = $this->root->getUserFolder($uid)->getFirstNodeById($uploadId);
 		if (!$file instanceof File || !$upload instanceof File) {
 			throw new NotFoundException('File not found');
 		}
@@ -646,7 +647,7 @@ class ProjectService {
 		} finally {
 			$upload->delete();
 		}
-		return $this->versionPayload($this->versions->find($versionId) ?? $version, $uid);
+		return [];
 	}
 
 	/**
@@ -660,7 +661,7 @@ class ProjectService {
 			throw new InvalidRequestException('The image is not base64');
 		}
 		$this->media->acceptThumbs($version, $bytes, $every, $count);
-		return $this->versionPayload($this->versions->find($versionId) ?? $version, $uid);
+		return [];
 	}
 
 	/** What a Member's browser decoded where the server has no ffmpeg (ADR 0003) */

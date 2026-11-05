@@ -35,8 +35,6 @@ class DerivedMedia {
 	public const FILES = [
 		'proxy' => 'proxy.mp4',
 		'thumbs' => 'thumbs.webp',
-		// The Thumbnail Strip of a Safari, which draws no WebP; `thumbs` is served from here where there is no WebP
-		'thumbsJpeg' => 'thumbs.jpg',
 		'thumbsIndex' => 'thumbs.json',
 		'waveform' => 'waveform.json',
 	];
@@ -56,10 +54,12 @@ class DerivedMedia {
 		'matroska' => ['video' => ['h264', 'vp8', 'vp9'], 'audio' => ['aac', 'opus', 'vorbis', 'flac', 'mp3']],
 	];
 
+	/** The Thumbnail Strip of a Safari, which draws no WebP; `thumbs` is served from here where there is no WebP */
+	private const THUMBS_JPEG = 'thumbs.jpg';
 	private const THUMB_WIDTH = 160;
 	/** A Thumbnail Strip from the browser, at most */
 	private const MAX_THUMBS_BYTES = 32 * 1024 * 1024;
-	/** Whether the server lacks ffmpeg, as proxyFromBrowser found once for this request */
+	/** Whether the server lacks ffmpeg, found once per request: each look starts a process */
 	private ?bool $withoutFfmpegNow = null;
 	/** The Proxy's AAC, which counts towards the Proxy bitrate threshold with the picture */
 	private const AUDIO_KBPS = 160;
@@ -67,8 +67,6 @@ class DerivedMedia {
 	/** Seconds between two progress writes to the job row */
 	private const PROGRESS_INTERVAL = 2;
 
-	/** Who works on a Proxy that the uploading browser makes (ADR 0019) */
-	public const BROWSER = 'browser';
 	/** Seconds after the last report of a browser making a Proxy, when its tab counts as closed */
 	public const BROWSER_LAPSE = 120;
 
@@ -233,7 +231,7 @@ class DerivedMedia {
 			}
 			return;
 		}
-		if ($this->needsProxy($version, $probed, $path)) {
+		if ($this->needsProxy($version, (int)filesize($path))) {
 			$this->enqueue($version->getId(), Job::KIND_PROXY);
 		}
 		if ($version->getHasVideo()) {
@@ -384,7 +382,7 @@ class DerivedMedia {
 			|| $tile * $rows !== $size[1] || $tile < 2 || $tile % 2 !== 0 || $tile > 4 * self::THUMB_WIDTH) {
 			throw new InvalidRequestException('A Thumbnail Strip is a WebP or JPEG of ' . $columns . ' by ' . $rows . ' pictures, each ' . self::THUMB_WIDTH . ' wide and of even height');
 		}
-		$this->put($version, $size[2] === IMAGETYPE_JPEG ? 'thumbsJpeg' : 'thumbs', $image);
+		$this->put($version, 'thumbs', $image, $size[2] === IMAGETYPE_JPEG ? self::THUMBS_JPEG : null);
 		$this->putThumbsIndex($version, $every, $count);
 		$this->mark($version->getId(), Job::KIND_THUMBS, self::STATE_READY);
 	}
@@ -445,7 +443,7 @@ class DerivedMedia {
 
 	/** Whether the server lacks ffmpeg, so browsers make Waveforms and Proxies (ADRs 0012, 0019); ffmpeg may have come since the last look */
 	public function withoutFfmpeg(): bool {
-		return !$this->ffmpeg->available() && $this->ffmpeg->probe() === null;
+		return $this->withoutFfmpegNow ??= !$this->ffmpeg->available() && $this->ffmpeg->probe() === null;
 	}
 
 	/**
@@ -463,10 +461,10 @@ class DerivedMedia {
 			$job->setKind(Job::KIND_PROXY);
 			$job->setVersionId($version->getId());
 			$job->setState(Job::STATE_RUNNING);
-			$job->setClaimedBy(self::BROWSER);
+			$job->setClaimedBy(Job::BROWSER);
 			$job->setCreatedAt($this->time->getTime());
 			$job = $this->jobs->insert($job);
-		} elseif ($job->getClaimedBy() !== self::BROWSER) {
+		} elseif ($job->getClaimedBy() !== Job::BROWSER) {
 			throw new ProjectConflictException('The server makes this Proxy');
 		}
 		$job->setProgress(max(0, min(99, $percent)));
@@ -488,9 +486,8 @@ class DerivedMedia {
 	public function proxyFromBrowser(Version $version, int $bytes): bool {
 		return $version->getHasVideo() && $version->getPlayable() !== null
 			&& in_array($version->getProxyState(), [self::STATE_NONE, self::STATE_FAILED], true)
-			&& (!$version->getPlayable() || $this->heavy($bytes, $this->durationSeconds($version)))
-			// Once per request: a Project read asks for each of its Versions, and each look at ffmpeg starts a process
-			&& ($this->withoutFfmpegNow ??= $this->withoutFfmpeg());
+			&& $this->needsProxy($version, $bytes)
+			&& $this->withoutFfmpeg();
 	}
 
 	/** A browser that has not reported for a while closed its tab: its Proxy counts as missing again (spec: Proxies from the browser) */
@@ -499,7 +496,7 @@ class DerivedMedia {
 			return;
 		}
 		$job = $this->jobs->findPending($version->getId(), Job::KIND_PROXY);
-		if ($job?->getClaimedBy() === self::BROWSER && $job->getStartedAt() < $this->time->getTime() - self::BROWSER_LAPSE) {
+		if ($job?->getClaimedBy() === Job::BROWSER && $job->getStartedAt() < $this->time->getTime() - self::BROWSER_LAPSE) {
 			$this->jobs->delete($job);
 			$version->setProxyState(self::STATE_NONE);
 			$this->versions->update($version);
@@ -536,7 +533,7 @@ class DerivedMedia {
 			}
 		}
 		$probed = $this->container->read($source) ?? [];
-		if (!$this->needsProxy($version, $probed, $source)) {
+		if (!$this->needsProxy($version, (int)filesize($source))) {
 			throw new ProjectConflictException('This Version plays without a Proxy');
 		}
 		$error = $this->mismatch($version, $probed, $this->container->read($candidate), (int)filesize($candidate));
@@ -678,9 +675,9 @@ class DerivedMedia {
 	 * it is heavier than the Proxy bitrate threshold, so that slow connections
 	 * get a lighter choice (ADR 0019).
 	 */
-	private function needsProxy(Version $version, array $probed, string $path): bool {
+	private function needsProxy(Version $version, int $bytes): bool {
 		return $version->getHasVideo()
-			&& (!$version->getPlayable() || $this->heavy((int)filesize($path), (float)($probed['format']['duration'] ?? 0)));
+			&& (!$version->getPlayable() || $this->heavy($bytes, $this->durationSeconds($version, 0.0)));
 	}
 
 	/** Whether a file of this size and length goes above the Proxy bitrate threshold */
@@ -759,13 +756,14 @@ class DerivedMedia {
 	}
 
 	/** @param string|resource $content */
-	private function put(Version $version, string $kind, $content): void {
+	private function put(Version $version, string $kind, $content, ?string $name = null): void {
 		$this->guard();
 		$folder = $this->folder($version->getId());
+		$name ??= self::FILES[$kind];
 		try {
-			$file = $folder->getFile(self::FILES[$kind]);
+			$file = $folder->getFile($name);
 		} catch (NotFoundException) {
-			$file = $folder->newFile(self::FILES[$kind]);
+			$file = $folder->newFile($name);
 		}
 		$file->putContent($content);
 	}
@@ -794,7 +792,7 @@ class DerivedMedia {
 			if ($kind !== 'thumbs') {
 				throw $e;
 			}
-			return $folder->getFile(self::FILES['thumbsJpeg']);
+			return $folder->getFile(self::THUMBS_JPEG);
 		}
 	}
 
@@ -825,13 +823,13 @@ class DerivedMedia {
 		return $this->settings->proxy()['maxHeight'];
 	}
 
-	/** The length of a Version in seconds, from its Frames and rate; an unknown length counts as a minute */
-	private function durationSeconds(Version $version): float {
+	/** The length of a Version in seconds, from its Frames and rate; an unknown length counts as `$unknown` (a minute for spacing Thumbnails, 0 where it must not count as heavy) */
+	private function durationSeconds(Version $version, float $unknown = 60.0): float {
 		$frames = $version->getDurationFrames();
 		$num = $version->getFpsNum();
 		$den = $version->getFpsDen();
 		if ($frames === null || !$num || !$den) {
-			return 60.0;
+			return $unknown;
 		}
 		return $frames * $den / $num;
 	}
