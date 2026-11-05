@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Db;
 
-use OCA\Deliver\Service\DerivedMedia;
-use OCP\DB\QueryBuilder\ICompositeExpression;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 
@@ -102,11 +100,9 @@ class JobMapper extends Mapper {
 		return $amount;
 	}
 
-	private function onServer(IQueryBuilder $qb): ICompositeExpression {
-		return $qb->expr()->orX(
-			$qb->expr()->isNull('claimed_by'),
-			$qb->expr()->neq('claimed_by', $qb->createNamedParameter(DerivedMedia::BROWSER)),
-		);
+	private function onServer(IQueryBuilder $qb): string {
+		// Every running row has a claimed_by (claim(), DerivedMedia::proxyProgress)
+		return $qb->expr()->neq('claimed_by', $qb->createNamedParameter(Job::BROWSER));
 	}
 
 	/** @return Job[] failed jobs, the latest first; all of them without a limit */

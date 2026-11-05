@@ -38,6 +38,9 @@ class Job extends Entity {
 	public const KIND_THUMBS = 'thumbs';
 	public const KIND_WAVEFORM = 'waveform';
 
+	/** Who works on a Proxy that the uploading browser makes (ADR 0019) */
+	public const BROWSER = 'browser';
+
 	public const STATE_QUEUED = 'queued';
 	public const STATE_RUNNING = 'running';
 	public const STATE_DONE = 'done';

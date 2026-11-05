@@ -21,6 +21,7 @@ use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
+use OCP\AppFramework\Http\EmptyContentSecurityPolicy;
 use OCP\Files\Events\Node\NodeCreatedEvent;
 use OCP\Files\Events\Node\NodeDeletedEvent;
 use OCP\Files\Events\Node\NodeRenamedEvent;
@@ -33,6 +34,20 @@ class Application extends App implements IBootstrap {
 
 	public function __construct() {
 		parent::__construct(self::APP_ID);
+	}
+
+	/**
+	 * What the Proxies the browser makes need (ADR 0019): WebAssembly for the
+	 * ProRes decoder and the AAC encoder, and workers made from blobs.
+	 *
+	 * @template T of EmptyContentSecurityPolicy
+	 * @param T $policy
+	 * @return T
+	 */
+	public static function allowWasm(EmptyContentSecurityPolicy $policy): EmptyContentSecurityPolicy {
+		$policy->allowEvalWasm(true);
+		$policy->addAllowedWorkerSrcDomain('blob:');
+		return $policy;
 	}
 
 	public function register(IRegistrationContext $context): void {

@@ -38,11 +38,7 @@ class PageController extends Controller {
 		// Without ffmpeg the uploading browser makes Proxies to the server's rules (ADR 0019)
 		$this->initialState->provideInitialState('proxy', $this->settings->proxy());
 		$response = new TemplateResponse(Application::APP_ID, 'index');
-		// Its ProRes decoder and AAC encoder are WebAssembly, the decoder runs in workers made from blobs
-		$policy = new ContentSecurityPolicy();
-		$policy->allowEvalWasm(true);
-		$policy->addAllowedWorkerSrcDomain('blob:');
-		$response->setContentSecurityPolicy($policy);
+		$response->setContentSecurityPolicy(Application::allowWasm(new ContentSecurityPolicy()));
 		return $response;
 	}
 }
