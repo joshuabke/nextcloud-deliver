@@ -170,6 +170,10 @@ _Avoid_: bitrate limit
 A grid of small frames sampled along a Version, used for hover previews on the timeline.
 _Avoid_: Sprite, scrubber, filmstrip
 
+**Scrub Proxy**:
+A tiny rendition of a video Version only for hover previews on the timeline and the Asset card.
+_Avoid_: preview video, hover video, thumbnail video
+
 **Waveform**:
 Precomputed audio peaks of a Version, drawn under the timeline; the primary visual for audio-only Assets.
 _Avoid_: Peaks, audio graph
@@ -211,6 +215,7 @@ The German translation (`l10n/de` with "du", `l10n/de_DE` with "Sie") uses these
 | Unseen | Ungesehen |
 | Proxy, Thumbnail Strip, Waveform | Proxy, Vorschauleiste, Wellenform |
 | Proxy bitrate threshold | Proxy-Bitratengrenze |
+| Scrub Proxy | Scrub-Proxy |
 | Processing | Verarbeitung (on cards „Wird verarbeitet“) |
 | Missing | Fehlt |
 | Locked | Gesperrt |

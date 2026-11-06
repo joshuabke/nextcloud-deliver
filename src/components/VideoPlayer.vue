@@ -29,6 +29,7 @@ import { COLORS, drawingsAt } from '../lib/drawing.js'
 import { DOUBLE_TAP_MS } from '../lib/gestures.js'
 import { actionFor } from '../lib/hotkeys.js'
 import { t } from '../lib/l10n.js'
+import { hoverSource } from '../lib/media.js'
 import { formatAt, fpsValue, frameToTime, modesFor, stepOf, timeToFrame } from '../lib/timecode.js'
 import { watermarkTile } from '../lib/watermark.js'
 import { useCommentsStore } from '../store/comments.js'
@@ -301,13 +302,13 @@ function onHover(event) {
 
 /*
  * The exact Frame under the pointer, as Frame.io shows it: a hidden second
- * video, the lighter Proxy where there is one, seeks there and is copied
+ * video, the Scrub Proxy or else the lighter Proxy where there is one, seeks there and is copied
  * into a canvas. One seek at a time; the pointer's latest Frame goes next.
  * Until the first copy, the Thumbnail Strip's nearest picture stands in.
  */
 const scrubVideo = ref(null)
 const scrubCanvas = ref(null)
-const scrubSource = computed(() => props.version.audioOnly ? null : (proxy.value ?? source.value))
+const scrubSource = computed(() => props.version.audioOnly ? null : hoverSource(props.version.derived?.scrub?.url, proxy.value ?? source.value))
 /** Whether the canvas holds a Frame from this hover */
 const scrubDrawn = ref(false)
 const scrubSize = ref({ width: 176, height: 99 })

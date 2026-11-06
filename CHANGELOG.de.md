@@ -2,6 +2,8 @@
 
 ## Unveröffentlicht
 - Die verbleibende Zeit neben dem Prozentwert gezeigt, solange dieser Browser einen Proxy erzeugt.
+- Mit ffmpeg einen Scrub-Proxy für jede Video-Version erzeugt, für ältere einige pro Stunde, und beim Überfahren der Zeitleiste und der Asset-Karte durch ihn gescrubbt.
+- Einen Scrub-Proxy aus dem Browser über `POST /versions/{id}/scrub` angenommen, wenn der Server kein ffmpeg hat.
 
 ## 0.11.1 – 2026-11-05
 

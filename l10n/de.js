@@ -245,7 +245,7 @@ OC.L10N.register(
 		"Queue": "Warteschlange",
 		"REAPER marker list": "REAPER-Markerliste",
 		"React": "Reagieren",
-		"Regenerate Proxy, Thumbnail Strip and Waveform": "Proxy, Vorschauleiste und Wellenform neu erzeugen",
+		"Regenerate derived media": "Abgeleitete Medien neu erzeugen",
 		"Remove": "Entfernen",
 		"Remove Reviewer": "Reviewer entfernen",
 		"Remove from Deliver": "Aus Deliver entfernen",

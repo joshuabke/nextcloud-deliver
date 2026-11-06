@@ -628,6 +628,22 @@ class ProjectService {
 	 * @throws InvalidRequestException the upload is not a file of its own next to the Version's file, or no Proxy of it
 	 */
 	public function giveProxy(string $uid, int $versionId, int $uploadId): array {
+		return $this->handIn($uid, $versionId, $uploadId, $this->media->acceptProxy(...));
+	}
+
+	/** The Scrub Proxy a browser made where the server has no ffmpeg (#169), handed in as a Proxy is */
+	public function giveScrub(string $uid, int $versionId, int $uploadId): array {
+		return $this->handIn($uid, $versionId, $uploadId, $this->media->acceptScrub(...));
+	}
+
+	/**
+	 * Hands an upload next to the Version's file to `$accept`; the upload goes
+	 * whether it is taken or refused. Needs Manage.
+	 *
+	 * @param callable(Version, File, File): void $accept takes the Version, its file and the upload
+	 * @throws InvalidRequestException the upload is not a file of its own next to the Version's file
+	 */
+	private function handIn(string $uid, int $versionId, int $uploadId, callable $accept): array {
 		[$version, $file, $grant] = $this->reachVersion($uid, $versionId);
 		if (!$grant->manages()) {
 			throw new AccessDeniedException('Manage is required');
@@ -643,7 +659,7 @@ class ProjectService {
 			throw new AccessDeniedException('Deleting the upload is not allowed');
 		}
 		try {
-			$this->media->acceptProxy($version, $file, $upload);
+			$accept($version, $file, $upload);
 		} finally {
 			$upload->delete();
 		}
@@ -804,6 +820,8 @@ class ProjectService {
 					'index' => $link('thumbsIndex', $version->getThumbsState()),
 				],
 				'waveform' => ['state' => $version->getWaveformState(), 'url' => $link('waveform', $version->getWaveformState())],
+				// Only for hover previews on the timeline (#169)
+				'scrub' => ['state' => $version->getScrubState(), 'url' => $link('scrub', $version->getScrubState())],
 				'progress' => $this->progress($version),
 				'error' => $version->getDerivedError(),
 			],
@@ -1346,6 +1364,10 @@ class ProjectService {
 					'playUrl' => $version->getProxyState() === DerivedMedia::STATE_READY
 						? $this->urls->linkToRoute('deliver.media.show', ['id' => $version->getId(), 'kind' => 'proxy'])
 						: ($file === null ? null : $this->davUrl($uid, $file)),
+					// The lighter one to scrub through on hover, once there is one (#169)
+					'scrubUrl' => $version->getScrubState() === DerivedMedia::STATE_READY
+						? $this->urls->linkToRoute('deliver.media.show', ['id' => $version->getId(), 'kind' => 'scrub'])
+						: null,
 					// Queued or running derived media, with the running job's progress
 					'processing' => array_intersect(
 						[$version->getProxyState(), $version->getThumbsState(), $version->getWaveformState()],

@@ -42,6 +42,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setProxyState(string $proxyState)
  * @method string getThumbsState()
  * @method void setThumbsState(string $thumbsState)
+ * @method string getScrubState()
+ * @method void setScrubState(string $scrubState)
  * @method string getWaveformState()
  * @method void setWaveformState(string $waveformState)
  * @method ?string getDerivedError()
@@ -89,6 +91,7 @@ class Version extends Entity {
 	protected string $proxyState = 'none';
 	protected string $thumbsState = 'none';
 	protected string $waveformState = 'none';
+	protected string $scrubState = 'none';
 	protected ?string $derivedError = null;
 	/** When its file was last overwritten under Comments; Comments made before are marked (ADR 0018) */
 	protected ?int $overwrittenAt = null;

@@ -2,6 +2,8 @@
 
 ## Unreleased
 - Show the time left next to the percentage while this browser encodes a Proxy.
+- Make a Scrub Proxy of every video Version with ffmpeg, of older ones a few each hour, and scrub through it on hover on the timeline and the Asset card.
+- Take a Scrub Proxy from the browser through `POST /versions/{id}/scrub` where the server has no ffmpeg.
 
 ## 0.11.1 – 2026-11-05
 

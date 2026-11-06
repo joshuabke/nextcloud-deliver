@@ -6,7 +6,7 @@ For admins: what Deliver needs, what it does in the background, and how to tune 
 
 - Nextcloud 33 to 35 (the Files sidebar tab API this app uses shipped with 33)
 - PHP 8.2 or newer
-- ffmpeg/ffprobe are optional and only needed for derived media (Proxies, Thumbnail Strips, Waveforms)
+- ffmpeg/ffprobe are optional and only needed for derived media (Proxies, Thumbnail Strips, Waveforms, Scrub Proxies)
 - For the still that identifies an Asset in a list, Nextcloud's own Movie preview provider has to be enabled by an admin (`occ config:system:set enabledPreviewProviders N --value 'OC\Preview\Movie'`); without it the list falls back to an icon
 
 ## File locks
@@ -15,7 +15,7 @@ Deliver locks the file of every Version with Comments or Approvals through Nextc
 
 ## Derived media
 
-`ffprobe` reads the frame rate as a fraction, the start timecode and the duration in Frames; `ffmpeg` makes a Proxy for anything a browser will not play and for originals above the Proxy bitrate threshold, a WebP Thumbnail Strip for the timeline and a Waveform for the audio. Everything lands in app data, never in a user folder, and is served with byte ranges so the player can seek.
+`ffprobe` reads the frame rate as a fraction, the start timecode and the duration in Frames; `ffmpeg` makes a Proxy for anything a browser will not play and for originals above the Proxy bitrate threshold, a WebP Thumbnail Strip for the timeline, a Waveform for the audio and, for every video Version, a Scrub Proxy that hover previews on the timeline and on Asset cards scrub through: H.264 at 320 pixels wide, a keyframe a second, about 250 kbit/s and no sound, so about 1.9 MB of app data per minute of video. Versions from before Deliver made Scrub Proxies get one from the hourly job, ten at a time once the last ten are done, the newest first and after all other jobs; without ffmpeg the server makes none, and hover previews scrub through the Proxy or the original as before. Everything lands in app data, never in a user folder, and is served with byte ranges so the player can seek.
 
 ```sh
 occ deliver:worker --once              # work through the queue and stop

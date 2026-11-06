@@ -13,16 +13,23 @@ class JobMapper extends Mapper {
 		parent::__construct($db, 'deliver_jobs', Job::class);
 	}
 
-	/** @return Job[] the oldest waiting work first; a Deleted Project's waits until it is restored (ADR 0015) */
-	public function findQueued(int $limit): array {
+	/**
+	 * @param ?string $kind only jobs of this kind
+	 * @return Job[] the oldest waiting work first, Scrub Proxies after everything else; a Deleted Project's waits until it is restored (ADR 0015)
+	 */
+	public function findQueued(int $limit, ?string $kind = null): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('j.*')->from($this->getTableName(), 'j')
 			->leftJoin('j', 'deliver_versions', 'v', $qb->expr()->eq('v.id', 'j.version_id'))
 			->leftJoin('v', 'deliver_projects', 'p', $qb->expr()->eq('p.id', 'v.project_id'))
 			->where($qb->expr()->eq('j.state', $qb->createNamedParameter(Job::STATE_QUEUED)))
 			->andWhere($qb->expr()->isNull('p.deleted_at'))
-			->orderBy('j.id')
+			->orderBy($qb->createFunction('CASE WHEN j.kind = ' . $qb->expr()->literal(Job::KIND_SCRUB) . ' THEN 1 ELSE 0 END'))
+			->addOrderBy('j.id')
 			->setMaxResults($limit);
+		if ($kind !== null) {
+			$qb->andWhere($qb->expr()->eq('j.kind', $qb->createNamedParameter($kind)));
+		}
 		return $this->findEntities($qb);
 	}
 
