@@ -10,6 +10,7 @@ use OCA\Deliver\Db\Version;
 use OCA\Deliver\Http\RangeFileResponse;
 use OCA\Deliver\Service\AccessDeniedException;
 use OCA\Deliver\Service\ApprovalService;
+use OCA\Deliver\Service\Captions;
 use OCA\Deliver\Service\CommentService;
 use OCA\Deliver\Service\DerivedMedia;
 use OCA\Deliver\Service\ProjectService;
@@ -54,6 +55,7 @@ class PublicApiController extends PublicShareController {
 		private ReviewerService $reviewers,
 		private CommentService $comments,
 		private DerivedMedia $media,
+		private Captions $captions,
 		private ProjectService $projects,
 		private StackService $stacks,
 		private IURLGenerator $urls,
@@ -190,7 +192,8 @@ class PublicApiController extends PublicShareController {
 			$version = $this->links->version($link, $versionId);
 			if ($kind !== 'original') {
 				// Not generated (yet) is a 404 as well; the player falls back to the original
-				return RangeFileResponse::ofSimpleFile($this->media->file($version, $kind), $this->request->getHeader('Range'));
+				$file = str_starts_with($kind, 'captions-') ? $this->captions->file($version->getId(), substr($kind, 9)) : $this->media->file($version, $kind);
+				return RangeFileResponse::ofSimpleFile($file, $this->request->getHeader('Range'));
 			}
 			$file = $link->originalFile($version);
 			$download = $link->downloadable($version);

@@ -38,7 +38,8 @@ class PageController extends Controller {
 		// Without ffmpeg the uploading browser makes Proxies to the server's rules (ADR 0019)
 		$this->initialState->provideInitialState('proxy', $this->settings->proxy());
 		$response = new TemplateResponse(Application::APP_ID, 'index');
-		$response->setContentSecurityPolicy(Application::allowWasm(new ContentSecurityPolicy()));
+		// Captions play from a blob the browser converted (#54)
+		$response->setContentSecurityPolicy(Application::allowWasm(new ContentSecurityPolicy())->addAllowedMediaDomain('blob:'));
 		return $response;
 	}
 }

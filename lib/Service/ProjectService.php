@@ -50,6 +50,7 @@ class ProjectService {
 		private RemovedMapper $removed,
 		private StackService $stacks,
 		private DerivedMedia $media,
+		private Captions $captions,
 		private IRootFolder $root,
 		private IURLGenerator $urls,
 		private ITimeFactory $time,
@@ -672,6 +673,46 @@ class ProjectService {
 	}
 
 	/**
+	 * Captions in one language for a Version (#54), uploaded next to the
+	 * Version's file as for a Proxy; the upload goes whether they are taken
+	 * or refused.
+	 *
+	 * @throws InvalidRequestException the upload is not a file of its own next to the Version's file, or no Captions
+	 */
+	public function giveCaptions(string $uid, int $versionId, int $uploadId, string $language): array {
+		[$version, $file, $grant] = $this->reachVersion($uid, $versionId);
+		if (!$grant->manages()) {
+			throw new AccessDeniedException('Manage is required');
+		}
+		$upload = $this->root->getUserFolder($uid)->getFirstNodeById($uploadId);
+		if (!$file instanceof File || !$upload instanceof File) {
+			throw new NotFoundException('File not found');
+		}
+		if ($upload->getId() === $file->getId() || $upload->getParent()->getId() !== $file->getParent()->getId() || $this->versions->findByFile($upload->getId()) !== null) {
+			throw new InvalidRequestException('The upload must be a file of its own next to the Version\'s file');
+		}
+		if (!$upload->isDeletable()) {
+			throw new AccessDeniedException('Deleting the upload is not allowed');
+		}
+		try {
+			if ($upload->getSize() > Captions::MAX_BYTES) {
+				throw new InvalidRequestException('A captions file has at most 1 MB');
+			}
+			$this->captions->store($version->getId(), $language, $upload->getContent());
+		} finally {
+			$upload->delete();
+		}
+		return $this->versionPayload($version, $uid, $grant);
+	}
+
+	/** Removes a Version's Captions in one language (#54) */
+	public function removeCaptions(string $uid, int $versionId, string $language): array {
+		$version = $this->writableVersion($uid, $versionId);
+		$this->captions->remove($version->getId(), $language);
+		return $this->versionPayload($version, $uid);
+	}
+
+	/**
 	 * What the Review view needs for one Version: its Project (or No Project),
 	 * its Asset and the Versions of its Stack this Member can see, newest first.
 	 *
@@ -792,6 +833,11 @@ class ProjectService {
 			// The short side in pixels, as in "1080p"
 			'resolution' => $shortSide,
 			'url' => $url,
+			// Shown in the player on request, never in Compare (#54)
+			'captions' => array_map(
+				static fn (string $language) => ['language' => $language, 'url' => str_replace('__kind__', 'captions-' . $language, $media)],
+				$this->captions->languages($version->getId()),
+			),
 			'derived' => [
 				'proxy' => [
 					'state' => $version->getProxyState(),

@@ -2,6 +2,7 @@
 
 ## Unveröffentlicht
 - Die verbleibende Zeit neben dem Prozentwert gezeigt, solange dieser Browser einen Proxy erzeugt.
+- Untertitel als SRT oder WebVTT zu einer Version hinzugefügt, eine Datei je Sprache, und sie im Player unter einer CC-Schaltfläche gezeigt.
 
 ## 0.11.1 – 2026-11-05
 

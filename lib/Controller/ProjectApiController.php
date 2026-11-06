@@ -145,6 +145,17 @@ class ProjectApiController extends OCSController {
 		return $this->guard(fn () => $this->service->proxyProgress((string)$this->userId, $id, $percent));
 	}
 
+	/** @param int $fileId the file id of the Captions, uploaded next to the Version's file */
+	#[NoAdminRequired]
+	public function captions(int $id, int $fileId, string $language): Response {
+		return $this->guard(fn () => $this->service->giveCaptions((string)$this->userId, $id, uploadId: $fileId, language: $language));
+	}
+
+	#[NoAdminRequired]
+	public function removeCaptions(int $id, string $language): Response {
+		return $this->guard(fn () => $this->service->removeCaptions((string)$this->userId, $id, $language));
+	}
+
 	#[NoAdminRequired]
 	public function thumbs(int $id, string $image = '', int $every = 0, int $count = 0): Response {
 		return $this->guard(fn () => $this->service->giveThumbs((string)$this->userId, $id, $image, $every, $count));
