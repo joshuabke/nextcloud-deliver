@@ -744,7 +744,9 @@ test.describe('Review view', () => {
 		await expect(dialog.locator('.vs__selected')).toHaveText('German')
 		await dialog.getByRole('button', { name: 'Add Captions' }).click()
 		await expect(dialog.locator('.deliver-captions__list')).toHaveText('German')
-		await page.keyboard.press('Escape')
+		// By its button: the dialog's focus trap may have put focus into the file field, where NcModal ignores Escape
+		await dialog.getByRole('button', { name: 'Close' }).click()
+		await expect(dialog).toBeHidden()
 
 		await card(page, 'captioned').locator('.deliver-card__link').dblclick()
 		const shown = () => page.evaluate(() => [...document.querySelector('.deliver-player__video').textTracks].filter((track) => track.mode === 'showing').map((track) => track.language))
