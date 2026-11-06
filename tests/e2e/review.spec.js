@@ -742,9 +742,12 @@ test.describe('Review view', () => {
 		// The language comes from the file name
 		await dialog.locator('input[type=file]').setInputFiles({ name: 'captioned.de.srt', mimeType: 'application/x-subrip', buffer: Buffer.from('1\n00:00:00,000 --> 00:00:03,000\nHallo\n') })
 		await expect(dialog.locator('.vs__selected')).toHaveText('German')
-		await dialog.getByRole('button', { name: 'Add Captions' }).click()
+		// Focus stays in the file field, as where a click does not focus the button (Safari); Escape in a field leaves a dialog open
+		await dialog.locator('input[type=file]').focus()
+		await dialog.getByRole('button', { name: 'Add Captions' }).dispatchEvent('click')
 		await expect(dialog.locator('.deliver-captions__list')).toHaveText('German')
 		await page.keyboard.press('Escape')
+		await expect(dialog).toBeHidden()
 
 		await card(page, 'captioned').locator('.deliver-card__link').dblclick()
 		const shown = () => page.evaluate(() => [...document.querySelector('.deliver-player__video').textTracks].filter((track) => track.mode === 'showing').map((track) => track.language))

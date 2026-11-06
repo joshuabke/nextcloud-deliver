@@ -1,7 +1,7 @@
 <script setup>
 import deleteIcon from '@mdi/svg/svg/trash-can-outline.svg?raw'
 import { getLanguage } from '@nextcloud/l10n'
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
@@ -24,6 +24,7 @@ const locale = getLanguage()
 const present = ref(null)
 const file = ref(null)
 const fileInput = ref(null)
+const list = ref(null)
 const language = ref(null)
 const busy = ref(false)
 const error = ref(null)
@@ -79,6 +80,9 @@ async function add() {
 		file.value = null
 		fileInput.value.value = ''
 		language.value = null
+		// Out of the file field, where the dialog ignores Escape, and off the button the add disabled
+		await nextTick()
+		list.value?.focus()
 	} catch (e) {
 		error.value = errorMessage(e)
 	} finally {
@@ -101,7 +105,12 @@ async function remove(tag) {
 
 <template>
 	<NcDialog :name="t('deliver', 'Captions')" size="small" @closing="emit('close')">
-		<ul v-if="present?.length" class="deliver-captions__list">
+		<ul
+			v-if="present?.length"
+			ref="list"
+			class="deliver-captions__list"
+			tabindex="-1"
+			:aria-label="t('deliver', 'Captions')">
 			<li v-for="tag in present" :key="tag">
 				<span>{{ languageName(tag, locale) }}</span>
 				<NcButton variant="tertiary" :aria-label="t('deliver', 'Remove the Captions in {language}', { language: languageName(tag, locale) })" @click="remove(tag)">
@@ -149,6 +158,10 @@ async function remove(tag) {
 	flex-direction: column;
 	gap: var(--default-grid-baseline);
 	padding-bottom: calc(2 * var(--default-grid-baseline));
+}
+
+.deliver-captions__list:focus-visible {
+	outline: 2px solid var(--color-main-text);
 }
 
 .deliver-captions__list li {

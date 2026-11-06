@@ -3,6 +3,7 @@
 ## Unveröffentlicht
 - Die verbleibende Zeit neben dem Prozentwert gezeigt, solange dieser Browser einen Proxy erzeugt.
 - Untertitel als SRT oder WebVTT zu einer Version hinzugefügt, eine Datei je Sprache, und sie im Player unter einer CC-Schaltfläche gezeigt.
+- Den Fokus nach dem Hinzufügen von Untertiteln auf ihre Liste gesetzt, damit Escape den Dialog wieder schließt.
 - Mit ffmpeg einen Scrub-Proxy für jede Video-Version erzeugt, für ältere einige pro Stunde, und beim Überfahren der Zeitleiste und der Asset-Karte durch ihn gescrubbt.
 - Einen Scrub-Proxy aus dem Browser über `POST /versions/{id}/scrub` angenommen, wenn der Server kein ffmpeg hat.
 - „Proxy hochladen …“ und „Proxy entfernen“ zur Asset-Karte hinzugefügt; ein übergebener Proxy wird auch mit ffmpeg angenommen.
