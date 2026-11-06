@@ -10,10 +10,18 @@ Your media stays in Files. Deliver keeps the review around it: Comments, Drawing
 
 - Making a **Project**, enabling a file for review, deleting a Project or removing an **Asset** never moves, copies or deletes a file.
 - Deliver changes a file only when you ask it to in Deliver: uploading puts new files into Files, renaming a file renames it there, and **Delete** on an Asset moves its files to the trash of Files.
-- When your browser makes a Proxy, it uploads it as a hidden file `.deliver-proxy-…` next to the video, which Deliver takes in and removes.
+- When your browser makes a Proxy, or you upload one of your own, it goes up as a hidden file `.deliver-proxy-…` next to the video, which Deliver takes in and removes.
 - Whatever you do in Files works as always: sharing, moving, renaming, deleting. Deliver follows.
 - Except for a file with Comments or Approvals: Deliver **locks** it, so that nobody overwrites, renames or deletes it outside Deliver by accident, a sync client included. Files shows it as locked by Deliver. Replacing, renaming and deleting through Deliver still work, and whoever owns the file can lift the lock in Files. A Member with **Manage** can switch the lock off for a Project.
 - Where a file in review is overwritten anyway, without the lock, its Comments stay and are marked as made before the overwrite, and the Project's Members are notified.
+
+### A Proxy of your own
+
+- A video that browsers do not play, or one above the Proxy bitrate threshold, gets a **Proxy** to play from. If you rendered one yourself in your editing software, a Member with **Manage** can use it instead: **Upload Proxy…** in the Asset card's menu.
+- It has to fit the Version: an H.264/AAC MP4 that browsers play, with sound where the original has it, the same Frames at the same frame rate, at most the Proxy resolution and below the Proxy bitrate threshold. Deliver says why when it does not take it. A video that plays as it is takes none.
+- Your Proxy replaces one Deliver made, and Deliver makes none while yours is there. It plays as **Proxy** in the player's quality menu.
+- **Remove Proxy** in the same menu takes it away; then Deliver makes one again, or, without ffmpeg on the server, offers **Make Proxy in this browser**. **Regenerate** and a file written again drop it too.
+- The Proxy is kept with Deliver's other Proxies, not in your folder, so naming a file `cut.proxy.mp4` makes it nothing special.
 
 ### One file, one Version, one Project
 

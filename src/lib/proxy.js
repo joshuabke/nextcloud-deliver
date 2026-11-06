@@ -510,6 +510,24 @@ export async function handInProxy(versionId, making, status, controller) {
 }
 
 /**
+ * Hands in a Proxy made by hand (ADR 0020): uploaded next to the Version's
+ * file like the browser's, then checked by the server, which says why when
+ * it refuses it.
+ *
+ * @param {number} versionId - the Version
+ * @param {string} url - the WebDAV URL of its file
+ * @param {File} file - the Proxy
+ * @param {{state: string, progress: number}} status - uploading, then handing
+ * @return {Promise<void>}
+ */
+export async function uploadProxy(versionId, url, file, status) {
+	Object.assign(status, { state: 'uploading', progress: 0 })
+	const fileId = await uploadNextTo(url, file, status, new AbortController().signal)
+	status.state = 'handing'
+	await giveProxy(versionId, fileId)
+}
+
+/**
  * Uploads a Proxy next to the Version's file, under a name without a media
  * extension so that Auto Intake passes it by; deleted again when it does
  * not arrive.

@@ -187,7 +187,7 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertCount(1, $this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'], 'the upload never became an Asset');
 		self::assertSame(404, $this->nc->davStatus('PROPFIND', $path), 'the upload is gone');
 
-		self::assertSame(409, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom(self::PROXY)[0]])['status'], 'a Proxy stays until it is regenerated');
+		self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom(self::PROXY)[0]])['status'], 'another one handed in replaces it (ADR 0020)');
 	}
 
 	/** @return array<string, array{string, string}> */
@@ -205,6 +205,8 @@ class WithoutFfmpegTest extends TestCase {
 	public function testAProxyThatDoesNotFitIsRefused(string $args, string $why): void {
 		$this->make(self::PRORES);
 		$version = $this->upload('master.mov');
+		// The browser's own attempt, which then shows as failed
+		self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy/progress", ['percent' => 99])['status']);
 
 		$refused = $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom($args)[0]]);
 		self::assertSame(400, $refused['status'], json_encode($refused['data']));
@@ -268,6 +270,8 @@ class WithoutFfmpegTest extends TestCase {
 			$viewer = $this->nc->withUser($user, 'Viewer-pass-123!');
 			self::assertSame(403, $viewer->ocs('POST', "/versions/{$version['id']}/proxy/progress", ['percent' => 10])['status']);
 			self::assertSame(403, $viewer->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom(self::PROXY)[0]])['status']);
+			self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom(self::PROXY)[0]])['status']);
+			self::assertSame(403, $viewer->ocs('DELETE', "/versions/{$version['id']}/proxy")['status'], 'nor removes it');
 		} finally {
 			$this->nc->ocsForm('DELETE', "/ocs/v2.php/cloud/users/$user");
 		}
@@ -428,6 +432,7 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertSame(200, $taken['status'], 'two pictures of two seconds are within a cap of ten: ' . json_encode($taken['data']));
 
 		// Noise at 640x360 is far above 2 Mbit/s
+		self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy/progress", ['percent' => 99])['status']);
 		$refused = $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom('-f lavfi -i color=size=640x360:rate=25:duration=2,noise=alls=100:allf=t -f lavfi -i sine=duration=2 -c:v libx264 -crf 10 -pix_fmt yuv420p -c:a aac -shortest')[0]]);
 		self::assertSame(400, $refused['status'], json_encode($refused['data']));
 		$shown = $this->nc->ocs('GET', "/versions/{$version['id']}")['data']['versions'][0];

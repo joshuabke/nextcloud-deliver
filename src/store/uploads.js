@@ -4,7 +4,7 @@ import { defineStore } from 'pinia'
 import { chunkSizeFor, decodeInTurn, enableFile, errorMessage, getVersion, giveAudioWaveform, regenerateVersion, uploadsUrl } from '../api.js'
 import { t } from '../lib/l10n.js'
 import { mediaKind, reviewable } from '../lib/media.js'
-import { clearProxies, convertInTurn, dropProxy, handInProxy, inspect } from '../lib/proxy.js'
+import { clearProxies, convertInTurn, dropProxy, handInProxy, inspect, uploadProxy } from '../lib/proxy.js'
 import { refusal } from '../lib/unsupported.js'
 import { browserEnv, current, HEARTBEAT, sameFile, uploadFile } from '../lib/upload.js'
 import { ACTIVE, mergeBoard, totals } from '../lib/uploadBoard.js'
@@ -466,6 +466,25 @@ export const useUploadsStore = defineStore('uploads', {
 			await handInProxy(version.id, convertInTurn(version.url, proxySettings, status, controller.signal), status, controller)
 			delete this.proxies[version.id]
 			return status
+		},
+		/**
+		 * A Proxy made by hand, from the Asset card (ADR 0020); the card shows
+		 * how far its upload has got
+		 *
+		 * @param {{id: number, url: string}} version - the Version, with the WebDAV URL of its file
+		 * @param {File} file - the Proxy
+		 * @return {Promise<?string>} why it was not taken, null when it was
+		 */
+		async uploadProxy(version, file) {
+			this.proxies[version.id] = { state: 'uploading', progress: 0, error: null }
+			try {
+				await uploadProxy(version.id, version.url, file, this.proxies[version.id])
+				return null
+			} catch (error) {
+				return errorMessage(error) ?? t('deliver', 'The Proxy could not be uploaded.')
+			} finally {
+				delete this.proxies[version.id]
+			}
 		},
 		/**
 		 * @param {object} item - a finished upload, whose Version is read again

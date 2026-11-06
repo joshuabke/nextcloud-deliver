@@ -2,6 +2,7 @@
 
 ## Unveröffentlicht
 - Die verbleibende Zeit neben dem Prozentwert gezeigt, solange dieser Browser einen Proxy erzeugt.
+- „Proxy hochladen …“ und „Proxy entfernen“ zur Asset-Karte hinzugefügt; ein übergebener Proxy wird auch mit ffmpeg angenommen.
 
 ## 0.11.1 – 2026-11-05
 

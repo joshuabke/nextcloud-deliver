@@ -141,6 +141,11 @@ class ProjectApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	public function removeProxy(int $id): Response {
+		return $this->guard(fn () => $this->service->removeProxy((string)$this->userId, $id));
+	}
+
+	#[NoAdminRequired]
 	public function proxyProgress(int $id, int $percent): Response {
 		return $this->guard(fn () => $this->service->proxyProgress((string)$this->userId, $id, $percent));
 	}

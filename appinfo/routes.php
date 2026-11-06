@@ -86,6 +86,7 @@ return [
 		['name' => 'project_api#waveform', 'url' => '/api/v1/versions/{id}/waveform', 'verb' => 'POST'],
 		['name' => 'project_api#thumbs', 'url' => '/api/v1/versions/{id}/thumbs', 'verb' => 'POST'],
 		['name' => 'project_api#proxy', 'url' => '/api/v1/versions/{id}/proxy', 'verb' => 'POST'],
+		['name' => 'project_api#removeProxy', 'url' => '/api/v1/versions/{id}/proxy', 'verb' => 'DELETE'],
 		['name' => 'project_api#proxy_progress', 'url' => '/api/v1/versions/{id}/proxy/progress', 'verb' => 'POST'],
 		['name' => 'project_api#members', 'url' => '/api/v1/versions/{id}/members', 'verb' => 'GET'],
 		['name' => 'comment_api#index', 'url' => '/api/v1/versions/{versionId}/comments', 'verb' => 'GET'],

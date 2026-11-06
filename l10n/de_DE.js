@@ -633,6 +633,9 @@ OC.L10N.register(
 		"Deliver could not make the Proxy of {name} in this browser.": "Deliver konnte den Proxy von {name} in diesem Browser nicht erzeugen.",
 		"Another browser is making this Proxy, or it is there already.": "Ein anderer Browser erzeugt diesen Proxy schon, oder er ist schon da.",
 		"Make Proxy in this browser": "Proxy in diesem Browser erzeugen",
+		"Upload Proxy…": "Proxy hochladen …",
+		"Remove Proxy": "Proxy entfernen",
+		"The Proxy could not be uploaded.": "Der Proxy konnte nicht hochgeladen werden.",
 		"This browser could not make the Proxy.": "Dieser Browser konnte den Proxy nicht erzeugen."
 	},
 	"nplurals=2; plural=(n != 1);"

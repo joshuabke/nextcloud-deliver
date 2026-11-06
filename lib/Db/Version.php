@@ -40,6 +40,8 @@ use OCP\AppFramework\Db\Entity;
  * @method ?bool getDropFrame()
  * @method string getProxyState()
  * @method void setProxyState(string $proxyState)
+ * @method ?bool getProxyHandedIn()
+ * @method void setProxyHandedIn(bool $proxyHandedIn)
  * @method string getThumbsState()
  * @method void setThumbsState(string $thumbsState)
  * @method string getWaveformState()
@@ -87,6 +89,8 @@ class Version extends Entity {
 	/** Set when the filename convention stacked this Version, so a Member can undo it */
 	protected ?bool $autoStacked = null;
 	protected string $proxyState = 'none';
+	/** Whether its Proxy came in through the API, from a browser or made by hand, not from ffmpeg (ADR 0020) */
+	protected ?bool $proxyHandedIn = null;
 	protected string $thumbsState = 'none';
 	protected string $waveformState = 'none';
 	protected ?string $derivedError = null;
@@ -104,6 +108,7 @@ class Version extends Entity {
 		$this->addType('dropFrame', 'boolean');
 		$this->addType('autoStacked', 'boolean');
 		$this->addType('playable', 'boolean');
+		$this->addType('proxyHandedIn', 'boolean');
 		$this->addType('startFrame', 'integer');
 		$this->addType('durationFrames', 'integer');
 		$this->addType('width', 'integer');

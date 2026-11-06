@@ -2,6 +2,7 @@
 
 ## Unreleased
 - Show the time left next to the percentage while this browser encodes a Proxy.
+- Add "Upload Proxy…" and "Remove Proxy" to the Asset card, and take a Proxy handed in with ffmpeg too.
 
 ## 0.11.1 – 2026-11-05
 
