@@ -3,7 +3,6 @@
 ## Unreleased
 - Show the time left next to the percentage while this browser encodes a Proxy.
 - Add Captions to a Version as SRT or WebVTT, one file per language, and show them in the player under a CC button.
-- Move the focus to the list of Captions after adding some, so that Escape closes the dialog again.
 - Make a Scrub Proxy of every video Version with ffmpeg, of older ones a few each hour, and scrub through it on hover on the timeline and the Asset card.
 - Take a Scrub Proxy from the browser through `POST /versions/{id}/scrub` where the server has no ffmpeg.
 - Add "Upload Proxy…" and "Remove Proxy" to the Asset card, and take a Proxy handed in with ffmpeg too.
