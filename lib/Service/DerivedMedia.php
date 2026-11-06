@@ -20,7 +20,7 @@ use OCP\IAppConfig;
 use Psr\Log\LoggerInterface;
 
 /**
- * Proxies, Thumbnail Strips and Waveforms (ADR 0003). They live in app data,
+ * Proxies, Thumbnail Strips, Waveforms and Scrub Proxies (ADR 0003). They live in app data,
  * never in a user's folder, and a Version plays without them whenever the
  * browser can handle the original.
  */
@@ -37,6 +37,7 @@ class DerivedMedia {
 		'thumbs' => 'thumbs.webp',
 		'thumbsIndex' => 'thumbs.json',
 		'waveform' => 'waveform.json',
+		'scrub' => 'scrub.mp4',
 	];
 
 	/** Codecs a browser plays in each container family, by their ffprobe names */
@@ -69,6 +70,11 @@ class DerivedMedia {
 
 	/** Seconds after the last report of a browser making a Proxy, when its tab counts as closed */
 	public const BROWSER_LAPSE = 120;
+
+	/** The Scrub Proxy: this wide at most, about this many kbit/s, and never above the ceiling in bit/s (#169) */
+	private const SCRUB_WIDTH = 320;
+	private const SCRUB_KBPS = 250;
+	private const SCRUB_CEILING = 500_000;
 
 	/** @var array{job: Job, seconds: float, percent: int, written: int}|null the job ffmpeg is working on */
 	private ?array $running = null;
@@ -176,6 +182,7 @@ class DerivedMedia {
 				Job::KIND_PROXY => $this->runProxy($version, $path),
 				Job::KIND_THUMBS => $this->runThumbs($version, $path),
 				Job::KIND_WAVEFORM => $this->runWaveform($version, $path),
+				Job::KIND_SCRUB => $this->runScrub($version, $path),
 				default => throw new \RuntimeException('Unknown job kind ' . $job->getKind()),
 			};
 			$this->guard();
@@ -243,6 +250,9 @@ class DerivedMedia {
 		}
 		if ($version->getHasAudio()) {
 			$this->enqueue($version->getId(), Job::KIND_WAVEFORM);
+		}
+		if ($version->getHasVideo()) {
+			$this->enqueue($version->getId(), Job::KIND_SCRUB);
 		}
 	}
 
@@ -321,6 +331,98 @@ class DerivedMedia {
 	public static function splitArgs(string $line): array {
 		preg_match_all('/(?:[^\s"\']+|"[^"]*"|\'[^\']*\')+/', $line, $matches);
 		return array_map(static fn (string $arg) => (string)preg_replace('/"([^"]*)"|\'([^\']*)\'/', '$1$2', $arg), $matches[0]);
+	}
+
+	/**
+	 * The Scrub Proxy (#169): every Frame of the picture at 320 wide, a
+	 * keyframe a second and no sound, for hover previews. Always libx264: at
+	 * this size the encode costs next to nothing beside the decode, and a
+	 * hardware encoder's constant quality would not hold the bitrate.
+	 */
+	private function runScrub(Version $version, string $path): void {
+		$num = $version->getFpsNum();
+		$den = $version->getFpsDen();
+		$gop = (string)max(1, $num && $den ? (int)round($num / $den) : 25);
+		$this->store($version, 'scrub', fn (string $output) => $this->ffmpeg([
+			...Ffmpeg::input($path),
+			'-map', '0:v:0', '-an',
+			'-vf', 'scale=\'min(' . self::SCRUB_WIDTH . ',trunc(iw/2)*2)\':-2',
+			...($num && $den ? ['-r', "$num/$den"] : []),
+			'-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p',
+			'-b:v', self::SCRUB_KBPS . 'k', '-maxrate', (int)(self::SCRUB_KBPS * 1.6) . 'k', '-bufsize', (2 * self::SCRUB_KBPS) . 'k',
+			'-g', $gop,
+			'-movflags', '+faststart',
+			'-f', 'mp4', $output,
+		]));
+	}
+
+	/**
+	 * A Scrub Proxy a browser made where the server has no ffmpeg (#169): an
+	 * H.264 MP4 that browsers play, at most 320 wide, below 0.5 Mbit/s, with
+	 * the Version's Frames as a Proxy has them. Sound is not needed. One that
+	 * does not fit is refused and leaves the Version without one.
+	 *
+	 * @throws ProjectConflictException the server makes Scrub Proxies, or the Version has one, has no picture or is not read yet
+	 * @throws InvalidRequestException the upload is no Scrub Proxy of this Version
+	 */
+	public function acceptScrub(Version $version, File $original, File $upload): void {
+		if (!$this->withoutFfmpeg()) {
+			throw new ProjectConflictException('This server makes Scrub Proxies with ffmpeg');
+		}
+		$version = $this->readNow($version);
+		if (!$version->getHasVideo() || $version->getScrubState() === self::STATE_READY) {
+			throw new ProjectConflictException('This Version takes no Scrub Proxy');
+		}
+		$source = $this->probe->localPath($original);
+		$candidate = $this->probe->localPath($upload);
+		if ($source === null || $candidate === null) {
+			throw new \RuntimeException('The files are not readable');
+		}
+		$probed = $this->container->read($candidate);
+		$picture = $this->videoOf($probed);
+		if ($probed === null || $picture === null || !str_contains((string)($probed['format']['format_name'] ?? ''), 'mp4') || !$this->browserPlays($probed)) {
+			throw new InvalidRequestException('The Scrub Proxy is no H.264 MP4 that browsers play');
+		}
+		if ((int)($picture['width'] ?? 0) > self::SCRUB_WIDTH) {
+			throw new InvalidRequestException('The Scrub Proxy is wider than ' . self::SCRUB_WIDTH . ' pixels');
+		}
+		$seconds = (float)($picture['duration'] ?? 0);
+		if ($seconds <= 0 || filesize($candidate) * 8 / $seconds >= self::SCRUB_CEILING) {
+			throw new InvalidRequestException('The Scrub Proxy is not below ' . self::SCRUB_CEILING / 1_000_000 . ' Mbit/s');
+		}
+		$error = $this->otherFrames($version, $this->container->read($source) ?? [], $picture, 'Scrub Proxy');
+		if ($error !== null) {
+			throw new InvalidRequestException($error);
+		}
+		$stream = $upload->fopen('r');
+		try {
+			$this->put($version, 'scrub', $stream);
+		} finally {
+			if (is_resource($stream)) {
+				fclose($stream);
+			}
+		}
+		$this->mark($version->getId(), Job::KIND_SCRUB, self::STATE_READY);
+	}
+
+	/**
+	 * With ffmpeg, queues a Scrub Proxy for a few video Versions made before
+	 * there were any, the newest first, once the last few are done; they run
+	 * after every other job and hold none up (JobMapper::findQueued,
+	 * JobRunner::runNext). Without ffmpeg only new
+	 * uploads get one, from the browser.
+	 *
+	 * @return int how many
+	 */
+	public function queueMissingScrubs(int $limit): int {
+		if (!$this->ffmpeg->available() || $this->jobs->findQueued(1, Job::KIND_SCRUB) !== []) {
+			return 0;
+		}
+		$missing = $this->versions->findWithoutScrub($limit);
+		foreach ($missing as $version) {
+			$this->enqueue($version->getId(), Job::KIND_SCRUB);
+		}
+		return count($missing);
 	}
 
 	/** About one Frame per second in a WebP grid, capped by the admin setting */
@@ -542,18 +644,7 @@ class DerivedMedia {
 		if ($source === null || $candidate === null) {
 			throw new \RuntimeException('The files are not readable');
 		}
-		// The upload may be quicker than the background job that reads the original
-		if ($version->getPlayable() === null) {
-			$job = $this->jobs->findPending($version->getId(), Job::KIND_PROBE);
-			// Claimed as by any worker: should the request die, the probe is queued again like theirs
-			if ($job !== null && $this->jobs->claim($job, 'request', $this->time->getTime())) {
-				$this->process($job);
-			}
-			$version = $this->versions->find($version->getId()) ?? throw new \RuntimeException('The Version is gone');
-			if ($version->getPlayable() === null) {
-				throw new ProjectConflictException('The original is not read yet');
-			}
-		}
+		$version = $this->readNow($version);
 		$probed = $this->container->read($source) ?? [];
 		if (!$this->needsProxy($version, (int)filesize($source))) {
 			throw new ProjectConflictException('This Version plays without a Proxy');
@@ -616,6 +707,28 @@ class DerivedMedia {
 		}
 	}
 
+	/**
+	 * The Version once its original is read: an upload from the browser may be
+	 * quicker than the background job that reads it, so this request reads it
+	 *
+	 * @throws ProjectConflictException the original cannot be read now
+	 */
+	private function readNow(Version $version): Version {
+		if ($version->getPlayable() !== null) {
+			return $version;
+		}
+		$job = $this->jobs->findPending($version->getId(), Job::KIND_PROBE);
+		// Claimed as by any worker: should the request die, the probe is queued again like theirs
+		if ($job !== null && $this->jobs->claim($job, 'request', $this->time->getTime())) {
+			$this->process($job);
+		}
+		$version = $this->versions->find($version->getId()) ?? throw new \RuntimeException('The Version is gone');
+		if ($version->getPlayable() === null) {
+			throw new ProjectConflictException('The original is not read yet');
+		}
+		return $version;
+	}
+
 	/** @throws ProjectConflictException the server makes Proxies, or the Version has one */
 	private function assertBrowserProxy(Version $version): void {
 		if (!$this->withoutFfmpeg()) {
@@ -646,20 +759,30 @@ class DerivedMedia {
 		if ($version->getHasAudio() && !array_filter($this->probe->streams($proxy), static fn (array $stream) => ($stream['codec_type'] ?? '') === 'audio')) {
 			return 'The Proxy has no sound, the original has';
 		}
+		return $this->otherFrames($version, $original, $picture, 'Proxy');
+	}
+
+	/**
+	 * @param array<string, mixed> $original what the original's headers say
+	 * @param array<string, mixed> $picture the video stream of the rendition
+	 * @param string $what the rendition, as the message names it
+	 * @return ?string why its Frames are not the original's at its rate, null when they are
+	 */
+	private function otherFrames(Version $version, array $original, array $picture, string $what): ?string {
 		$num = (int)$version->getFpsNum();
 		$den = (int)$version->getFpsDen();
 		$made = (int)($picture['nb_frames'] ?? -1);
 		$frames = $this->videoOf($original)['nb_frames'] ?? null;
 		if ($num < 1 || $den < 1 || $frames !== null && $made !== (int)$frames) {
-			return "The Proxy has other Frames than the original's $frames";
+			return "The $what has other Frames than the original's $frames";
 		}
 		// WebM and MKV do not count their Frames, and their length includes the sound, which may run on a little
 		if ($frames === null && abs($made - (int)$version->getDurationFrames()) > max(1, (int)round($num / $den / 5))) {
-			return 'The Proxy has other Frames than the original\'s ' . (int)$version->getDurationFrames();
+			return "The $what has other Frames than the original's " . (int)$version->getDurationFrames();
 		}
 		// Within half a Frame over the whole length, so the rate cannot drift a Frame anywhere
 		if (abs((float)($picture['duration'] ?? 0) - $made * $den / $num) > $den / $num / 2) {
-			return 'The Proxy runs at another frame rate than the original';
+			return "The $what runs at another frame rate than the original";
 		}
 		return null;
 	}
@@ -877,6 +1000,7 @@ class DerivedMedia {
 			$version->setProxyHandedIn(false);
 			$version->setThumbsState(self::STATE_NONE);
 			$version->setWaveformState(self::STATE_NONE);
+			$version->setScrubState(self::STATE_NONE);
 			$version->setDerivedError(null);
 			$this->versions->update($version);
 		}
@@ -922,6 +1046,7 @@ class DerivedMedia {
 			Job::KIND_PROXY => $version->setProxyState($state),
 			Job::KIND_THUMBS => $version->setThumbsState($state),
 			Job::KIND_WAVEFORM => $version->setWaveformState($state),
+			Job::KIND_SCRUB => $version->setScrubState($state),
 			default => null,
 		};
 		if ($error !== null) {

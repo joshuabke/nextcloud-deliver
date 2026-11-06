@@ -65,7 +65,7 @@ function save() {
 	<div v-if="settings">
 		<NcSettingsSection
 			:name="t('deliver', 'Derived media')"
-			:description="t('deliver', 'Deliver makes Proxies, Thumbnail Strips and Waveforms with ffmpeg in the background. Without ffmpeg, files the browser plays natively still work.')">
+			:description="t('deliver', 'Deliver makes Proxies, Thumbnail Strips, Waveforms and Scrub Proxies with ffmpeg in the background. Without ffmpeg, files the browser plays natively still work.')">
 			<form class="deliver-admin" @submit.prevent="save">
 				<NcTextField v-model="settings.ffmpegPath" :label="t('deliver', 'Path to ffmpeg')" :placeholder="t('deliver', 'ffmpeg on the PATH')" />
 				<NcTextField v-model="settings.ffprobePath" :label="t('deliver', 'Path to ffprobe')" :placeholder="t('deliver', 'ffprobe on the PATH')" />
@@ -150,7 +150,7 @@ function save() {
 		<NcSettingsSection :name="t('deliver', 'Status')">
 			<dl class="deliver-admin__status">
 				<dt>ffmpeg</dt>
-				<dd>{{ status.ffmpeg ?? t('deliver', 'not found: no Proxies, Thumbnail Strips or Waveforms') }}</dd>
+				<dd>{{ status.ffmpeg ?? t('deliver', 'not found: no Proxies, Thumbnail Strips, Waveforms or Scrub Proxies') }}</dd>
 				<dt>ffprobe</dt>
 				<dd>{{ status.ffprobe ?? t('deliver', 'not found: frame rates come from the Project setting') }}</dd>
 				<dt>{{ t('deliver', 'Encoder in use') }}</dt>

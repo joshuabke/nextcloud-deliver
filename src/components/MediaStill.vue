@@ -1,5 +1,6 @@
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { hoverSource } from '../lib/media.js'
 import { previewUrl } from '../lib/preview.js'
 
 // The still of an Asset: Nextcloud's preview, else a frame of the video itself; a mouse over it scrubs through the video, as on Frame.io
@@ -8,6 +9,8 @@ const props = defineProps({
 	fileId: { type: Number, required: true },
 	/** The video to take a frame from and scrub through; null for none (audio, images) */
 	playUrl: { type: String, default: null },
+	/** The Scrub Proxy, lighter to scrub through, once it is ready (#169) */
+	scrubUrl: { type: String, default: null },
 	/** How the picture fills the box: cover or contain */
 	fit: { type: String, default: 'cover' },
 })
@@ -25,6 +28,12 @@ const ready = ref(false)
 /** Where the mouse is, 0 to 1 */
 const at = ref(0)
 const video = ref(null)
+/** What the mouse scrubs through: the Scrub Proxy where it is ready */
+const source = computed(() => props.playUrl ? hoverSource(props.scrubUrl, props.playUrl) : null)
+/** Where Nextcloud has no still, a frame of playUrl is the still; with a Scrub Proxy the mouse scrubs through another video */
+const apart = computed(() => noStill.value && Boolean(props.scrubUrl))
+/** The one video is the still too */
+const stillVideo = computed(() => noStill.value && !props.scrubUrl)
 
 /**
  * Seeks to where the mouse is; seeks pile up on a slow line, so only the latest one counts
@@ -32,7 +41,7 @@ const video = ref(null)
  * @param {MouseEvent} event - the move over the still
  */
 function scrub(event) {
-	if (!props.playUrl || noVideo.value) {
+	if (!source.value || noVideo.value) {
 		return
 	}
 	const box = event.currentTarget.getBoundingClientRect()
@@ -68,7 +77,7 @@ function failed() {
 /** Back to the still, or to the first second where the video is the still */
 function leave() {
 	scrubbing.value = false
-	if (video.value && noStill.value && Number.isFinite(video.value.duration)) {
+	if (video.value && stillVideo.value && Number.isFinite(video.value.duration)) {
 		video.value.currentTime = Math.min(1, video.value.duration)
 	}
 }
@@ -88,10 +97,19 @@ function leave() {
 			loading="lazy"
 			@error="noStill = true">
 		<video
-			v-if="playUrl && !noVideo && (noStill || hovered)"
-			v-show="noStill || (scrubbing && ready)"
-			ref="video"
+			v-if="apart && !noVideo"
+			v-show="!scrubbing || !ready"
 			:src="playUrl + '#t=1'"
+			preload="metadata"
+			muted
+			playsinline
+			tabindex="-1"
+			@error="failed" />
+		<video
+			v-if="source && !noVideo && (stillVideo || hovered)"
+			v-show="stillVideo || (scrubbing && ready)"
+			ref="video"
+			:src="source + '#t=1'"
 			preload="metadata"
 			muted
 			playsinline

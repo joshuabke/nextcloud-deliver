@@ -25,7 +25,7 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | DELETE | `/assets/{id}/files` | Delete an Asset with its files: they go to the trash of Files, the Asset with its review data at once |
 | POST | `/files/{fileId}/rename` `{name}` | Rename a file in its folder from inside Deliver's lock, which WebDAV cannot pass; 409 for a name the folder holds, 400 for an empty name or one with a slash |
 | GET | `/versions/{id}/members` | Who can be @mentioned on a Version: whoever can open its file |
-| GET | `/versions/{id}` | Project, Asset and Version Stack for the Review view |
+| GET | `/versions/{id}` | Project, Asset and Version Stack for the Review view; each Version's `derived` holds the state and URL of its Proxy, Thumbnail Strip, Waveform and Scrub Proxy (`scrub`) |
 | PUT | `/versions/{id}` `{number, autoStacked}` | Set the Version Number, or take note of an automatic stack |
 | POST | `/versions/{id}/stack` `{assetId, number}` | Stack a Version onto another Asset |
 | POST | `/versions/{id}/unstack` | Take a Version out of its Stack, which is also the undo |
@@ -37,12 +37,13 @@ OCS, under `/ocs/v2.php/apps/deliver/api/v1`:
 | DELETE | `/versions/{id}/proxy` | Remove a Proxy handed in (ADR 0020): with ffmpeg the server queues its own at once, without the browser may make one again. 409 for a Proxy ffmpeg made, which would come right back, or none. Needs Manage |
 | POST | `/versions/{id}/captions` `{fileId, language}` | Add Captions in a language, a BCP 47 tag such as `de` or `pt-BR`, from an SRT or WebVTT file uploaded next to the Version's file under a name without a media extension; replaces the Captions in that language, stores them as UTF-8 (read as UTF-8, else Windows-1252) and deletes the upload either way. The Version as `GET /versions/{id}` lists it, with its `captions`. 400 for a file above 1 MB, one in which not a single cue can be read, or no language tag; needs Manage |
 | DELETE | `/versions/{id}/captions/{language}` | Remove the Version's Captions in that language; needs Manage |
+| POST | `/versions/{id}/scrub` `{fileId}` | Hand in the Scrub Proxy the browser made, uploaded next to the Version's file as for the Proxy; the upload is deleted either way. 400 with the reason for an MP4 that is no H.264 browsers play, wider than 320 pixels, not below 0.5 Mbit/s or with other Frames than the original (sound is not needed); 409 while the server has ffmpeg, for a Version without a picture, with its Scrub Proxy, or whose original is not read yet. Needs Manage |
 | POST | `/versions/{id}/replace` `{fileId, confirm}` | Replace the content of the Version's file with the file `fileId` and delete that file, keeping the Version's file id, so its Comments stay (spec: Delivering again); see below. 409 `{reason: confirm}` when the Version has Comments and `confirm` is not true, 400 for a file that is not next to the Version's file or is a Version itself, 403 without write access |
 | GET | `/admin/settings` | Pipeline settings and status, admins only |
 | PUT | `/admin/settings` `{ffmpegPath, ffprobePath, maxJobs, maxHeight, maxBitrate, thumbCap, hwEncoder, hwDevice, extraArgs, projectFolder, attachmentLimit, deletedDays}` | Save and test the encoder, admins only; `attachmentLimit` in MB per person and Version; `deletedDays` how long Deleted Projects are kept, 1 to 365; `maxBitrate` the Proxy bitrate threshold in Mbit/s, 2 to 200 |
 | GET | `/apps/deliver/versions/{id}/export/{format}` `?unresolvedOnly=1&zeroBased=1` | The Comments as `edl` (DaVinci Resolve markers), `fcpxml` (FCP7 XML, Premiere Pro), `fcpx` (FCPXML, Final Cut Pro) or `csv`, and for audio as `wav` (embedded markers), `midi` (marker meta events) or `reaper` (Region/Marker Manager CSV); needs Manage |
 | POST | `/apps/deliver/versions/{id}/export/ableton` (multipart `set`) | An Ableton Live Set back with the Comments as locators |
-| GET | `/apps/deliver/versions/{id}/media/{kind}` | Proxy, Thumbnail Strip, its index or the Waveform, with byte ranges; `captions-{language}` the Captions in a language, SRT or WebVTT as added |
+| GET | `/apps/deliver/versions/{id}/media/{kind}` | Proxy, Thumbnail Strip, its index, the Waveform or the Scrub Proxy (`proxy`, `thumbs`, `thumbsIndex`, `waveform`, `scrub`), with byte ranges. A card's Version carries `scrubUrl` once its Scrub Proxy is ready; `captions-{language}` the Captions in a language, SRT or WebVTT as added |
 | GET | `/versions/{id}/comments` | Comments of a Version, Frame order |
 | POST | `/versions/{id}/comments` `{inFrame, outFrame, body, parentId}` | Comment on a Frame or a Range, or a Reply |
 | GET | `/versions/{id}/changes?since=` | What changed, plus the ids that still exist |
@@ -87,7 +88,7 @@ Reviewers never touch OCS. Their surface hangs off the token of a Review Link, n
 | GET | `/apps/deliver/s/{token}` | The review page: a link with one Asset opens it, with more a grid of them under the link's description |
 | GET | `/apps/deliver/s/{token}/versions/{versionId}` | The review page on one Version |
 | GET | `/apps/deliver/s/{token}/api/context` | Project settings, Asset and Version Stack behind the link |
-| GET | `/apps/deliver/s/{token}/api/assets` | What the link shows, for the grid |
+| GET | `/apps/deliver/s/{token}/api/assets` | What the link shows, for the grid, with `scrubUrl` where the Scrub Proxy is ready, also on a link without downloads |
 | GET | `/apps/deliver/s/{token}/preview?fileId=&x=&y=` | The still of a file behind the link |
 | GET | `/apps/deliver/s/{token}/download` `?assetIds=1,2` | The newest Version of every Asset the link shows, or of those given, as one ZIP, where the link allows downloads |
 | GET | `/apps/deliver/s/{token}/media/{versionId}/{kind}` | Derived media, Captions (`captions-{language}`), or `original` where downloads are allowed or no Proxy is made; `?download=1` downloads it where both the link and the Member's own access allow downloads, and notes that in the link's activity |

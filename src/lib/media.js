@@ -47,3 +47,12 @@ export const isStill = (version) => STILL.test(version?.mimeType ?? '')
  * @return {string} its extension with the dot, lower case; '' for none
  */
 export const extensionOf = (name) => name.lastIndexOf('.') > 0 ? name.slice(name.lastIndexOf('.')).toLowerCase() : ''
+
+/**
+ * Where a hover preview scrubs through, on the timeline and on the Asset card (#169)
+ *
+ * @param {string|null|undefined} scrub - the Scrub Proxy, once it is ready
+ * @param {string|null|undefined} fallback - what plays otherwise, the Proxy or the original
+ * @return {string|null} the Scrub Proxy where there is one; until then, and where it never comes, the fallback
+ */
+export const hoverSource = (scrub, fallback) => scrub ?? fallback ?? null

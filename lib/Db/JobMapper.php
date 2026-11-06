@@ -13,16 +13,25 @@ class JobMapper extends Mapper {
 		parent::__construct($db, 'deliver_jobs', Job::class);
 	}
 
-	/** @return Job[] the oldest waiting work first; a Deleted Project's waits until it is restored (ADR 0015) */
-	public function findQueued(int $limit): array {
+	/**
+	 * @param ?string $kind only jobs of this kind
+	 * @return Job[] the oldest waiting work first, then Scrub Proxies, the newest Version's first; a Deleted Project's waits until it is restored (ADR 0015)
+	 */
+	public function findQueued(int $limit, ?string $kind = null): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('j.*')->from($this->getTableName(), 'j')
 			->leftJoin('j', 'deliver_versions', 'v', $qb->expr()->eq('v.id', 'j.version_id'))
 			->leftJoin('v', 'deliver_projects', 'p', $qb->expr()->eq('p.id', 'v.project_id'))
 			->where($qb->expr()->eq('j.state', $qb->createNamedParameter(Job::STATE_QUEUED)))
 			->andWhere($qb->expr()->isNull('p.deleted_at'))
-			->orderBy('j.id')
+			->orderBy($qb->createFunction('CASE WHEN j.kind = ' . $qb->expr()->literal(Job::KIND_SCRUB) . ' THEN 1 ELSE 0 END'))
+			// A fresh upload's before the batch of older Versions (DerivedMedia::queueMissingScrubs)
+			->addOrderBy($qb->createFunction('CASE WHEN j.kind = ' . $qb->expr()->literal(Job::KIND_SCRUB) . ' THEN j.version_id ELSE 0 END'), 'DESC')
+			->addOrderBy('j.id')
 			->setMaxResults($limit);
+		if ($kind !== null) {
+			$qb->andWhere($qb->expr()->eq('j.kind', $qb->createNamedParameter($kind)));
+		}
 		return $this->findEntities($qb);
 	}
 
@@ -87,13 +96,20 @@ class JobMapper extends Mapper {
 			->executeStatement();
 	}
 
-	/** How many jobs the server runs right now, without the Proxies browsers make */
-	public function countRunningOnServer(): int {
+	/**
+	 * How many jobs the server runs right now, without the Proxies browsers make
+	 *
+	 * @param ?string $except without the jobs of this kind
+	 */
+	public function countRunningOnServer(?string $except = null): int {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select($qb->func()->count('*', 'amount'))
 			->from($this->getTableName())
 			->where($qb->expr()->eq('state', $qb->createNamedParameter(Job::STATE_RUNNING)))
 			->andWhere($this->onServer($qb));
+		if ($except !== null) {
+			$qb->andWhere($qb->expr()->neq('kind', $qb->createNamedParameter($except)));
+		}
 		$result = $qb->executeQuery();
 		$amount = (int)$result->fetchOne();
 		$result->closeCursor();

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\BackgroundJob;
 
+use OCA\Deliver\Service\DerivedMedia;
 use OCA\Deliver\Service\ProjectMembers;
 use OCA\Deliver\Service\ProjectService;
 use OCP\AppFramework\Utility\ITimeFactory;
@@ -14,13 +15,18 @@ use OCP\BackgroundJob\TimedJob;
  * It catches what fires no event Deliver can hear, like deletions from the
  * trash, and turns a Folder Project whose folder is gone for good into a
  * plain Project. It also forgets how people came to a Project they
- * no longer reach (ADR 0016).
+ * no longer reach (ADR 0016), and queues a few Scrub Proxies for video
+ * Versions made before there were any (#169).
  */
 class ScanProjects extends TimedJob {
+	/** Scrub Proxies queued at a time for older Versions */
+	private const SCRUBS = 10;
+
 	public function __construct(
 		ITimeFactory $time,
 		private ProjectService $projects,
 		private ProjectMembers $members,
+		private DerivedMedia $media,
 	) {
 		parent::__construct($time);
 		$this->setInterval(3600);
@@ -30,5 +36,6 @@ class ScanProjects extends TimedJob {
 	protected function run($argument): void {
 		$this->projects->scanAll();
 		$this->members->forgetLostAll();
+		$this->media->queueMissingScrubs(self::SCRUBS);
 	}
 }

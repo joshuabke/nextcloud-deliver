@@ -128,6 +128,8 @@ class PublicApiController extends PublicShareController {
 					'playUrl' => $newest->getProxyState() === DerivedMedia::STATE_READY || !$this->mayPlayOriginal($newest, $download)
 						? $this->mediaUrl($newest, 'proxy')
 						: $original,
+					// Scrubbed through on hover where there is one, also on links without downloads (#169)
+					'scrubUrl' => $newest->getScrubState() === DerivedMedia::STATE_READY ? $this->mediaUrl($newest, 'scrub') : null,
 					'downloadUrl' => $download ? $original . '?download=1' : null,
 				];
 			}
