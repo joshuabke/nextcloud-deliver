@@ -665,6 +665,7 @@ class ProjectService {
 		} finally {
 			$upload->delete();
 		}
+		return [];
 	}
 
 	/** Removes a Proxy handed in, so ffmpeg or a browser makes the next (ADR 0020) */
