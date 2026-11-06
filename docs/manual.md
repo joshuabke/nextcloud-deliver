@@ -18,7 +18,7 @@ Your media stays in Files. Deliver keeps the review around it: Comments, Drawing
 ### Derived media from your browser
 
 - Where the server has no ffmpeg, the browser that uploads a video makes its Thumbnail Strip, its Waveform and its Scrub Proxy while it uploads, and its Proxy where it needs one, in Deliver and in the Files app into a Folder Project with Auto Intake. Keep the tab open until it is done.
-- A video that came another way, from a sync client for instance, lacks them. A Member with **Manage** finds **Make missing derived media in this browser** in its Asset card's menu: the browser makes everything the Version lacks in one go, from its Proxy where it has one, else from the original. Where your browser cannot, the entry says why. Once nothing is missing, it is gone.
+- A video that came another way, from a sync client for instance, lacks them. A Member with **Manage** finds **Make missing derived media in this browser** in its Asset card's menu: the browser makes everything the Version lacks in one go, from its Proxy where it has one, else from the original. Where your browser cannot, the entry says why; where only the Scrub Proxy is missing and your browser cannot make one, the entry is left out. Once nothing is missing, it is gone.
 
 ### A Proxy of your own
 
