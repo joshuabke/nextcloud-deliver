@@ -758,6 +758,17 @@ test.describe('Review view', () => {
 		await page.getByRole('menuitemradio', { name: 'Off' }).click()
 		await expect.poll(shown).toEqual([])
 	})
+
+	test('the timeline hover scrubs through what plays where this browser cannot play the Scrub Proxy', async () => {
+		// ffmpeg makes the clip's Scrub Proxy, an H.264 MP4, which open-source Chromium does not decode
+		execFileSync('docker', ['compose', 'exec', '-T', '-u', 'www-data', 'nextcloud', 'php', 'occ', 'deliver:worker', '--once'], { stdio: 'inherit' })
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		const h264 = await page.evaluate(() => document.createElement('video').canPlayType('video/mp4; codecs="avc1.42E01E"') !== '')
+		await expect(page.locator('.deliver-player__scrub-video')).toHaveAttribute('src', h264 ? /\/media\/scrub$/ : /clip\.webm$/)
+		const bar = await page.locator('.deliver-player__timeline').boundingBox()
+		await page.mouse.move(bar.x + bar.width / 2, bar.y + bar.height / 2)
+		await expect(page.locator('.deliver-player__hover canvas')).toBeVisible()
+	})
 })
 
 test.describe('Uploads without ffmpeg', () => {

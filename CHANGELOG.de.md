@@ -9,6 +9,7 @@
 - Vorschauleiste, Wellenform und Scrub-Proxy jedes Videos im Durchlauf des hochladenden Browsers erzeugt, wenn der Server kein ffmpeg hat, auch aus einem von Hand hochgeladenen Proxy.
 - „Proxy in diesem Browser erzeugen“ auf der Asset-Karte durch „Fehlende abgeleitete Medien in diesem Browser erzeugen“ ersetzt.
 - Eine Umwandlung, der ein Proxy von Hand zuvorkommt, als angehalten statt fehlgeschlagen gezeigt.
+- Für die Vorschau beim Überfahren der Zeitleiste auf den Proxy oder das Original zurückgegriffen, wo der Browser den Scrub-Proxy nicht abspielen kann.
 
 ## 0.11.1 – 2026-11-05
 

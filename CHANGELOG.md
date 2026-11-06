@@ -9,6 +9,7 @@
 - Make the Thumbnail Strip, Waveform and Scrub Proxy of every video in the uploading browser's pass where the server has no ffmpeg, also from a Proxy uploaded by hand.
 - Replace "Make Proxy in this browser" on the Asset card with "Make missing derived media in this browser".
 - Show a conversion overtaken by a Proxy by hand as stopped instead of failed.
+- Fall back to the Proxy or the original for the timeline hover where the browser cannot play the Scrub Proxy.
 
 ## 0.11.1 – 2026-11-05
 
