@@ -148,6 +148,12 @@ class ProjectApiController extends OCSController {
 		return $this->guard(fn () => $this->service->removeProxy((string)$this->userId, $id));
 	}
 
+	/** @param int $fileId the file id of the Scrub Proxy, uploaded next to the Version's file */
+	#[NoAdminRequired]
+	public function scrub(int $id, int $fileId): Response {
+		return $this->guard(fn () => $this->service->giveScrub((string)$this->userId, $id, uploadId: $fileId));
+	}
+
 	#[NoAdminRequired]
 	public function proxyProgress(int $id, int $percent): Response {
 		return $this->guard(fn () => $this->service->proxyProgress((string)$this->userId, $id, $percent));

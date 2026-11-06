@@ -123,6 +123,7 @@ const status = computed(() => {
 					v-if="!audio && newest.state === 'ready'"
 					:fileId="newest.fileId"
 					:playUrl="newest.mimeType?.startsWith('video/') ? newest.playUrl : null"
+					:scrubUrl="newest.scrubUrl"
 					fit="contain" />
 				<span class="deliver-card__version">{{ t('deliver', 'V{number}', { number: newest.number }) }}</span>
 				<span

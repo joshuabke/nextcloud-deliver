@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { acceptFor, extensionOf, isStill, mediaKind, reviewable, stackKind } from './media.js'
+import { acceptFor, extensionOf, hoverSource, isStill, mediaKind, reviewable, stackKind } from './media.js'
 
 describe('media kinds', () => {
 	it('reviews video, audio and the stills browsers show', () => {
@@ -12,6 +12,12 @@ describe('media kinds', () => {
 		expect([mediaKind('video/quicktime'), mediaKind('audio/wav'), mediaKind('image/png'), mediaKind(null)]).toEqual(['video', 'audio', 'image', null])
 		expect([acceptFor('audio/mpeg'), acceptFor(undefined)]).toEqual(['audio/*', 'video/*,audio/*,image/*'])
 		expect([stackKind([{ mimeType: null }, { mimeType: 'video/mp4' }]), stackKind([{ mimeType: null }])]).toEqual(['video', null])
+	})
+
+	it('scrubs on hover through the Scrub Proxy once it is ready, else through what plays', () => {
+		expect(hoverSource('/scrub', '/proxy')).toBe('/scrub')
+		expect(hoverSource(null, '/proxy')).toBe('/proxy')
+		expect(hoverSource(undefined, null)).toBe(null)
 	})
 
 	it('tells stills apart', () => {

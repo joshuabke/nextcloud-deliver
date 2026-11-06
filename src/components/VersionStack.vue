@@ -119,7 +119,7 @@ function drop(event) {
 							{{ t('deliver', 'Unstack into its own Asset') }}
 						</NcActionButton>
 						<NcActionButton v-if="version.state === 'ready'" :disabled="busy" @click="run(() => regenerateVersion(version.id))">
-							{{ t('deliver', 'Regenerate Proxy, Thumbnail Strip and Waveform') }}
+							{{ t('deliver', 'Regenerate derived media') }}
 						</NcActionButton>
 					</NcActions>
 				</div>
