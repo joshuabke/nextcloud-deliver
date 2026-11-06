@@ -3,7 +3,7 @@
 ## Unreleased
 - Show the time left next to the percentage while this browser encodes a Proxy.
 - Add Captions to a Version as SRT or WebVTT, one file per language, and show them in the player under a CC button.
-- Make a Scrub Proxy of every video Version with ffmpeg, of older ones a few each hour, and scrub through it on hover on the timeline and the Asset card.
+- Make a Scrub Proxy of every video Version with ffmpeg, of older ones a few each hour, scrub through it on hover on the timeline and the Asset card, and take the Asset card's still from it where Nextcloud renders none; both fall back to the Proxy or the original where the browser cannot play it.
 - Take a Scrub Proxy from the browser through `POST /versions/{id}/scrub` where the server has no ffmpeg.
 - Add "Upload Proxy…" and "Remove Proxy" to the Asset card, and take a Proxy handed in with ffmpeg too.
 - Make the Thumbnail Strip, Waveform and Scrub Proxy of every video in the uploading browser's pass where the server has no ffmpeg, also from a Proxy uploaded by hand.

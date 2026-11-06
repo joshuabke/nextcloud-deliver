@@ -345,7 +345,9 @@ function onHover(event) {
  */
 const scrubVideo = ref(null)
 const scrubCanvas = ref(null)
-const scrubSource = computed(() => props.version.audioOnly ? null : hoverSource(props.version.derived?.scrub?.url, proxy.value ?? source.value))
+/** This browser cannot play the Scrub Proxy (no H.264 decoder), so the hover goes back to what plays */
+const scrubBroken = ref(false)
+const scrubSource = computed(() => props.version.audioOnly ? null : hoverSource(props.version.derived?.scrub?.url, proxy.value ?? source.value, scrubBroken.value))
 /** Whether the canvas holds a Frame from this hover */
 const scrubDrawn = ref(false)
 const scrubSize = ref({ width: 176, height: 99 })
@@ -381,6 +383,14 @@ function onScrubLoaded() {
 		scrubSize.value = { width: 176, height: Math.round(176 * element.videoHeight / element.videoWidth) }
 	}
 	nextScrub()
+}
+
+/** The hidden video cannot be read: a Scrub Proxy gives way to what plays; else the Thumbnail Strip stays */
+function onScrubError() {
+	scrubBusy = false
+	if (scrubSource.value !== (proxy.value ?? source.value)) {
+		scrubBroken.value = true
+	}
 }
 
 /** The hidden video stands on the Frame: copy it and go on to the next */
@@ -897,7 +907,8 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 				preload="metadata"
 				aria-hidden="true"
 				@loadedmetadata="onScrubLoaded"
-				@seeked="onScrubSeeked" />
+				@seeked="onScrubSeeked"
+				@error="onScrubError" />
 			<div
 				class="deliver-player__timeline"
 				@click="scrub"

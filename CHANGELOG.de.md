@@ -3,7 +3,7 @@
 ## Unveröffentlicht
 - Die verbleibende Zeit neben dem Prozentwert gezeigt, solange dieser Browser einen Proxy erzeugt.
 - Untertitel als SRT oder WebVTT zu einer Version hinzugefügt, eine Datei je Sprache, und sie im Player unter einer CC-Schaltfläche gezeigt.
-- Mit ffmpeg einen Scrub-Proxy für jede Video-Version erzeugt, für ältere einige pro Stunde, und beim Überfahren der Zeitleiste und der Asset-Karte durch ihn gescrubbt.
+- Mit ffmpeg einen Scrub-Proxy für jede Video-Version erzeugt, für ältere einige pro Stunde, beim Überfahren der Zeitleiste und der Asset-Karte durch ihn gescrubbt und das Standbild der Asset-Karte aus ihm genommen, wo Nextcloud keines rendert; beides greift auf den Proxy oder das Original zurück, wo der Browser ihn nicht abspielen kann.
 - Einen Scrub-Proxy aus dem Browser über `POST /versions/{id}/scrub` angenommen, wenn der Server kein ffmpeg hat.
 - „Proxy hochladen …“ und „Proxy entfernen“ zur Asset-Karte hinzugefügt; ein übergebener Proxy wird auch mit ffmpeg angenommen.
 - Vorschauleiste, Wellenform und Scrub-Proxy jedes Videos im Durchlauf des hochladenden Browsers erzeugt, wenn der Server kein ffmpeg hat, auch aus einem von Hand hochgeladenen Proxy.
