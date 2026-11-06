@@ -86,7 +86,8 @@ describe('encodingEta', () => {
 		expect(encodingEta({ progress: 50, since: since + 290_000 }, since + 300_000)).toBe(10)
 	})
 	it('is part of the running phase only', () => {
-		expect(proxyLine({ state: 'running', progress: 40, since: Date.now() - 120_000 })).toBe('Proxy: Encoding 40 % · 3 minutes left')
+		// Off the minute boundary, so the milliseconds until proxyLine reads the clock do not round it up
+		expect(proxyLine({ state: 'running', progress: 40, since: Date.now() - 100_000 })).toBe('Proxy: Encoding 40 % · 3 minutes left')
 	})
 })
 

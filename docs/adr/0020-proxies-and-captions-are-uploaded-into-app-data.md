@@ -17,7 +17,7 @@ A Proxy handed in has to keep the rules of a Proxy from the browser: H.264/AAC M
 
 - The server marks a Proxy handed in (`proxy_handed_in` on the Version). Such a Proxy replaces one ffmpeg made, withdraws a job making one (which looks before it writes), and keeps ffmpeg from making another, a retry of a failed job included. It plays as "Proxy" in the quality menu like any.
 - A Member with Manage can remove a Proxy handed in (`DELETE /versions/{id}/proxy`); then the normal path takes over: with ffmpeg its Proxy is queued at once, without the Asset card offers the browser's again. A Proxy ffmpeg made is not removed this way, it would come right back.
-- A Proxy from the browser is handed in the same way and counts as handed in too. Only the browser's own attempt shows as failed when it is refused; a Proxy refused otherwise changes nothing.
+- A Proxy from the browser is handed in the same way, marked as a conversion, and counts as handed in too. A conversion never replaces a Proxy that is there, one by hand above all: a tab converting while one comes by hand is told to stop. Only a conversion shows as failed when it is refused; a Proxy by hand refused changes nothing, also not for a browser converting meanwhile.
 - "Regenerate" and a file written again drop a Proxy handed in with the rest of the derived media, and its mark. Captions survive both, as they are kept apart from what regeneration deletes.
 - File names get no special treatment: an upload named `cut_v3.proxy.mp4` is a Version like any other.
 - This supersedes ADR 0019 where its hand-in takes a Proxy only without ffmpeg and only while the Version has none.

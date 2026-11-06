@@ -172,6 +172,28 @@ class HandProxyTest extends TestCase {
 		self::assertSame('This Version plays without a Proxy', $refused['data']['message']);
 	}
 
+	public function testABrowserConvertingMeanwhileNeitherReplacesAProxyByHandNorFailsOverOne(): void {
+		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['ffmpegPath' => '/nonexistent/ffmpeg', 'ffprobePath' => '/nonexistent/ffprobe'])['status']);
+		$id = $this->master();
+		$this->drainQueue();
+		// One Member's tab converts the master
+		self::assertSame(200, $this->nc->ocs('POST', "/versions/$id/proxy/progress", ['percent' => 30])['status']);
+
+		$refused = $this->handIn($id, '-f lavfi -i testsrc=size=640x360:rate=25:duration=2 -c:v libx264 -pix_fmt yuv420p');
+		self::assertSame(400, $refused['status']);
+		$shown = $this->version($id)['derived'];
+		self::assertSame(['running', null], [$shown['proxy']['state'], $shown['error']], 'a Proxy by hand refused leaves the conversion as it was');
+
+		// Another hands one in by hand
+		self::assertSame(200, $this->handIn($id)['status']);
+		self::assertSame(409, $this->nc->ocs('POST', "/versions/$id/proxy/progress", ['percent' => 60])['status'], 'the converting tab is told to stop');
+		$this->ffmpeg('-f lavfi -i testsrc=size=640x360:rate=25:duration=2 -f lavfi -i sine=duration=2 -c:v libx264 -pix_fmt yuv420p -g 25 -c:a aac -shortest -f mp4', $this->fixture . '-converted.mp4');
+		$path = "{$this->root}/.deliver-proxy-" . bin2hex(random_bytes(4));
+		$this->nc->put($path, (string)file_get_contents($this->fixture . '-converted.mp4'));
+		self::assertSame(409, $this->nc->ocs('POST', "/versions/$id/proxy", ['converted' => true, 'fileId' => $this->nc->fileId($path)])['status'], 'and its Proxy does not replace the one by hand');
+		self::assertTrue($this->playsHandedIn($id));
+	}
+
 	public function testWithoutFfmpegARemovedProxyComesFromTheBrowserAgain(): void {
 		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['ffmpegPath' => '/nonexistent/ffmpeg', 'ffprobePath' => '/nonexistent/ffprobe'])['status']);
 		$id = $this->master();

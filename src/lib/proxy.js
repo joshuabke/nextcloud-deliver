@@ -463,7 +463,12 @@ export async function handInProxy(versionId, making, status, controller) {
 	let reported = Promise.resolve()
 	const report = () => {
 		if (['running', 'uploading'].includes(status.state)) {
-			reported = reportProxy(versionId, status.state === 'running' ? status.progress : 99).catch(() => {})
+			reported = reportProxy(versionId, status.state === 'running' ? status.progress : 99).catch((error) => {
+				// A Proxy came by hand meanwhile, or ffmpeg makes one: this one is not wanted any more (ADR 0020)
+				if (error.response?.status === 409 && status.state === 'running') {
+					dropProxy(making, status, controller)
+				}
+			})
 		}
 	}
 	report()
@@ -483,7 +488,7 @@ export async function handInProxy(versionId, making, status, controller) {
 				status.state = 'handing'
 				await reported
 				try {
-					await giveProxy(versionId, fileId)
+					await giveProxy(versionId, fileId, true)
 					break
 				} catch (error) {
 					if (error.response?.status !== 409 || attempt >= 12 || !/not read yet/.test(errorMessage(error) ?? '')) {

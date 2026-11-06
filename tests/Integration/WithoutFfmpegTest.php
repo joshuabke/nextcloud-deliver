@@ -178,7 +178,7 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertSame(40, $shown['derived']['progress']);
 
 		[$upload, $path] = $this->proxyFrom(self::PROXY);
-		$given = $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $upload]);
+		$given = $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['converted' => true, 'fileId' => $upload]);
 		self::assertSame(200, $given['status'], json_encode($given['data']));
 		$shown = $this->nc->ocs('GET', "/versions/{$version['id']}")['data']['versions'][0];
 		self::assertSame('ready', $shown['derived']['proxy']['state']);
@@ -187,7 +187,7 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertCount(1, $this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'], 'the upload never became an Asset');
 		self::assertSame(404, $this->nc->davStatus('PROPFIND', $path), 'the upload is gone');
 
-		self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom(self::PROXY)[0]])['status'], 'another one handed in replaces it (ADR 0020)');
+		self::assertSame(409, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['converted' => true, 'fileId' => $this->proxyFrom(self::PROXY)[0]])['status'], 'a conversion never replaces a Proxy that is there');
 	}
 
 	/** @return array<string, array{string, string}> */
@@ -208,7 +208,7 @@ class WithoutFfmpegTest extends TestCase {
 		// The browser's own attempt, which then shows as failed
 		self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy/progress", ['percent' => 99])['status']);
 
-		$refused = $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom($args)[0]]);
+		$refused = $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['converted' => true, 'fileId' => $this->proxyFrom($args)[0]]);
 		self::assertSame(400, $refused['status'], json_encode($refused['data']));
 		$shown = $this->nc->ocs('GET', "/versions/{$version['id']}")['data']['versions'][0];
 		self::assertSame('failed', $shown['derived']['proxy']['state']);
@@ -222,7 +222,7 @@ class WithoutFfmpegTest extends TestCase {
 		$id = $this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'][0]['versions'][0]['id'];
 		self::assertNull($this->nc->ocs('GET', "/versions/$id")['data']['versions'][0]['playable'], 'no background job ran yet');
 
-		$given = $this->nc->ocs('POST', "/versions/$id/proxy", ['fileId' => $this->proxyFrom(self::PROXY)[0]]);
+		$given = $this->nc->ocs('POST', "/versions/$id/proxy", ['converted' => true, 'fileId' => $this->proxyFrom(self::PROXY)[0]]);
 		self::assertSame(200, $given['status'], json_encode($given['data']));
 		self::assertSame('ready', $this->nc->ocs('GET', "/versions/$id")['data']['versions'][0]['derived']['proxy']['state']);
 	}
@@ -247,12 +247,12 @@ class WithoutFfmpegTest extends TestCase {
 		$version = $this->upload('cut.mp4');
 		self::assertTrue($version['playable']);
 
-		self::assertSame(409, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom(self::PROXY)[0]])['status'], 'it plays as it is');
+		self::assertSame(409, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['converted' => true, 'fileId' => $this->proxyFrom(self::PROXY)[0]])['status'], 'it plays as it is');
 		self::assertFalse($this->card()['proxyFromBrowser'], 'and is not offered one');
 		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['maxBitrate' => 2])['status']);
 		try {
 			self::assertTrue($this->card()['proxyFromBrowser'], 'above the Proxy bitrate threshold');
-			$given = $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom(self::PROXY)[0]]);
+			$given = $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['converted' => true, 'fileId' => $this->proxyFrom(self::PROXY)[0]]);
 			self::assertSame(200, $given['status'], json_encode($given['data']));
 		} finally {
 			$this->nc->ocs('PUT', '/admin/settings', ['maxBitrate' => 20]);
@@ -269,8 +269,8 @@ class WithoutFfmpegTest extends TestCase {
 			self::assertSame(200, $share['status'], json_encode($share['data']));
 			$viewer = $this->nc->withUser($user, 'Viewer-pass-123!');
 			self::assertSame(403, $viewer->ocs('POST', "/versions/{$version['id']}/proxy/progress", ['percent' => 10])['status']);
-			self::assertSame(403, $viewer->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom(self::PROXY)[0]])['status']);
-			self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom(self::PROXY)[0]])['status']);
+			self::assertSame(403, $viewer->ocs('POST', "/versions/{$version['id']}/proxy", ['converted' => true, 'fileId' => $this->proxyFrom(self::PROXY)[0]])['status']);
+			self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['converted' => true, 'fileId' => $this->proxyFrom(self::PROXY)[0]])['status']);
 			self::assertSame(403, $viewer->ocs('DELETE', "/versions/{$version['id']}/proxy")['status'], 'nor removes it');
 		} finally {
 			$this->nc->ocsForm('DELETE', "/ocs/v2.php/cloud/users/$user");
@@ -296,9 +296,9 @@ class WithoutFfmpegTest extends TestCase {
 		$this->inNextcloud('$q = \\OCP\\Server::get(\\OCP\\IDBConnection::class)->getQueryBuilder(); $q->update("deliver_jobs")->set("started_at", $q->createNamedParameter(1))->where($q->expr()->eq("version_id", $q->createNamedParameter(' . $version['id'] . ')))->executeStatement();');
 		self::assertTrue($this->card()['proxyFromBrowser']);
 
-		self::assertSame(400, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom('-f lavfi -i testsrc=size=640x360:rate=25:duration=1 -c:v libx264 -pix_fmt yuv420p')[0]])['status']);
+		self::assertSame(400, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['converted' => true, 'fileId' => $this->proxyFrom('-f lavfi -i testsrc=size=640x360:rate=25:duration=1 -c:v libx264 -pix_fmt yuv420p')[0]])['status']);
 		self::assertTrue($this->card()['proxyFromBrowser'], 'after a failed one too');
-		self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom(self::PROXY)[0]])['status']);
+		self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['converted' => true, 'fileId' => $this->proxyFrom(self::PROXY)[0]])['status']);
 		self::assertFalse($this->card()['proxyFromBrowser'], 'it has its Proxy');
 	}
 
@@ -433,7 +433,7 @@ class WithoutFfmpegTest extends TestCase {
 
 		// Noise at 640x360 is far above 2 Mbit/s
 		self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy/progress", ['percent' => 99])['status']);
-		$refused = $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['fileId' => $this->proxyFrom('-f lavfi -i color=size=640x360:rate=25:duration=2,noise=alls=100:allf=t -f lavfi -i sine=duration=2 -c:v libx264 -crf 10 -pix_fmt yuv420p -c:a aac -shortest')[0]]);
+		$refused = $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['converted' => true, 'fileId' => $this->proxyFrom('-f lavfi -i color=size=640x360:rate=25:duration=2,noise=alls=100:allf=t -f lavfi -i sine=duration=2 -c:v libx264 -crf 10 -pix_fmt yuv420p -c:a aac -shortest')[0]]);
 		self::assertSame(400, $refused['status'], json_encode($refused['data']));
 		$shown = $this->nc->ocs('GET', "/versions/{$version['id']}")['data']['versions'][0];
 		self::assertSame('failed', $shown['derived']['proxy']['state']);

@@ -523,14 +523,20 @@ class DerivedMedia {
 	 * by hand (ADR 0020), after checking it as the browser did: H.264/AAC MP4
 	 * that browsers play, within the Proxy resolution, with as many Frames as
 	 * the original at its rate, so that every Frame anchor holds. It replaces
-	 * a Proxy ffmpeg made and withdraws a job making one. A Proxy that does
-	 * not match is refused; only the browser's own attempt then shows as
-	 * failed, a Proxy there or on its way stays.
+	 * a Proxy ffmpeg made and withdraws a job making one. A Proxy a browser
+	 * converted (`$converted`) keeps ADR 0019's rules: only without ffmpeg,
+	 * never over a Proxy that is there, one by hand above all. A Proxy that
+	 * does not match is refused; only a conversion then shows as failed, a
+	 * Proxy there or on its way stays.
 	 *
-	 * @throws ProjectConflictException the Version needs no Proxy or is not read yet
+	 * @param bool $converted whether a browser converted it from the original, rather than someone rendering it by hand
+	 * @throws ProjectConflictException the Version needs no Proxy, is not read yet, or, for a conversion, the server has ffmpeg or the Version its Proxy
 	 * @throws InvalidRequestException the upload is no Proxy of this Version
 	 */
-	public function acceptProxy(Version $version, File $original, File $upload): void {
+	public function acceptProxy(Version $version, File $original, File $upload, bool $converted = false): void {
+		if ($converted) {
+			$this->assertBrowserProxy($version);
+		}
 		$source = $this->probe->localPath($original);
 		$candidate = $this->probe->localPath($upload);
 		if ($source === null || $candidate === null) {
@@ -555,8 +561,10 @@ class DerivedMedia {
 		$error = $this->mismatch($version, $probed, $this->container->read($candidate), (int)filesize($candidate));
 		$job = $this->jobs->findPending($version->getId(), Job::KIND_PROXY);
 		if ($error !== null) {
-			if ($job?->getClaimedBy() === Job::BROWSER) {
-				$this->jobs->delete($job);
+			if ($converted) {
+				if ($job?->getClaimedBy() === Job::BROWSER) {
+					$this->jobs->delete($job);
+				}
 				$this->mark($version->getId(), Job::KIND_PROXY, self::STATE_FAILED, $error);
 			}
 			throw new InvalidRequestException($error);
@@ -805,17 +813,30 @@ class DerivedMedia {
 		}
 	}
 
-	/** @param string|resource $content */
+	/**
+	 * Writes under a name of its own first and gives it its name only when
+	 * the running job still stands: copying a large Proxy takes a while, in
+	 * which a Proxy handed in or a regeneration may withdraw the job.
+	 *
+	 * @param string|resource $content
+	 */
 	private function put(Version $version, string $kind, $content, ?string $name = null): void {
 		$this->guard();
-		$folder = $this->folder($version->getId());
 		$name ??= self::FILES[$kind];
+		$written = $this->folder($version->getId())->newFile('.' . $name . '.' . bin2hex(random_bytes(4)));
 		try {
-			$file = $folder->getFile($name);
-		} catch (NotFoundException) {
-			$file = $folder->newFile($name);
+			$written->putContent($content);
+			$this->guard();
+			$node = $this->root->get($this->root->getAppDataDirectoryName() . '/' . Application::APP_ID . '/' . $version->getId() . '/' . $written->getName());
+			$node->move(dirname($node->getPath()) . '/' . $name);
+		} catch (\Throwable $e) {
+			try {
+				$written->delete();
+			} catch (\Throwable) {
+				// gone with its folder
+			}
+			throw $e;
 		}
-		$file->putContent($content);
 	}
 
 	/** The Version's folder in app data, `appdata_<instance>/deliver/<version id>/` (spec) */

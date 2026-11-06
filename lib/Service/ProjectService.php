@@ -628,7 +628,7 @@ class ProjectService {
 	 *
 	 * @throws InvalidRequestException the upload is not a file of its own next to the Version's file, or no Proxy of it
 	 */
-	public function giveProxy(string $uid, int $versionId, int $uploadId): array {
+	public function giveProxy(string $uid, int $versionId, int $uploadId, bool $converted = false): array {
 		[$version, $file, $grant] = $this->reachVersion($uid, $versionId);
 		if (!$grant->manages()) {
 			throw new AccessDeniedException('Manage is required');
@@ -644,7 +644,7 @@ class ProjectService {
 			throw new AccessDeniedException('Deleting the upload is not allowed');
 		}
 		try {
-			$this->media->acceptProxy($version, $file, $upload);
+			$this->media->acceptProxy($version, $file, $upload, $converted);
 		} finally {
 			$upload->delete();
 		}
