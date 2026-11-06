@@ -28,8 +28,10 @@ const ready = ref(false)
 /** Where the mouse is, 0 to 1 */
 const at = ref(0)
 const video = ref(null)
+/** This browser cannot play the Scrub Proxy (no H.264 decoder), so the video goes back to playUrl */
+const scrubBroken = ref(false)
 /** What the video plays: also where Nextcloud has no still, the Scrub Proxy's frame is the still */
-const source = computed(() => props.playUrl ? hoverSource(props.scrubUrl, props.playUrl) : null)
+const source = computed(() => props.playUrl ? hoverSource(props.scrubUrl, props.playUrl, scrubBroken.value) : null)
 
 /**
  * Seeks to where the mouse is; seeks pile up on a slow line, so only the latest one counts
@@ -64,8 +66,13 @@ function shown() {
 	catchUp()
 }
 
-/** The video cannot be read: the still stays, or the parent's icon shows through */
+/** The video cannot be read: a Scrub Proxy gives way to playUrl; else the still stays, or the parent's icon shows through */
 function failed() {
+	if (source.value !== props.playUrl) {
+		scrubBroken.value = true
+		ready.value = false
+		return
+	}
 	noVideo.value = true
 	scrubbing.value = false
 }
