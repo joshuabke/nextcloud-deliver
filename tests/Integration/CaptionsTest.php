@@ -142,4 +142,13 @@ class CaptionsTest extends TestCase {
 		$url = $context['data']['versions'][0]['captions'][0]['url'];
 		self::assertSame(self::SRT, $reviewer->raw(substr($url, strpos($url, $link['token']) + strlen($link['token'])))['body']);
 	}
+
+	public function testThePagesWithAPlayerLetCaptionsPlayFromABlob(): void {
+		$link = $this->nc->ocs('POST', "/projects/{$this->projectId}/links")['data'];
+		foreach (['/apps/deliver/', "/apps/deliver/s/{$link['token']}"] as $page) {
+			$shown = $this->nc->request('GET', $page);
+			self::assertSame(200, $shown['status'], $page);
+			self::assertMatchesRegularExpression('/media-src [^;]*blob:/', $shown['headers']['content-security-policy'] ?? '', $page);
+		}
+	}
 }

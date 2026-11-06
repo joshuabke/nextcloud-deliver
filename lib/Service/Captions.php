@@ -99,7 +99,7 @@ class Captions {
 		if (str_starts_with($bytes, "\xEF\xBB\xBF")) {
 			$bytes = substr($bytes, 3);
 		}
-		return mb_check_encoding($bytes, 'UTF-8') ? $bytes : mb_convert_encoding($bytes, 'UTF-8', 'Windows-1252');
+		return mb_check_encoding($bytes, 'UTF-8') ? $bytes : (string)mb_convert_encoding($bytes, 'UTF-8', 'Windows-1252');
 	}
 
 	/** A BCP 47 tag as the browser writes it, such as de or pt-BR; it names the file */

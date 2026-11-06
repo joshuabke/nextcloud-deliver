@@ -2,6 +2,7 @@
 
 ## Unreleased
 - Show the time left next to the percentage while this browser encodes a Proxy.
+- Add Captions to a Version as SRT or WebVTT, one file per language, and show them in the player under a CC button.
 
 ## 0.11.1 – 2026-11-05
 
