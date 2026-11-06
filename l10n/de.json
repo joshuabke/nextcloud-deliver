@@ -630,9 +630,6 @@
 		"Deliver is making the Proxy of {name} in this browser: {percent} %. Keep this tab open.": "Deliver erzeugt den Proxy von {name} in diesem Browser: {percent} %. Lass diesen Tab offen.",
 		"Deliver is uploading the Proxy of {name}: {percent} %. Keep this tab open.": "Deliver lädt den Proxy von {name} hoch: {percent} %. Lass diesen Tab offen.",
 		"Deliver could not make the Proxy of {name} in this browser.": "Deliver konnte den Proxy von {name} in diesem Browser nicht erzeugen.",
-		"Another browser is making this Proxy, or it is there already.": "Ein anderer Browser erzeugt diesen Proxy schon, oder er ist schon da.",
-		"Make Proxy in this browser": "Proxy in diesem Browser erzeugen",
-		"This browser could not make the Proxy.": "Dieser Browser konnte den Proxy nicht erzeugen.",
 		"Add Captions…": "Untertitel hinzufügen…",
 		"Add Captions": "Untertitel hinzufügen",
 		"Captions": "Untertitel",
@@ -647,7 +644,14 @@
 		"Off": "Aus",
 		"Upload Proxy…": "Proxy hochladen …",
 		"Remove Proxy": "Proxy entfernen",
-		"The Proxy could not be uploaded.": "Der Proxy konnte nicht hochgeladen werden."
+		"The Proxy could not be uploaded.": "Der Proxy konnte nicht hochgeladen werden.",
+		"Make missing derived media in this browser": "Fehlende abgeleitete Medien in diesem Browser erzeugen",
+		"Another browser is making the derived media, or they are there already.": "Ein anderer Browser erzeugt die abgeleiteten Medien schon, oder sie sind schon da.",
+		"This browser could not make the derived media.": "Dieser Browser konnte die abgeleiteten Medien nicht erzeugen.",
+		"Deliver is making the derived media of {name} in this browser: {percent} %, {left}. Keep this tab open.": "Deliver erzeugt die abgeleiteten Medien von {name} in diesem Browser: {percent} %, {left}. Lass diesen Tab offen.",
+		"Deliver is making the derived media of {name} in this browser: {percent} %. Keep this tab open.": "Deliver erzeugt die abgeleiteten Medien von {name} in diesem Browser: {percent} %. Lass diesen Tab offen.",
+		"Deliver could not make the derived media of {name} in this browser.": "Deliver konnte die abgeleiteten Medien von {name} in diesem Browser nicht erzeugen.",
+		"Stopped": "Angehalten"
 	},
 	"pluralForm": "nplurals=2; plural=(n != 1);"
 }

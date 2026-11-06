@@ -122,7 +122,7 @@ export function advance(status, progress, now = Date.now()) {
 }
 
 /**
- * Where the Proxy this browser makes has got, to follow "Proxy"
+ * Where the pass this browser makes has got, to follow "Proxy" or "Derived media"
  *
  * @param {{state: string, progress?: number, error?: string, since?: number}} proxy - its status
  * @return {?string} the phase and its percentage, or null while nothing is to say
@@ -134,17 +134,25 @@ export function proxyPhase(proxy) {
 		uploading: t('deliver', 'Upload {percent} %', { percent: proxy.progress }),
 		handing: t('deliver', 'Finishing on the server'),
 		ready: t('deliver', 'Done'),
+		// Taken over by a Proxy by hand or ffmpeg, or stopped on purpose
+		stopped: t('deliver', 'Stopped'),
 		failed: proxy.error ?? t('deliver', 'Failed'),
 	}[proxy.state]
 }
 
 /**
- * @param {?{state: string, progress?: number, error?: string}} proxy - the status of a Proxy this browser makes
- * @return {?string} "Proxy: <phase>", or null while nothing is to say
+ * @param {{proxy?: boolean}} pass - the status of a pass this browser makes (#168)
+ * @return {string} what it is named after: the Proxy it makes, or the derived media where it makes none
+ */
+const passLabel = (pass) => pass.proxy === false ? t('deliver', 'Derived media') : t('deliver', 'Proxy')
+
+/**
+ * @param {?{state: string, progress?: number, error?: string, proxy?: boolean}} proxy - the status of a pass this browser makes
+ * @return {?string} "Proxy: <phase>" or "Derived media: <phase>", or null while nothing is to say
  */
 export function proxyLine(proxy) {
 	const phase = proxy && proxyPhase(proxy)
-	return phase ? `${t('deliver', 'Proxy')}: ${phase}` : null
+	return phase ? `${passLabel(proxy)}: ${phase}` : null
 }
 
 /**
@@ -167,11 +175,11 @@ export function processingOf(item) {
 			done: item.waveform.state === 'ready',
 		})
 	}
-	// The Proxy this browser makes where the server has no ffmpeg, also while the file still uploads (ADR 0019)
+	// The pass this browser makes where the server has no ffmpeg, also while the file still uploads (ADR 0019, #168)
 	if (item.proxy && item.version?.derived?.proxy?.state !== 'ready') {
 		lines.push({
 			kind: 'browserProxy',
-			label: t('deliver', 'Proxy'),
+			label: passLabel(item.proxy),
 			text: proxyPhase(item.proxy),
 			done: item.proxy.state === 'ready',
 		})

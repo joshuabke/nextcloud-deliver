@@ -184,3 +184,66 @@ export function thumbSlot({ every, count }, time) {
 	const slot = Math.round(time / every)
 	return slot < count ? slot : null
 }
+
+/** The Scrub Proxy (#169), as ffmpeg makes it (DerivedMedia::runScrub): this wide at most, about this many bit/s, and the server takes none at or above the ceiling */
+export const SCRUB_WIDTH = 320
+export const SCRUB_BITRATE = 250_000
+export const SCRUB_CEILING = 500_000
+
+/**
+ * @param {{width: number, height: number}} picture - the original's
+ * @return {{width: number, height: number}} the Scrub Proxy's: 320 wide, never wider than the original, the height even from its aspect
+ */
+export function scrubSize({ width, height }) {
+	const even = (value) => Math.max(2, Math.round(value / 2) * 2)
+	const scrubWidth = Math.min(SCRUB_WIDTH, Math.max(2, Math.floor(width / 2) * 2))
+	return { width: scrubWidth, height: even(scrubWidth * height / width) }
+}
+
+/**
+ * @param {number} bytes - the made Scrub Proxy's size
+ * @param {number} seconds - its length
+ * @return {boolean} whether the server takes it: below the ceiling
+ */
+export const scrubFits = (bytes, seconds) => seconds > 0 && bytes * 8 / seconds < SCRUB_CEILING
+
+/** Derived media a browser makes of a video where the server has no ffmpeg (#168), as the server names what a Version lacks */
+export const DERIVED = ['proxy', 'thumbs', 'waveform', 'scrub']
+
+/**
+ * @param {?object} seen - what inspect() found of an upload, null when it could not look
+ * @return {string[]} what its Version lacks: everything, the Proxy only where it gets one
+ */
+export const atUpload = (seen) => seen ? DERIVED.filter((kind) => kind !== 'proxy' || seen.needsProxy) : []
+
+/**
+ * What one pass of this browser makes of a video (#168): the Proxy where it
+ * is missing, and the Thumbnail Strip, Waveform and Scrub Proxy where they
+ * are, from one decode. None where this browser cannot decode the picture,
+ * nor where the Proxy is missing and this browser cannot make it.
+ *
+ * @param {?object} seen - what inspect() found of the file it decodes
+ * @param {string[]} missing - what the Version lacks, from DERIVED
+ * @return {?{proxy: boolean, thumbs: boolean, waveform: boolean, scrub: boolean}} what it makes, null for no pass
+ */
+export function passOf(seen, missing) {
+	if (!seen || !['encoder', null].includes(seen.reason) || (missing.includes('proxy') && !seen.convertible)) {
+		return null
+	}
+	const want = {
+		proxy: missing.includes('proxy'),
+		thumbs: missing.includes('thumbs'),
+		waveform: missing.includes('waveform'),
+		scrub: missing.includes('scrub') && seen.scrubbable,
+	}
+	return Object.values(want).some(Boolean) ? want : null
+}
+
+/**
+ * The lightest file there is to decode for what a Version lacks (#168): its
+ * Proxy, generated, from a browser or by hand, else the original
+ *
+ * @param {{url: ?string, derived?: object}} version - as GET /versions/{id} gives it
+ * @return {?string} where it is served
+ */
+export const lightest = (version) => version.derived?.proxy?.url ?? version.url

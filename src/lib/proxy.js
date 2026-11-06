@@ -6,9 +6,9 @@
  * fit into memory. The rules come from proxyPlan.js.
  */
 import axios from '@nextcloud/axios'
-import { chunkSizeFor, errorMessage, getVersion, giveProxy, giveThumbs, giveWaveform, reportProxy, uploadsUrl } from '../api.js'
+import { chunkSizeFor, errorMessage, getVersion, giveProxy, giveScrub, giveThumbs, giveWaveform, reportProxy, uploadsUrl } from '../api.js'
 import { t } from './l10n.js'
-import { AUDIO_BITRATE, fits, heavy, lowerTarget, needsProxy, plays, proxyBytes, proxySize, THUMB_WIDTH, thumbGrid, thumbSlot, videoBitrate, whyNot } from './proxyPlan.js'
+import { AUDIO_BITRATE, fits, heavy, lowerTarget, needsProxy, plays, proxyBytes, proxySize, SCRUB_BITRATE, scrubFits, scrubSize, THUMB_WIDTH, thumbGrid, thumbSlot, videoBitrate, whyNot } from './proxyPlan.js'
 import { unsupported } from './unsupported.js'
 import { browserEnv, uploadFile } from './upload.js'
 import { advance } from './uploadStatus.js'
@@ -84,11 +84,12 @@ const proxyOf = (video, maxHeight) => proxySize({ width: video.displayWidth, hei
  * @param {object} settings - the server's
  * @param {number} settings.maxHeight - the Proxy resolution
  * @param {number} settings.maxBitrate - the Proxy bitrate threshold in Mbit/s
- * @return {Promise<{readable: boolean, playable: boolean, convertible: boolean, needsProxy: boolean, reason: ?string, codec: ?string}>}
+ * @return {Promise<{readable: boolean, playable: boolean, convertible: boolean, scrubbable: boolean, needsProxy: boolean, reason: ?string, codec: ?string}>}
  *   whether Mediabunny reads it at all, whether browsers play it as it is, whether this browser can make its Proxy
- *   (it decodes the first picture and sound, encodes H.264, and the server reads the container's Frames), whether it
- *   gets one, and what stands in the way: `reason` is 'codec' (this browser cannot decode `codec`, others may), 'format'
- *   (no browser can help) or 'encoder' (this browser has no H.264 encoder)
+ *   (it decodes the first picture and sound, encodes H.264, and the server reads the container's Frames) and its
+ *   Scrub Proxy (the same at 320 wide), whether it gets a Proxy, and what stands in the way: `reason` is 'codec' (this
+ *   browser cannot decode `codec`, others may), 'format' (no browser can help) or 'encoder' (this browser has no H.264
+ *   encoder for the Proxy)
  */
 export async function inspect(source, bytes, { maxHeight, maxBitrate }) {
 	const { canEncodeVideo } = await mediabunny()
@@ -113,10 +114,12 @@ export async function inspect(source, bytes, { maxHeight, maxBitrate }) {
 		// The encoder is asked for the Proxy, not the original: an 8K master or an odd anamorphic width still makes a 1080p Proxy
 		const reason = whyNot({ video: Boolean(video), container: format.name, undecodable })
 			?? (await canEncodeVideo('avc', { ...proxyOf(video, maxHeight), bitrate: videoBitrate(proxyOf(video, maxHeight), maxBitrate) }) ? null : 'encoder')
+		const decodes = reason === null || reason === 'encoder'
 		return {
 			readable: true,
 			playable,
 			convertible: reason === null,
+			scrubbable: decodes && await canEncodeVideo('avc', { ...scrubSize({ width: video.displayWidth, height: video.displayHeight }), bitrate: SCRUB_BITRATE }),
 			needsProxy: Boolean(video) && needsProxy(playable, bytes, await input.computeDuration(), maxBitrate),
 			reason,
 			codec: undecodable?.codec ?? null,
@@ -156,6 +159,7 @@ export async function clearProxies() {
 
 /**
  * @param {number} bytes - what the Proxy needs
+ * @return {Promise<number>} the bytes free beyond it
  * @throws {NoRoomError} when the browser does not give it, even after asking to keep Deliver's data
  */
 async function makeRoom(bytes) {
@@ -171,42 +175,103 @@ async function makeRoom(bytes) {
 	if (room < bytes) {
 		throw new NoRoomError(bytes - room)
 	}
+	return room - bytes
 }
 
 /**
- * Makes the Proxy of a file, one picture after another into a file of the
- * private file system, and checks it as the server will: as many Frames as
- * the original, at its rate. The same pass draws the Thumbnail Strip from
- * the pictures and the Waveform from the sound, in the server's shapes, so
- * the original is decoded once.
+ * A file of its own in the private file system, held under a Web Lock
+ * until done(), so no tab clears it while this one still needs it
  *
- * @param {Blob|string} source - the original, or its URL
- * @param {object} settings - the server's
- * @param {number} settings.maxHeight - the Proxy resolution
- * @param {number} settings.maxBitrate - the Proxy bitrate threshold in Mbit/s
- * @param {number} settings.thumbCap - the Thumbnail Strip cap
- * @param {(percent: number) => void} onProgress - how far it is, 0 to 99
- * @param {AbortSignal} signal - stops it
- * @param {number} [target] - the picture's bitrate in bit/s, for the second go after the first came out above the threshold
- * @return {Promise<{file: File, done: () => Promise<void>, frames: number, seconds: number, bitrate: number, thumbs: ?{image: Blob, every: number, count: number}, peaks: ?number[]}>}
- *   the Proxy, what deletes it once handed in, the Frames of the original, its Thumbnail Strip (WebP, JPEG where the browser encodes no WebP) and its Waveform (null without sound)
+ * @return {Promise<{writable: () => Promise<FileSystemWritableFileStream>, file: () => Promise<File>, done: () => Promise<void>}>} it
  */
-async function convert(source, { maxHeight, maxBitrate, thumbCap }, onProgress, signal, target) {
-	const { Conversion, Mp4OutputFormat, Output, StreamTarget } = await mediabunny()
+async function scratch() {
 	const name = `proxy-${Date.now()}-${Math.random().toString(36).slice(2)}.mp4`
-	// Held until done(), so no tab clears the file while this one still needs it
 	let release
-	const held = new Promise((resolve) => {
+	await new Promise((resolve) => {
 		navigator.locks.request(LOCK + name, () => new Promise((free) => {
 			release = free
 			resolve()
 		}))
 	})
-	await held
 	const dir = await folder()
+	return {
+		writable: async () => (await dir.getFileHandle(name, { create: true })).createWritable(),
+		file: async () => (await dir.getFileHandle(name)).getFile(),
+		done: async () => {
+			await dir.removeEntry(name).catch(() => {})
+			release()
+		},
+	}
+}
+
+/**
+ * The Scrub Proxy (#169), from the pictures of the pass: each is drawn at
+ * 320 wide into a canvas of its own before it reaches this second encoder,
+ * so no full-size picture waits in it.
+ *
+ * @param {{width: number, height: number}} size - the Scrub Proxy's
+ * @param {number} frames - the original's Frames
+ * @param {number} seconds - their length
+ * @return {Promise<{add: (sample: object, time: number) => Promise<void>, finish: () => Promise<File>, drop: () => Promise<void>, done: () => Promise<void>}>} it
+ */
+async function scrubber(size, frames, seconds) {
+	const { CanvasSource, Mp4OutputFormat, Output, StreamTarget } = await mediabunny()
+	const file = await scratch()
+	const writable = await file.writable()
+	const context = new OffscreenCanvas(size.width, size.height).getContext('2d', { alpha: false })
+	const source = new CanvasSource(context.canvas, { codec: 'avc', bitrate: SCRUB_BITRATE, keyFrameInterval: 1 })
+	const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'reserve' }), target: new StreamTarget(writable, { chunked: true }) })
+	// At the original's rate, which snaps every timestamp to a Frame, with room for the index of every one
+	output.addVideoTrack(source, { frameRate: frames / seconds, maximumPacketCount: Math.ceil(frames * 1.34) + 16 })
+	await output.start()
+	return {
+		add: async (sample, time) => {
+			sample.draw(context, 0, 0, size.width, size.height)
+			await source.add(time, sample.duration)
+		},
+		finish: async () => {
+			await output.finalize()
+			return file.file()
+		},
+		drop: async () => {
+			await output.cancel().catch(() => {})
+			await writable.abort?.().catch(() => {})
+			await file.done()
+		},
+		done: file.done,
+	}
+}
+
+/**
+ * One pass over a file (#168): its pictures and sound are decoded once, and
+ * from them come what `want` asks for. The Proxy goes one picture after
+ * another into a file of the private file system and is checked as the
+ * server will: as many Frames as the original, at its rate. The Thumbnail
+ * Strip and the Waveform are drawn in the server's shapes, and the Scrub
+ * Proxy is encoded beside it; without a Proxy the pictures and the sound are
+ * only decoded for them. A Thumbnail Strip or Scrub Proxy that fails never
+ * fails the Proxy.
+ *
+ * @param {Blob|string} source - the file, or its URL: the original, or a Proxy for what the Version lacks besides
+ * @param {object} settings - the server's
+ * @param {number} settings.maxHeight - the Proxy resolution
+ * @param {number} settings.maxBitrate - the Proxy bitrate threshold in Mbit/s
+ * @param {number} settings.thumbCap - the Thumbnail Strip cap
+ * @param {{proxy: boolean, thumbs: boolean, waveform: boolean, scrub: boolean}} want - what to make, from passOf
+ * @param {(percent: number) => void} onProgress - how far it is, 0 to 99
+ * @param {AbortSignal} signal - stops it
+ * @param {number} [target] - the picture's bitrate in bit/s, for the second go after the first came out above the threshold
+ * @return {Promise<{file: ?File, scrub: ?File, done: () => Promise<void>, frames: number, seconds: number, bitrate: number, thumbs: ?{image: Blob, every: number, count: number}, peaks: ?number[]}>}
+ *   the Proxy and the Scrub Proxy (null where not made), what deletes them once handed in, the Frames of the original, its
+ *   Thumbnail Strip (WebP, JPEG where the browser encodes no WebP) and its Waveform (null without sound)
+ */
+async function convert(source, { maxHeight, maxBitrate, thumbCap }, want, onProgress, signal, target) {
+	const { AudioSampleSink, Conversion, Mp4OutputFormat, Output, StreamTarget, VideoSampleSink } = await mediabunny()
+	const proxy = want.proxy ? await scratch() : null
+	let scrub = null
 	const done = async () => {
-		await dir.removeEntry(name).catch(() => {})
-		release()
+		await proxy?.done()
+		await scrub?.done()
 	}
 	const input = await open(source)
 	try {
@@ -218,81 +283,140 @@ async function convert(source, { maxHeight, maxBitrate, thumbCap }, onProgress, 
 		const seconds = await video.computeDuration() - await video.getFirstTimestamp()
 		const size = proxyOf(video, maxHeight)
 		const bitrate = target ?? videoBitrate(size, maxBitrate)
-		await makeRoom(proxyBytes(seconds, bitrate))
+		const free = await makeRoom(want.proxy ? proxyBytes(seconds, bitrate) : 0)
 		const grid = thumbGrid(seconds, thumbCap, size)
 		// The Thumbnail Strip never costs the Proxy: none where the browser encodes neither WebP nor JPEG, or has no canvas that large
-		const stripType = await stripImageType()
+		const stripType = want.thumbs ? await stripImageType() : null
 		let strip = stripType ? stripCanvas(grid) : null
 		let drawn = -1
+		// Nor does the Scrub Proxy, which needs no more than a few MB an hour
+		if (want.scrub && free > proxyBytes(seconds, SCRUB_BITRATE)) {
+			scrub = await scrubber(scrubSize({ width: video.displayWidth, height: video.displayHeight }), frames, seconds).catch(() => null)
+		}
 		const peaks = new Float32Array(BUCKETS)
 		let heard = false
+		let first = null
 		signal.throwIfAborted()
 
-		const writable = await (await dir.getFileHandle(name, { create: true })).createWritable()
-		const output = new Output({
-			// The index goes into room kept at the start: the Proxy plays from its first bytes, and nothing waits in memory
-			format: new Mp4OutputFormat({ fastStart: 'reserve' }),
-			target: new StreamTarget(writable, { chunked: true }),
-		})
-		const conversion = await Conversion.init({
-			input,
-			output,
-			tracks: 'primary',
-			// The original's own average rate, unrounded: the server checks the Proxy against it
-			video: {
-				codec: 'avc',
-				...size,
-				fit: 'fill',
-				frameRate: frames / seconds,
-				bitrate,
-				keyFrameInterval: 1,
-				forceTranscode: true,
-				// The picture, already at the Proxy's size, also goes into the Thumbnail Strip
-				process: (sample) => {
-					const slot = thumbSlot(grid, sample.timestamp)
-					if (strip && slot !== null && slot >= drawn) {
-						drawn = slot
-						try {
-							sample.draw(strip, (slot % grid.columns) * THUMB_WIDTH, Math.floor(slot / grid.columns) * grid.tileHeight, THUMB_WIDTH, grid.tileHeight)
-						} catch {
-							strip = null
-						}
-					}
-					return sample
-				},
-			},
-			audio: {
-				codec: 'aac',
-				bitrate: AUDIO_BITRATE,
-				// The sound also goes into the Waveform
-				process: (sample) => {
-					addPeaks(peaks, channelsOf(sample), sample.timestamp, sample.sampleRate, seconds)
-					heard = true
-					return sample
-				},
-			},
-			tags: {},
-			showWarnings: false,
-		})
-		// A track it would leave out makes a Proxy the server refuses: silent, or without a picture
-		if (!conversion.isValid || conversion.discardedTracks.some((each) => ['video', 'audio'].includes(each.track.type))) {
-			await writable.abort?.().catch(() => {})
-			throw new Error(conversion.discardedTracks.map((each) => `${each.track.type}: ${each.reason}`).join(', '))
+		/** @param {object} sample - a picture, which goes into the Thumbnail Strip and the Scrub Proxy */
+		const see = async (sample) => {
+			first ??= sample.timestamp
+			const time = sample.timestamp - first
+			const slot = thumbSlot(grid, time)
+			if (strip && slot !== null && slot >= drawn) {
+				drawn = slot
+				try {
+					sample.draw(strip, (slot % grid.columns) * THUMB_WIDTH, Math.floor(slot / grid.columns) * grid.tileHeight, THUMB_WIDTH, grid.tileHeight)
+				} catch {
+					strip = null
+				}
+			}
+			try {
+				await scrub?.add(sample, time)
+			} catch {
+				await scrub.drop()
+				scrub = null
+			}
+			return time
 		}
-		const stop = () => conversion.cancel()
-		signal.addEventListener('abort', stop, { once: true })
-		conversion.onProgress = (progress) => onProgress(Math.min(99, Math.floor(progress * 100)))
-		try {
-			await conversion.execute()
-		} finally {
-			signal.removeEventListener('abort', stop)
+		/** @param {object} sample - sound, which goes into the Waveform */
+		const hear = (sample) => {
+			if (want.waveform) {
+				addPeaks(peaks, channelsOf(sample), sample.timestamp, sample.sampleRate, seconds)
+				heard = true
+			}
 		}
 
-		const file = await (await dir.getFileHandle(name)).getFile()
-		await check(file, { frames, seconds })
+		if (proxy) {
+			const writable = await proxy.writable()
+			const output = new Output({
+				// The index goes into room kept at the start: the Proxy plays from its first bytes, and nothing waits in memory
+				format: new Mp4OutputFormat({ fastStart: 'reserve' }),
+				target: new StreamTarget(writable, { chunked: true }),
+			})
+			const conversion = await Conversion.init({
+				input,
+				output,
+				tracks: 'primary',
+				// The original's own average rate, unrounded: the server checks the Proxy against it
+				video: {
+					codec: 'avc',
+					...size,
+					fit: 'fill',
+					frameRate: frames / seconds,
+					bitrate,
+					keyFrameInterval: 1,
+					forceTranscode: true,
+					// The picture, already at the Proxy's size, also goes into the Thumbnail Strip and the Scrub Proxy
+					process: async (sample) => {
+						await see(sample)
+						return sample
+					},
+				},
+				audio: {
+					codec: 'aac',
+					bitrate: AUDIO_BITRATE,
+					process: (sample) => {
+						hear(sample)
+						return sample
+					},
+				},
+				tags: {},
+				showWarnings: false,
+			})
+			// A track it would leave out makes a Proxy the server refuses: silent, or without a picture
+			if (!conversion.isValid || conversion.discardedTracks.some((each) => ['video', 'audio'].includes(each.track.type))) {
+				await writable.abort?.().catch(() => {})
+				throw new Error(conversion.discardedTracks.map((each) => `${each.track.type}: ${each.reason}`).join(', '))
+			}
+			const stop = () => conversion.cancel()
+			signal.addEventListener('abort', stop, { once: true })
+			conversion.onProgress = (progress) => onProgress(Math.min(99, Math.floor(progress * 100)))
+			try {
+				await conversion.execute()
+			} finally {
+				signal.removeEventListener('abort', stop)
+			}
+		} else {
+			// Without a Proxy the pictures and the sound are decoded side by side, each let go of once seen
+			const audio = want.waveform ? await input.getPrimaryAudioTrack() : null
+			await Promise.all([
+				(async () => {
+					for await (const sample of new VideoSampleSink(video).samples()) {
+						try {
+							signal.throwIfAborted()
+							onProgress(Math.min(99, Math.floor(await see(sample) / seconds * 100)))
+						} finally {
+							sample.close()
+						}
+					}
+				})(),
+				audio && (async () => {
+					for await (const sample of new AudioSampleSink(audio).samples()) {
+						try {
+							signal.throwIfAborted()
+							hear(sample)
+						} finally {
+							sample.close()
+						}
+					}
+				})(),
+			])
+		}
+
+		const file = proxy && await proxy.file()
+		if (file) {
+			await check(file, { frames, seconds })
+		}
 		const image = strip && drawn >= 0 ? await strip.canvas.convertToBlob({ type: stripType, quality: stripType === 'image/webp' ? 0.75 : 0.8 }).catch(() => null) : null
+		// One the server would refuse is not uploaded
+		const scrubbed = scrub && await scrub.finish().then(async (made) => {
+			await check(made, { frames, seconds })
+			return scrubFits(made.size, seconds) ? made : null
+		}).catch(() => null)
 		return {
 			file,
+			scrub: scrubbed,
 			done,
 			frames,
 			seconds,
@@ -301,7 +425,8 @@ async function convert(source, { maxHeight, maxBitrate, thumbCap }, onProgress, 
 			peaks: heard ? roundPeaks(peaks) : null,
 		}
 	} catch (error) {
-		await done()
+		await scrub?.drop()
+		await proxy?.done()
 		throw error
 	} finally {
 		input.dispose()
@@ -309,23 +434,25 @@ async function convert(source, { maxHeight, maxBitrate, thumbCap }, onProgress, 
 }
 
 /**
- * Makes the Proxy of a file, once more at a lower bitrate when it comes out
- * above the Proxy bitrate threshold: the encoder only aims at its bitrate,
- * and the server refuses a Proxy above it. The first go is let go of (input,
- * strip canvas, peaks) before the second starts.
+ * Makes what a file lacks in one pass; where that makes a Proxy, once more
+ * at a lower bitrate when it comes out above the Proxy bitrate threshold:
+ * the encoder only aims at its bitrate, and the server refuses a Proxy above
+ * it. The first go is let go of (input, strip canvas, peaks, Scrub Proxy)
+ * before the second starts.
  *
- * @param {Blob|string} source - the original, or its URL
+ * @param {Blob|string} source - the file, or its URL
  * @param {object} settings - the server's, see convert()
+ * @param {object} want - what to make, see convert()
  * @param {(percent: number) => void} onProgress - how far it is, 0 to 99
  * @param {AbortSignal} signal - stops it
  * @return {Promise<object>} as convert()
  * @throws {TooHeavyError} when the second go is above the threshold as well
  */
-async function makeProxy(source, settings, onProgress, signal) {
+async function makePass(source, settings, want, onProgress, signal) {
 	// Its own scope, so nothing of the first go outlives it
 	const first = await (async () => {
-		const made = await convert(source, settings, onProgress, signal)
-		if (!heavy(made.file.size, made.seconds, settings.maxBitrate)) {
+		const made = await convert(source, settings, want, onProgress, signal)
+		if (!made.file || !heavy(made.file.size, made.seconds, settings.maxBitrate)) {
 			return { made }
 		}
 		const target = lowerTarget(made.bitrate, made.file.size, made.seconds, settings.maxBitrate)
@@ -335,7 +462,7 @@ async function makeProxy(source, settings, onProgress, signal) {
 	if (first.made) {
 		return first.made
 	}
-	const again = await convert(source, settings, onProgress, signal, first.target)
+	const again = await convert(source, settings, want, onProgress, signal, first.target)
 	if (heavy(again.file.size, again.seconds, settings.maxBitrate)) {
 		await again.done()
 		throw new TooHeavyError(settings.maxBitrate)
@@ -396,20 +523,21 @@ async function check(file, original) {
 
 let converting = Promise.resolve()
 /**
- * Makes one Proxy after the other in this tab, so two masters do not fight
+ * Makes one pass after the other in this tab, so two masters do not fight
  * over the decoder, the encoder and the disk.
  *
- * @param {Blob|string} source - the original, or its URL
+ * @param {Blob|string} source - the file, or its URL
  * @param {{maxHeight: number, maxBitrate: number, thumbCap: number}} settings - the server's Proxy resolution, threshold and Thumbnail Strip cap
- * @param {{state: string, progress: number, error: ?string, since?: number}} status - kept up to date: running (since: when the pass that is running began), then failed if it does
+ * @param {{proxy: boolean, thumbs: boolean, waveform: boolean, scrub: boolean}} want - what to make, from passOf
+ * @param {{state: string, progress: number, error: ?string, since?: number, proxy?: boolean}} status - kept up to date: running (since: when the pass that is running began), then failed if it does; proxy: whether it makes a Proxy
  * @param {AbortSignal} signal - stops it
- * @return {Promise<?{file: File, done: () => Promise<void>, frames: number, thumbs: ?{image: Blob, every: number, count: number}, peaks: ?number[]}>} what makeProxy returns, null when it failed or was stopped
+ * @return {Promise<?object>} what convert() returns, null when it failed or was stopped
  */
-export function convertInTurn(source, settings, status, signal) {
-	Object.assign(status, { state: 'running', progress: 0, error: null })
+export function convertInTurn(source, settings, want, status, signal) {
+	Object.assign(status, { state: 'running', progress: 0, error: null, proxy: want.proxy })
 	const turn = converting.then(() => signal.aborted
 		? Promise.reject(new Error('cancelled'))
-		: makeProxy(source, settings, (progress) => advance(status, progress), signal))
+		: makePass(source, settings, want, (progress) => advance(status, progress), signal))
 	converting = turn.catch(() => {})
 	return turn.catch((error) => {
 		Object.assign(status, {
@@ -440,19 +568,22 @@ export function dropProxy(making, status, controller) {
 }
 
 /**
- * Hands in a Proxy this browser makes, the same way for an upload in
- * Deliver, one in the Files app and the fallback on the Asset card (ADR
- * 0019): it reports the progress while the Proxy is made and uploaded,
- * uploads it next to the Version's file and hands it in. Only a Member with
- * Manage on the Version hands in; for anyone else the Proxy is stopped.
+ * Hands in what a pass of this browser made, the same way for an upload in
+ * Deliver, one in the Files app and the action on the Asset card (ADR 0019,
+ * #168). A pass with a Proxy reports its progress while the Proxy is made
+ * and uploaded, uploads it next to the Version's file and hands it in; then,
+ * whatever became of the Proxy, the Thumbnail Strip, the Waveform and the
+ * Scrub Proxy go in, which the server refuses where it has its own. Only a
+ * Member with Manage on the Version hands in; for anyone else the pass is
+ * stopped.
  *
  * @param {number} versionId - the Version
- * @param {Promise<?{file: File, done: () => Promise<void>}>} making - from convertInTurn
- * @param {{state: string, progress: number, error: ?string}} status - its, as convertInTurn keeps it, then uploading, handing, ready, failed or stopped
- * @param {AbortController} controller - stops the Proxy
+ * @param {Promise<?object>} making - from convertInTurn
+ * @param {{state: string, progress: number, error: ?string, proxy: boolean}} status - its, as convertInTurn keeps it, then uploading, handing, ready, failed or stopped
+ * @param {AbortController} controller - stops the pass
  * @return {Promise<boolean>} false when this Member may not hand it in
  */
-export async function handInProxy(versionId, making, status, controller) {
+export async function handInPass(versionId, making, status, controller) {
 	const context = await getVersion(versionId).catch(() => null)
 	const url = context?.versions.find((each) => each.id === versionId)?.url
 	if (!context?.manages || !url) {
@@ -462,7 +593,7 @@ export async function handInProxy(versionId, making, status, controller) {
 	// Also while the Proxy uploads, which takes minutes for a long one: silent for two minutes, the server takes this tab as gone
 	let reported = Promise.resolve()
 	const report = () => {
-		if (['running', 'uploading'].includes(status.state)) {
+		if (status.proxy && ['running', 'uploading'].includes(status.state)) {
 			reported = reportProxy(versionId, status.state === 'running' ? status.progress : 99).catch((error) => {
 				// A Proxy came by hand meanwhile, or ffmpeg makes one: this one is not wanted any more (ADR 0020)
 				if (error.response?.status === 409 && status.state === 'running') {
@@ -481,7 +612,7 @@ export async function handInProxy(versionId, making, status, controller) {
 		try {
 			// The server reads the original first if its background job has not yet, and says so while a worker is at it;
 			// it deletes every upload it looked at, so another try uploads the Proxy again
-			for (let attempt = 0; ; attempt++) {
+			for (let attempt = 0; made.file; attempt++) {
 				Object.assign(status, { state: 'uploading', progress: 0 })
 				const fileId = await uploadNextTo(url, made.file, status, controller.signal)
 				// No report may land while the server takes it: it would mark the Proxy as running again
@@ -497,17 +628,24 @@ export async function handInProxy(versionId, making, status, controller) {
 					await new Promise((resolve) => setTimeout(resolve, 5000))
 				}
 			}
-			Object.assign(status, { state: 'ready', progress: 100 })
+			status.state = 'handing'
 		} catch (error) {
-			Object.assign(status, { state: 'failed', error: error.response ? errorMessage(error) : null })
+			// A Proxy by hand, or ffmpeg, came first while this one went up: taken over, not failed (ADR 0020)
+			Object.assign(status, error.response?.status === 409 ? { state: 'stopped', error: null } : { state: 'failed', error: error.response ? errorMessage(error) : null })
+		}
+		try {
+			// Whatever became of the Proxy: the server refuses them where it has its own, or makes them
+			await Promise.all([
+				made.thumbs && giveThumbs(versionId, made.thumbs.image, made.thumbs.every, made.thumbs.count).catch(() => {}),
+				made.peaks && giveWaveform(versionId, made.peaks, made.frames).catch(() => {}),
+				made.scrub && uploadNextTo(url, made.scrub, {}, controller.signal, '.deliver-scrub-').then((fileId) => giveScrub(versionId, fileId)).catch(() => {}),
+			])
 		} finally {
 			await made.done()
 		}
-		// Whatever became of the Proxy: the server refuses them where it has its own, or makes them
-		await Promise.all([
-			made.thumbs && giveThumbs(versionId, made.thumbs.image, made.thumbs.every, made.thumbs.count).catch(() => {}),
-			made.peaks && giveWaveform(versionId, made.peaks, made.frames).catch(() => {}),
-		])
+		if (status.state === 'handing') {
+			Object.assign(status, { state: 'ready', progress: 100 })
+		}
 	} finally {
 		clearInterval(beat)
 	}
