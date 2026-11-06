@@ -610,23 +610,15 @@ export async function handInPass(versionId, making, status, controller) {
 			return true
 		}
 		try {
-			// The server reads the original first if its background job has not yet, and says so while a worker is at it;
-			// it deletes every upload it looked at, so another try uploads the Proxy again
-			for (let attempt = 0; made.file; attempt++) {
-				Object.assign(status, { state: 'uploading', progress: 0 })
-				const fileId = await uploadNextTo(url, made.file, status, controller.signal)
+			if (made.file) {
 				// No report may land while the server takes it: it would mark the Proxy as running again
-				status.state = 'handing'
-				await reported
-				try {
+				await whenRead(async () => {
+					Object.assign(status, { state: 'uploading', progress: 0 })
+					const fileId = await uploadNextTo(url, made.file, status, controller.signal)
+					status.state = 'handing'
+					await reported
 					await giveProxy(versionId, fileId, true)
-					break
-				} catch (error) {
-					if (error.response?.status !== 409 || attempt >= 12 || !/not read yet/.test(errorMessage(error) ?? '')) {
-						throw error
-					}
-					await new Promise((resolve) => setTimeout(resolve, 5000))
-				}
+				})
 			}
 			status.state = 'handing'
 		} catch (error) {
@@ -634,11 +626,12 @@ export async function handInPass(versionId, making, status, controller) {
 			Object.assign(status, error.response?.status === 409 ? { state: 'stopped', error: null } : { state: 'failed', error: error.response ? errorMessage(error) : null })
 		}
 		try {
-			// Whatever became of the Proxy: the server refuses them where it has its own, or makes them
+			// Whatever became of the Proxy: the server refuses them where it has its own, or makes them.
+			// The Scrub Proxy first, which has the server read the original where no Proxy did
+			await (made.scrub && whenRead(async () => giveScrub(versionId, await uploadNextTo(url, made.scrub, {}, controller.signal, '.deliver-scrub-'))).catch(() => {}))
 			await Promise.all([
-				made.thumbs && giveThumbs(versionId, made.thumbs.image, made.thumbs.every, made.thumbs.count).catch(() => {}),
+				made.thumbs && whenRead(() => giveThumbs(versionId, made.thumbs.image, made.thumbs.every, made.thumbs.count)).catch(() => {}),
 				made.peaks && giveWaveform(versionId, made.peaks, made.frames).catch(() => {}),
-				made.scrub && uploadNextTo(url, made.scrub, {}, controller.signal, '.deliver-scrub-').then((fileId) => giveScrub(versionId, fileId)).catch(() => {}),
 			])
 		} finally {
 			await made.done()
@@ -650,6 +643,27 @@ export async function handInPass(versionId, making, status, controller) {
 		clearInterval(beat)
 	}
 	return true
+}
+
+/**
+ * The server reads the original in the request that hands something in if
+ * its background job has not yet, and says so while a worker is at it; it
+ * deletes every upload it looked at, so another try uploads again.
+ *
+ * @param {() => Promise<?object>} give - uploads and hands in
+ * @return {Promise<?object>} what it returns once the original is read, for a minute at most
+ */
+async function whenRead(give) {
+	for (let attempt = 0; ; attempt++) {
+		try {
+			return await give()
+		} catch (error) {
+			if (error.response?.status !== 409 || attempt >= 12 || !/not read yet/.test(errorMessage(error) ?? '')) {
+				throw error
+			}
+			await new Promise((resolve) => setTimeout(resolve, 5000))
+		}
+	}
 }
 
 /**
