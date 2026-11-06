@@ -134,10 +134,18 @@ class ProjectApiController extends OCSController {
 		return $this->guard(fn () => $this->service->regenerate((string)$this->userId, $id));
 	}
 
-	/** @param int $fileId the file id of the Proxy, uploaded next to the Version's file */
+	/**
+	 * @param int $fileId the file id of the Proxy, uploaded next to the Version's file
+	 * @param bool $converted whether a browser converted it, which then replaces no Proxy (ADR 0019); false for one made by hand (ADR 0020)
+	 */
 	#[NoAdminRequired]
-	public function proxy(int $id, int $fileId): Response {
-		return $this->guard(fn () => $this->service->giveProxy((string)$this->userId, $id, uploadId: $fileId));
+	public function proxy(int $id, int $fileId, bool $converted = false): Response {
+		return $this->guard(fn () => $this->service->giveProxy((string)$this->userId, $id, uploadId: $fileId, converted: $converted));
+	}
+
+	#[NoAdminRequired]
+	public function removeProxy(int $id): Response {
+		return $this->guard(fn () => $this->service->removeProxy((string)$this->userId, $id));
 	}
 
 	/** @param int $fileId the file id of the Scrub Proxy, uploaded next to the Version's file */

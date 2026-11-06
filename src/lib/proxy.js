@@ -463,7 +463,12 @@ export async function handInProxy(versionId, making, status, controller) {
 	let reported = Promise.resolve()
 	const report = () => {
 		if (['running', 'uploading'].includes(status.state)) {
-			reported = reportProxy(versionId, status.state === 'running' ? status.progress : 99).catch(() => {})
+			reported = reportProxy(versionId, status.state === 'running' ? status.progress : 99).catch((error) => {
+				// A Proxy came by hand meanwhile, or ffmpeg makes one: this one is not wanted any more (ADR 0020)
+				if (error.response?.status === 409 && status.state === 'running') {
+					dropProxy(making, status, controller)
+				}
+			})
 		}
 	}
 	report()
@@ -483,7 +488,7 @@ export async function handInProxy(versionId, making, status, controller) {
 				status.state = 'handing'
 				await reported
 				try {
-					await giveProxy(versionId, fileId)
+					await giveProxy(versionId, fileId, true)
 					break
 				} catch (error) {
 					if (error.response?.status !== 409 || attempt >= 12 || !/not read yet/.test(errorMessage(error) ?? '')) {
@@ -507,6 +512,24 @@ export async function handInProxy(versionId, making, status, controller) {
 		clearInterval(beat)
 	}
 	return true
+}
+
+/**
+ * Hands in a Proxy made by hand (ADR 0020): uploaded next to the Version's
+ * file like the browser's, then checked by the server, which says why when
+ * it refuses it.
+ *
+ * @param {number} versionId - the Version
+ * @param {string} url - the WebDAV URL of its file
+ * @param {File} file - the Proxy
+ * @param {{state: string, progress: number}} status - uploading, then handing
+ * @return {Promise<void>}
+ */
+export async function uploadProxy(versionId, url, file, status) {
+	Object.assign(status, { state: 'uploading', progress: 0 })
+	const fileId = await uploadNextTo(url, file, status, new AbortController().signal)
+	status.state = 'handing'
+	await giveProxy(versionId, fileId)
 }
 
 /**

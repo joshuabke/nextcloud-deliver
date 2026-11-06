@@ -622,14 +622,15 @@ class ProjectService {
 	}
 
 	/**
-	 * The Proxy a browser made where the server has no ffmpeg (ADR 0019),
-	 * uploaded next to the Version's file as for a replace; the upload goes
-	 * whether the Proxy is taken or refused.
+	 * A Proxy handed in: made by a browser where the server has no ffmpeg
+	 * (ADR 0019), or by hand with and without ffmpeg (ADR 0020), uploaded
+	 * next to the Version's file as for a replace; the upload goes whether
+	 * the Proxy is taken or refused.
 	 *
 	 * @throws InvalidRequestException the upload is not a file of its own next to the Version's file, or no Proxy of it
 	 */
-	public function giveProxy(string $uid, int $versionId, int $uploadId): array {
-		return $this->handIn($uid, $versionId, $uploadId, $this->media->acceptProxy(...));
+	public function giveProxy(string $uid, int $versionId, int $uploadId, bool $converted = false): array {
+		return $this->handIn($uid, $versionId, $uploadId, fn (Version $version, File $file, File $upload) => $this->media->acceptProxy($version, $file, $upload, $converted));
 	}
 
 	/** The Scrub Proxy a browser made where the server has no ffmpeg (#169), handed in as a Proxy is */
@@ -641,7 +642,7 @@ class ProjectService {
 	 * Hands an upload next to the Version's file to `$accept`; the upload goes
 	 * whether it is taken or refused. Needs Manage.
 	 *
-	 * @param callable(Version, File, File): ?array $accept takes the Version, its file and the upload; what it returns is the answer
+	 * @param callable(Version, File, File): void $accept takes the Version, its file and the upload
 	 * @throws InvalidRequestException the upload is not a file of its own next to the Version's file
 	 */
 	private function handIn(string $uid, int $versionId, int $uploadId, callable $accept): array {
@@ -660,10 +661,20 @@ class ProjectService {
 			throw new AccessDeniedException('Deleting the upload is not allowed');
 		}
 		try {
-			return $accept($version, $file, $upload) ?? [];
+			$accept($version, $file, $upload);
 		} finally {
 			$upload->delete();
 		}
+	}
+
+	/** Removes a Proxy handed in, so ffmpeg or a browser makes the next (ADR 0020) */
+	public function removeProxy(string $uid, int $versionId): array {
+		[$version, $file, $grant] = $this->reachVersion($uid, $versionId);
+		if (!$grant->manages()) {
+			throw new AccessDeniedException('Manage is required');
+		}
+		$this->media->removeProxy($version, $file instanceof File ? (int)$file->getSize() : 0);
+		return [];
 	}
 
 	/**
@@ -695,13 +706,13 @@ class ProjectService {
 	 * @throws InvalidRequestException the upload is not a file of its own next to the Version's file, or no Captions
 	 */
 	public function giveCaptions(string $uid, int $versionId, int $uploadId, string $language): array {
-		return $this->handIn($uid, $versionId, $uploadId, function (Version $version, File $file, File $upload) use ($uid, $language): array {
+		$this->handIn($uid, $versionId, $uploadId, function (Version $version, File $file, File $upload) use ($language): void {
 			if ($upload->getSize() > Captions::MAX_BYTES) {
 				throw new InvalidRequestException('A captions file has at most 1 MB');
 			}
 			$this->captions->store($version->getId(), $language, $upload->getContent());
-			return $this->versionPayload($version, $uid);
 		});
+		return $this->versionPayload($this->versions->find($versionId) ?? throw new NotFoundException('Version not found'), $uid);
 	}
 
 	/** Removes a Version's Captions in one language (#54) */
@@ -1410,6 +1421,9 @@ class ProjectService {
 					) || ($version->getPlayable() === null && $version->getDerivedError() !== null),
 					// Without ffmpeg, a Member with Manage may make its Proxy in the browser (ADR 0019)
 					'proxyFromBrowser' => $file !== null && $this->media->proxyFromBrowser($version, (int)$file->getSize()),
+					// A Member with Manage may hand in a Proxy where it gets one, and remove one handed in (ADR 0020)
+					'takesProxy' => $file !== null && $this->media->takesProxy($version, (int)$file->getSize()),
+					'proxyHandedIn' => (bool)$version->getProxyHandedIn(),
 				];
 			}
 			$newestFile = $files[$newestByAsset[$asset->getId()]->getId()] ?? null;

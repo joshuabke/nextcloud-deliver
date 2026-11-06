@@ -145,6 +145,10 @@ class DerivedMedia {
 		if ($this->jobs->findPending($versionId, $kind) !== null) {
 			return;
 		}
+		// A Proxy handed in keeps ffmpeg from making another until it is removed or dropped (ADR 0020)
+		if ($kind === Job::KIND_PROXY && $this->versions->find($versionId)?->getProxyHandedIn()) {
+			return;
+		}
 		$job = new Job();
 		$job->setKind($kind);
 		$job->setVersionId($versionId);
@@ -284,6 +288,8 @@ class DerivedMedia {
 				}
 			});
 		} catch (\RuntimeException $e) {
+			// Withdrawn, for instance by a Proxy handed in meanwhile: no second go in software
+			$this->guard();
 			if ($encoder === Encoder::NONE) {
 				throw $e;
 			}
@@ -586,10 +592,19 @@ class DerivedMedia {
 	 * @param int $bytes the size of the Version's file, for the Proxy bitrate threshold
 	 */
 	public function proxyFromBrowser(Version $version, int $bytes): bool {
-		return $version->getHasVideo() && $version->getPlayable() !== null
-			&& in_array($version->getProxyState(), [self::STATE_NONE, self::STATE_FAILED], true)
-			&& $this->needsProxy($version, $bytes)
+		return in_array($version->getProxyState(), [self::STATE_NONE, self::STATE_FAILED], true)
+			&& $this->takesProxy($version, $bytes)
 			&& $this->withoutFfmpeg();
+	}
+
+	/**
+	 * Whether the Version, once read, gets a Proxy (ADR 0019), so one may be
+	 * handed in (ADR 0020)
+	 *
+	 * @param int $bytes the size of the Version's file, for the Proxy bitrate threshold
+	 */
+	public function takesProxy(Version $version, int $bytes): bool {
+		return $version->getPlayable() !== null && $this->needsProxy($version, $bytes);
 	}
 
 	/** A browser that has not reported for a while closed its tab: its Proxy counts as missing again (spec: Proxies from the browser) */
@@ -606,17 +621,24 @@ class DerivedMedia {
 	}
 
 	/**
-	 * Takes the Proxy the uploading browser made (ADR 0019) after checking it
-	 * as the browser did: H.264/AAC MP4 that browsers play, within the Proxy
-	 * resolution, with as many Frames as the original at its rate, so that
-	 * every Frame anchor holds. A Proxy that does not match is refused, and
-	 * the Version shows that its Proxy failed.
+	 * Takes a Proxy handed in, from the uploading browser (ADR 0019) or made
+	 * by hand (ADR 0020), after checking it as the browser did: H.264/AAC MP4
+	 * that browsers play, within the Proxy resolution, with as many Frames as
+	 * the original at its rate, so that every Frame anchor holds. It replaces
+	 * a Proxy ffmpeg made and withdraws a job making one. A Proxy a browser
+	 * converted (`$converted`) keeps ADR 0019's rules: only without ffmpeg,
+	 * never over a Proxy that is there, one by hand above all. A Proxy that
+	 * does not match is refused; only a conversion then shows as failed, a
+	 * Proxy there or on its way stays.
 	 *
-	 * @throws ProjectConflictException the server makes Proxies, the Version needs none, has one, or is not read yet
+	 * @param bool $converted whether a browser converted it from the original, rather than someone rendering it by hand
+	 * @throws ProjectConflictException the Version needs no Proxy, is not read yet, or, for a conversion, the server has ffmpeg or the Version its Proxy
 	 * @throws InvalidRequestException the upload is no Proxy of this Version
 	 */
-	public function acceptProxy(Version $version, File $original, File $upload): void {
-		$this->assertBrowserProxy($version);
+	public function acceptProxy(Version $version, File $original, File $upload, bool $converted = false): void {
+		if ($converted) {
+			$this->assertBrowserProxy($version);
+		}
 		$source = $this->probe->localPath($original);
 		$candidate = $this->probe->localPath($upload);
 		if ($source === null || $candidate === null) {
@@ -628,24 +650,60 @@ class DerivedMedia {
 			throw new ProjectConflictException('This Version plays without a Proxy');
 		}
 		$error = $this->mismatch($version, $probed, $this->container->read($candidate), (int)filesize($candidate));
-		if ($error === null) {
-			$stream = $upload->fopen('r');
-			try {
-				$this->put($version, 'proxy', $stream);
-			} finally {
-				if (is_resource($stream)) {
-					fclose($stream);
-				}
-			}
-		}
-		// Only now: should storing fail, the browser's job lapses and the Proxy counts as missing again
 		$job = $this->jobs->findPending($version->getId(), Job::KIND_PROXY);
+		if ($error !== null) {
+			if ($converted) {
+				if ($job?->getClaimedBy() === Job::BROWSER) {
+					$this->jobs->delete($job);
+				}
+				$this->mark($version->getId(), Job::KIND_PROXY, self::STATE_FAILED, $error);
+			}
+			throw new InvalidRequestException($error);
+		}
+		// First: a job of the server running meanwhile looks before it writes, and finds itself withdrawn
 		if ($job !== null) {
 			$this->jobs->delete($job);
 		}
-		$this->mark($version->getId(), Job::KIND_PROXY, $error === null ? self::STATE_READY : self::STATE_FAILED, $error);
-		if ($error !== null) {
-			throw new InvalidRequestException($error);
+		$stream = $upload->fopen('r');
+		try {
+			$this->put($version, 'proxy', $stream);
+		} catch (\Throwable $e) {
+			$this->mark($version->getId(), Job::KIND_PROXY, self::STATE_FAILED, 'The Proxy could not be stored');
+			throw $e;
+		} finally {
+			if (is_resource($stream)) {
+				fclose($stream);
+			}
+		}
+		$version = $this->versions->find($version->getId()) ?? throw new \RuntimeException('The Version is gone');
+		$version->setProxyHandedIn(true);
+		$version->setProxyState(self::STATE_READY);
+		$this->versions->update($version);
+	}
+
+	/**
+	 * Removes a Proxy handed in (ADR 0020). Then the normal path takes over:
+	 * with ffmpeg its Proxy is queued at once, without the Asset card offers
+	 * the browser's again. A Proxy ffmpeg made is not removed: it would come
+	 * right back.
+	 *
+	 * @param int $bytes the size of the Version's file, for the Proxy bitrate threshold
+	 * @throws ProjectConflictException the Version has no Proxy handed in
+	 */
+	public function removeProxy(Version $version, int $bytes): void {
+		if (!$version->getProxyHandedIn()) {
+			throw new ProjectConflictException('This Version has no Proxy handed in');
+		}
+		try {
+			$this->folder($version->getId())->getFile(self::FILES['proxy'])->delete();
+		} catch (NotFoundException) {
+			// gone with app data
+		}
+		$version->setProxyHandedIn(false);
+		$version->setProxyState(self::STATE_NONE);
+		$this->versions->update($version);
+		if (!$this->withoutFfmpeg() && $this->needsProxy($version, $bytes)) {
+			$this->enqueue($version->getId(), Job::KIND_PROXY);
 		}
 	}
 
@@ -878,17 +936,30 @@ class DerivedMedia {
 		}
 	}
 
-	/** @param string|resource $content */
+	/**
+	 * Writes under a name of its own first and gives it its name only when
+	 * the running job still stands: copying a large Proxy takes a while, in
+	 * which a Proxy handed in or a regeneration may withdraw the job.
+	 *
+	 * @param string|resource $content
+	 */
 	private function put(Version $version, string $kind, $content, ?string $name = null): void {
 		$this->guard();
-		$folder = $this->folder($version->getId());
 		$name ??= self::FILES[$kind];
+		$written = $this->folder($version->getId())->newFile('.' . $name . '.' . bin2hex(random_bytes(4)));
 		try {
-			$file = $folder->getFile($name);
-		} catch (NotFoundException) {
-			$file = $folder->newFile($name);
+			$written->putContent($content);
+			$this->guard();
+			$node = $this->root->get($this->root->getAppDataDirectoryName() . '/' . Application::APP_ID . '/' . $version->getId() . '/' . $written->getName());
+			$node->move(dirname($node->getPath()) . '/' . $name);
+		} catch (\Throwable $e) {
+			try {
+				$written->delete();
+			} catch (\Throwable) {
+				// gone with its folder
+			}
+			throw $e;
 		}
-		$file->putContent($content);
 	}
 
 	/** The Version's folder in app data, `appdata_<instance>/deliver/<version id>/` (spec) */
@@ -925,6 +996,8 @@ class DerivedMedia {
 		$version = $this->versions->find($versionId);
 		if ($version !== null) {
 			$version->setProxyState(self::STATE_NONE);
+			// A Proxy handed in goes with the rest: ffmpeg or the browser makes the next (ADR 0020)
+			$version->setProxyHandedIn(false);
 			$version->setThumbsState(self::STATE_NONE);
 			$version->setWaveformState(self::STATE_NONE);
 			$version->setScrubState(self::STATE_NONE);

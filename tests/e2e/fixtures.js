@@ -12,6 +12,8 @@ export const CLIP = join(FIXTURES, 'clip-25fps.webm')
 export const MIX = join(FIXTURES, 'mix.wav')
 /** DNxHR in MOV: no browser decodes it, so without ffmpeg it is refused before it goes up (ADR 0019) */
 export const DNXHR = join(FIXTURES, 'master-dnxhr.mov')
+/** A Proxy of it as an editor renders it, with its Frames (ADR 0020) */
+export const HAND_PROXY = join(FIXTURES, 'master-dnxhr-proxy.mp4')
 
 /**
  * Generates the media the browser tests play; committed fixtures would be binary noise.
@@ -39,4 +41,5 @@ export default function globalSetup() {
 	make(CLIP, ['-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=25:duration=4', '-c:v', 'libvpx-vp9', '-b:v', '200k'])
 	make(MIX, ['-f', 'lavfi', '-i', 'sine=duration=1', '-f', 'wav'])
 	make(DNXHR, ['-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=25:duration=1', '-c:v', 'dnxhd', '-profile:v', 'dnxhr_lb', '-pix_fmt', 'yuv422p', '-f', 'mov'])
+	make(HAND_PROXY, ['-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=25:duration=1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-f', 'mp4'])
 }
