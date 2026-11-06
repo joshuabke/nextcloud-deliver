@@ -66,6 +66,11 @@ describe('proxyLine', () => {
 		expect(proxyLine({ state: 'checking' })).toBeNull()
 		expect(proxyLine(undefined)).toBeNull()
 	})
+
+	it('names a pass without a Proxy after the derived media, and one taken over as stopped (#168)', () => {
+		expect(proxyLine({ state: 'running', progress: 40, proxy: false })).toBe('Derived media: Encoding 40 %')
+		expect(proxyLine({ state: 'stopped', proxy: true })).toBe('Proxy: Stopped')
+	})
 })
 
 describe('encodingEta', () => {

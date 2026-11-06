@@ -198,7 +198,7 @@ class HandProxyTest extends TestCase {
 		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['ffmpegPath' => '/nonexistent/ffmpeg', 'ffprobePath' => '/nonexistent/ffprobe'])['status']);
 		$id = $this->master();
 		$this->drainQueue();
-		self::assertTrue($this->card()['proxyFromBrowser']);
+		self::assertTrue(in_array('proxy', $this->card()['derivedFromBrowser'], true));
 
 		$refused = $this->handIn($id, '-f lavfi -i testsrc=size=640x360:rate=25:duration=1 -f lavfi -i sine=duration=1 -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest');
 		self::assertSame(400, $refused['status']);
@@ -206,12 +206,12 @@ class HandProxyTest extends TestCase {
 		self::assertSame('none', $this->version($id)['derived']['proxy']['state'], 'only the browser\'s own attempt shows as failed');
 
 		self::assertSame(200, $this->handIn($id)['status'], 'no browser needs to be making one');
-		self::assertSame([true, false], [$this->card()['proxyHandedIn'], $this->card()['proxyFromBrowser']]);
+		self::assertSame([true, false], [$this->card()['proxyHandedIn'], in_array('proxy', $this->card()['derivedFromBrowser'], true)]);
 		self::assertTrue($this->playsHandedIn($id));
 
 		self::assertSame(200, $this->nc->ocs('DELETE', "/versions/$id/proxy")['status']);
 		self::assertSame('none', $this->version($id)['derived']['proxy']['state']);
-		self::assertSame([false, true], [$this->card()['proxyHandedIn'], $this->card()['proxyFromBrowser']], 'the card offers the browser\'s again');
+		self::assertSame([false, true], [$this->card()['proxyHandedIn'], in_array('proxy', $this->card()['derivedFromBrowser'], true)], 'the card offers the browser\'s again');
 		self::assertSame(404, $this->nc->request('GET', "/index.php/apps/deliver/versions/$id/media/proxy")['status'], 'and the file is gone');
 	}
 }
