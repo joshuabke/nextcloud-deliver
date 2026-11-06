@@ -6,6 +6,9 @@
 - Mit ffmpeg einen Scrub-Proxy für jede Video-Version erzeugt, für ältere einige pro Stunde, und beim Überfahren der Zeitleiste und der Asset-Karte durch ihn gescrubbt.
 - Einen Scrub-Proxy aus dem Browser über `POST /versions/{id}/scrub` angenommen, wenn der Server kein ffmpeg hat.
 - „Proxy hochladen …“ und „Proxy entfernen“ zur Asset-Karte hinzugefügt; ein übergebener Proxy wird auch mit ffmpeg angenommen.
+- Vorschauleiste, Wellenform und Scrub-Proxy jedes Videos im Durchlauf des hochladenden Browsers erzeugt, wenn der Server kein ffmpeg hat, auch aus einem von Hand hochgeladenen Proxy.
+- „Proxy in diesem Browser erzeugen“ auf der Asset-Karte durch „Fehlende abgeleitete Medien in diesem Browser erzeugen“ ersetzt.
+- Eine Umwandlung, der ein Proxy von Hand zuvorkommt, als angehalten statt fehlgeschlagen gezeigt.
 
 ## 0.11.1 – 2026-11-05
 
