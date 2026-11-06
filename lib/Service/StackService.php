@@ -64,6 +64,7 @@ class StackService {
 		private ReviewLinkMapper $linkRecords,
 		private ReviewerMapper $reviewers,
 		private FileLock $fileLock,
+		private Captions $captions,
 	) {
 	}
 
@@ -362,12 +363,13 @@ class StackService {
 	}
 
 	/**
-	 * Deletes a Version with its Comments, Unseen marks, Approvals and derived media, and
+	 * Deletes a Version with its Comments, Unseen marks, Approvals, derived media and Captions, and
 	 * its Asset if that was the last Version (stories 4 and 19). The file stays.
 	 */
 	public function purge(Version $version): void {
 		$this->fileLock->release($version);
 		$this->media->forget($version->getId());
+		$this->captions->forget($version->getId());
 		$commentIds = array_map(static fn ($comment) => $comment->getId(), $this->comments->findByVersion($version->getId()));
 		$this->notifications->versionGone($version, $commentIds);
 		$this->reactions->deleteByComments($commentIds);

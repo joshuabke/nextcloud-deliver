@@ -2,6 +2,7 @@
 import backIcon from '@mdi/svg/svg/arrow-left.svg?raw'
 import dueIcon from '@mdi/svg/svg/calendar-clock.svg?raw'
 import clearIcon from '@mdi/svg/svg/checkbox-blank-off-outline.svg?raw'
+import captionsIcon from '@mdi/svg/svg/closed-caption-outline.svg?raw'
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import compareIcon from '@mdi/svg/svg/compare.svg?raw'
 import removeIcon from '@mdi/svg/svg/delete-outline.svg?raw'
@@ -36,6 +37,7 @@ import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import AssetCard from '../components/AssetCard.vue'
+import CaptionsDialog from '../components/CaptionsDialog.vue'
 import ContextMenu from '../components/ContextMenu.vue'
 import DueDateDialog from '../components/DueDateDialog.vue'
 import FilterBar from '../components/FilterBar.vue'
@@ -77,6 +79,8 @@ const menu = ref(null)
 let menuFor = null
 /** The Assets whose Due Date is being set */
 const dueFor = ref(null)
+/** The Version whose Captions the dialog adds and removes */
+const captionsFor = ref(null)
 /** The Asset a new Version is picked for */
 const stackOn = ref(null)
 const project = computed(() => store.details[props.id])
@@ -501,6 +505,7 @@ function assetItems(asset) {
 		asset.manages && newest.proxyFromBrowser && newest.url && !uploads.proxies[newest.id] && proxyItem(asset),
 		asset.manages && newest.takesProxy && newest.url && !uploads.proxies[newest.id] && { label: t('deliver', 'Upload Proxy…'), icon: uploadProxyIcon, action: () => pickProxy(newest) },
 		asset.manages && newest.proxyHandedIn && !uploads.proxies[newest.id] && { label: t('deliver', 'Remove Proxy'), icon: removeProxyIcon, action: () => dropHandedIn(newest) },
+		asset.manages && asset.filesWrite && newest.url && newest.mimeType?.startsWith('video/') && { label: t('deliver', 'Add Captions…'), icon: captionsIcon, action: () => { captionsFor.value = newest } },
 		asset.manages && { label: asset.dueDate ? t('deliver', 'Change the Due Date') : t('deliver', 'Set a Due Date'), icon: dueIcon, action: () => { dueFor.value = [asset] } },
 		asset.manages && !isMobile.value && { label: t('deliver', 'Manage Versions'), icon: stackIcon, action: () => { managing.value = asset.id } },
 		asset.manages && { label: t('deliver', 'Move to Project…'), icon: moveIcon, action: () => openAssign([asset]) },
@@ -860,6 +865,10 @@ function dropped(event) {
 				:name="renaming.name"
 				@rename="rename"
 				@close="renaming = null" />
+			<CaptionsDialog
+				v-if="captionsFor"
+				:version="captionsFor"
+				@close="captionsFor = null" />
 			<DueDateDialog
 				v-if="dueFor"
 				:modelValue="dueFor.length === 1 ? dueFor[0].dueDate : null"

@@ -729,6 +729,35 @@ test.describe('Review view', () => {
 			await api.dispose()
 		}
 	})
+
+	test('Captions are added on the Asset card and turned on under the CC button', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		expect((await api.fetch(`/remote.php/dav/files/${USER}/${folder}/captioned.webm`, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(201)
+		await api.dispose()
+
+		await page.goto(`/apps/deliver/projects/${projectId}`)
+		await card(page, 'captioned').click({ button: 'right' })
+		await page.getByRole('menuitem', { name: 'Add Captions…' }).click()
+		const dialog = page.getByRole('dialog', { name: 'Captions' })
+		// The language comes from the file name
+		await dialog.locator('input[type=file]').setInputFiles({ name: 'captioned.de.srt', mimeType: 'application/x-subrip', buffer: Buffer.from('1\n00:00:00,000 --> 00:00:03,000\nHallo\n') })
+		await expect(dialog.locator('.vs__selected')).toHaveText('German')
+		await dialog.getByRole('button', { name: 'Add Captions' }).click()
+		await expect(dialog.locator('.deliver-captions__list')).toHaveText('German')
+		await page.keyboard.press('Escape')
+
+		await card(page, 'captioned').locator('.deliver-card__link').dblclick()
+		const shown = () => page.evaluate(() => [...document.querySelector('.deliver-player__video').textTracks].filter((track) => track.mode === 'showing').map((track) => track.language))
+		// Off until someone turns them on
+		await expect(page.getByRole('button', { name: 'Captions' })).toBeVisible()
+		expect(await shown()).toEqual([])
+		await page.getByRole('button', { name: 'Captions' }).click()
+		await page.getByRole('menuitemradio', { name: 'German' }).click()
+		await expect.poll(shown).toEqual(['de'])
+		await page.getByRole('button', { name: 'Captions' }).click()
+		await page.getByRole('menuitemradio', { name: 'Off' }).click()
+		await expect.poll(shown).toEqual([])
+	})
 })
 
 test.describe('Uploads without ffmpeg', () => {

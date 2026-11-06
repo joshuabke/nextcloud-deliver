@@ -2,6 +2,8 @@
 import menuIcon from '@mdi/svg/svg/chevron-down.svg?raw'
 import caretIcon from '@mdi/svg/svg/chevron-up.svg?raw'
 import closeIcon from '@mdi/svg/svg/close.svg?raw'
+import captionsOffIcon from '@mdi/svg/svg/closed-caption-outline.svg?raw'
+import captionsIcon from '@mdi/svg/svg/closed-caption.svg?raw'
 import moreIcon from '@mdi/svg/svg/dots-horizontal.svg?raw'
 import fullscreenExitIcon from '@mdi/svg/svg/fullscreen-exit.svg?raw'
 import fullscreenIcon from '@mdi/svg/svg/fullscreen.svg?raw'
@@ -12,6 +14,7 @@ import stepBackIcon from '@mdi/svg/svg/step-backward.svg?raw'
 import stepForwardIcon from '@mdi/svg/svg/step-forward.svg?raw'
 import volumeIcon from '@mdi/svg/svg/volume-high.svg?raw'
 import mutedIcon from '@mdi/svg/svg/volume-off.svg?raw'
+import { getLanguage } from '@nextcloud/l10n'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -25,6 +28,7 @@ import DrawToolbar from './DrawToolbar.vue'
 import PersonAvatar from './PersonAvatar.vue'
 import { useFullscreen } from '../composables/fullscreen.js'
 import { useGestures } from '../composables/gestures.js'
+import { languageName, toWebVtt } from '../lib/captions.js'
 import { COLORS, drawingsAt } from '../lib/drawing.js'
 import { DOUBLE_TAP_MS } from '../lib/gestures.js'
 import { actionFor } from '../lib/hotkeys.js'
@@ -233,6 +237,39 @@ watch(() => props.version.derived?.thumbs?.state, async (state) => {
 
 watch(source, () => {
 	unplayable.value = false
+})
+
+/** The language whose Captions show; off until someone picks one (#54) */
+const captionLanguage = ref(null)
+/** The shown Captions as WebVTT in a blob, for the <track> */
+const captionTrack = ref(null)
+const trackEl = ref(null)
+const captions = computed(() => props.version.captions ?? [])
+const locale = getLanguage()
+
+watch([captionLanguage, () => props.version.id], async () => {
+	if (captionTrack.value) {
+		URL.revokeObjectURL(captionTrack.value)
+		captionTrack.value = null
+	}
+	const id = props.version.id
+	// Another Version keeps the language where it has Captions in it
+	const chosen = captions.value.find((each) => each.language === captionLanguage.value)
+	if (!chosen) {
+		captionLanguage.value = null
+		return
+	}
+	const text = await fetch(chosen.url).then((response) => response.ok ? response.text() : '').catch(() => '')
+	const vtt = toWebVtt(text, props.version)
+	if (vtt !== null && props.version.id === id && captionLanguage.value === chosen.language) {
+		captionTrack.value = URL.createObjectURL(new Blob([vtt], { type: 'text/vtt' }))
+	}
+})
+// A track added to a playing element starts hidden
+watch(trackEl, (track) => {
+	if (track) {
+		track.track.mode = 'showing'
+	}
 })
 
 /**
@@ -503,6 +540,9 @@ onMounted(() => {
 	window.addEventListener('keydown', onKey)
 })
 onBeforeUnmount(() => {
+	if (captionTrack.value) {
+		URL.revokeObjectURL(captionTrack.value)
+	}
 	window.removeEventListener('keydown', onKey)
 	stopReverse()
 	clearTimeout(flashTimer)
@@ -780,7 +820,17 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 					@pause="playing = reverse !== null"
 					@ended="pause"
 					@error="unplayable = true"
-					@click="onVideoClick" />
+					@click="onVideoClick">
+					<track
+						v-if="captionTrack"
+						:key="captionTrack"
+						ref="trackEl"
+						kind="subtitles"
+						:src="captionTrack"
+						:srclang="captionLanguage"
+						:label="languageName(captionLanguage, locale)"
+						default>
+				</video>
 				<DrawingLayer
 					v-if="source && !version.audioOnly"
 					v-model:draft="draft"
@@ -1002,6 +1052,25 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 							{{ sourceLabel(each) }}
 						</NcActionButton>
 					</template>
+					<template v-if="captions.length">
+						<NcActionSeparator />
+						<NcActionButton
+							:modelValue="captionLanguage === null"
+							type="radio"
+							closeAfterClick
+							@click="captionLanguage = null">
+							{{ t('deliver', 'Captions off') }}
+						</NcActionButton>
+						<NcActionButton
+							v-for="each in captions"
+							:key="each.language"
+							:modelValue="captionLanguage === each.language"
+							type="radio"
+							closeAfterClick
+							@click="captionLanguage = each.language">
+							{{ t('deliver', 'Captions: {language}', { language: languageName(each.language, locale) }) }}
+						</NcActionButton>
+					</template>
 					<NcActionSeparator />
 					<NcActionButton
 						v-for="each in modesFor(clock)"
@@ -1096,6 +1165,32 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 						<NcIconSvgWrapper :svg="closeIcon" :size="16" inline />
 					</button>
 				</div>
+				<NcActions
+					v-if="captions.length"
+					variant="tertiary"
+					:pressed="captionLanguage !== null"
+					:aria-label="t('deliver', 'Captions')"
+					:title="t('deliver', 'Captions')">
+					<template #icon>
+						<NcIconSvgWrapper :svg="captionLanguage ? captionsIcon : captionsOffIcon" />
+					</template>
+					<NcActionButton
+						:modelValue="captionLanguage === null"
+						type="radio"
+						closeAfterClick
+						@click="captionLanguage = null">
+						{{ t('deliver', 'Off') }}
+					</NcActionButton>
+					<NcActionButton
+						v-for="each in captions"
+						:key="each.language"
+						:modelValue="captionLanguage === each.language"
+						type="radio"
+						closeAfterClick
+						@click="captionLanguage = each.language">
+						{{ languageName(each.language, locale) }}
+					</NcActionButton>
+				</NcActions>
 				<NcActions
 					v-if="original && proxy"
 					variant="tertiary"

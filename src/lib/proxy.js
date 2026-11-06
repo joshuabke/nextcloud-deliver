@@ -378,7 +378,7 @@ function stripCanvas(grid) {
  * The server refuses a Proxy with other Frames than the original or another
  * rate; the browser does not upload one in the first place.
  *
- * @param {File} file - the Proxy
+ * @param {File} file - the Proxy or the Captions
  * @param {{frames: number, seconds: number}} original - its Frames and their length
  */
 async function check(file, original) {
@@ -533,18 +533,19 @@ export async function uploadProxy(versionId, url, file, status) {
 }
 
 /**
- * Uploads a Proxy next to the Version's file, under a name without a media
- * extension so that Auto Intake passes it by; deleted again when it does
- * not arrive.
+ * Uploads a Proxy, or Captions, next to the Version's file, under a name
+ * without a media extension so that Auto Intake passes it by; deleted again
+ * when it does not arrive.
  *
  * @param {string} url - the WebDAV URL of the Version's file
- * @param {File} file - the Proxy
+ * @param {File} file - the Proxy or the Captions
  * @param {{progress: number}} status - gets how much of it is up
  * @param {AbortSignal} signal - stops it
+ * @param {string} prefix - the hidden name it goes up under, a random part after it
  * @return {Promise<number>} its file id
  */
-async function uploadNextTo(url, file, status, signal) {
-	const target = url.slice(0, url.lastIndexOf('/')) + '/.deliver-proxy-' + Math.random().toString(36).slice(2)
+export async function uploadNextTo(url, file, status, signal, prefix = '.deliver-proxy-') {
+	const target = url.slice(0, url.lastIndexOf('/')) + '/' + prefix + Math.random().toString(36).slice(2)
 	try {
 		return await uploadFile({
 			request: axios.request,

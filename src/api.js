@@ -188,6 +188,8 @@ export const reportProxy = (versionId, percent) => axios.post(url(`/versions/${v
 export const giveProxy = (versionId, fileId, converted = false) => axios.post(url(`/versions/${versionId}/proxy`), { fileId, converted }).then(data)
 // A Proxy handed in is removed, so ffmpeg or a browser makes the next (ADR 0020)
 export const removeProxy = (versionId) => axios.delete(url(`/versions/${versionId}/proxy`)).then(data)
+export const giveCaptions = (versionId, fileId, language) => axios.post(url(`/versions/${versionId}/captions`), { fileId, language }).then(data)
+export const removeCaptions = (versionId, language) => axios.delete(url(`/versions/${versionId}/captions/${encodeURIComponent(language)}`)).then(data)
 export const markSeen = (versionId, at) => axios.post(url(`/versions/${versionId}/seen`), { at }).then(data)
 
 // Review Links (ADR 0010, 0011): a whole Project or picked Assets; on No Project (id 0) picked Assets of it

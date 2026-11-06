@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Deliver\Controller;
 
 use OCA\Deliver\Http\RangeFileResponse;
+use OCA\Deliver\Service\Captions;
 use OCA\Deliver\Service\CommentService;
 use OCA\Deliver\Service\DerivedMedia;
 use OCA\Deliver\Service\ProjectService;
@@ -23,6 +24,7 @@ class MediaController extends Controller {
 		IRequest $request,
 		private ProjectService $projects,
 		private DerivedMedia $media,
+		private Captions $captions,
 		private CommentService $comments,
 		private ?string $userId,
 	) {
@@ -35,7 +37,8 @@ class MediaController extends Controller {
 		try {
 			$version = $this->projects->contentOf((string)$this->userId, $id);
 			// Not generated (yet) is a 404 as well; the player falls back to the original
-			return RangeFileResponse::ofSimpleFile($this->media->file($version, $kind), $this->request->getHeader('Range'));
+			$file = str_starts_with($kind, 'captions-') ? $this->captions->file($version->getId(), substr($kind, 9)) : $this->media->file($version, $kind);
+			return RangeFileResponse::ofSimpleFile($file, $this->request->getHeader('Range'));
 		} catch (NotFoundException) {
 			return new Response(Http::STATUS_NOT_FOUND);
 		}
