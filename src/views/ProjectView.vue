@@ -53,7 +53,7 @@ import { groupByFolder, inFolder, projectDavPath, projectDir } from '../lib/fold
 import { n, t } from '../lib/l10n.js'
 import { acceptFor, mediaKind, stackKind } from '../lib/media.js'
 import { cannotConvert, inspect } from '../lib/proxy.js'
-import { passOf } from '../lib/proxyPlan.js'
+import { offer } from '../lib/proxyPlan.js'
 import { stackSuggestions } from '../lib/suggestions.js'
 import { useProjectsStore } from '../store/projects.js'
 import { hasFfmpeg, proxySettings, useUploadsStore } from '../store/uploads.js'
@@ -412,7 +412,7 @@ function openMenu(event, asset) {
 	}
 }
 
-/** What this browser can do with a Version's file, by Version id: null while it reads the headers, then the reason it cannot, or '' */
+/** What this browser can do for a Version, by Version id, what the card plays and what it lacks: null while it reads the headers, then offer()'s answer */
 const proxyChecks = ref({})
 
 /**
@@ -426,20 +426,26 @@ const proxyChecks = ref({})
  */
 function missingItem(asset) {
 	const version = asset.versions[0]
-	const check = proxyChecks.value[version.id]
+	// Read again once a Proxy arrives or something else is made
+	const key = [version.id, version.playUrl, ...version.derivedFromBrowser].join(' ')
+	const check = proxyChecks.value[key]
 	if (check === undefined) {
-		proxyChecks.value[version.id] = null
+		proxyChecks.value[key] = null
 		// A few range requests for the headers, not the whole file; what the card plays is the lightest file there is
 		inspect(version.playUrl, 0, proxySettings).catch(() => null).then((seen) => {
-			proxyChecks.value[version.id] = passOf(seen, version.derivedFromBrowser) ? '' : cannotConvert(seen)
+			const offered = offer(seen, version.derivedFromBrowser)
+			proxyChecks.value[key] = offered === 'cannot' ? { reason: cannotConvert(seen) } : { offered }
 			if (menu.value && menuFor === asset) {
 				menu.value.items = assetItems(asset).filter(Boolean)
 			}
 		})
 	}
-	return check === ''
+	if (check?.offered === null) {
+		return false
+	}
+	return check?.offered === 'make'
 		? { label: t('deliver', 'Make missing derived media in this browser'), icon: proxyIcon, action: () => makeMissing(version) }
-		: { label: check ?? t('deliver', 'Checking whether this browser can convert it'), icon: proxyIcon, disabled: true }
+		: { label: check?.reason ?? t('deliver', 'Checking whether this browser can convert it'), icon: proxyIcon, disabled: true }
 }
 
 /**
@@ -449,7 +455,8 @@ function missingItem(asset) {
 async function makeMissing(version, file = null) {
 	error.value = null
 	const status = await uploads.makeMissing(version, file)
-	if (status.state === 'failed') {
+	// After a Proxy by hand, nothing left to make or a browser that cannot is no error: the Proxy is in
+	if (status.state === 'failed' || (status.state === 'skipped' && !file)) {
 		error.value = status.error ?? t('deliver', 'This browser could not make the derived media.')
 	}
 	await store.fetch(props.id).catch(() => {})
@@ -510,7 +517,7 @@ function assetItems(asset) {
 		previous && { label: t('deliver', 'Compare with the Version before'), icon: compareIcon, action: () => router.push(`/compare/${previous.id}/${newest.id}`) },
 		asset.manages && asset.filesWrite && { label: t('deliver', 'Upload a new Version'), icon: newVersionIcon, action: () => pickVersion(asset) },
 		asset.manages && newest.processingFailed && { label: t('deliver', 'Process again'), icon: retryIcon, action: () => processAgain([asset]) },
-		asset.manages && newest.derivedFromBrowser?.length && newest.playUrl && !uploads.proxies[newest.id] && missingItem(asset),
+		asset.manages && newest.derivedFromBrowser?.length && newest.playUrl && !uploads.passing(newest.id) && missingItem(asset),
 		asset.manages && newest.takesProxy && newest.url && !uploads.proxies[newest.id] && { label: t('deliver', 'Upload Proxy…'), icon: uploadProxyIcon, action: () => pickProxy(newest) },
 		asset.manages && newest.proxyHandedIn && !uploads.proxies[newest.id] && { label: t('deliver', 'Remove Proxy'), icon: removeProxyIcon, action: () => dropHandedIn(newest) },
 		asset.manages && asset.filesWrite && newest.url && newest.mimeType?.startsWith('video/') && { label: t('deliver', 'Add Captions…'), icon: captionsIcon, action: () => { captionsFor.value = newest } },

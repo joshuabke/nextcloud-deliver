@@ -104,6 +104,11 @@ export const useUploadsStore = defineStore('uploads', {
 		 * @return {boolean} whether this browser is making or uploading a Proxy, which a closed tab would lose
 		 */
 		converting: (state) => [...state.items.map((item) => item.proxy), ...Object.values(state.proxies)].some((proxy) => busy(proxy?.state)),
+		/**
+		 * @param {object} state - the store's
+		 * @return {(versionId: number) => boolean} whether this tab's pass makes derived media of the Version, the card's or an upload's
+		 */
+		passing: (state) => (versionId) => Boolean(state.proxies[versionId]) || state.items.some((item) => item.version?.id === versionId && busy(item.proxy?.state)),
 		/** Whether the card may be closed: nothing sends, here or in another tab, and nothing is being made */
 		closable() {
 			return this.active.length === 0 && this.items.every((item) => item.status !== 'elsewhere' && (item.status !== 'done' || settled(item)))
@@ -456,7 +461,7 @@ export const useUploadsStore = defineStore('uploads', {
 		 *
 		 * @param {{id: number}} version - the Version
 		 * @param {?File} file - the hand Proxy just handed in, to decode in place of the Version's files
-		 * @return {Promise<object>} how it ended: ready, stopped or failed, with the reason
+		 * @return {Promise<object>} how it ended: ready, stopped or failed, with the reason; skipped, with the reason, where nothing was to be made or this browser cannot
 		 */
 		async makeMissing(version, file = null) {
 			this.proxies[version.id] = { state: 'checking', progress: 0, error: null }
@@ -467,12 +472,12 @@ export const useUploadsStore = defineStore('uploads', {
 				const missing = now?.derivedFromBrowser ?? []
 				const source = file ?? (now && lightest(now))
 				if (!missing.length || !source) {
-					return { state: 'failed', error: t('deliver', 'Another browser is making the derived media, or they are there already.') }
+					return { state: 'skipped', error: t('deliver', 'Another browser is making the derived media, or they are there already.') }
 				}
 				const seen = await inspect(source, 0, proxySettings).catch(() => null)
 				const want = passOf(seen, missing)
 				if (!want) {
-					return { state: 'failed', error: cannotConvert(seen) }
+					return { state: 'skipped', error: cannotConvert(seen) }
 				}
 				const controller = new AbortController()
 				await handInPass(version.id, convertInTurn(source, proxySettings, want, status, controller.signal), status, controller)

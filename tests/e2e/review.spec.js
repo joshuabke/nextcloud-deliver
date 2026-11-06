@@ -867,6 +867,13 @@ test.describe('Uploads without ffmpeg', () => {
 				await card(page, 'master').click({ button: 'right' })
 				await expect(page.getByRole('menuitem', { name: 'Remove Proxy' })).toBeVisible({ timeout: 1000 })
 			}).toPass()
+			// The browser's pass from the hand Proxy is over by then: where it decodes H.264 it made the strip from it,
+			// where it does not (CI's Chromium) that is no error, as the Proxy is in (#168)
+			await expect(page.locator('.notecard--error')).toHaveCount(0)
+			if (await page.evaluate(async () => (await VideoDecoder.isConfigSupported({ codec: 'avc1.42001e' })).supported)) {
+				const shown = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/versions/${(await newest()).id}?format=json`)).json()
+				expect(shown.ocs.data.versions[0].derived.thumbs.state).toBe('ready')
+			}
 			// Another one of their own would replace it
 			await expect(page.getByRole('menuitem', { name: 'Upload Proxy…' })).toBeVisible()
 			await page.getByRole('menuitem', { name: 'Remove Proxy' }).click()
@@ -883,6 +890,35 @@ test.describe('Uploads without ffmpeg', () => {
 			await api.dispose()
 		}
 	})
+	test('a video that needs no Proxy, uploaded in the Files app where Auto Intake takes it, gets its strip from this browser (#168)', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const folder = `deliver-e2e-${randomBytes(4).toString('hex')}`
+		const dav = `/remote.php/dav/files/${USER}/${folder}`
+		expect((await api.fetch(dav, { method: 'MKCOL' })).status()).toBe(201)
+		const created = await api.post('/ocs/v2.php/apps/deliver/api/v1/projects?format=json', { data: { folderId: await fileId(api, dav), autoIntake: true } })
+		const id = (await created.json()).ocs.data.id
+		const browser = await chromium.connectOverCDP(CDP)
+		const context = await browser.newContext({ baseURL: BROWSER_URL })
+		const page = await context.newPage()
+		const derived = async () => {
+			const versionId = (await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${id}?format=json`)).json()).ocs.data.assets[0]?.versions[0].id
+			return versionId && (await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/versions/${versionId}?format=json`)).json()).ocs.data.versions[0].derived
+		}
+		try {
+			await login(page)
+			await page.goto(`/apps/files/files?dir=/${folder}`)
+			await page.locator('input[type=file]').first().setInputFiles({ name: 'clip.webm', mimeType: 'video/webm', buffer: readFileSync(CLIP) })
+			// VP9 plays as it is, so no Proxy; the pass decodes it all the same, also without an H.264 encoder for the Scrub Proxy
+			await expect.poll(async () => (await derived())?.thumbs.state, { timeout: 60_000 }).toBe('ready')
+			expect((await derived()).proxy.state).toBe('none')
+		} finally {
+			await context.close()
+			await api.delete(`/ocs/v2.php/apps/deliver/api/v1/projects/${id}?format=json`)
+			await api.fetch(dav, { method: 'DELETE' })
+			await api.dispose()
+		}
+	})
+
 	test('the Asset card offers to make missing derived media in this browser only while something is missing, and never with ffmpeg (#168)', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		const dav = `/remote.php/dav/files/${USER}/deliver-e2e-${randomBytes(4).toString('hex')}`
