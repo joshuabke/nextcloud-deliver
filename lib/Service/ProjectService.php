@@ -1437,6 +1437,7 @@ class ProjectService {
 				];
 			}
 			$newestFile = $files[$newestByAsset[$asset->getId()]->getId()] ?? null;
+			$opened = array_values(array_filter(array_map(static fn (Version $version) => $files[$version->getId()] ?? null, $stack)));
 			$manages = $this->managesAsset($uid, $project, $newestByAsset[$asset->getId()], $files);
 			$result[] = [
 				'id' => $asset->getId(),
@@ -1448,8 +1449,8 @@ class ProjectService {
 				'manages' => $manages,
 				// Upload a new Version, rename it, delete it: Files' write access to its newest file
 				'filesWrite' => $newestFile !== null && Access::canWrite($newestFile),
-				// Left out of this Member's Review Links: Files does not let them share its newest file
-				'offLinks' => $newestFile !== null && !self::linkable($newestFile),
+				// Left out of this Member's Review Links, as ReviewLink takes them: Files lets them share none of its files
+				'offLinks' => $opened !== [] && array_filter($opened, self::linkable(...)) === [],
 				// For sorting: when its first Version arrived, and when anything last happened on it
 				'createdAt' => min(array_map(static fn (Version $version) => $version->getCreatedAt(), $stack)),
 				'lastActivity' => max(array_map(
