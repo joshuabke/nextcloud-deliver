@@ -88,7 +88,7 @@ function follow(name, job) {
 		const { state, progress, error } = job.status
 		const left = state === 'running' ? timeLeft(encodingEta(job.status)) : ''
 		// Without a Proxy the pass only decodes; what it hands in is small
-		if (busy(state) && !job.want.proxy) {
+		if (busy(state) && !job.status.proxy) {
 			text.textContent = left
 				? t('deliver', 'Deliver is making the derived media of {name} in this browser: {percent} %, {left}. Keep this tab open.', { name, percent: progress, left })
 				: t('deliver', 'Deliver is making the derived media of {name} in this browser: {percent} %. Keep this tab open.', { name, percent: progress })
@@ -108,7 +108,7 @@ function follow(name, job) {
 		queueMicrotask(() => stop())
 		// Stopped on purpose, it is no failure: the upload failed, or the file is not for Deliver
 		if (state === 'failed' && !job.controller.signal.aborted) {
-			showError(error ?? (job.want.proxy
+			showError(error ?? (job.status.proxy
 				? t('deliver', 'Deliver could not make the Proxy of {name} in this browser.', { name })
 				: t('deliver', 'Deliver could not make the derived media of {name} in this browser.', { name })))
 		}

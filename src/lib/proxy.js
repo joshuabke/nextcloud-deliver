@@ -260,7 +260,9 @@ async function scrubber(size, frames, seconds) {
  * @param {number} settings.maxBitrate - the Proxy bitrate threshold in Mbit/s
  * @param {number} settings.thumbCap - the Thumbnail Strip cap
  * @param {{proxy: boolean, thumbs: boolean, waveform: boolean, scrub: boolean}} want - what to make, from passOf
- * @param {(percent: number) => void} onProgress - how far it is, 0 to 99
+ * @param {object} hooks - what the caller hears
+ * @param {(percent: number) => void} hooks.onProgress - how far it is, 0 to 99
+ * @param {() => void} hooks.onWithoutProxy - the pass goes on without the Proxy it was to make, before it decodes anything
  * @param {AbortSignal} signal - stops it
  * @param {number} [target] - the picture's bitrate in bit/s, for the second go after the first came out above the threshold
  * @return {Promise<{file: ?File, error: ?Error, again: boolean, scrub: ?File, done: () => Promise<void>, frames: number, seconds: number, bitrate: number, thumbs: ?{image: Blob, every: number, count: number}, peaks: ?number[]}>}
@@ -268,7 +270,7 @@ async function scrubber(size, frames, seconds) {
  *   a lower bitrate, what deletes them once handed in, the Frames of the original, its Thumbnail Strip (WebP, JPEG where
  *   the browser encodes no WebP) and its Waveform (null without sound)
  */
-async function convert(source, { maxHeight, maxBitrate, thumbCap }, want, onProgress, signal, target) {
+async function convert(source, { maxHeight, maxBitrate, thumbCap }, want, { onProgress, onWithoutProxy }, signal, target) {
 	const { AudioSampleSink, Conversion, Mp4OutputFormat, Output, StreamTarget, VideoSampleSink } = await mediabunny()
 	let proxy = null
 	let proxyError = null
@@ -296,6 +298,7 @@ async function convert(source, { maxHeight, maxBitrate, thumbCap }, want, onProg
 			}
 			// Without room for the Proxy, the rest is made all the same
 			proxyError = error
+			onWithoutProxy()
 			free = await makeRoom(0)
 		}
 		if (want.proxy && !proxyError) {
@@ -385,6 +388,7 @@ async function convert(source, { maxHeight, maxBitrate, thumbCap }, want, onProg
 			if (!conversion.isValid || conversion.discardedTracks.some((each) => ['video', 'audio'].includes(each.track.type))) {
 				await writable.abort?.().catch(() => {})
 				proxyError = new Error(conversion.discardedTracks.map((each) => `${each.track.type}: ${each.reason}`).join(', '))
+				onWithoutProxy()
 				await proxy.done()
 				proxy = null
 			} else {
@@ -472,14 +476,14 @@ async function convert(source, { maxHeight, maxBitrate, thumbCap }, want, onProg
  * @param {Blob|string} source - the file, or its URL
  * @param {object} settings - the server's, see convert()
  * @param {object} want - what to make, see convert()
- * @param {(percent: number) => void} onProgress - how far it is, 0 to 99
+ * @param {object} hooks - see convert()
  * @param {AbortSignal} signal - stops it
  * @return {Promise<object>} as convert()
  */
-async function makePass(source, settings, want, onProgress, signal) {
+async function makePass(source, settings, want, hooks, signal) {
 	// Its own scope, so nothing of the first go outlives it
 	const first = await (async () => {
-		const made = await convert(source, settings, want, onProgress, signal)
+		const made = await convert(source, settings, want, hooks, signal)
 		if (!made.again) {
 			return { made }
 		}
@@ -487,7 +491,7 @@ async function makePass(source, settings, want, onProgress, signal) {
 		await made.done()
 		return { target }
 	})()
-	return first.made ?? convert(source, settings, want, onProgress, signal, first.target)
+	return first.made ?? convert(source, settings, want, hooks, signal, first.target)
 }
 
 let probedType = null
@@ -551,7 +555,13 @@ export function convertInTurn(source, settings, want, status, signal) {
 	Object.assign(status, { state: 'running', progress: 0, error: null, proxy: want.proxy })
 	const turn = converting.then(() => signal.aborted
 		? Promise.reject(new Error('cancelled'))
-		: makePass(source, settings, want, (progress) => advance(status, progress), signal))
+		: makePass(source, settings, want, {
+				onProgress: (progress) => advance(status, progress),
+				// Neither reported as a Proxy on its way nor shown as one
+				onWithoutProxy: () => {
+					status.proxy = false
+				},
+			}, signal))
 	converting = turn.catch(() => {})
 	return turn.catch((error) => {
 		Object.assign(status, { state: 'failed', error: reason(error) })
