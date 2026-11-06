@@ -181,11 +181,11 @@ describe('what the card offers (#168)', () => {
 		expect(offer(noEncoder, ['thumbs', 'scrub'])).toBe('make')
 	})
 
-	it('says why not where a Proxy, strip or Waveform is missing, and offers nothing for a Scrub Proxy alone', () => {
+	it('says why not where this browser can make none of what is missing, a Scrub Proxy alone too', () => {
 		expect(offer(noEncoder, ['proxy', 'thumbs'])).toBe('cannot')
 		expect(offer({ reason: 'codec' }, ['thumbs'])).toBe('cannot')
-		expect(offer(noEncoder, ['scrub'])).toBe(null)
-		expect(offer(null, ['scrub'])).toBe(null)
+		expect(offer(noEncoder, ['scrub'])).toBe('cannot')
+		expect(offer(null, ['scrub'])).toBe('cannot')
 	})
 })
 

@@ -440,9 +440,6 @@ function missingItem(asset) {
 			}
 		})
 	}
-	if (check?.offered === null) {
-		return false
-	}
 	return check?.offered === 'make'
 		? { label: t('deliver', 'Make missing derived media in this browser'), icon: proxyIcon, action: () => makeMissing(version) }
 		: { label: check?.reason ?? t('deliver', 'Checking whether this browser can convert it'), icon: proxyIcon, disabled: true }
