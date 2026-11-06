@@ -80,6 +80,10 @@ _Avoid_: Tag, ping
 The Reviewer's name and the date, repeated across the picture on a Review Link that asks for it. An overlay in the player, not burned into the media.
 _Avoid_: Stamp, overlay (alone)
 
+**Captions**:
+The timed text of a Version in one language, from an SRT or WebVTT file a Member with Manage adds; one file per language. Shown in the player for whoever turns them on, Reviewers included, never in Compare. They live in Deliver's app data, outlive regenerating and rewriting the Version's file, and go with the Version.
+_Avoid_: Subtitles, subs, transcript
+
 **Due Date**:
 The calendar day an Asset should be through by. The Members of its newest Version are reminded the day before and on the day, unless its newest Version is approved with nobody asking for changes.
 _Avoid_: Deadline
@@ -228,6 +232,7 @@ The German translation (`l10n/de` with "du", `l10n/de_DE` with "Sie") uses these
 | Attachment | Anhang |
 | Due Date | Fälligkeitsdatum |
 | Watermark | Wasserzeichen |
+| Captions | Untertitel |
 | Still | Standbild |
 | Approval (approved, changes requested) | Abnahme (abgenommen, Änderungen gewünscht) |
 | Project Member, Access level | Projektmitglied, Zugriffsstufe |

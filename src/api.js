@@ -186,6 +186,8 @@ export function handInWaveform(file, asset) {
 // How far this browser has got with a Version's Proxy, and the Proxy itself, uploaded next to the Version's file, where the server has no ffmpeg (ADR 0019)
 export const reportProxy = (versionId, percent) => axios.post(url(`/versions/${versionId}/proxy/progress`), { percent }).then(data)
 export const giveProxy = (versionId, fileId) => axios.post(url(`/versions/${versionId}/proxy`), { fileId }).then(data)
+export const giveCaptions = (versionId, fileId, language) => axios.post(url(`/versions/${versionId}/captions`), { fileId, language }).then(data)
+export const removeCaptions = (versionId, language) => axios.delete(url(`/versions/${versionId}/captions/${encodeURIComponent(language)}`)).then(data)
 export const markSeen = (versionId, at) => axios.post(url(`/versions/${versionId}/seen`), { at }).then(data)
 
 // Review Links (ADR 0010, 0011): a whole Project or picked Assets; on No Project (id 0) picked Assets of it

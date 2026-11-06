@@ -10,7 +10,7 @@ Your media stays in Files. Deliver keeps the review around it: Comments, Drawing
 
 - Making a **Project**, enabling a file for review, deleting a Project or removing an **Asset** never moves, copies or deletes a file.
 - Deliver changes a file only when you ask it to in Deliver: uploading puts new files into Files, renaming a file renames it there, and **Delete** on an Asset moves its files to the trash of Files.
-- When your browser makes a Proxy, it uploads it as a hidden file `.deliver-proxy-…` next to the video, which Deliver takes in and removes.
+- When your browser makes a Proxy, it uploads it as a hidden file `.deliver-proxy-…` next to the video, which Deliver takes in and removes. Captions go up the same way, as `.deliver-captions-…`.
 - Whatever you do in Files works as always: sharing, moving, renaming, deleting. Deliver follows.
 - Except for a file with Comments or Approvals: Deliver **locks** it, so that nobody overwrites, renames or deletes it outside Deliver by accident, a sync client included. Files shows it as locked by Deliver. Replacing, renaming and deleting through Deliver still work, and whoever owns the file can lift the lock in Files. A Member with **Manage** can switch the lock off for a Project.
 - Where a file in review is overwritten anyway, without the lock, its Comments stay and are marked as made before the overwrite, and the Project's Members are notified.
@@ -43,3 +43,13 @@ Your media stays in Files. Deliver keeps the review around it: Comments, Drawing
 - A Folder Project the account made passes to whoever owns the folder.
 - Any other Project it made is deleted for good at once, since nobody else could restore it.
 - Its Comments, Approvals and Reactions elsewhere stay, by a Deleted user.
+
+## Captions
+
+A video can carry **Captions**, one SRT or WebVTT file per language.
+
+- A Member with **Manage** adds them with **Add Captions…** in the menu of the Asset card: pick the `.srt` or `.vtt` file (at most 1 MB), and the language. A file named like `cut_v3.de.srt` or `cut_v3.en.vtt` brings its language along; otherwise pick it from the list.
+- They belong to the newest Version, the one the card shows. Adding a file in a language the Version has already replaces the old one; the same dialog lists the languages and removes them.
+- Captions timed against the timeline's start timecode, as an editing application exports them from a timeline at 01:00:00:00, line up with a Version that starts there: when no cue starts before the Version's start timecode, every cue moves back by it. The start timecode counts as Resolve and Premiere count it: at 23.976 fps, 01:00:00:00 lies 3603.6 seconds into the media.
+- In the player, the **CC** button turns them on in one of their languages and off again. They start off. Members and Reviewers on a Review Link see them; Compare does not show them.
+- Deliver only shows them: it does not edit them, burn them into the picture or export them. They stay through **Process again** and a new file under the same name, and go when the Version goes.

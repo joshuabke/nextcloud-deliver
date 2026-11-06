@@ -50,6 +50,7 @@ class ProjectService {
 		private RemovedMapper $removed,
 		private StackService $stacks,
 		private DerivedMedia $media,
+		private Captions $captions,
 		private IRootFolder $root,
 		private IURLGenerator $urls,
 		private ITimeFactory $time,
@@ -640,7 +641,7 @@ class ProjectService {
 	 * Hands an upload next to the Version's file to `$accept`; the upload goes
 	 * whether it is taken or refused. Needs Manage.
 	 *
-	 * @param callable(Version, File, File): void $accept takes the Version, its file and the upload
+	 * @param callable(Version, File, File): ?array $accept takes the Version, its file and the upload; what it returns is the answer
 	 * @throws InvalidRequestException the upload is not a file of its own next to the Version's file
 	 */
 	private function handIn(string $uid, int $versionId, int $uploadId, callable $accept): array {
@@ -659,11 +660,10 @@ class ProjectService {
 			throw new AccessDeniedException('Deleting the upload is not allowed');
 		}
 		try {
-			$accept($version, $file, $upload);
+			return $accept($version, $file, $upload) ?? [];
 		} finally {
 			$upload->delete();
 		}
-		return [];
 	}
 
 	/**
@@ -684,6 +684,30 @@ class ProjectService {
 	public function giveWaveform(string $uid, int $versionId, array $peaks, int $durationFrames): array {
 		[$version] = $this->reachVersion($uid, $versionId);
 		$this->media->acceptWaveform($version, $peaks, $durationFrames);
+		return $this->versionPayload($version, $uid);
+	}
+
+	/**
+	 * Captions in one language for a Version (#54), uploaded next to the
+	 * Version's file as for a Proxy; the upload goes whether they are taken
+	 * or refused.
+	 *
+	 * @throws InvalidRequestException the upload is not a file of its own next to the Version's file, or no Captions
+	 */
+	public function giveCaptions(string $uid, int $versionId, int $uploadId, string $language): array {
+		return $this->handIn($uid, $versionId, $uploadId, function (Version $version, File $file, File $upload) use ($uid, $language): array {
+			if ($upload->getSize() > Captions::MAX_BYTES) {
+				throw new InvalidRequestException('A captions file has at most 1 MB');
+			}
+			$this->captions->store($version->getId(), $language, $upload->getContent());
+			return $this->versionPayload($version, $uid);
+		});
+	}
+
+	/** Removes a Version's Captions in one language (#54) */
+	public function removeCaptions(string $uid, int $versionId, string $language): array {
+		$version = $this->writableVersion($uid, $versionId);
+		$this->captions->remove($version->getId(), $language);
 		return $this->versionPayload($version, $uid);
 	}
 
@@ -808,6 +832,11 @@ class ProjectService {
 			// The short side in pixels, as in "1080p"
 			'resolution' => $shortSide,
 			'url' => $url,
+			// Shown in the player on request, never in Compare (#54)
+			'captions' => array_map(
+				static fn (string $language) => ['language' => $language, 'url' => str_replace('__kind__', 'captions-' . $language, $media)],
+				$this->captions->languages($version->getId()),
+			),
 			'derived' => [
 				'proxy' => [
 					'state' => $version->getProxyState(),

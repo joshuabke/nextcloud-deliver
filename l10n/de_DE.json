@@ -632,7 +632,19 @@
 		"Deliver could not make the Proxy of {name} in this browser.": "Deliver konnte den Proxy von {name} in diesem Browser nicht erzeugen.",
 		"Another browser is making this Proxy, or it is there already.": "Ein anderer Browser erzeugt diesen Proxy schon, oder er ist schon da.",
 		"Make Proxy in this browser": "Proxy in diesem Browser erzeugen",
-		"This browser could not make the Proxy.": "Dieser Browser konnte den Proxy nicht erzeugen."
+		"This browser could not make the Proxy.": "Dieser Browser konnte den Proxy nicht erzeugen.",
+		"Add Captions…": "Untertitel hinzufügen…",
+		"Add Captions": "Untertitel hinzufügen",
+		"Captions": "Untertitel",
+		"Captions are an .srt or .vtt file.": "Untertitel sind eine .srt- oder .vtt-Datei.",
+		"A Captions file has at most 1 MB.": "Eine Untertiteldatei hat höchstens 1 MB.",
+		"Not a single cue could be read from this file.": "Aus dieser Datei ließ sich kein einziger Untertitel lesen.",
+		"Remove the Captions in {language}": "Die Untertitel auf {language} entfernen",
+		"Captions file": "Untertiteldatei",
+		"SRT or WebVTT, at most 1 MB. A file named like cut.de.srt brings its language. A new file replaces the Captions in its language.": "SRT oder WebVTT, höchstens 1 MB. Eine Datei mit einem Namen wie cut.de.srt bringt ihre Sprache mit. Eine neue Datei ersetzt die Untertitel in ihrer Sprache.",
+		"Captions off": "Untertitel aus",
+		"Captions: {language}": "Untertitel: {language}",
+		"Off": "Aus"
 	},
 	"pluralForm": "nplurals=2; plural=(n != 1);"
 }
