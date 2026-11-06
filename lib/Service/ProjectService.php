@@ -1210,6 +1210,15 @@ class ProjectService {
 		return self::shareOf($node)?->canSeeContent() ?? true;
 	}
 
+	/**
+	 * Whether a Review Link the user makes takes the file: Files lets them share
+	 * it, as Nextcloud would reshare it (ADR 0010). Not on an external storage
+	 * whose "Enable sharing" is off, which is how files_external makes them.
+	 */
+	public static function linkable(File $file): bool {
+		return $file->isShareable() && self::viewable($file);
+	}
+
 	/** The share the user reaches the node through; null for their own files */
 	private static function shareOf(Node $node): ?IShare {
 		$storage = $node->getStorage();
@@ -1439,6 +1448,8 @@ class ProjectService {
 				'manages' => $manages,
 				// Upload a new Version, rename it, delete it: Files' write access to its newest file
 				'filesWrite' => $newestFile !== null && Access::canWrite($newestFile),
+				// Left out of this Member's Review Links: Files does not let them share its newest file
+				'offLinks' => $newestFile !== null && !self::linkable($newestFile),
 				// For sorting: when its first Version arrived, and when anything last happened on it
 				'createdAt' => min(array_map(static fn (Version $version) => $version->getCreatedAt(), $stack)),
 				'lastActivity' => max(array_map(

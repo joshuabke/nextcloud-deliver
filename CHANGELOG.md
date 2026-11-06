@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Mark the Assets your Review Links leave out because Files does not let you share their files, such as files on an external storage without "Enable sharing".
 - Show the time left next to the percentage while this browser encodes a Proxy.
 - Add Captions to a Version as SRT or WebVTT, one file per language, and show them in the player under a CC button.
 - Make a Scrub Proxy of every video Version with ffmpeg, of older ones a few each hour, scrub through it on hover on the timeline and the Asset card, and take the Asset card's still from it where Nextcloud renders none; both fall back to the Proxy or the original where the browser cannot play it.

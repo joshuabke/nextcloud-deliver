@@ -1,6 +1,7 @@
 # Änderungen
 
 ## Unveröffentlicht
+- Die Assets markiert, die deine Review-Links auslassen, weil Dateien dich ihre Dateien nicht teilen lässt, etwa Dateien auf einem externen Speicher ohne „Teilen aktivieren“.
 - Die verbleibende Zeit neben dem Prozentwert gezeigt, solange dieser Browser einen Proxy erzeugt.
 - Untertitel als SRT oder WebVTT zu einer Version hinzugefügt, eine Datei je Sprache, und sie im Player unter einer CC-Schaltfläche gezeigt.
 - Mit ffmpeg einen Scrub-Proxy für jede Video-Version erzeugt, für ältere einige pro Stunde, beim Überfahren der Zeitleiste und der Asset-Karte durch ihn gescrubbt und das Standbild der Asset-Karte aus ihm genommen, wo Nextcloud keines rendert; beides greift auf den Proxy oder das Original zurück, wo der Browser ihn nicht abspielen kann.
