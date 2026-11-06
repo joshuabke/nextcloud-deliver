@@ -1401,11 +1401,11 @@ class ProjectService {
 					'comments' => $commentCounts[$version->getId()] ?? 0,
 					'unseen' => $unseen[$version->getId()] ?? 0,
 					'approvals' => $approvalCounts[$version->getId()],
-					// The card scrubs through it on hover, and shows a frame of it where Nextcloud renders no still, until there is a Scrub Proxy
+					// The card shows a frame of it where Nextcloud renders no still, and scrubs through it on hover until there is a Scrub Proxy
 					'playUrl' => $version->getProxyState() === DerivedMedia::STATE_READY
 						? $this->urls->linkToRoute('deliver.media.show', ['id' => $version->getId(), 'kind' => 'proxy'])
 						: ($file === null ? null : $this->davUrl($uid, $file)),
-					// Once ready, the card scrubs through it in place of playUrl, and takes from it the still Nextcloud does not render (#169)
+					// Once ready, the card scrubs through it on hover in place of playUrl (#169)
 					'scrubUrl' => $version->getScrubState() === DerivedMedia::STATE_READY
 						? $this->urls->linkToRoute('deliver.media.show', ['id' => $version->getId(), 'kind' => 'scrub'])
 						: null,

@@ -28,8 +28,12 @@ const ready = ref(false)
 /** Where the mouse is, 0 to 1 */
 const at = ref(0)
 const video = ref(null)
-/** What the video plays: also where Nextcloud has no still, the Scrub Proxy's frame is the still */
+/** What the mouse scrubs through: the Scrub Proxy where it is ready */
 const source = computed(() => props.playUrl ? hoverSource(props.scrubUrl, props.playUrl) : null)
+/** Where Nextcloud has no still, a frame of playUrl is the still; with a Scrub Proxy the mouse scrubs through another video */
+const apart = computed(() => noStill.value && Boolean(props.scrubUrl))
+/** The one video is the still too */
+const stillVideo = computed(() => noStill.value && !props.scrubUrl)
 
 /**
  * Seeks to where the mouse is; seeks pile up on a slow line, so only the latest one counts
@@ -73,7 +77,7 @@ function failed() {
 /** Back to the still, or to the first second where the video is the still */
 function leave() {
 	scrubbing.value = false
-	if (video.value && noStill.value && Number.isFinite(video.value.duration)) {
+	if (video.value && stillVideo.value && Number.isFinite(video.value.duration)) {
 		video.value.currentTime = Math.min(1, video.value.duration)
 	}
 }
@@ -93,8 +97,17 @@ function leave() {
 			loading="lazy"
 			@error="noStill = true">
 		<video
-			v-if="source && !noVideo && (noStill || hovered)"
-			v-show="noStill || (scrubbing && ready)"
+			v-if="apart && !noVideo"
+			v-show="!scrubbing || !ready"
+			:src="playUrl + '#t=1'"
+			preload="metadata"
+			muted
+			playsinline
+			tabindex="-1"
+			@error="failed" />
+		<video
+			v-if="source && !noVideo && (stillVideo || hovered)"
+			v-show="stillVideo || (scrubbing && ready)"
 			ref="video"
 			:src="source + '#t=1'"
 			preload="metadata"
