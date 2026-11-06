@@ -6,6 +6,9 @@
 - Make a Scrub Proxy of every video Version with ffmpeg, of older ones a few each hour, and scrub through it on hover on the timeline and the Asset card.
 - Take a Scrub Proxy from the browser through `POST /versions/{id}/scrub` where the server has no ffmpeg.
 - Add "Upload Proxy…" and "Remove Proxy" to the Asset card, and take a Proxy handed in with ffmpeg too.
+- Make the Thumbnail Strip, Waveform and Scrub Proxy of every video in the uploading browser's pass where the server has no ffmpeg, also from a Proxy uploaded by hand.
+- Replace "Make Proxy in this browser" on the Asset card with "Make missing derived media in this browser".
+- Show a conversion overtaken by a Proxy by hand as stopped instead of failed.
 
 ## 0.11.1 – 2026-11-05
 

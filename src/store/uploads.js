@@ -4,7 +4,8 @@ import { defineStore } from 'pinia'
 import { chunkSizeFor, decodeInTurn, enableFile, errorMessage, getVersion, giveAudioWaveform, regenerateVersion, uploadsUrl } from '../api.js'
 import { t } from '../lib/l10n.js'
 import { mediaKind, reviewable } from '../lib/media.js'
-import { clearProxies, convertInTurn, dropProxy, handInProxy, inspect, uploadProxy } from '../lib/proxy.js'
+import { cannotConvert, clearProxies, convertInTurn, dropProxy, handInPass, inspect, uploadProxy } from '../lib/proxy.js'
+import { atUpload, lightest, passOf } from '../lib/proxyPlan.js'
 import { refusal } from '../lib/unsupported.js'
 import { browserEnv, current, HEARTBEAT, sameFile, uploadFile } from '../lib/upload.js'
 import { ACTIVE, mergeBoard, totals } from '../lib/uploadBoard.js'
@@ -103,6 +104,11 @@ export const useUploadsStore = defineStore('uploads', {
 		 * @return {boolean} whether this browser is making or uploading a Proxy, which a closed tab would lose
 		 */
 		converting: (state) => [...state.items.map((item) => item.proxy), ...Object.values(state.proxies)].some((proxy) => busy(proxy?.state)),
+		/**
+		 * @param {object} state - the store's
+		 * @return {(versionId: number) => boolean} whether this tab's pass makes derived media of the Version, the card's or an upload's
+		 */
+		passing: (state) => (versionId) => Boolean(state.proxies[versionId]) || state.items.some((item) => item.version?.id === versionId && busy(item.proxy?.state)),
 		/** Whether the card may be closed: nothing sends, here or in another tab, and nothing is being made */
 		closable() {
 			return this.active.length === 0 && this.items.every((item) => item.status !== 'elsewhere' && (item.status !== 'done' || settled(item)))
@@ -306,11 +312,12 @@ export const useUploadsStore = defineStore('uploads', {
 			item.status = item.fileId ? 'finishing' : 'uploading'
 			item.controller = new AbortController()
 			const signal = item.controller.signal
-			// ... and the Proxy of a video that needs one is made while it goes up
-			if (!hasFfmpeg && item.seen?.needsProxy && !item.proxying) {
+			// ... and a video gets its Thumbnail Strip, Waveform and Scrub Proxy, and its Proxy where it needs one, in one pass while it goes up (#168)
+			const want = !hasFfmpeg && item.type.startsWith('video/') && !item.proxying && passOf(item.seen, atUpload(item.seen))
+			if (want) {
 				item.proxy = {}
 				item.proxyController = new AbortController()
-				item.proxying = convertInTurn(item.file, proxySettings, item.proxy, item.proxyController.signal)
+				item.proxying = convertInTurn(item.file, proxySettings, want, item.proxy, item.proxyController.signal)
 			}
 			// Without ffmpeg the browser makes the Waveform while the file goes up (story 137); a WAV's is read on the server
 			if (!hasFfmpeg && item.type.startsWith('audio/') && !/\.(wav|bwf)$/i.test(item.name) && !item.decoding) {
@@ -378,7 +385,7 @@ export const useUploadsStore = defineStore('uploads', {
 				// Its Processing shows in every tab, and after a reload
 				write(DONE + asset.versionId, { versionId: asset.versionId, name: item.name, size: item.size, projectId: item.projectId, assetId: item.assetId, seen: Date.now() })
 				this.handIn(item, asset)
-				this.handInProxy(item, asset)
+				this.handInPass(item, asset)
 				this.refreshProjects(item)
 				item.onDone?.(asset.versionId)
 				item.version = { id: asset.versionId }
@@ -428,17 +435,17 @@ export const useUploadsStore = defineStore('uploads', {
 			}
 		},
 		/**
-		 * Hands in the Proxy this browser makes of an upload (ADR 0019)
+		 * Hands in what the pass of this browser makes of an upload (ADR 0019, #168)
 		 *
 		 * @param {object} item - the upload
 		 * @param {{versionId: number}} asset - its Asset
 		 */
-		async handInProxy(item, asset) {
+		async handInPass(item, asset) {
 			if (!item.proxying) {
 				return
 			}
-			// The server takes no Proxy from a Member without Manage on the Version
-			if (!await handInProxy(asset.versionId, item.proxying, item.proxy, item.proxyController)) {
+			// The server takes no derived media from a Member without Manage on the Version
+			if (!await handInPass(asset.versionId, item.proxying, item.proxy, item.proxyController)) {
 				item.proxy = null
 				return
 			}
@@ -446,26 +453,38 @@ export const useUploadsStore = defineStore('uploads', {
 			this.watch()
 		},
 		/**
-		 * The fallback on the Asset card (ADR 0019): makes the Proxy of a
-		 * Version already on the server in this browser, from its file over
-		 * range requests, and hands it in. Never starts on its own.
+		 * The action on the Asset card (#168), and what follows a Proxy by hand
+		 * (ADR 0020): makes what a Version on the server lacks in one pass of
+		 * this browser and hands it in, from the lightest file there is, over
+		 * range requests, or from the hand Proxy this browser still holds.
+		 * Never starts on its own.
 		 *
-		 * @param {{id: number, url: string}} version - the Version, with the WebDAV URL of its file
-		 * @return {Promise<object>} how it ended: ready or failed, with the reason
+		 * @param {{id: number}} version - the Version
+		 * @param {?File} file - the hand Proxy just handed in, to decode in place of the Version's files
+		 * @return {Promise<object>} how it ended: ready, stopped or failed, with the reason; skipped, with the reason, where nothing was to be made or this browser cannot
 		 */
-		async makeProxy(version) {
+		async makeMissing(version, file = null) {
 			this.proxies[version.id] = { state: 'checking', progress: 0, error: null }
 			const status = this.proxies[version.id]
-			// Another tab or Member may have started it since this view was read
-			const now = (await getVersion(version.id).catch(() => null))?.versions.find((each) => each.id === version.id)
-			if (!now?.proxyFromBrowser) {
+			try {
+				// Another tab or Member may have made some of it since this view was read
+				const now = (await getVersion(version.id).catch(() => null))?.versions.find((each) => each.id === version.id)
+				const missing = now?.derivedFromBrowser ?? []
+				const source = file ?? (now && lightest(now))
+				if (!missing.length || !source) {
+					return { state: 'skipped', error: t('deliver', 'Another browser is making the derived media, or they are there already.') }
+				}
+				const seen = await inspect(source, 0, proxySettings).catch(() => null)
+				const want = passOf(seen, missing)
+				if (!want) {
+					return { state: 'skipped', error: cannotConvert(seen) }
+				}
+				const controller = new AbortController()
+				await handInPass(version.id, convertInTurn(source, proxySettings, want, status, controller.signal), status, controller)
+				return status
+			} finally {
 				delete this.proxies[version.id]
-				return { state: 'failed', error: t('deliver', 'Another browser is making this Proxy, or it is there already.') }
 			}
-			const controller = new AbortController()
-			await handInProxy(version.id, convertInTurn(version.url, proxySettings, status, controller.signal), status, controller)
-			delete this.proxies[version.id]
-			return status
 		},
 		/**
 		 * A Proxy made by hand, from the Asset card (ADR 0020); the card shows

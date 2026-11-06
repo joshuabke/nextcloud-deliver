@@ -2,8 +2,9 @@
  * Uploads in the Files app. Its uploader tells only when an upload is over,
  * so Deliver also looks at its queue for new ones: where the server has no
  * ffmpeg, a video that Auto Intake takes into a Folder Project gets its
- * Proxy from this browser while it uploads (ADR 0019), and audio its
- * Waveform once it is up (ADR 0012).
+ * Thumbnail Strip, Waveform and Scrub Proxy, and its Proxy where it needs
+ * one, from this browser in one pass while it uploads (ADR 0019, #168), and
+ * audio its Waveform once it is up (ADR 0012).
  *
  * The Files app bundles @nextcloud/upload 1.x and keeps its uploader on
  * window._nc_uploader, made when its upload menu mounts, which can be after
@@ -15,26 +16,27 @@ import { showError, showMessage, TOAST_PERMANENT_TIMEOUT } from '@nextcloud/dial
 import { reactive, watchEffect } from 'vue'
 import { getAssetForFile, getIntake, handInWaveform } from './api.js'
 import { t } from './lib/l10n.js'
-import { convertInTurn, dropProxy, handInProxy, inspect } from './lib/proxy.js'
+import { convertInTurn, dropProxy, handInPass, inspect } from './lib/proxy.js'
+import { atUpload, passOf } from './lib/proxyPlan.js'
 import { busy, encodingEta, timeLeft } from './lib/uploadStatus.js'
 import { uploaded } from './lib/waveform.js'
 
-/** The Proxies this tab makes of uploads, by file id once the file is there, for Deliver's sidebar tab */
+/** The passes this tab makes of uploads, by file id once the file is there, for Deliver's sidebar tab */
 export const proxiesByFile = reactive({})
 
 /** Per folder uploaded into, what the server said: the Proxy settings, or null where the browser makes no Proxies */
 const folders = new Map()
-/** Uploads looked at, and the Proxy of those that get one from this browser */
+/** Uploads looked at, and the pass of those that get one from this browser */
 const jobs = new WeakMap()
-/** The uploads whose Proxy waits for them to finish */
+/** The uploads whose pass waits for them to finish */
 const waiting = new Map()
-/** The Proxies being made, which a closed tab would lose */
+/** The passes being made, which a closed tab would lose */
 const making = new Set()
 
 let uploader
 
 /**
- * Starts the Proxy of a video while it uploads, if it gets one here. The
+ * Starts the pass over a video while it uploads, if it gets one here. The
  * folder is the one on screen when the upload is first seen; one started
  * elsewhere is left to the fallback on the Asset card.
  *
@@ -56,13 +58,14 @@ function start(upload) {
 	const job = { status: reactive({ state: 'checking', progress: 0, error: null }), controller: new AbortController() }
 	job.settings = folders.get(folder.fileid).then(async (settings) => {
 		const seen = settings && await inspect(file, file.size, settings).catch(() => null)
-		return seen?.needsProxy && seen.convertible ? settings : null
+		job.want = passOf(seen, atUpload(seen))
+		return job.want ? settings : null
 	})
 	job.making = job.settings.then((settings) => {
 		if (!settings) {
 			return null
 		}
-		const made = convertInTurn(file, settings, job.status, job.controller.signal)
+		const made = convertInTurn(file, settings, job.want, job.status, job.controller.signal)
 		follow(file.name, job)
 		return made
 	})
@@ -71,11 +74,11 @@ function start(upload) {
 }
 
 /**
- * A toast that stays while the Proxy is made and uploaded, as the upload
- * itself shows in the Files app.
+ * A toast that stays while the pass runs and its Proxy is uploaded, as the
+ * upload itself shows in the Files app.
  *
  * @param {string} name - the file's
- * @param {{status: object, controller: AbortController}} job - its Proxy
+ * @param {{status: object, controller: AbortController, want: object}} job - its pass
  */
 function follow(name, job) {
 	making.add(job.status)
@@ -84,6 +87,13 @@ function follow(name, job) {
 	const stop = watchEffect(() => {
 		const { state, progress, error } = job.status
 		const left = state === 'running' ? timeLeft(encodingEta(job.status)) : ''
+		// Without a Proxy the pass only decodes; what it hands in is small
+		if (busy(state) && !job.status.proxy) {
+			text.textContent = left
+				? t('deliver', 'Deliver is making the derived media of {name} in this browser: {percent} %, {left}. Keep this tab open.', { name, percent: progress, left })
+				: t('deliver', 'Deliver is making the derived media of {name} in this browser: {percent} %. Keep this tab open.', { name, percent: progress })
+			return
+		}
 		// Handing: the server takes the uploaded Proxy, still uploading for whoever watches
 		if (busy(state)) {
 			text.textContent = state === 'running'
@@ -98,7 +108,9 @@ function follow(name, job) {
 		queueMicrotask(() => stop())
 		// Stopped on purpose, it is no failure: the upload failed, or the file is not for Deliver
 		if (state === 'failed' && !job.controller.signal.aborted) {
-			showError(error ?? t('deliver', 'Deliver could not make the Proxy of {name} in this browser.', { name }))
+			showError(error ?? (job.status.proxy
+				? t('deliver', 'Deliver could not make the Proxy of {name} in this browser.', { name })
+				: t('deliver', 'Deliver could not make the derived media of {name} in this browser.', { name })))
 		}
 	})
 }
@@ -118,7 +130,7 @@ async function handIn(fileId, job) {
 	if (!asset?.versionId) {
 		dropProxy(job.making, job.status, job.controller)
 	}
-	if (!asset?.versionId || !await handInProxy(asset.versionId, job.making, job.status, job.controller)) {
+	if (!asset?.versionId || !await handInPass(asset.versionId, job.making, job.status, job.controller)) {
 		delete proxiesByFile[fileId]
 	}
 }

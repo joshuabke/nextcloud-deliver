@@ -186,6 +186,8 @@ export function handInWaveform(file, asset) {
 // How far this browser has got with a Version's Proxy, and the Proxy itself, uploaded next to the Version's file, where the server has no ffmpeg (ADR 0019)
 export const reportProxy = (versionId, percent) => axios.post(url(`/versions/${versionId}/proxy/progress`), { percent }).then(data)
 export const giveProxy = (versionId, fileId, converted = false) => axios.post(url(`/versions/${versionId}/proxy`), { fileId, converted }).then(data)
+// The Scrub Proxy this browser made in the same pass, uploaded next to the Version's file (#169)
+export const giveScrub = (versionId, fileId) => axios.post(url(`/versions/${versionId}/scrub`), { fileId }).then(data)
 // A Proxy handed in is removed, so ffmpeg or a browser makes the next (ADR 0020)
 export const removeProxy = (versionId) => axios.delete(url(`/versions/${versionId}/proxy`)).then(data)
 export const giveCaptions = (versionId, fileId, language) => axios.post(url(`/versions/${versionId}/captions`), { fileId, language }).then(data)

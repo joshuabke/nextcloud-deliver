@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { convertible, fits, heavy, lowerTarget, needsProxy, plays, proxyBytes, proxySize, thumbGrid, thumbSlot, videoBitrate, whyNot } from './proxyPlan.js'
+import { atUpload, convertible, fits, heavy, lightest, lowerTarget, needsProxy, offer, passOf, plays, proxyBytes, proxySize, scrubFits, scrubSize, thumbGrid, thumbSlot, verdict, videoBitrate, whyNot } from './proxyPlan.js'
 
 const video = (codec, codecString) => ({ type: 'video', codec, codecString })
 const audio = (codec) => ({ type: 'audio', codec })
@@ -123,5 +123,82 @@ describe('a Proxy above the Proxy bitrate threshold', () => {
 		expect(next).toBeLessThan(10e6)
 		expect(next).toBeCloseTo(10e6 * (25.5e6 - 160e3) / (30e6 - 160e3), -3)
 		expect(lowerTarget(1, 1e9, 1, 2)).toBe(100_000)
+	})
+})
+
+describe('the pass of the browser for derived media (#168)', () => {
+	const seen = { reason: null, convertible: true, scrubbable: true, needsProxy: false }
+
+	it('makes the Thumbnail Strip, Waveform and Scrub Proxy of every upload, the Proxy only where it gets one', () => {
+		expect(atUpload(seen)).toEqual(['thumbs', 'waveform', 'scrub'])
+		expect(atUpload({ ...seen, needsProxy: true })).toEqual(['proxy', 'thumbs', 'waveform', 'scrub'])
+		expect(atUpload(null)).toEqual([])
+		expect(passOf(seen, atUpload(seen))).toEqual({ proxy: false, thumbs: true, waveform: true, scrub: true })
+	})
+
+	it('makes only what the Version lacks, and nothing when it lacks nothing', () => {
+		expect(passOf(seen, ['scrub'])).toEqual({ proxy: false, thumbs: false, waveform: false, scrub: true })
+		expect(passOf(seen, [])).toBe(null)
+	})
+
+	it('decodes without an H.264 encoder, but then makes no Scrub Proxy and no missing Proxy', () => {
+		const noEncoder = { reason: 'encoder', convertible: false, scrubbable: false }
+		expect(passOf(noEncoder, ['thumbs', 'waveform', 'scrub'])).toEqual({ proxy: false, thumbs: true, waveform: true, scrub: false })
+		expect(passOf(noEncoder, ['scrub'])).toBe(null)
+		expect(passOf(noEncoder, ['proxy', 'thumbs'])).toBe(null)
+	})
+
+	it('makes nothing of what this browser cannot decode', () => {
+		expect(passOf({ ...seen, reason: 'codec' }, ['thumbs'])).toBe(null)
+		expect(passOf({ ...seen, reason: 'format' }, ['thumbs'])).toBe(null)
+		expect(passOf(null, ['thumbs'])).toBe(null)
+	})
+
+	it('decodes the Proxy where there is one, else the original', () => {
+		expect(lightest({ url: '/original', derived: { proxy: { url: '/proxy' } } })).toBe('/proxy')
+		expect(lightest({ url: '/original', derived: { proxy: { url: null } } })).toBe('/original')
+	})
+})
+
+describe('the Scrub Proxy from the browser (#169)', () => {
+	it('is 320 wide at most and of even height, as ffmpeg scales it', () => {
+		expect(scrubSize({ width: 3840, height: 2160 })).toEqual({ width: 320, height: 180 })
+		expect(scrubSize({ width: 1080, height: 1920 })).toEqual({ width: 320, height: 568 })
+		expect(scrubSize({ width: 241, height: 135 })).toEqual({ width: 240, height: 134 })
+	})
+
+	it('goes in only below 0.5 Mbit/s', () => {
+		expect(scrubFits(1_875_000, 60)).toBe(true)
+		expect(scrubFits(3_750_000, 60)).toBe(false)
+		expect(scrubFits(1, 0)).toBe(false)
+	})
+})
+
+describe('what the card offers (#168)', () => {
+	const noEncoder = { reason: 'encoder', convertible: false, scrubbable: false }
+
+	it('offers the pass where this browser makes some of what is missing', () => {
+		expect(offer(noEncoder, ['thumbs', 'scrub'])).toBe('make')
+	})
+
+	it('says why not where this browser can make none of what is missing, a Scrub Proxy alone too', () => {
+		expect(offer(noEncoder, ['proxy', 'thumbs'])).toBe('cannot')
+		expect(offer({ reason: 'codec' }, ['thumbs'])).toBe('cannot')
+		expect(offer(noEncoder, ['scrub'])).toBe('cannot')
+		expect(offer(null, ['scrub'])).toBe('cannot')
+	})
+})
+
+describe('what becomes of a Proxy the browser made', () => {
+	const original = { frames: 50, seconds: 2 }
+
+	it('keeps one that fits, and makes one above the threshold once more', () => {
+		expect(verdict({ frames: 50, seconds: 2, bytes: 1e6 }, original, 20, false)).toBe('keep')
+		expect(verdict({ frames: 50, seconds: 2, bytes: 1e7 }, original, 20, false)).toBe('again')
+	})
+
+	it('leaves it out of the pass where its Frames are off or the second go is above the threshold too', () => {
+		expect(verdict({ frames: 49, seconds: 2, bytes: 1e6 }, original, 20, false)).toBe('frames')
+		expect(verdict({ frames: 50, seconds: 2, bytes: 1e7 }, original, 20, true)).toBe('heavy')
 	})
 })

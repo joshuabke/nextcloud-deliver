@@ -470,10 +470,12 @@ class DerivedMedia {
 	 * replaces it on regeneration.
 	 *
 	 * @throws InvalidRequestException the image or its grid is out of shape
-	 * @throws ProjectConflictException the Version has no picture, is not read yet, or has its Thumbnail Strip or is getting one
+	 * @throws ProjectConflictException the Version has no picture, cannot be read now, or has its Thumbnail Strip or is getting one
 	 */
 	public function acceptThumbs(Version $version, string $image, int $every, int $count): void {
-		if (!$version->getHasVideo() || $version->getPlayable() === null || $version->getThumbsState() !== self::STATE_NONE) {
+		// Without a Proxy before it, a browser's pass may be quicker than the background job that reads the original (#168)
+		$version = $this->readNow($version);
+		if (!$version->getHasVideo() || $version->getThumbsState() !== self::STATE_NONE) {
 			throw new ProjectConflictException('This Version takes no Thumbnail Strip from the browser');
 		}
 		$duration = $this->durationSeconds($version);
@@ -595,6 +597,28 @@ class DerivedMedia {
 		return in_array($version->getProxyState(), [self::STATE_NONE, self::STATE_FAILED], true)
 			&& $this->takesProxy($version, $bytes)
 			&& $this->withoutFfmpeg();
+	}
+
+	/**
+	 * What a browser is to make of this Version where the server has no
+	 * ffmpeg (#168), in one pass: its Proxy where proxyFromBrowser() says so,
+	 * and the Thumbnail Strip, Waveform and Scrub Proxy it lacks. Nothing for
+	 * a Version without a picture or not read yet, nor while a browser makes
+	 * its Proxy, as that pass brings the rest along.
+	 *
+	 * @param int $bytes the size of the Version's file, for the Proxy bitrate threshold
+	 * @return list<string> of 'proxy', 'thumbs', 'waveform' and 'scrub'
+	 */
+	public function fromBrowser(Version $version, int $bytes): array {
+		if (!$version->getHasVideo() || $version->getPlayable() === null || $version->getProxyState() === self::STATE_RUNNING || !$this->withoutFfmpeg()) {
+			return [];
+		}
+		return array_keys(array_filter([
+			'proxy' => $this->proxyFromBrowser($version, $bytes),
+			'thumbs' => $version->getThumbsState() === self::STATE_NONE,
+			'waveform' => $version->getHasAudio() && $version->getWaveformState() === self::STATE_NONE,
+			'scrub' => $version->getScrubState() === self::STATE_NONE,
+		]));
 	}
 
 	/**
