@@ -248,10 +248,10 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertTrue($version['playable']);
 
 		self::assertSame(409, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['converted' => true, 'fileId' => $this->proxyFrom(self::PROXY)[0]])['status'], 'it plays as it is');
-		self::assertFalse($this->card()['proxyFromBrowser'], 'and is not offered one');
+		self::assertFalse(in_array('proxy', $this->card()['derivedFromBrowser'], true), 'and is not offered one');
 		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['maxBitrate' => 2])['status']);
 		try {
-			self::assertTrue($this->card()['proxyFromBrowser'], 'above the Proxy bitrate threshold');
+			self::assertTrue(in_array('proxy', $this->card()['derivedFromBrowser'], true), 'above the Proxy bitrate threshold');
 			$given = $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['converted' => true, 'fileId' => $this->proxyFrom(self::PROXY)[0]]);
 			self::assertSame(200, $given['status'], json_encode($given['data']));
 		} finally {
@@ -285,21 +285,21 @@ class WithoutFfmpegTest extends TestCase {
 	public function testTheCardOffersTheProxyFromTheBrowserUntilOneIsOnItsWay(): void {
 		$this->make(self::PRORES);
 		$version = $this->upload('master.mov');
-		self::assertTrue($this->card()['proxyFromBrowser'], 'no Proxy, and none can come from the server');
+		self::assertTrue(in_array('proxy', $this->card()['derivedFromBrowser'], true), 'no Proxy, and none can come from the server');
 
-		self::assertTrue($this->nc->ocs('GET', "/versions/{$version['id']}")['data']['versions'][0]['proxyFromBrowser'], 'read again before a browser starts');
+		self::assertTrue(in_array('proxy', $this->nc->ocs('GET', "/versions/{$version['id']}")['data']['versions'][0]['derivedFromBrowser'], true), 'read again before a browser starts');
 		self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy/progress", ['percent' => 10])['status']);
-		self::assertFalse($this->card()['proxyFromBrowser'], 'another browser is making it');
-		self::assertFalse($this->nc->ocs('GET', "/versions/{$version['id']}")['data']['versions'][0]['proxyFromBrowser'], 'so a second one does not start');
+		self::assertFalse(in_array('proxy', $this->card()['derivedFromBrowser'], true), 'another browser is making it');
+		self::assertFalse(in_array('proxy', $this->nc->ocs('GET', "/versions/{$version['id']}")['data']['versions'][0]['derivedFromBrowser'], true), 'so a second one does not start');
 
 		// Two minutes without a report: that tab is gone, as the card sees too
 		$this->inNextcloud('$q = \\OCP\\Server::get(\\OCP\\IDBConnection::class)->getQueryBuilder(); $q->update("deliver_jobs")->set("started_at", $q->createNamedParameter(1))->where($q->expr()->eq("version_id", $q->createNamedParameter(' . $version['id'] . ')))->executeStatement();');
-		self::assertTrue($this->card()['proxyFromBrowser']);
+		self::assertTrue(in_array('proxy', $this->card()['derivedFromBrowser'], true));
 
 		self::assertSame(400, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['converted' => true, 'fileId' => $this->proxyFrom('-f lavfi -i testsrc=size=640x360:rate=25:duration=1 -c:v libx264 -pix_fmt yuv420p')[0]])['status']);
-		self::assertTrue($this->card()['proxyFromBrowser'], 'after a failed one too');
+		self::assertTrue(in_array('proxy', $this->card()['derivedFromBrowser'], true), 'after a failed one too');
 		self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy", ['converted' => true, 'fileId' => $this->proxyFrom(self::PROXY)[0]])['status']);
-		self::assertFalse($this->card()['proxyFromBrowser'], 'it has its Proxy');
+		self::assertFalse(in_array('proxy', $this->card()['derivedFromBrowser'], true), 'it has its Proxy');
 	}
 
 	public function testUploadsInTheFilesAppGetTheirProxyFromTheBrowserWhereAutoIntakeTakesThem(): void {

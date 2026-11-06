@@ -767,9 +767,7 @@ class ProjectService {
 				'manages' => $grant->manages(),
 				'deliveredBy' => $this->deliveredBy($version),
 				'createdAt' => $version->getCreatedAt(),
-				// Read again before a browser starts the Proxy, as another may have meanwhile (ADR 0019)
-				'proxyFromBrowser' => $file !== null && $this->media->proxyFromBrowser($version, (int)$file->getSize()),
-				// Read again before a browser makes what the Version lacks, as another may have meanwhile (#168)
+				// Read again before a browser makes what the Version lacks, its Proxy too (ADR 0019), as another may have meanwhile (#168)
 				'derivedFromBrowser' => $file === null ? [] : $this->media->fromBrowser($version, (int)$file->getSize()),
 			];
 	}
@@ -1422,9 +1420,7 @@ class ProjectService {
 						[$version->getProxyState(), $version->getThumbsState(), $version->getWaveformState()],
 						true,
 					) || ($version->getPlayable() === null && $version->getDerivedError() !== null),
-					// Without ffmpeg, a Member with Manage may make its Proxy in the browser (ADR 0019)
-					'proxyFromBrowser' => $file !== null && $this->media->proxyFromBrowser($version, (int)$file->getSize()),
-					// Without ffmpeg, a Member with Manage may make what it lacks in the browser, in one pass (#168)
+					// Without ffmpeg, a Member with Manage may make what it lacks in the browser, its Proxy too (ADR 0019), in one pass (#168)
 					'derivedFromBrowser' => $file === null ? [] : $this->media->fromBrowser($version, (int)$file->getSize()),
 					// A Member with Manage may hand in a Proxy where it gets one, and remove one handed in (ADR 0020)
 					'takesProxy' => $file !== null && $this->media->takesProxy($version, (int)$file->getSize()),
