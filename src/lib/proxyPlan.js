@@ -250,14 +250,19 @@ export const lightest = (version) => version.derived?.proxy?.url ?? version.url
 
 /**
  * What the card offers for a Version that lacks derived media (#168): the
- * pass where this browser can make some of it, else the reason why not
+ * pass where this browser can make some of it, else the reason why not;
+ * nothing where only the Scrub Proxy is missing, which every older Version
+ * lacks, and this browser cannot make it
  *
  * @param {?object} seen - what inspect() found of what the card plays
  * @param {string[]} missing - what the Version lacks, from DERIVED
- * @return {string} 'make' or 'cannot'
+ * @return {?string} 'make', 'cannot', or null for no entry
  */
 export function offer(seen, missing) {
-	return passOf(seen, missing) ? 'make' : 'cannot'
+	if (passOf(seen, missing)) {
+		return 'make'
+	}
+	return missing.every((kind) => kind === 'scrub') ? null : 'cannot'
 }
 
 /**
