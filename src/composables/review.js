@@ -154,7 +154,7 @@ export function useReview({ version, projectMode, projectFps, refresh }) {
 	let recheck = null
 	watch(() => version.value?.derived, (derived) => {
 		clearTimeout(recheck)
-		const pending = ['proxy', 'thumbs', 'waveform', 'scrub'].some((kind) => ['queued', 'running'].includes(derived?.[kind]?.state))
+		const pending = ['proxy', 'thumbs', 'waveform'].some((kind) => ['queued', 'running'].includes(derived?.[kind]?.state))
 		if (pending) {
 			recheck = setTimeout(() => refresh().catch(() => {}), DERIVED_RECHECK)
 		}

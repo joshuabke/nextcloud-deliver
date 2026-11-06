@@ -171,7 +171,7 @@ A grid of small frames sampled along a Version, used for hover previews on the t
 _Avoid_: Sprite, scrubber, filmstrip
 
 **Scrub Proxy**:
-A tiny rendition of a video Version only for hover previews on the timeline and the Asset card.
+A tiny rendition of a video Version only for hover previews on the timeline and the Asset card, and the Asset card's still where Nextcloud renders none.
 _Avoid_: preview video, hover video, thumbnail video
 
 **Waveform**:

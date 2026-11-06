@@ -402,7 +402,8 @@ class DerivedMedia {
 	/**
 	 * With ffmpeg, queues a Scrub Proxy for a few video Versions made before
 	 * there were any, the newest first, once the last few are done; they run
-	 * after every other job (JobMapper::findQueued). Without ffmpeg only new
+	 * after every other job and hold none up (JobMapper::findQueued,
+	 * JobRunner::runNext). Without ffmpeg only new
 	 * uploads get one, from the browser.
 	 *
 	 * @return int how many

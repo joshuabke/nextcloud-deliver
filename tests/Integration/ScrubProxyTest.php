@@ -146,6 +146,60 @@ class ScrubProxyTest extends TestCase {
 		self::assertSame('none', $this->version($old)['derived']['scrub']['state'], 'without ffmpeg only new uploads get one, from the browser');
 	}
 
+	/** Sets the Scrub Proxy state of Versions as the database has it, for Versions from before Scrub Proxies were */
+	private function scrubState(string $state, int ...$ids): void {
+		$this->inNextcloud('$q = \\OCP\\Server::get(\\OCP\\IDBConnection::class)->getQueryBuilder(); $q->update("deliver_versions")->set("scrub_state", $q->createNamedParameter("' . $state . '"))->where($q->expr()->in("id", $q->createNamedParameter([' . implode(',', $ids) . '], \\OCP\\DB\\QueryBuilder\\IQueryBuilder::PARAM_INT_ARRAY)))->executeStatement();');
+	}
+
+	/** @return string the Versions of the queued Scrub Proxies, in the order they run */
+	private function queuedScrubs(): string {
+		return trim($this->inNextcloud('foreach (\\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->findQueued(10, "scrub") as $job) { echo $job->getVersionId(), " "; }'));
+	}
+
+	private function backfill(int $limit): int {
+		return (int)$this->inNextcloud('echo \\OCP\\Server::get(\\OCA\\Deliver\\Service\\DerivedMedia::class)->queueMissingScrubs(' . $limit . ');');
+	}
+
+	public function testTheBackfillTakesTheNewestWithoutAFailedOneAndWaitsForTheLastBatch(): void {
+		$a = $this->upload('a.mp4');
+		$b = $this->upload('b.mp4');
+		$c = $this->upload('c.mp4');
+		$this->drainQueue();
+		$this->scrubState('none', $a, $b);
+		$this->scrubState('failed', $c);
+
+		self::assertSame(1, $this->backfill(1));
+		self::assertSame("$b", $this->queuedScrubs(), 'the newest, past the failed one');
+		self::assertSame(0, $this->backfill(1), 'nothing more while one waits');
+		self::assertSame('none', $this->version($a)['derived']['scrub']['state']);
+		self::assertSame('failed', $this->version($c)['derived']['scrub']['state']);
+
+		$this->drainQueue();
+		$this->scrubState('none', $b);
+		self::assertSame(2, $this->backfill(5), 'once it is done, the next ones; the failed one stays out');
+		$d = $this->upload('d.mp4');
+		$this->inNextcloud('\\OCP\\Server::get(\\OCA\\Deliver\\Service\\JobRunner::class)->runNext("test");');
+		self::assertSame("$d $b $a", $this->queuedScrubs(), 'a fresh upload\'s before the older ones');
+	}
+
+	public function testAScrubProxyHoldsUpNoOtherWork(): void {
+		$old = $this->upload('old.mp4');
+		$this->drainQueue();
+		// A long Scrub Proxy of an old master takes the one job at a time there is
+		$this->inNextcloud('$job = new \\OCA\\Deliver\\Db\\Job(); $job->setKind("scrub"); $job->setVersionId(' . $old . '); $job->setState("running"); $job->setClaimedBy("other"); $job->setCreatedAt(time()); $job->setStartedAt(time()); \\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->insert($job);');
+		try {
+			$new = $this->upload('new.mp4');
+			$this->drainQueue();
+			$version = $this->version($new);
+			self::assertTrue($version['playable'], 'the new upload was read meanwhile');
+			self::assertSame('ready', $version['derived']['thumbs']['state']);
+			self::assertSame('ready', $version['derived']['waveform']['state']);
+			self::assertSame('queued', $version['derived']['scrub']['state'], 'its Scrub Proxy waits for the slot');
+		} finally {
+			$this->inNextcloud('$q = \\OCP\\Server::get(\\OCP\\IDBConnection::class)->getQueryBuilder(); $q->delete("deliver_jobs")->where($q->expr()->eq("claimed_by", $q->createNamedParameter("other")))->executeStatement();');
+		}
+	}
+
 	public function testAReviewerScrubsThroughItAlsoOnALinkWithoutDownloads(): void {
 		$id = $this->upload();
 		$this->drainQueue();
