@@ -456,7 +456,7 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertSame(404, $this->nc->request('GET', "/apps/deliver/versions/{$version['id']}/media/thumbsJpeg")['status'], 'the strip has one URL');
 	}
 
-	public function testOnlyWhoManagesAReadVideoHandsInItsThumbnailStrip(): void {
+	public function testOnlyWhoManagesAVideoHandsInItsThumbnailStripAlsoBeforeTheBackgroundJobReadIt(): void {
 		$thumbs = fn (NextcloudClient $as, int $id) => $as->ocs('POST', "/versions/$id/thumbs", ['image' => $this->image('320x90'), 'every' => 1, 'count' => 2])['status'];
 		$this->make('-f lavfi -i sine=duration=2 -f wav');
 		self::assertSame(409, $thumbs($this->nc, $this->upload('mix.wav')['id']), 'no picture');
@@ -465,20 +465,61 @@ class WithoutFfmpegTest extends TestCase {
 		$this->nc->put("{$this->root}/master.mov", (string)file_get_contents($this->fixture));
 		$assets = $this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'];
 		$versionId = array_values(array_filter($assets, static fn (array $asset) => $asset['versions'][0]['name'] === 'master.mov'))[0]['versions'][0]['id'];
-		self::assertSame(409, $thumbs($this->nc, $versionId), 'not read yet, its length unknown');
 
 		$user = 'deliver-viewer-' . bin2hex(random_bytes(3));
 		$this->nc->ocsForm('POST', '/ocs/v2.php/cloud/users', ['userid' => $user, 'password' => 'Viewer-pass-123!']);
 		try {
 			self::assertSame(200, $this->nc->ocsForm('POST', '/ocs/v2.php/apps/files_sharing/api/v1/shares', ['path' => $this->root, 'shareType' => 0, 'shareWith' => $user, 'permissions' => 1])['status']);
-			exec('php /var/www/html/occ deliver:worker --once 2>&1', $output, $code);
-			self::assertSame(0, $code, implode("\n", $output));
 			self::assertSame(403, $thumbs($this->nc->withUser($user, 'Viewer-pass-123!'), $versionId), 'Manage, as for the Proxy');
 		} finally {
 			$this->nc->ocsForm('DELETE', "/ocs/v2.php/cloud/users/$user");
 		}
 
+		// A pass without a Proxy before it may be quicker than the background job: the request reads the original (#168)
 		self::assertSame(200, $thumbs($this->nc, $versionId));
+		self::assertSame(25, $this->nc->ocs('GET', "/versions/$versionId")['data']['versions'][0]['fps']['num']);
+	}
+
+	/** @return list<string> what the card and the Version say a browser is to make of the Version (the Project's only one by default), which must agree */
+	private function fromBrowser(?int $versionId = null): array {
+		$cards = array_map(static fn (array $asset) => $asset['versions'][0], $this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets']);
+		$card = $versionId === null ? $cards[0] : array_values(array_filter($cards, static fn (array $each) => $each['id'] === $versionId))[0];
+		self::assertSame($card['derivedFromBrowser'], $this->nc->ocs('GET', "/versions/{$card['id']}")['data']['versions'][0]['derivedFromBrowser'], 'read again before a browser starts');
+		return $card['derivedFromBrowser'];
+	}
+
+	public function testABrowserMakesWhatAVideoLacksUntilItHasItAll(): void {
+		$this->make('-f lavfi -i testsrc=size=640x360:rate=25:duration=2 -f lavfi -i sine=duration=2 -c:v libx264 -pix_fmt yuv420p -g 25 -c:a aac -shortest -f mp4');
+		$version = $this->upload('cut.mp4');
+		self::assertSame(['thumbs', 'waveform', 'scrub'], $this->fromBrowser(), 'it plays as it is, so no Proxy');
+
+		self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/waveform", ['peaks' => [0.1, 0.5], 'durationFrames' => 50])['status']);
+		self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/thumbs", ['image' => $this->image('320x90'), 'every' => 1, 'count' => 2])['status']);
+		self::assertSame(['scrub'], $this->fromBrowser());
+		$scrub = $this->proxyFrom('-f lavfi -i testsrc=size=320x180:rate=25:duration=2 -c:v libx264 -pix_fmt yuv420p -g 25 -b:v 250k')[0];
+		$given = $this->nc->ocs('POST', "/versions/{$version['id']}/scrub", ['fileId' => $scrub]);
+		self::assertSame(200, $given['status'], json_encode($given['data']));
+		self::assertSame([], $this->fromBrowser(), 'nothing is missing');
+
+		self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/regenerate")['status']);
+		self::assertSame(['thumbs', 'waveform', 'scrub'], $this->fromBrowser(), 'regenerated, it lacks them again');
+		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['ffmpegPath' => '', 'ffprobePath' => ''])['status']);
+		self::assertSame([], $this->fromBrowser(), 'ffmpeg makes them');
+	}
+
+	public function testAMasterLacksItsProxyTooAndASilentVideoNoWaveform(): void {
+		$this->make(self::PRORES);
+		$version = $this->upload('master.mov');
+		self::assertSame(['proxy', 'thumbs', 'waveform', 'scrub'], $this->fromBrowser());
+		self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/proxy/progress", ['percent' => 10])['status']);
+		self::assertSame([], $this->fromBrowser(), 'a browser making the Proxy makes the rest in the same pass');
+
+		$this->make('-f lavfi -i testsrc=size=640x360:rate=25:duration=2 -c:v libvpx-vp9 -b:v 200k -f webm');
+		$this->nc->put("{$this->root}/silent.webm", (string)file_get_contents($this->fixture));
+		exec('php /var/www/html/occ deliver:worker --once 2>&1', $output, $code);
+		self::assertSame(0, $code, implode("\n", $output));
+		$silent = array_values(array_filter($this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'], static fn (array $asset) => $asset['versions'][0]['name'] === 'silent.webm'))[0]['versions'][0]['id'];
+		self::assertSame(['thumbs', 'scrub'], $this->fromBrowser($silent), 'no sound, no Waveform');
 	}
 
 	public function testAThumbnailStripTheServerMakesWins(): void {

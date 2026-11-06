@@ -769,6 +769,8 @@ class ProjectService {
 				'createdAt' => $version->getCreatedAt(),
 				// Read again before a browser starts the Proxy, as another may have meanwhile (ADR 0019)
 				'proxyFromBrowser' => $file !== null && $this->media->proxyFromBrowser($version, (int)$file->getSize()),
+				// Read again before a browser makes what the Version lacks, as another may have meanwhile (#168)
+				'derivedFromBrowser' => $file === null ? [] : $this->media->fromBrowser($version, (int)$file->getSize()),
 			];
 	}
 
@@ -1422,6 +1424,8 @@ class ProjectService {
 					) || ($version->getPlayable() === null && $version->getDerivedError() !== null),
 					// Without ffmpeg, a Member with Manage may make its Proxy in the browser (ADR 0019)
 					'proxyFromBrowser' => $file !== null && $this->media->proxyFromBrowser($version, (int)$file->getSize()),
+					// Without ffmpeg, a Member with Manage may make what it lacks in the browser, in one pass (#168)
+					'derivedFromBrowser' => $file === null ? [] : $this->media->fromBrowser($version, (int)$file->getSize()),
 					// A Member with Manage may hand in a Proxy where it gets one, and remove one handed in (ADR 0020)
 					'takesProxy' => $file !== null && $this->media->takesProxy($version, (int)$file->getSize()),
 					'proxyHandedIn' => (bool)$version->getProxyHandedIn(),
