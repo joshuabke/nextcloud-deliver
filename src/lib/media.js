@@ -53,6 +53,7 @@ export const extensionOf = (name) => name.lastIndexOf('.') > 0 ? name.slice(name
  *
  * @param {string|null|undefined} scrub - the Scrub Proxy, once it is ready
  * @param {string|null|undefined} fallback - what plays otherwise, the Proxy or the original
- * @return {string|null} the Scrub Proxy where there is one; until then, and where it never comes, the fallback
+ * @param {boolean} broken - this browser could not play the Scrub Proxy (an H.264 MP4, which some browsers do not decode)
+ * @return {string|null} the Scrub Proxy where there is one and it plays; until then, and where it never does, the fallback
  */
-export const hoverSource = (scrub, fallback) => scrub ?? fallback ?? null
+export const hoverSource = (scrub, fallback, broken = false) => (broken ? null : scrub) ?? fallback ?? null
