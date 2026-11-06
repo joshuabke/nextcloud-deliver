@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { atUpload, convertible, fits, heavy, lightest, lowerTarget, needsProxy, passOf, plays, proxyBytes, proxySize, scrubFits, scrubSize, thumbGrid, thumbSlot, videoBitrate, whyNot } from './proxyPlan.js'
+import { atUpload, convertible, fits, heavy, lightest, lowerTarget, needsProxy, offer, passOf, plays, proxyBytes, proxySize, scrubFits, scrubSize, thumbGrid, thumbSlot, verdict, videoBitrate, whyNot } from './proxyPlan.js'
 
 const video = (codec, codecString) => ({ type: 'video', codec, codecString })
 const audio = (codec) => ({ type: 'audio', codec })
@@ -171,5 +171,34 @@ describe('the Scrub Proxy from the browser (#169)', () => {
 		expect(scrubFits(1_875_000, 60)).toBe(true)
 		expect(scrubFits(3_750_000, 60)).toBe(false)
 		expect(scrubFits(1, 0)).toBe(false)
+	})
+})
+
+describe('what the card offers (#168)', () => {
+	const noEncoder = { reason: 'encoder', convertible: false, scrubbable: false }
+
+	it('offers the pass where this browser makes some of what is missing', () => {
+		expect(offer(noEncoder, ['thumbs', 'scrub'])).toBe('make')
+	})
+
+	it('says why not where a Proxy, strip or Waveform is missing, and offers nothing for a Scrub Proxy alone', () => {
+		expect(offer(noEncoder, ['proxy', 'thumbs'])).toBe('cannot')
+		expect(offer({ reason: 'codec' }, ['thumbs'])).toBe('cannot')
+		expect(offer(noEncoder, ['scrub'])).toBe(null)
+		expect(offer(null, ['scrub'])).toBe(null)
+	})
+})
+
+describe('what becomes of a Proxy the browser made', () => {
+	const original = { frames: 50, seconds: 2 }
+
+	it('keeps one that fits, and makes one above the threshold once more', () => {
+		expect(verdict({ frames: 50, seconds: 2, bytes: 1e6 }, original, 20, false)).toBe('keep')
+		expect(verdict({ frames: 50, seconds: 2, bytes: 1e7 }, original, 20, false)).toBe('again')
+	})
+
+	it('leaves it out of the pass where its Frames are off or the second go is above the threshold too', () => {
+		expect(verdict({ frames: 49, seconds: 2, bytes: 1e6 }, original, 20, false)).toBe('frames')
+		expect(verdict({ frames: 50, seconds: 2, bytes: 1e7 }, original, 20, true)).toBe('heavy')
 	})
 })
