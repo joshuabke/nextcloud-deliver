@@ -861,8 +861,12 @@ test.describe('Uploads without ffmpeg', () => {
 			await page.getByRole('menuitem', { name: 'Upload Proxy…' }).click()
 			await (await chooser).setFiles({ name: 'master.proxy.mp4', mimeType: 'video/mp4', buffer: readFileSync(HAND_PROXY) })
 			await expect.poll(async () => (await newest()).proxyHandedIn).toBe(true)
-
-			await card(page, 'master').click({ button: 'right' })
+			// The card shows the upload until the server's answer is in, and its menu follows once the Project is read again
+			await expect(async () => {
+				await page.keyboard.press('Escape')
+				await card(page, 'master').click({ button: 'right' })
+				await expect(page.getByRole('menuitem', { name: 'Remove Proxy' })).toBeVisible({ timeout: 1000 })
+			}).toPass()
 			// Another one of their own would replace it
 			await expect(page.getByRole('menuitem', { name: 'Upload Proxy…' })).toBeVisible()
 			await page.getByRole('menuitem', { name: 'Remove Proxy' }).click()
