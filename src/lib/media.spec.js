@@ -18,6 +18,7 @@ describe('media kinds', () => {
 		expect(hoverSource('/scrub', '/proxy')).toBe('/scrub')
 		expect(hoverSource(null, '/proxy')).toBe('/proxy')
 		expect(hoverSource(undefined, null)).toBe(null)
+		expect(hoverSource('/scrub', '/original', true), 'a browser without H.264 goes back to what plays').toBe('/original')
 	})
 
 	it('tells stills apart', () => {
