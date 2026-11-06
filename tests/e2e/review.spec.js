@@ -1,7 +1,8 @@
 import { chromium, expect, test } from '@playwright/test'
+import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { CLIP, DNXHR, MIX } from './fixtures.js'
+import { CLIP, DNXHR, HAND_PROXY, MIX } from './fixtures.js'
 
 const URL = process.env.DELIVER_TEST_URL ?? 'http://localhost:8080'
 const ADMIN = process.env.DELIVER_TEST_USER ?? 'admin'
@@ -836,6 +837,50 @@ test.describe('Uploads without ffmpeg', () => {
 		} finally {
 			await api.dispose()
 			await context.close()
+		}
+	})
+
+	test('a Member uploads a Proxy of their own from the Asset card and removes it (ADR 0020)', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const dav = `/remote.php/dav/files/${USER}/deliver-e2e-${randomBytes(4).toString('hex')}`
+		expect((await api.fetch(dav, { method: 'MKCOL' })).status()).toBe(201)
+		const created = await api.post('/ocs/v2.php/apps/deliver/api/v1/projects?format=json', { data: { folderId: await fileId(api, dav), autoIntake: true } })
+		const id = (await created.json()).ocs.data.id
+		expect((await api.fetch(`${dav}/master.mov`, { method: 'PUT', data: readFileSync(DNXHR) })).status()).toBe(201)
+		// The probe, so the card knows the Version gets a Proxy
+		execFileSync('docker', ['compose', 'exec', '-T', '-u', 'www-data', 'nextcloud', 'php', 'occ', 'deliver:worker', '--once'], { stdio: 'inherit' })
+		const newest = async () => (await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${id}?format=json`)).json()).ocs.data.assets[0].versions[0]
+		const browser = await chromium.connectOverCDP(CDP)
+		const context = await browser.newContext({ baseURL: BROWSER_URL })
+		const page = await context.newPage()
+		try {
+			await login(page)
+			await page.goto(`/apps/deliver/projects/${id}`)
+			await card(page, 'master').click({ button: 'right' })
+			const chooser = page.waitForEvent('filechooser')
+			await page.getByRole('menuitem', { name: 'Upload Proxy…' }).click()
+			await (await chooser).setFiles({ name: 'master.proxy.mp4', mimeType: 'video/mp4', buffer: readFileSync(HAND_PROXY) })
+			await expect.poll(async () => (await newest()).proxyHandedIn).toBe(true)
+			// The card shows the upload until the server's answer is in, and its menu follows once the Project is read again
+			await expect(async () => {
+				await page.keyboard.press('Escape')
+				await card(page, 'master').click({ button: 'right' })
+				await expect(page.getByRole('menuitem', { name: 'Remove Proxy' })).toBeVisible({ timeout: 1000 })
+			}).toPass()
+			// Another one of their own would replace it
+			await expect(page.getByRole('menuitem', { name: 'Upload Proxy…' })).toBeVisible()
+			await page.getByRole('menuitem', { name: 'Remove Proxy' }).click()
+			await expect.poll(async () => (await newest()).proxyHandedIn).toBe(false)
+			await card(page, 'master').click({ button: 'right' })
+			await expect(page.getByRole('menuitem', { name: 'Upload Proxy…' })).toBeVisible()
+			await expect(page.getByRole('menuitem', { name: 'Remove Proxy' })).toHaveCount(0)
+			// Only the master became an Asset: the upload was hidden and is gone
+			expect((await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${id}?format=json`)).json()).ocs.data.assets).toHaveLength(1)
+		} finally {
+			await context.close()
+			await api.delete(`/ocs/v2.php/apps/deliver/api/v1/projects/${id}?format=json`)
+			await api.fetch(dav, { method: 'DELETE' })
+			await api.dispose()
 		}
 	})
 })

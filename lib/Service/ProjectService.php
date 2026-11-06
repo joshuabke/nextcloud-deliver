@@ -622,13 +622,25 @@ class ProjectService {
 	}
 
 	/**
-	 * The Proxy a browser made where the server has no ffmpeg (ADR 0019),
-	 * uploaded next to the Version's file as for a replace; the upload goes
-	 * whether the Proxy is taken or refused.
+	 * A Proxy handed in: made by a browser where the server has no ffmpeg
+	 * (ADR 0019), or by hand with and without ffmpeg (ADR 0020), uploaded
+	 * next to the Version's file as for a replace; the upload goes whether
+	 * the Proxy is taken or refused.
 	 *
 	 * @throws InvalidRequestException the upload is not a file of its own next to the Version's file, or no Proxy of it
 	 */
-	public function giveProxy(string $uid, int $versionId, int $uploadId): array {
+	public function giveProxy(string $uid, int $versionId, int $uploadId, bool $converted = false): array {
+		return $this->handIn($uid, $versionId, $uploadId, fn (Version $version, File $file, File $upload) => $this->media->acceptProxy($version, $file, $upload, $converted));
+	}
+
+	/**
+	 * Hands an upload next to the Version's file to `$accept`; the upload goes
+	 * whether it is taken or refused. Needs Manage.
+	 *
+	 * @param callable(Version, File, File): void $accept takes the Version, its file and the upload
+	 * @throws InvalidRequestException the upload is not a file of its own next to the Version's file
+	 */
+	private function handIn(string $uid, int $versionId, int $uploadId, callable $accept): array {
 		[$version, $file, $grant] = $this->reachVersion($uid, $versionId);
 		if (!$grant->manages()) {
 			throw new AccessDeniedException('Manage is required');
@@ -644,10 +656,20 @@ class ProjectService {
 			throw new AccessDeniedException('Deleting the upload is not allowed');
 		}
 		try {
-			$this->media->acceptProxy($version, $file, $upload);
+			$accept($version, $file, $upload);
 		} finally {
 			$upload->delete();
 		}
+		return [];
+	}
+
+	/** Removes a Proxy handed in, so ffmpeg or a browser makes the next (ADR 0020) */
+	public function removeProxy(string $uid, int $versionId): array {
+		[$version, $file, $grant] = $this->reachVersion($uid, $versionId);
+		if (!$grant->manages()) {
+			throw new AccessDeniedException('Manage is required');
+		}
+		$this->media->removeProxy($version, $file instanceof File ? (int)$file->getSize() : 0);
 		return [];
 	}
 
@@ -680,29 +702,13 @@ class ProjectService {
 	 * @throws InvalidRequestException the upload is not a file of its own next to the Version's file, or no Captions
 	 */
 	public function giveCaptions(string $uid, int $versionId, int $uploadId, string $language): array {
-		[$version, $file, $grant] = $this->reachVersion($uid, $versionId);
-		if (!$grant->manages()) {
-			throw new AccessDeniedException('Manage is required');
-		}
-		$upload = $this->root->getUserFolder($uid)->getFirstNodeById($uploadId);
-		if (!$file instanceof File || !$upload instanceof File) {
-			throw new NotFoundException('File not found');
-		}
-		if ($upload->getId() === $file->getId() || $upload->getParent()->getId() !== $file->getParent()->getId() || $this->versions->findByFile($upload->getId()) !== null) {
-			throw new InvalidRequestException('The upload must be a file of its own next to the Version\'s file');
-		}
-		if (!$upload->isDeletable()) {
-			throw new AccessDeniedException('Deleting the upload is not allowed');
-		}
-		try {
+		$this->handIn($uid, $versionId, $uploadId, function (Version $version, File $file, File $upload) use ($language): void {
 			if ($upload->getSize() > Captions::MAX_BYTES) {
 				throw new InvalidRequestException('A captions file has at most 1 MB');
 			}
 			$this->captions->store($version->getId(), $language, $upload->getContent());
-		} finally {
-			$upload->delete();
-		}
-		return $this->versionPayload($version, $uid, $grant);
+		});
+		return $this->versionPayload($this->versions->find($versionId) ?? throw new NotFoundException('Version not found'), $uid);
 	}
 
 	/** Removes a Version's Captions in one language (#54) */
@@ -1405,6 +1411,9 @@ class ProjectService {
 					) || ($version->getPlayable() === null && $version->getDerivedError() !== null),
 					// Without ffmpeg, a Member with Manage may make its Proxy in the browser (ADR 0019)
 					'proxyFromBrowser' => $file !== null && $this->media->proxyFromBrowser($version, (int)$file->getSize()),
+					// A Member with Manage may hand in a Proxy where it gets one, and remove one handed in (ADR 0020)
+					'takesProxy' => $file !== null && $this->media->takesProxy($version, (int)$file->getSize()),
+					'proxyHandedIn' => (bool)$version->getProxyHandedIn(),
 				];
 			}
 			$newestFile = $files[$newestByAsset[$asset->getId()]->getId()] ?? null;

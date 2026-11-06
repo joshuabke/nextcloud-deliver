@@ -644,7 +644,10 @@
 		"SRT or WebVTT, at most 1 MB. A file named like cut.de.srt brings its language. A new file replaces the Captions in its language.": "SRT oder WebVTT, höchstens 1 MB. Eine Datei mit einem Namen wie cut.de.srt bringt ihre Sprache mit. Eine neue Datei ersetzt die Untertitel in ihrer Sprache.",
 		"Captions off": "Untertitel aus",
 		"Captions: {language}": "Untertitel: {language}",
-		"Off": "Aus"
+		"Off": "Aus",
+		"Upload Proxy…": "Proxy hochladen …",
+		"Remove Proxy": "Proxy entfernen",
+		"The Proxy could not be uploaded.": "Der Proxy konnte nicht hochgeladen werden."
 	},
 	"pluralForm": "nplurals=2; plural=(n != 1);"
 }

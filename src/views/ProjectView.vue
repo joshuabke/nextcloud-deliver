@@ -16,6 +16,8 @@ import stackIcon from '@mdi/svg/svg/layers-outline.svg?raw'
 import newVersionIcon from '@mdi/svg/svg/layers-plus.svg?raw'
 import searchIcon from '@mdi/svg/svg/magnify.svg?raw'
 import proxyIcon from '@mdi/svg/svg/movie-cog-outline.svg?raw'
+import uploadProxyIcon from '@mdi/svg/svg/movie-open-plus-outline.svg?raw'
+import removeProxyIcon from '@mdi/svg/svg/movie-open-remove-outline.svg?raw'
 import openIcon from '@mdi/svg/svg/open-in-app.svg?raw'
 import retryIcon from '@mdi/svg/svg/refresh.svg?raw'
 import renameIcon from '@mdi/svg/svg/rename-outline.svg?raw'
@@ -43,7 +45,7 @@ import NotUpForReviewCard from '../components/NotUpForReviewCard.vue'
 import ProjectSettingsDialog from '../components/ProjectSettingsDialog.vue'
 import RenameDialog from '../components/RenameDialog.vue'
 import VersionStack from '../components/VersionStack.vue'
-import { assignAsset, deleteAsset, disableAsset, enableFile, errorMessage, regenerateVersion, renameFile, stackVersion, updateAsset } from '../api.js'
+import { assignAsset, deleteAsset, disableAsset, enableFile, errorMessage, regenerateVersion, removeProxy, renameFile, stackVersion, updateAsset } from '../api.js'
 import { useQuery } from '../composables/query.js'
 import { confirmRemoval } from '../confirm.js'
 import { allMissing, between, FILTER_LABELS, FILTERS, found, passes, selectAll, SORT_OPTIONS, sortAssets, SORTS } from '../lib/filters.js'
@@ -68,6 +70,9 @@ const isMobile = useIsMobile()
 const searchOpen = ref(false)
 const uploads = useUploadsStore()
 const versionInput = ref(null)
+const proxyInput = ref(null)
+/** The Version a Proxy made by hand is picked for (ADR 0020) */
+let proxyFor = null
 /** The right-click menu: where, and its entries */
 const menu = ref(null)
 /** The Asset whose own menu is open, so it can show what the browser found out meanwhile */
@@ -448,6 +453,44 @@ async function makeProxy(version) {
 }
 
 /**
+ * @param {object} version - the newest Version of an Asset, which takes a Proxy made by hand
+ */
+function pickProxy(version) {
+	proxyFor = version
+	proxyInput.value.click()
+}
+
+/**
+ * Hands in the Proxy picked for a Version, made by hand (ADR 0020)
+ *
+ * @param {Event} event - the file input's change event
+ */
+async function uploadProxy(event) {
+	const file = event.target.files?.[0]
+	event.target.value = ''
+	if (!file || !proxyFor) {
+		return
+	}
+	error.value = await uploads.uploadProxy(proxyFor, file)
+	await store.fetch(props.id).catch(() => {})
+}
+
+/**
+ * Removes a Proxy handed in; ffmpeg or this browser makes the next (ADR 0020)
+ *
+ * @param {object} version - the newest Version of an Asset
+ */
+async function dropHandedIn(version) {
+	error.value = null
+	try {
+		await removeProxy(version.id)
+	} catch (e) {
+		error.value = errorMessage(e)
+	}
+	await store.fetch(props.id).catch(() => {})
+}
+
+/**
  * @param {object} asset - an Asset
  * @return {Array<object|false>} its menu
  */
@@ -460,6 +503,8 @@ function assetItems(asset) {
 		asset.manages && asset.filesWrite && { label: t('deliver', 'Upload a new Version'), icon: newVersionIcon, action: () => pickVersion(asset) },
 		asset.manages && newest.processingFailed && { label: t('deliver', 'Process again'), icon: retryIcon, action: () => processAgain([asset]) },
 		asset.manages && newest.proxyFromBrowser && newest.url && !uploads.proxies[newest.id] && proxyItem(asset),
+		asset.manages && newest.takesProxy && newest.url && !uploads.proxies[newest.id] && { label: t('deliver', 'Upload Proxy…'), icon: uploadProxyIcon, action: () => pickProxy(newest) },
+		asset.manages && newest.proxyHandedIn && !uploads.proxies[newest.id] && { label: t('deliver', 'Remove Proxy'), icon: removeProxyIcon, action: () => dropHandedIn(newest) },
 		asset.manages && asset.filesWrite && newest.url && newest.mimeType?.startsWith('video/') && { label: t('deliver', 'Add Captions…'), icon: captionsIcon, action: () => { captionsFor.value = newest } },
 		asset.manages && { label: asset.dueDate ? t('deliver', 'Change the Due Date') : t('deliver', 'Set a Due Date'), icon: dueIcon, action: () => { dueFor.value = [asset] } },
 		asset.manages && !isMobile.value && { label: t('deliver', 'Manage Versions'), icon: stackIcon, action: () => { managing.value = asset.id } },
@@ -752,6 +797,12 @@ function dropped(event) {
 				accept="video/*,audio/*,image/*"
 				hidden
 				@change="uploadStacked">
+			<input
+				ref="proxyInput"
+				type="file"
+				accept="video/mp4"
+				hidden
+				@change="uploadProxy">
 			<ContextMenu
 				v-if="menu"
 				v-bind="menu"
