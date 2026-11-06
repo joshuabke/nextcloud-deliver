@@ -28,7 +28,7 @@ import DrawToolbar from './DrawToolbar.vue'
 import PersonAvatar from './PersonAvatar.vue'
 import { useFullscreen } from '../composables/fullscreen.js'
 import { useGestures } from '../composables/gestures.js'
-import { languageName, startOf, toWebVtt } from '../lib/captions.js'
+import { languageName, toWebVtt } from '../lib/captions.js'
 import { COLORS, drawingsAt } from '../lib/drawing.js'
 import { DOUBLE_TAP_MS } from '../lib/gestures.js'
 import { actionFor } from '../lib/hotkeys.js'
@@ -260,7 +260,7 @@ watch([captionLanguage, () => props.version.id], async () => {
 		return
 	}
 	const text = await fetch(chosen.url).then((response) => response.ok ? response.text() : '').catch(() => '')
-	const vtt = toWebVtt(text, startOf(props.version))
+	const vtt = toWebVtt(text, props.version)
 	if (vtt !== null && props.version.id === id && captionLanguage.value === chosen.language) {
 		captionTrack.value = URL.createObjectURL(new Blob([vtt], { type: 'text/vtt' }))
 	}

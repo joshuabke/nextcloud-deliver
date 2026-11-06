@@ -2,7 +2,7 @@
  * Captions (#54): SRT or WebVTT as the server stores them, made into the
  * WebVTT a <track> plays. Display only, nothing goes back to the server.
  */
-import { fpsValue, smpte } from './timecode.js'
+import { fpsValue } from './timecode.js'
 
 /** The largest file Deliver takes, as the server checks it */
 export const MAX_BYTES = 1024 * 1024
@@ -38,10 +38,10 @@ function stamp(value) {
  * that timecode, so they move back by it; otherwise they stay as they are.
  *
  * @param {string} text - SRT or WebVTT, a byte order mark allowed
- * @param {number} start - the Version's start timecode in seconds, from startOf
+ * @param {?{startFrame?: number, fps: {num: number, den: number}}} version - the Version they play on; null takes the cues as they are
  * @return {?string} WebVTT, or null when not a single cue can be read
  */
-export function toWebVtt(text, start = 0) {
+export function toWebVtt(text, version = null) {
 	const lines = text.replace(/^\uFEFF/, '').split(/\r\n|\r|\n/)
 	const vtt = /^WEBVTT(\s|$)/.test(lines[0])
 	const timings = lines.map((line) => TIMING.exec(line))
@@ -49,8 +49,10 @@ export function toWebVtt(text, start = 0) {
 	if (starts.length === 0) {
 		return null
 	}
-	// A millisecond of slack for a start that is a fraction of a second
-	const shift = start > 0 && starts.every((each) => each >= start - 0.001) ? start : 0
+	const start = version ? startOf(version) : 0
+	// Half a Frame of slack: an editing application writes the first Frame's time cut to the millisecond (3603.599 for 3603.6)
+	const slack = version ? 0.5 / fpsValue(version.fps) : 0
+	const shift = start > 0 && starts.every((each) => each >= start - slack) ? start : 0
 	const body = lines.map((line, i) => {
 		const timing = timings[i]
 		// SRT carries coordinates after the times that WebVTT would misread as cue settings
@@ -61,18 +63,15 @@ export function toWebVtt(text, start = 0) {
 }
 
 /**
- * The start timecode as the clock time it reads, `01:00:00:00` as an hour:
- * an editing application times its captions against the timeline's timecode.
+ * The start timecode as media time, its Frames over the true rate, as
+ * Resolve and Premiere time captions: `01:00:00:00` at 23.976 is 3603.6
+ * seconds, exact at every rate, drop-frame included.
  *
- * @param {{startFrame?: number, fps: {num: number, den: number}, dropFrame?: boolean}} version - the Version
+ * @param {{startFrame?: number, fps: {num: number, den: number}}} version - the Version
  * @return {number} seconds
  */
-export function startOf({ startFrame = 0, fps, dropFrame = false }) {
-	if (!startFrame) {
-		return 0
-	}
-	const [hours, minutes, secs, frames] = smpte(startFrame, fps, dropFrame).split(/[:;]/).map(Number)
-	return hours * 3600 + minutes * 60 + secs + frames / Math.round(fpsValue(fps))
+export function startOf({ startFrame = 0, fps }) {
+	return startFrame ? startFrame * fps.den / fps.num : 0
 }
 
 /**

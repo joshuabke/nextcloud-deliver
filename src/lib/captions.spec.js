@@ -33,24 +33,35 @@ describe('SRT and WebVTT for the player', () => {
 
 describe('the start timecode', () => {
 	const srt = '1\n01:00:00,000 --> 01:00:02,000\nFirst\n\n2\n01:00:10,500 --> 01:00:12,000\nSecond\n'
+	const at = (startFrame, fps = PAL) => ({ startFrame, fps })
 
 	it('moves cues timed against the start timecode back by it', () => {
-		expect(toWebVtt(srt, 3600)).toBe('WEBVTT\n\n1\n00:00:00.000 --> 00:00:02.000\nFirst\n\n2\n00:00:10.500 --> 00:00:12.000\nSecond\n')
+		expect(toWebVtt(srt, at(90000))).toBe('WEBVTT\n\n1\n00:00:00.000 --> 00:00:02.000\nFirst\n\n2\n00:00:10.500 --> 00:00:12.000\nSecond\n')
 	})
 
 	it('leaves cues as they are when one lies before the start, or the start is 0', () => {
 		const early = '1\n00:59:59,000 --> 01:00:01,000\nEarly\n\n2\n01:00:05,000 --> 01:00:06,000\nLate\n'
-		expect(toWebVtt(early, 3600)).toContain('00:59:59.000 --> 01:00:01.000')
-		expect(toWebVtt(srt, 0)).toContain('01:00:00.000 --> 01:00:02.000')
-		expect(toWebVtt('1\n00:00:01,000 --> 00:00:02,000\nA\n', 3600)).toContain('00:00:01.000 --> 00:00:02.000')
+		expect(toWebVtt(early, at(90000))).toContain('00:59:59.000 --> 01:00:01.000')
+		expect(toWebVtt(srt, at(0))).toContain('01:00:00.000 --> 01:00:02.000')
+		expect(toWebVtt(srt)).toContain('01:00:00.000 --> 01:00:02.000')
+		expect(toWebVtt('1\n00:00:01,000 --> 00:00:02,000\nA\n', at(90000))).toContain('00:00:01.000 --> 00:00:02.000')
 	})
 
-	it('reads the start timecode as the clock time it shows', () => {
-		expect(startOf({ startFrame: 0, fps: PAL })).toBe(0)
-		expect(startOf({ startFrame: 90000, fps: PAL })).toBe(3600)
-		expect(startOf({ startFrame: 90001, fps: PAL })).toBeCloseTo(3600.04)
-		// 01:00:00:00 at 23.976 is frame 86400, an hour on the timecode
-		expect(startOf({ startFrame: 86400, fps: FILM })).toBe(3600)
+	it('reads the start timecode as media time, its Frames over the true rate', () => {
+		expect(startOf(at(0))).toBe(0)
+		expect(startOf(at(90000))).toBe(3600)
+		expect(startOf(at(90001))).toBeCloseTo(3600.04)
+		// 01:00:00:00 at 23.976 is frame 86400, 3603.6 seconds into the media
+		expect(startOf(at(86400, FILM))).toBeCloseTo(3603.6, 6)
+		// 01:00:00;00 drop-frame at 29.97 is frame 107892
+		expect(startOf(at(107892, { num: 30000, den: 1001 }))).toBeCloseTo(3599.9964, 4)
+	})
+
+	it('shifts a cue on the first Frame, written cut to the millisecond', () => {
+		// Premiere: 10:00:00:00 at 23.976, a cue at 10:00:02:05 written as 10:00:38,210
+		const film = '1\n01:00:03,599 --> 01:00:05,000\nFirst Frame\n\n2\n01:00:05,810 --> 01:00:07,000\nLater\n'
+		expect(toWebVtt(film, at(86400, FILM))).toBe('WEBVTT\n\n1\n00:00:00.000 --> 00:00:01.400\nFirst Frame\n\n2\n00:00:02.210 --> 00:00:03.400\nLater\n')
+		expect(toWebVtt('1\n10:00:38,210 --> 10:00:40,000\nA\n', at(864000, FILM))).toContain('00:00:02.210 --> 00:00:04.000')
 	})
 })
 

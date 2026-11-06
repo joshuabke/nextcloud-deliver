@@ -50,6 +50,6 @@ A video can carry **Captions**, one SRT or WebVTT file per language.
 
 - A Member with **Manage** adds them with **Add Captions…** in the menu of the Asset card: pick the `.srt` or `.vtt` file (at most 1 MB), and the language. A file named like `cut_v3.de.srt` or `cut_v3.en.vtt` brings its language along; otherwise pick it from the list.
 - They belong to the newest Version, the one the card shows. Adding a file in a language the Version has already replaces the old one; the same dialog lists the languages and removes them.
-- Captions timed against the timeline's start timecode, as an editing application exports them from a timeline at 01:00:00:00, line up with a Version that starts there: when no cue starts before the Version's start timecode, every cue moves back by it.
+- Captions timed against the timeline's start timecode, as an editing application exports them from a timeline at 01:00:00:00, line up with a Version that starts there: when no cue starts before the Version's start timecode, every cue moves back by it. The start timecode counts as Resolve and Premiere count it: at 23.976 fps, 01:00:00:00 lies 3603.6 seconds into the media.
 - In the player, the **CC** button turns them on in one of their languages and off again. They start off. Members and Reviewers on a Review Link see them; Compare does not show them.
 - Deliver only shows them: it does not edit them, burn them into the picture or export them. They stay through **Process again** and a new file under the same name, and go when the Version goes.
