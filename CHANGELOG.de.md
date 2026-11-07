@@ -1,15 +1,18 @@
 # Änderungen
 
-## Unveröffentlicht
-- Die Assets markiert, die deine Review-Links auslassen, weil Dateien dich ihre Dateien nicht teilen lässt, etwa Dateien auf einem externen Speicher ohne „Teilen aktivieren“.
-- Die verbleibende Zeit neben dem Prozentwert gezeigt, solange dieser Browser einen Proxy erzeugt.
+## 0.12.0 – 2026-11-07
+
+### Neu
 - Untertitel als SRT oder WebVTT zu einer Version hinzugefügt, eine Datei je Sprache, und sie im Player unter einer CC-Schaltfläche gezeigt.
+- „Proxy hochladen …“ und „Proxy entfernen“ zur Asset-Karte hinzugefügt; ein übergebener Proxy wird auch mit ffmpeg angenommen.
 - Mit ffmpeg einen Scrub-Proxy für jede Video-Version erzeugt, für ältere einige pro Stunde, beim Überfahren der Zeitleiste und der Asset-Karte durch ihn gescrubbt und das Standbild der Asset-Karte aus ihm genommen, wo Nextcloud keines rendert; beides greift auf den Proxy oder das Original zurück, wo der Browser ihn nicht abspielen kann.
 - Einen Scrub-Proxy aus dem Browser über `POST /versions/{id}/scrub` angenommen, wenn der Server kein ffmpeg hat.
-- „Proxy hochladen …“ und „Proxy entfernen“ zur Asset-Karte hinzugefügt; ein übergebener Proxy wird auch mit ffmpeg angenommen.
+- Die verbleibende Zeit neben dem Prozentwert gezeigt, solange dieser Browser einen Proxy erzeugt.
+- Die Assets markiert, die deine Review-Links auslassen, weil Dateien dich ihre Dateien nicht teilen lässt, etwa Dateien auf einem externen Speicher ohne „Teilen aktivieren“.
+
+### Geändert
 - Vorschauleiste, Wellenform und Scrub-Proxy jedes Videos im Durchlauf des hochladenden Browsers erzeugt, wenn der Server kein ffmpeg hat, auch aus einem von Hand hochgeladenen Proxy.
 - „Proxy in diesem Browser erzeugen“ auf der Asset-Karte durch „Fehlende abgeleitete Medien in diesem Browser erzeugen“ ersetzt.
-- Eine Umwandlung, der ein Proxy von Hand zuvorkommt, als angehalten statt fehlgeschlagen gezeigt.
 
 ## 0.11.1 – 2026-11-05
 
