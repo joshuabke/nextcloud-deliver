@@ -13,6 +13,15 @@ For admins: what Deliver needs, what it does in the background, and how to tune 
 
 Deliver locks the file of every Version with Comments or Approvals through Nextcloud's file locking app `files_lock` (shipped, enabled by default; ADR 0018). Without it, or with a Project's switch off, nothing is locked and an overwrite is marked and notified instead. The lock shows in Files as held by Deliver; the file's owner lifts it there, and `occ files:lock --unlock <file id>` lifts it from the command line. A lifted lock comes back with the next Comment or Approval on that Version, or when the Project's setting is switched off and on. If you set a lock timeout in `files_lock`, Deliver's locks expire with it.
 
+## External storage
+
+Files on an external storage (the `files_external` app) are on Review Links like any other file, as far as the Member who made the link may share them in Files (ADR 0010). Two settings of the storage decide that:
+
+- **Enable sharing**, in the storage's options, is off for a new storage. Without it Nextcloud lets nobody share its files, so they show in a Project but never on a Review Link, and the Project marks them as not on the Member's Review Links. Switch it on in the admin settings under External storage, or with `occ files_external:option <mount id> enable_sharing true`.
+- **Authentication**: a Review Link opens the files of the Member who made it while nobody is logged in. A storage that authenticates with the login credentials kept in the session cannot be opened then, so its files stay off the link. Save the login credentials in the database instead, or give the storage credentials of its own.
+
+A storage you add or make applicable to someone reaches Deliver, the Project page and their Review Links only with their next full setup of the filesystem: Nextcloud caches each user's mounts for up to 5 minutes (`fs_mount_cache_duration`). Opening their root folder in Files sets them up again at once.
+
 ## Derived media
 
 `ffprobe` reads the frame rate as a fraction, the start timecode and the duration in Frames; `ffmpeg` makes a Proxy for anything a browser will not play and for originals above the Proxy bitrate threshold, a WebP Thumbnail Strip for the timeline, a Waveform for the audio and, for every video Version, a Scrub Proxy that hover previews on the timeline and on Asset cards scrub through: H.264 at 320 pixels wide, a keyframe a second, about 250 kbit/s and no sound, so about 1.9 MB of app data per minute of video. Versions from before Deliver made Scrub Proxies get one from the hourly job, ten at a time once the last ten are done, the newest first; Scrub Proxies run after all other jobs and never hold them up, as other jobs start beside them even where Scrub Proxies fill `max_jobs`; without ffmpeg the server makes none, and hover previews scrub through the Proxy or the original as before. Everything lands in app data, never in a user folder, and is served with byte ranges so the player can seek.

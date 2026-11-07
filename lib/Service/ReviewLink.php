@@ -198,7 +198,7 @@ class ReviewLink {
 			}
 			$file = $home->getFirstNodeById($version->getFileId());
 			// What the Member may not reshare, or not see, stays out, as Nextcloud would keep it out of a link of theirs
-			if ($file instanceof File && $file->isShareable() && ProjectService::viewable($file)) {
+			if ($file instanceof File && ProjectService::linkable($file)) {
 				$files[$version->getId()] = $file;
 				$byAsset[$version->getAssetId()][] = $version;
 			}

@@ -173,6 +173,8 @@ const filters = computed(() => FILTERS.map((id) => ({
 const shown = computed(() => inView.value.filter((asset) => passes(asset, filter.value, me) && found(asset, query.value)))
 // Sorted within each folder, the folders themselves by path
 const groups = computed(() => groupByFolder(sortAssets(shown.value, sort.value)))
+/** The Assets my Review Links leave out, where I make links: Files does not let me share their files (ADR 0010) */
+const offLinks = computed(() => project.value?.access?.share ? project.value.assets.filter((asset) => asset.offLinks).length : 0)
 // Ticked Assets a filter, a search or another folder takes off the screen are no longer ticked: the menu acts only on what is in sight
 watch(shown, (now) => {
 	selected.value = selected.value.filter((id) => now.some((asset) => asset.id === id))
@@ -754,6 +756,9 @@ function dropped(event) {
 						@change="selected = selected.length ? [] : selectable.map((asset) => asset.id)">
 				</template>
 			</FilterBar>
+			<NcNoteCard v-if="offLinks" type="warning">
+				{{ n('deliver', '%n Asset is not on your Review Links: Files does not let you share its file. On an external storage, an admin switches on "Enable sharing" for it.', '%n Assets are not on your Review Links: Files does not let you share their files. On an external storage, an admin switches on "Enable sharing" for it.', offLinks) }}
+			</NcNoteCard>
 			<NcEmptyContent
 				v-if="project.assets.length && shown.length === 0"
 				:name="t('deliver', 'No Asset fits')" />
@@ -780,6 +785,7 @@ function dropped(event) {
 						:selected="selected.includes(asset.id)"
 						:selecting="selected.length > 0"
 						:locked="tickedMissing !== null && tickedMissing !== allMissing(asset)"
+						:offLinks="offLinks > 0 && asset.offLinks"
 						@select="toggle(asset, $event)"
 						@pick="pick(asset, $event)"
 						@stack="accept"

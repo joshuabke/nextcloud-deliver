@@ -1210,6 +1210,15 @@ class ProjectService {
 		return self::shareOf($node)?->canSeeContent() ?? true;
 	}
 
+	/**
+	 * Whether a Review Link the user makes takes the file: Files lets them share
+	 * it, as Nextcloud would reshare it (ADR 0010). Not on an external storage
+	 * whose "Enable sharing" is off, which is how files_external makes them.
+	 */
+	public static function linkable(File $file): bool {
+		return $file->isShareable() && self::viewable($file);
+	}
+
 	/** The share the user reaches the node through; null for their own files */
 	private static function shareOf(Node $node): ?IShare {
 		$storage = $node->getStorage();
@@ -1428,6 +1437,7 @@ class ProjectService {
 				];
 			}
 			$newestFile = $files[$newestByAsset[$asset->getId()]->getId()] ?? null;
+			$opened = array_values(array_filter(array_map(static fn (Version $version) => $files[$version->getId()] ?? null, $stack)));
 			$manages = $this->managesAsset($uid, $project, $newestByAsset[$asset->getId()], $files);
 			$result[] = [
 				'id' => $asset->getId(),
@@ -1439,6 +1449,8 @@ class ProjectService {
 				'manages' => $manages,
 				// Upload a new Version, rename it, delete it: Files' write access to its newest file
 				'filesWrite' => $newestFile !== null && Access::canWrite($newestFile),
+				// Left out of this Member's Review Links, as ReviewLink takes them: Files lets them share none of its files
+				'offLinks' => $opened !== [] && array_filter($opened, self::linkable(...)) === [],
 				// For sorting: when its first Version arrived, and when anything last happened on it
 				'createdAt' => min(array_map(static fn (Version $version) => $version->getCreatedAt(), $stack)),
 				'lastActivity' => max(array_map(

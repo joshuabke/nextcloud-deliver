@@ -29,6 +29,10 @@ Your media stays in Files. Deliver keeps the review around it: Comments, Drawing
 - **Remove Proxy** in the same menu takes it away; then Deliver makes one again, or, without ffmpeg on the server, offers **Make missing derived media in this browser**. **Regenerate** and a file written again drop it too.
 - The Proxy is kept with Deliver's other Proxies, not in your folder, so naming a file `cut.proxy.mp4` makes it nothing special.
 
+### Files you may not share
+
+A Review Link shows only the files whoever made it may share in Files. A file shared with you without resharing, or one on an external storage whose admin has not switched on "Enable sharing", stays in your Project but off your Review Links: its Asset card says **Not on your Review Links**, and the Project says how many such Assets it has.
+
 ### One file, one Version, one Project
 
 - A file is one **Version** at most, and it belongs to one Project at most, or to **No Project**. The same file cannot be reviewed in two Projects.

@@ -4,6 +4,7 @@ import approvedIcon from '@mdi/svg/svg/check-decagram.svg?raw'
 import commentIcon from '@mdi/svg/svg/comment-outline.svg?raw'
 import moreIcon from '@mdi/svg/svg/dots-horizontal.svg?raw'
 import assetIcon from '@mdi/svg/svg/filmstrip.svg?raw'
+import offLinksIcon from '@mdi/svg/svg/link-variant-off.svg?raw'
 import audioIcon from '@mdi/svg/svg/waveform.svg?raw'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed } from 'vue'
@@ -33,6 +34,8 @@ const props = defineProps({
 	selecting: { type: Boolean, default: false },
 	/** Whether it may not join the ticked ones: Missing Assets go only with Missing ones (story 141) */
 	locked: { type: Boolean, default: false },
+	/** Whether my Review Links leave it out: Files does not let me share its file (ADR 0010) */
+	offLinks: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['stack', 'menu', 'versions', 'select', 'pick'])
@@ -174,6 +177,10 @@ const status = computed(() => {
 				<NcIconSvgWrapper :svg="moreIcon" />
 			</template>
 		</NcButton>
+		<div v-if="offLinks" class="deliver-card__suggestion" :title="t('deliver', 'Files does not let you share this file')">
+			<NcIconSvgWrapper :svg="offLinksIcon" :size="16" inline />
+			<span>{{ t('deliver', 'Not on your Review Links') }}</span>
+		</div>
 		<div v-if="autoStacked" class="deliver-card__suggestion">
 			<span>{{ t('deliver', 'Stacked automatically, going by its name') }}</span>
 			<NcButton variant="secondary" @click="emit('versions', asset)">

@@ -652,7 +652,13 @@ OC.L10N.register(
 		"Deliver is making the derived media of {name} in this browser: {percent} %, {left}. Keep this tab open.": "Deliver erzeugt die abgeleiteten Medien von {name} in diesem Browser: {percent} %, {left}. Lass diesen Tab offen.",
 		"Deliver is making the derived media of {name} in this browser: {percent} %. Keep this tab open.": "Deliver erzeugt die abgeleiteten Medien von {name} in diesem Browser: {percent} %. Lass diesen Tab offen.",
 		"Deliver could not make the derived media of {name} in this browser.": "Deliver konnte die abgeleiteten Medien von {name} in diesem Browser nicht erzeugen.",
-		"Stopped": "Angehalten"
+		"Stopped": "Angehalten",
+		"Not on your Review Links": "Nicht auf deinen Review-Links",
+		"Files does not let you share this file": "Dateien lässt dich diese Datei nicht teilen",
+		"_%n Asset is not on your Review Links: Files does not let you share its file. On an external storage, an admin switches on \"Enable sharing\" for it._::_%n Assets are not on your Review Links: Files does not let you share their files. On an external storage, an admin switches on \"Enable sharing\" for it._": [
+			"%n Asset ist nicht auf deinen Review-Links: Dateien lässt dich seine Datei nicht teilen. Auf einem externen Speicher schaltet eine Administration dafür „Teilen aktivieren“ ein.",
+			"%n Assets sind nicht auf deinen Review-Links: Dateien lässt dich ihre Dateien nicht teilen. Auf einem externen Speicher schaltet eine Administration dafür „Teilen aktivieren“ ein."
+		]
 	},
 	"nplurals=2; plural=(n != 1);"
 );
