@@ -7,6 +7,7 @@
 - „Proxy hochladen …“ und „Proxy entfernen“ zur Asset-Karte hinzugefügt; ein übergebener Proxy wird auch mit ffmpeg angenommen.
 - Mit ffmpeg einen Scrub-Proxy für jede Video-Version erzeugt, für ältere einige pro Stunde, beim Überfahren der Zeitleiste und der Asset-Karte durch ihn gescrubbt und das Standbild der Asset-Karte aus ihm genommen, wo Nextcloud keines rendert; beides greift auf den Proxy oder das Original zurück, wo der Browser ihn nicht abspielen kann.
 - Einen Scrub-Proxy aus dem Browser über `POST /versions/{id}/scrub` angenommen, wenn der Server kein ffmpeg hat.
+- `POST /versions/{id}/captions`, `DELETE /versions/{id}/captions/{language}` und `DELETE /versions/{id}/proxy` ergänzt.
 - Die verbleibende Zeit neben dem Prozentwert gezeigt, solange dieser Browser einen Proxy erzeugt.
 - Die Assets markiert, die deine Review-Links auslassen, weil Dateien dich ihre Dateien nicht teilen lässt, etwa Dateien auf einem externen Speicher ohne „Teilen aktivieren“.
 

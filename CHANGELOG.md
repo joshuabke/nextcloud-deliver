@@ -7,6 +7,7 @@
 - Add "Upload Proxy…" and "Remove Proxy" to the Asset card, and take a Proxy handed in with ffmpeg too.
 - Make a Scrub Proxy of every video Version with ffmpeg, of older ones a few each hour, scrub through it on hover on the timeline and the Asset card, and take the Asset card's still from it where Nextcloud renders none; both fall back to the Proxy or the original where the browser cannot play it.
 - Take a Scrub Proxy from the browser through `POST /versions/{id}/scrub` where the server has no ffmpeg.
+- Add `POST /versions/{id}/captions`, `DELETE /versions/{id}/captions/{language}` and `DELETE /versions/{id}/proxy`.
 - Show the time left next to the percentage while this browser encodes a Proxy.
 - Mark the Assets your Review Links leave out because Files does not let you share their files, such as files on an external storage without "Enable sharing".
 
