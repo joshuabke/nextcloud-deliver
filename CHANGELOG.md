@@ -1,15 +1,19 @@
 # Changelog
 
-## Unreleased
-- Mark the Assets your Review Links leave out because Files does not let you share their files, such as files on an external storage without "Enable sharing".
-- Show the time left next to the percentage while this browser encodes a Proxy.
+## 0.12.0 – 2026-11-07
+
+### Added
 - Add Captions to a Version as SRT or WebVTT, one file per language, and show them in the player under a CC button.
+- Add "Upload Proxy…" and "Remove Proxy" to the Asset card, and take a Proxy handed in with ffmpeg too.
 - Make a Scrub Proxy of every video Version with ffmpeg, of older ones a few each hour, scrub through it on hover on the timeline and the Asset card, and take the Asset card's still from it where Nextcloud renders none; both fall back to the Proxy or the original where the browser cannot play it.
 - Take a Scrub Proxy from the browser through `POST /versions/{id}/scrub` where the server has no ffmpeg.
-- Add "Upload Proxy…" and "Remove Proxy" to the Asset card, and take a Proxy handed in with ffmpeg too.
+- Add `POST /versions/{id}/captions`, `DELETE /versions/{id}/captions/{language}` and `DELETE /versions/{id}/proxy`.
+- Show the time left next to the percentage while this browser encodes a Proxy.
+- Mark the Assets your Review Links leave out because Files does not let you share their files, such as files on an external storage without "Enable sharing".
+
+### Changed
 - Make the Thumbnail Strip, Waveform and Scrub Proxy of every video in the uploading browser's pass where the server has no ffmpeg, also from a Proxy uploaded by hand.
 - Replace "Make Proxy in this browser" on the Asset card with "Make missing derived media in this browser".
-- Show a conversion overtaken by a Proxy by hand as stopped instead of failed.
 
 ## 0.11.1 – 2026-11-05
 
