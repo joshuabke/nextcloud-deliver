@@ -52,6 +52,7 @@ import { allMissing, between, FILTER_LABELS, FILTERS, found, passes, selectAll, 
 import { groupByFolder, inFolder, projectDavPath, projectDir } from '../lib/folders.js'
 import { n, t } from '../lib/l10n.js'
 import { acceptFor, mediaKind, stackKind } from '../lib/media.js'
+import { isOriginal } from '../lib/original.js'
 import { cannotConvert, inspect } from '../lib/proxy.js'
 import { offer } from '../lib/proxyPlan.js'
 import { stackSuggestions } from '../lib/suggestions.js'
@@ -72,6 +73,8 @@ const searchOpen = ref(false)
 const uploads = useUploadsStore()
 const versionInput = ref(null)
 const proxyInput = ref(null)
+const originalInput = ref(null)
+let originalFor = null
 /** The Version a Proxy made by hand is picked for (ADR 0020) */
 let proxyFor = null
 /** The right-click menu: where, and its entries */
@@ -418,18 +421,25 @@ function openMenu(event, asset) {
 const proxyChecks = ref({})
 
 /**
+ * @param {object} version - the newest Version of an Asset
+ * @return {string} the key its check is stored under; read again once a Proxy arrives or something else is made
+ */
+function checkKey(version) {
+	return [version.id, version.playUrl, ...version.derivedFromBrowser].join(' ')
+}
+
+/**
  * The action for a Version that lacks derived media where the server has no
  * ffmpeg (#168): offered once this browser has read the headers of the file
  * it would decode, the Proxy where there is one, else the original, and can
  * make what is missing; otherwise it says why not.
  *
  * @param {object} asset - an Asset whose newest Version lacks derived media
- * @return {object} its menu entry
+ * @return {object|false} its menu entry
  */
 function missingItem(asset) {
 	const version = asset.versions[0]
-	// Read again once a Proxy arrives or something else is made
-	const key = [version.id, version.playUrl, ...version.derivedFromBrowser].join(' ')
+	const key = checkKey(version)
 	const check = proxyChecks.value[key]
 	if (check === undefined) {
 		proxyChecks.value[key] = null
@@ -462,6 +472,46 @@ async function makeMissing(version, file = null) {
 		error.value = status.error ?? t('deliver', 'This browser could not make the derived media.')
 	}
 	await store.fetch(props.id).catch(() => {})
+}
+
+/**
+ * The same, from a copy of the original on this computer, where the server has none to read (sync clients, Auto Intake)
+ *
+ * @param {object} asset - an Asset whose newest Version lacks derived media
+ * @return {?object} its menu entry, null where making it is not offered
+ */
+function missingFromFileItem(asset) {
+	const version = asset.versions[0]
+	return proxyChecks.value[checkKey(version)]?.offered === 'make'
+		? { label: t('deliver', 'Make missing derived media from a file on this computer'), icon: proxyIcon, action: () => pickOriginal(version) }
+		: null
+}
+
+/**
+ * @param {object} version - the newest Version of an Asset, whose original this browser picks
+ */
+function pickOriginal(version) {
+	originalFor = version
+	originalInput.value.click()
+}
+
+/**
+ * Makes what the Version lacks from the picked file, if it is the original
+ *
+ * @param {Event} event - the file input's change event
+ */
+async function uploadOriginal(event) {
+	const file = event.target.files?.[0]
+	event.target.value = ''
+	if (!file || !originalFor) {
+		return
+	}
+	const version = originalFor
+	if (!isOriginal(file, version)) {
+		error.value = t('deliver', 'This file is not the original of this Version: its size or date differs.')
+		return
+	}
+	await makeMissing(version, file)
 }
 
 /**
@@ -520,6 +570,7 @@ function assetItems(asset) {
 		asset.manages && asset.filesWrite && { label: t('deliver', 'Upload a new Version'), icon: newVersionIcon, action: () => pickVersion(asset) },
 		asset.manages && newest.processingFailed && { label: t('deliver', 'Process again'), icon: retryIcon, action: () => processAgain([asset]) },
 		asset.manages && newest.derivedFromBrowser?.length && newest.playUrl && !uploads.passing(newest.id) && missingItem(asset),
+		asset.manages && newest.derivedFromBrowser?.length && newest.playUrl && !uploads.passing(newest.id) && missingFromFileItem(asset),
 		asset.manages && newest.takesProxy && newest.url && !uploads.proxies[newest.id] && { label: t('deliver', 'Upload Proxy…'), icon: uploadProxyIcon, action: () => pickProxy(newest) },
 		asset.manages && newest.proxyHandedIn && !uploads.proxies[newest.id] && { label: t('deliver', 'Remove Proxy'), icon: removeProxyIcon, action: () => dropHandedIn(newest) },
 		asset.manages && asset.filesWrite && newest.url && newest.mimeType?.startsWith('video/') && { label: t('deliver', 'Add Captions…'), icon: captionsIcon, action: () => { captionsFor.value = newest } },
@@ -824,6 +875,12 @@ function dropped(event) {
 				accept="video/mp4"
 				hidden
 				@change="uploadProxy">
+			<input
+				ref="originalInput"
+				type="file"
+				accept="video/*,audio/*"
+				hidden
+				@change="uploadOriginal">
 			<ContextMenu
 				v-if="menu"
 				v-bind="menu"

@@ -764,6 +764,9 @@ class ProjectService {
 		return $this->describeVersion($version, $this->settingsOf($version), $file === null ? null : $this->davUrl($uid, $file), $media)
 			+ [
 				'mimeType' => $file?->getMimeType(),
+				// A local copy of the original is taken for it by size and date (the browser cannot read its checksum)
+				'fileSize' => $file === null ? null : (int)$file->getSize(),
+				'fileModified' => $file?->getMTime(),
 				'manages' => $grant->manages(),
 				'deliveredBy' => $this->deliveredBy($version),
 				'createdAt' => $version->getCreatedAt(),
@@ -1429,6 +1432,8 @@ class ProjectService {
 						[$version->getProxyState(), $version->getThumbsState(), $version->getWaveformState()],
 						true,
 					) || ($version->getPlayable() === null && $version->getDerivedError() !== null),
+					'fileSize' => $file === null ? null : (int)$file->getSize(),
+					'fileModified' => $file?->getMTime(),
 					// Without ffmpeg, a Member with Manage may make what it lacks in the browser, its Proxy too (ADR 0019), in one pass (#168)
 					'derivedFromBrowser' => $file === null ? [] : $this->media->fromBrowser($version, (int)$file->getSize()),
 					// A Member with Manage may hand in a Proxy where it gets one, and remove one handed in (ADR 0020)

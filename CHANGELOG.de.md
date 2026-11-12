@@ -1,5 +1,10 @@
 # Änderungen
 
+## Unveröffentlicht
+
+### Neu
+- Die fehlenden abgeleiteten Medien eines Videos, das ohne sie hereingekommen ist, aus einer Kopie des Originals auf diesem Computer erzeugen, geprüft nach Größe und Datum, statt das Original herunterzuladen.
+
 ## 0.12.1 – 2026-11-12
 
 ### Behoben

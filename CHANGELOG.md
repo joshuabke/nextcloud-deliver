@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Make the derived media of a video that arrived without it from a copy of the original on this computer, checked by size and date, instead of downloading the original.
+
 ## 0.12.1 – 2026-11-12
 
 ### Fixed

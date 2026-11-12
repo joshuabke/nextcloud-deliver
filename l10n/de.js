@@ -658,7 +658,9 @@ OC.L10N.register(
 		"_%n Asset is not on your Review Links: Files does not let you share its file. On an external storage, an admin switches on \"Enable sharing\" for it._::_%n Assets are not on your Review Links: Files does not let you share their files. On an external storage, an admin switches on \"Enable sharing\" for it._": [
 			"%n Asset ist nicht auf deinen Review-Links: Dateien lässt dich seine Datei nicht teilen. Auf einem externen Speicher schaltet eine Administration dafür „Teilen aktivieren“ ein.",
 			"%n Assets sind nicht auf deinen Review-Links: Dateien lässt dich ihre Dateien nicht teilen. Auf einem externen Speicher schaltet eine Administration dafür „Teilen aktivieren“ ein."
-		]
+		],
+		"Make missing derived media from a file on this computer": "Fehlende abgeleitete Medien aus einer Datei auf diesem Computer erzeugen",
+		"This file is not the original of this Version: its size or date differs.": "Diese Datei ist nicht das Original dieser Version: Größe oder Datum weichen ab."
 	},
 	"nplurals=2; plural=(n != 1);"
 );
