@@ -30,21 +30,13 @@
 
 Without ffmpeg on the server, the browser that uploads a file makes a Proxy of it when the file does not play. A file that plays directly needs no Proxy, unless its bitrate is above the admin's threshold (20 Mbit/s by default). The uploading browser must decode the codec for this.
 
-<table>
-<tr>
-<th align="left">Plays directly</th>
-<th align="left">Proxy made on upload</th>
-<th align="left">Needs ffmpeg</th>
-</tr>
-<tr>
-<td valign="top">
+**Plays directly**
 
 - H.264, 8-bit 4:2:0 (Baseline, Main, High), in MP4, MOV and MKV, with AAC or MP3 audio
 - VP8 and VP9 in WebM and MKV, with Opus or Vorbis audio
 - Audio: MP3, AAC, FLAC, Ogg (Vorbis, Opus, FLAC), WAV (PCM)
 
-</td>
-<td valign="top">
+**Proxy made on upload**
 
 - H.264, 10-bit or 4:2:2 (High 10, High 4:2:2, High 4:4:4), and H.264 in WebM
 - H.265, 8-bit and 10-bit alike, in every browser that decodes it
@@ -53,16 +45,11 @@ Without ffmpeg on the server, the browser that uploads a file makes a Proxy of i
 - ProRes, decoded in the browser
 - AC-3, E-AC-3 and other audio in video files
 
-</td>
-<td valign="top">
+**Needs ffmpeg**
 
 - DNxHD
 - MXF, AVI, MPEG-TS
 - Audio-only files in other formats
-
-</td>
-</tr>
-</table>
 
 - Subtitles: SRT and WebVTT, one file per language
 - Images: JPEG, PNG, WebP, GIF, AVIF
