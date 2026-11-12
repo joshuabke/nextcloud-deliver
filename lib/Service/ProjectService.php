@@ -761,14 +761,18 @@ class ProjectService {
 		$file = $this->root->getUserFolder($uid)->getFirstNodeById($version->getFileId());
 		$file = $file instanceof File ? $file : null;
 		$media = $this->urls->linkToRoute('deliver.media.show', ['id' => $version->getId(), 'kind' => '__kind__']);
+		$bytes = $file === null ? 0 : (int)$file->getSize();
 		return $this->describeVersion($version, $this->settingsOf($version), $file === null ? null : $this->davUrl($uid, $file), $media)
 			+ [
 				'mimeType' => $file?->getMimeType(),
+				// A local copy of the original is taken for it by size and date (the browser cannot read its checksum)
+				'fileSize' => $file === null ? null : $bytes,
+				'fileModified' => $file?->getMTime(),
 				'manages' => $grant->manages(),
 				'deliveredBy' => $this->deliveredBy($version),
 				'createdAt' => $version->getCreatedAt(),
 				// Read again before a browser makes what the Version lacks, its Proxy too (ADR 0019), as another may have meanwhile (#168)
-				'derivedFromBrowser' => $file === null ? [] : $this->media->fromBrowser($version, (int)$file->getSize()),
+				'derivedFromBrowser' => $file === null ? [] : $this->media->fromBrowser($version, $bytes),
 			];
 	}
 
@@ -1392,6 +1396,7 @@ class ProjectService {
 				if ($file !== null && $path === null) {
 					$path = $this->pathOf($file, $folder, $home);
 				}
+				$bytes = $file === null ? 0 : (int)$file->getSize();
 				$versions[] = [
 					'id' => $version->getId(),
 					'number' => $version->getNumber(),
@@ -1429,10 +1434,12 @@ class ProjectService {
 						[$version->getProxyState(), $version->getThumbsState(), $version->getWaveformState()],
 						true,
 					) || ($version->getPlayable() === null && $version->getDerivedError() !== null),
+					'fileSize' => $file === null ? null : $bytes,
+					'fileModified' => $file?->getMTime(),
 					// Without ffmpeg, a Member with Manage may make what it lacks in the browser, its Proxy too (ADR 0019), in one pass (#168)
-					'derivedFromBrowser' => $file === null ? [] : $this->media->fromBrowser($version, (int)$file->getSize()),
+					'derivedFromBrowser' => $file === null ? [] : $this->media->fromBrowser($version, $bytes),
 					// A Member with Manage may hand in a Proxy where it gets one, and remove one handed in (ADR 0020)
-					'takesProxy' => $file !== null && $this->media->takesProxy($version, (int)$file->getSize()),
+					'takesProxy' => $file !== null && $this->media->takesProxy($version, $bytes),
 					'proxyHandedIn' => (bool)$version->getProxyHandedIn(),
 				];
 			}

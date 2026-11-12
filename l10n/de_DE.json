@@ -658,11 +658,16 @@
 			"%n Asset ist nicht auf Ihren Review-Links: Dateien lässt Sie seine Datei nicht teilen. Auf einem externen Speicher schaltet eine Administration dafür „Teilen aktivieren“ ein.",
 			"%n Assets sind nicht auf Ihren Review-Links: Dateien lässt Sie ihre Dateien nicht teilen. Auf einem externen Speicher schaltet eine Administration dafür „Teilen aktivieren“ ein."
 		],
+<<<<<<< HEAD
 		"Proxies": "Proxies",
 		"Mail me when a video needs its Proxy made in a browser": "Mir eine E-Mail schicken, wenn ein Video seinen Proxy im Browser erzeugen muss",
 		"{asset}, Version {number}, needs its Proxy made in a browser": "{asset}, Version {number}, braucht seinen Proxy im Browser",
 		"Open the Version": "Version öffnen",
 		"Deliver has no ffmpeg on this server, and this video does not play in browsers as it is. Open it in a browser and choose \"Make missing derived media in this browser\" in its menu, so that it can be reviewed. The browser needs the file on hand, and the tab has to stay open until it is done.": "Auf diesem Server ist kein ffmpeg, und dieses Video spielt in Browsern so nicht ab. Öffnen Sie es in einem Browser und wählen Sie in seinem Menü „Fehlende abgeleitete Medien in diesem Browser erzeugen“, damit es geprüft werden kann. Der Browser braucht die Datei lokal, und der Tab muss offen bleiben, bis er fertig ist."
+=======
+		"Make missing derived media from a file on this computer": "Fehlende abgeleitete Medien aus einer Datei auf diesem Computer erzeugen",
+		"This file is not the original of this Version: its size or date differs.": "Diese Datei ist nicht das Original dieser Version: Größe oder Datum weichen ab."
+>>>>>>> origin/browser-pass-source
 	},
 	"pluralForm": "nplurals=2; plural=(n != 1);"
 }
