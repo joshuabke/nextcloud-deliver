@@ -208,7 +208,7 @@ class PublicApiController extends PublicShareController {
 					$this->links->record($link, LinkActivityMapper::DOWNLOADED, $this->reviewer(), $version);
 				}
 				$response = RangeFileResponse::ofFile($file, null);
-				$response->addHeader('Content-Disposition', 'attachment; filename="' . rawurlencode($file->getName()) . '"');
+				$response->addHeader('Content-Disposition', AttachmentResponse::disposition('attachment', $file->getName()));
 				return $response;
 			}
 			return RangeFileResponse::ofFile($file, $this->request->getHeader('Range'));

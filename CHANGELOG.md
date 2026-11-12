@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Fix Safari showing `%20` for spaces in the file names of downloads from Review Links, exports and attachments.
+
 ## 0.12.0 – 2026-11-07
 
 ### Added
