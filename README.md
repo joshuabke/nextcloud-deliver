@@ -10,7 +10,7 @@
 ## What it does
 
 - 📂 **Multimedia Review** with the files in your nextcloud. Deliver has its own comprehensive interface, but you can also quickly share a Review Link from the files-sidebar!
-- **Auto-Transcode**: Even on installations without ffmpeg, deliver will create proxies during upload if needed.
+- ⚡ **Auto-Transcode**: Even on installations without ffmpeg, deliver will create proxies during upload if needed.
 - 🎯 **Comment on Frames or timecode** with Range-support, Drawings, Replies, Reactions, Mentions and Attachments
 - 🗂️ **Versions** stack by filename or manually (`…_v1`, `…_v2`) and compare side by side or under a wipe
 - ✅ **Sign-off** with Approvals, Due Dates and reminders
@@ -21,9 +21,6 @@
   - Audio: WAV markers, MIDI, REAPER regions, Ableton Live Set
 - 🌊 **Waveforms, thumbnails and scrubbing** by hovering over a video
 - 📱 **Fully mobile ready**: use it as a web app on iOS and Android, and get notifications through the official Nextcloud app
-- ⚡ **With ffmpeg on the server**
-  - Proxies, thumbnails and waveforms for every format ffmpeg reads
-  - Hardware encoding: VAAPI, NVENC, VideoToolbox
 - 🎞️ **Supported files:** what plays directly, what the browser transcodes on upload and what needs ffmpeg, in [the table below](#supported-files)
 
 ## Supported files
@@ -39,10 +36,10 @@ Without ffmpeg on the server, the browser that uploads a file makes a Proxy of i
 **Proxy made on upload**
 
 - H.264, 10-bit or 4:2:2 (High 10, High 4:2:2, High 4:4:4), and H.264 in WebM
-- H.265, 8-bit and 10-bit alike, in every browser that decodes it
+- H.265, 8-bit and 10-bit (most browser-hardware combinations support it)
 - VP8 and VP9 in MP4 and MOV
-- AV1, which plays only on recent Apple hardware
-- ProRes, decoded in the browser
+- AV1
+- ProRes (on CPU)
 - AC-3, E-AC-3 and other audio in video files
 
 **Needs ffmpeg**
