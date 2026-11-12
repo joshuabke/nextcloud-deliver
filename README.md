@@ -26,11 +26,13 @@
   - Hardware encoding: VAAPI, NVENC, VideoToolbox
  
 🎞️ **Supported files without ffmpeg**
-  - Video: MP4, MOV, WebM MKV. 
+  - Plays directly:
+    - Video: H.264 (8-bit, 4:2:0) with AAC or MP3 in MP4 and MOV; H.264, VP8 or VP9 in MKV; VP8 or VP9 with Opus or Vorbis in WebM
+    - Audio: WAV, FLAC, MP3, AAC, Ogg
+  - Transcoded in the browser on upload: ProRes, H.265, AV1, 10-bit or 4:2:2 H.264, and other codecs in these containers. The browser that uploads makes the Proxy, so it has to decode the file (H.265 depends on the browser)
+  - Needs ffmpeg on the server: MXF, AVI, MPEG-TS, DNxHD, and audio-only files other than the ones above
   - Subtitles: SRT and WebVTT, one file per language
-  - Audio: WAV, FLAC, MP3, AAC, Ogg
   - Images: JPEG, PNG, WebP, GIF, AVIF
-  - Needs ffmpeg on the server: MXF, AVI, MPEG-TS, DNxHD, and H.265 in browsers that cannot decode it
 
 More screenshots are on the [App Store page](https://apps.nextcloud.com/apps/deliver).
 
