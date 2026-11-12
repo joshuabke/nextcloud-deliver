@@ -27,10 +27,14 @@
  
 🎞️ **Supported files without ffmpeg**
   - Plays directly:
-    - Video: H.264 (8-bit, 4:2:0) with AAC or MP3 in MP4 and MOV; H.264, VP8 or VP9 in MKV; VP8 or VP9 with Opus or Vorbis in WebM
+    - MP4/MOV: H.264 (8-bit, 4:2:0) with AAC or MP3
+    - MKV: H.264, VP8 or VP9
+    - WebM: VP8 or VP9 with Opus or Vorbis
     - Audio: WAV, FLAC, MP3, AAC, Ogg
-  - Transcoded in the browser on upload: ProRes, H.265, AV1, 10-bit or 4:2:2 H.264, and other codecs in these containers. The browser that uploads makes the Proxy, so it has to decode the file (H.265 depends on the browser)
-  - Needs ffmpeg on the server: MXF, AVI, MPEG-TS, DNxHD, and audio-only files other than the ones above
+  - Transcoded in the browser on upload:
+    ProRes, H.265 (not supported in Safari), AV1, 10-bit or 4:2:2 H.264 and other codecs in these containers.
+  - Needs ffmpeg on the server:
+    MXF, AVI, MPEG-TS, DNxHD, and audio-only files other than the ones above
   - Subtitles: SRT and WebVTT, one file per language
   - Images: JPEG, PNG, WebP, GIF, AVIF
 
