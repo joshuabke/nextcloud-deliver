@@ -1,6 +1,6 @@
 # Änderungen
 
-## Unveröffentlicht
+## 0.12.1 – 2026-11-12
 
 ### Behoben
 - Safari zeigte bei Downloads über Review-Links, Exporten und Anhängen `%20` statt Leerzeichen in Dateinamen; behoben.
