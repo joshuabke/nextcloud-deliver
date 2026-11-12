@@ -1,6 +1,6 @@
 # Änderungen
 
-## Unveröffentlicht
+## 0.12.2 – 2026-11-12
 
 ### Geändert
 - Den Download-Button der Review-Ansicht mit der Beschriftung „Herunterladen“ versehen, unter 1280 px ausgeblendet.
