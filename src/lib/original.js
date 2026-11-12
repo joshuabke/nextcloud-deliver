@@ -13,7 +13,7 @@ const SLACK = 2
  * @return {boolean} whether the file is the original
  */
 export function isOriginal(file, version) {
-	if (version.fileSize === null || version.fileSize === undefined || version.fileModified === null || version.fileModified === undefined) {
+	if (typeof version.fileSize !== 'number' || typeof version.fileModified !== 'number') {
 		return false
 	}
 	return file.size === version.fileSize && Math.abs(Math.floor(file.lastModified / 1000) - version.fileModified) <= SLACK

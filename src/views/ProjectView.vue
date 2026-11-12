@@ -478,13 +478,26 @@ async function makeMissing(version, file = null) {
  * The same, from a copy of the original on this computer, where the server has none to read (sync clients, Auto Intake)
  *
  * @param {object} asset - an Asset whose newest Version lacks derived media
- * @return {?object} its menu entry, null where making it is not offered
+ * @return {object|false} its menu entry, false where making it is not offered
  */
 function missingFromFileItem(asset) {
 	const version = asset.versions[0]
 	return proxyChecks.value[checkKey(version)]?.offered === 'make'
-		? { label: t('deliver', 'Make missing derived media from a file on this computer'), icon: proxyIcon, action: () => pickOriginal(version) }
-		: null
+		&& { label: t('deliver', 'Make missing derived media from a file on this computer'), icon: proxyIcon, action: () => pickOriginal(version) }
+}
+
+/**
+ * Both ways to make what a Version lacks, when its Asset's Manager may and the browser can
+ *
+ * @param {object} asset - an Asset
+ * @return {object[]} the menu entries, none where nothing is missing
+ */
+function missingEntries(asset) {
+	const newest = asset.versions[0]
+	if (!asset.manages || !newest.derivedFromBrowser?.length || !newest.playUrl || uploads.passing(newest.id)) {
+		return []
+	}
+	return [missingItem(asset), missingFromFileItem(asset)].filter(Boolean)
 }
 
 /**
@@ -569,8 +582,7 @@ function assetItems(asset) {
 		previous && { label: t('deliver', 'Compare with the Version before'), icon: compareIcon, action: () => router.push(`/compare/${previous.id}/${newest.id}`) },
 		asset.manages && asset.filesWrite && { label: t('deliver', 'Upload a new Version'), icon: newVersionIcon, action: () => pickVersion(asset) },
 		asset.manages && newest.processingFailed && { label: t('deliver', 'Process again'), icon: retryIcon, action: () => processAgain([asset]) },
-		asset.manages && newest.derivedFromBrowser?.length && newest.playUrl && !uploads.passing(newest.id) && missingItem(asset),
-		asset.manages && newest.derivedFromBrowser?.length && newest.playUrl && !uploads.passing(newest.id) && missingFromFileItem(asset),
+		...missingEntries(asset),
 		asset.manages && newest.takesProxy && newest.url && !uploads.proxies[newest.id] && { label: t('deliver', 'Upload Proxy…'), icon: uploadProxyIcon, action: () => pickProxy(newest) },
 		asset.manages && newest.proxyHandedIn && !uploads.proxies[newest.id] && { label: t('deliver', 'Remove Proxy'), icon: removeProxyIcon, action: () => dropHandedIn(newest) },
 		asset.manages && asset.filesWrite && newest.url && newest.mimeType?.startsWith('video/') && { label: t('deliver', 'Add Captions…'), icon: captionsIcon, action: () => { captionsFor.value = newest } },
