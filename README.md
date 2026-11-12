@@ -24,21 +24,25 @@
 - ⚡ **With ffmpeg on the server**
   - Proxies, thumbnails and waveforms for every format ffmpeg reads
   - Hardware encoding: VAAPI, NVENC, VideoToolbox
- 
-🎞️ **Supported files without ffmpeg**
-  - Plays directly:
-    - MP4/MOV: H.264 (8-bit, 4:2:0) with AAC or MP3
-    - MKV: H.264, VP8 or VP9
-    - WebM: VP8 or VP9 with Opus or Vorbis
-    - Audio: WAV, FLAC, MP3, AAC, Ogg
-  - Transcoded in the browser on upload:
-    ProRes, H.265 (not supported in Safari), AV1, 10-bit or 4:2:2 H.264 and other codecs in these containers.
-  - Needs ffmpeg on the server:
-    MXF, AVI, MPEG-TS, DNxHD, and audio-only files other than the ones above
-  - Subtitles: SRT and WebVTT, one file per language
-  - Images: JPEG, PNG, WebP, GIF, AVIF
+- 🎞️ **Supported files:** what plays directly, what the browser transcodes on upload and what needs ffmpeg, in [the table below](#supported-files)
 
-More screenshots are on the [App Store page](https://apps.nextcloud.com/apps/deliver).
+## Supported files
+
+Without ffmpeg on the server, the browser that uploads a file makes a Proxy of it when the file does not play. A file that plays directly needs no Proxy, unless its bitrate is above the admin's threshold (20 Mbit/s by default). The uploading browser must decode the codec for this.
+
+| Codec | Plays directly | Proxy made on upload | Needs ffmpeg |
+| --- | --- | --- | --- |
+| **H.264** | 8-bit, 4:2:0 (Baseline, Main, High) in MP4, MOV and MKV, with AAC or MP3 audio | 10-bit and 4:2:2 (High 10, High 4:2:2, High 4:4:4); in WebM | |
+| **H.265 / HEVC** | | 8-bit and 10-bit alike, in every browser that decodes it | |
+| **VP8, VP9** | In WebM and MKV | In MP4 and MOV | |
+| **AV1** | | All, plays only on recent Apple hardware | |
+| **ProRes** | | All, decoded in the browser | |
+| **DNxHD** | | | All |
+| **Audio** | MP3, AAC, FLAC, Ogg (Vorbis, Opus, FLAC), WAV (PCM) | AC-3, E-AC-3 and other audio in video files | Audio-only files in other formats |
+| **Containers** | | | MXF, AVI, MPEG-TS |
+
+- Subtitles: SRT and WebVTT, one file per language
+- Images: JPEG, PNG, WebP, GIF, AVIF
 
 ## Roadmap
 
