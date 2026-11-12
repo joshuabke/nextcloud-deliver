@@ -54,7 +54,7 @@ class ExportController extends Controller {
 			$path = $file['path'];
 			register_shutdown_function(static fn () => @unlink($path));
 			$response = new RangeFileResponse(fn () => fopen($path, 'rb'), (int)filesize($path), $file['mime'], md5($path), null);
-			$response->addHeader('Content-Disposition', 'attachment; filename="' . rawurlencode($file['name']) . '"; filename*=UTF-8\'\'' . rawurlencode($file['name']));
+			$response->addHeader('Content-Disposition', AttachmentResponse::disposition('attachment', $file['name']));
 			return $response;
 		});
 	}
