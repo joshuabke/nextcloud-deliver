@@ -4,7 +4,7 @@ import { ref } from 'vue'
 import NcAppSettingsDialog from '@nextcloud/vue/components/NcAppSettingsDialog'
 import NcAppSettingsSection from '@nextcloud/vue/components/NcAppSettingsSection'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
-import { errorMessage, getSettings, updateSettings } from '../api.js'
+import { errorMessage, getSettings, setBrowserPassMail, updateSettings } from '../api.js'
 import { t } from '../lib/l10n.js'
 
 /** The Member's own Deliver settings (story 144) */
@@ -16,6 +16,17 @@ const settings = ref(null)
 getSettings().then((found) => {
 	settings.value = found
 }).catch((e) => showError(errorMessage(e)))
+
+/**
+ * @param {boolean} enabled - whether to mail when a video needs its Proxy made in a browser
+ */
+async function pickBrowserPassMail(enabled) {
+	try {
+		settings.value = await setBrowserPassMail(enabled)
+	} catch (e) {
+		showError(errorMessage(e))
+	}
+}
 
 /**
  * @param {string} addressBook - the key of the address book Reviewers are saved to
@@ -51,6 +62,14 @@ async function pick(addressBook) {
 			<p v-if="settings && settings.addressBooks.length === 0" class="deliver-settings__hint">
 				{{ t('deliver', 'You have no address book to save to.') }}
 			</p>
+		</NcAppSettingsSection>
+		<NcAppSettingsSection id="deliver-browser-pass" :name="t('deliver', 'Proxies')">
+			<NcCheckboxRadioSwitch
+				v-if="settings"
+				:modelValue="settings.browserPassMail"
+				@update:modelValue="pickBrowserPassMail">
+				{{ t('deliver', 'Mail me when a video needs its Proxy made in a browser') }}
+			</NcCheckboxRadioSwitch>
 		</NcAppSettingsSection>
 	</NcAppSettingsDialog>
 </template>

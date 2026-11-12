@@ -70,6 +70,7 @@ return [
 		['name' => 'reviewer_api#saveContact', 'url' => '/api/v1/reviewers/{id}/contact', 'verb' => 'POST'],
 		['name' => 'settings_api#show', 'url' => '/api/v1/settings', 'verb' => 'GET'],
 		['name' => 'settings_api#update', 'url' => '/api/v1/settings', 'verb' => 'PUT'],
+		['name' => 'settings_api#browserPassMail', 'url' => '/api/v1/settings/browser-pass-mail', 'verb' => 'PUT'],
 		['name' => 'project_api#assetForFile', 'url' => '/api/v1/files/{fileId}/asset', 'verb' => 'GET'],
 		['name' => 'project_api#enableFile', 'url' => '/api/v1/assets', 'verb' => 'POST'],
 		['name' => 'project_api#updateAsset', 'url' => '/api/v1/assets/{id}', 'verb' => 'PUT'],

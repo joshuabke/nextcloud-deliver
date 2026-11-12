@@ -92,6 +92,8 @@ class DerivedMedia {
 		private PipelineSettings $settings,
 		private ITimeFactory $time,
 		private LoggerInterface $logger,
+		private NotificationService $notifications,
+		private BrowserPassMail $browserPassMail,
 	) {
 	}
 
@@ -239,6 +241,10 @@ class DerivedMedia {
 			if ($peaks !== null) {
 				$this->put($version, 'waveform', json_encode(['peaks' => $peaks], JSON_THROW_ON_ERROR));
 				$this->mark($version->getId(), Job::KIND_WAVEFORM, self::STATE_READY);
+			}
+			// Without ffmpeg nothing queues the Proxy: a browser has to make it (ADR 0019)
+			if ($this->needsProxy($version, (int)filesize($path))) {
+				$this->askBrowserPass($version);
 			}
 			return;
 		}
@@ -703,6 +709,13 @@ class DerivedMedia {
 		$version->setProxyHandedIn(true);
 		$version->setProxyState(self::STATE_READY);
 		$this->versions->update($version);
+		$this->notifications->browserPassDone($version);
+	}
+
+	/** The Managers hear that a browser has to make the Proxy; the mail is optional, the notification is not (ADR 0019) */
+	private function askBrowserPass(Version $version): void {
+		$managers = $this->notifications->browserPassNeeded($version);
+		$this->browserPassMail->needed($version, $managers);
 	}
 
 	/**

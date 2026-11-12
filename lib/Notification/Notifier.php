@@ -47,6 +47,7 @@ class Notifier implements INotifier {
 			NotificationService::MENTION => $l->t('{author} mentioned you on {asset}, Version {number}'),
 			NotificationService::APPROVED => $l->t('{author} approved {asset}, Version {number}'),
 			NotificationService::CHANGES => $l->t('{author} requested changes on {asset}, Version {number}'),
+			NotificationService::BROWSER_PASS => $l->t('{asset}, Version {number}, needs its Proxy made in a browser'),
 			default => throw new UnknownNotificationException(),
 		};
 		$notification->setParsedSubject(strtr($subject, $where + [
