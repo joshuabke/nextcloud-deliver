@@ -10,7 +10,7 @@
 **Note:** Deliver is approaching v1.0 and will still have some bugs. Please help by [creating an issue](https://github.com/joshuabke/nextcloud-deliver/issues/new) for everything you find!
 
 - 📂 **Multimedia Review** with the files in your Nextcloud. Deliver has its own comprehensive interface, but you can also quickly share a Review Link from the Files sidebar!
-- **Auto-Transcode:** Even on installations without ffmpeg, Deliver creates Proxies during upload if needed.
+- ⚡ **Auto-Transcode:** Even on installations without ffmpeg, Deliver creates Proxies during upload if needed.
 - 🎯 **Comment on Frames or timecode** with Range support, Drawings, Replies, Reactions, Mentions and Attachments
 - 🗂️ **Versions** stack by filename or manually (`…_v1`, `…_v2`) and compare side by side or under a wipe
 - ✅ **Sign-off** with Approvals, Due Dates and reminders
@@ -26,10 +26,10 @@
     - Audio: MP3, AAC, FLAC, Ogg (Vorbis, Opus, FLAC), WAV (PCM)
   - **Proxy made on upload**
     - H.264, 10-bit or 4:2:2 (High 10, High 4:2:2, High 4:4:4), and H.264 in WebM
-    - H.265, 8-bit and 10-bit alike, in every browser that decodes it
+    - H.265, 8-bit and 10-bit (most browser-hardware combinations support it)
     - VP8 and VP9 in MP4 and MOV
-    - AV1, which plays only on recent Apple hardware
-    - ProRes, decoded in the browser
+    - AV1
+    - ProRes (on CPU)
     - AC-3, E-AC-3 and other audio in video files
   - **Needs ffmpeg**
     - DNxHD
@@ -39,9 +39,6 @@
   - Images: JPEG, PNG, WebP, GIF, AVIF
 - 🌊 **Waveforms, thumbnails and scrubbing** by hovering over a video
 - 📱 **Fully mobile ready:** use it as a web app on iOS and Android, and get notifications through the official Nextcloud app
-- ⚡ **With ffmpeg on the server**
-  - Proxies, thumbnails and waveforms for every format ffmpeg reads
-  - Hardware encoding: VAAPI, NVENC, VideoToolbox
 
 **Roadmap**
 
@@ -54,7 +51,7 @@ Screenshots: footage from Tears of Steel, (CC) Blender Foundation | mango.blende
 **Hinweis:** Deliver steht kurz vor v1.0 und hat noch einige Fehler. Bitte helfen Sie mit und [legen Sie ein Issue an](https://github.com/joshuabke/nextcloud-deliver/issues/new) für alles, was Ihnen auffällt!
 
 - 📂 **Multimedia-Review** mit den Dateien in Ihrer Nextcloud. Deliver hat eine eigene, umfangreiche Oberfläche, Sie können aber auch schnell einen Review-Link aus der Dateien-Seitenleiste teilen!
-- **Auto-Transcode:** Auch auf Installationen ohne ffmpeg erzeugt Deliver beim Upload bei Bedarf Proxys.
+- ⚡ **Auto-Transcode:** Auch auf Installationen ohne ffmpeg erzeugt Deliver beim Upload bei Bedarf Proxys.
 - 🎯 **Kommentare auf Frames oder Timecode** mit Bereichen, Zeichnungen, Antworten, Reaktionen, Erwähnungen und Anhängen
 - 🗂️ **Versionen** stapeln sich nach Dateiname oder manuell (`…_v1`, `…_v2`) und lassen sich nebeneinander oder unter einem Wischer vergleichen
 - ✅ **Abnahme** mit Freigaben, Fälligkeitsdaten und Erinnerungen
@@ -70,10 +67,10 @@ Screenshots: footage from Tears of Steel, (CC) Blender Foundation | mango.blende
     - Audio: MP3, AAC, FLAC, Ogg (Vorbis, Opus, FLAC), WAV (PCM)
   - **Proxy beim Upload erzeugt**
     - H.264 mit 10 Bit oder 4:2:2 (High 10, High 4:2:2, High 4:4:4) und H.264 in WebM
-    - H.265, 8 und 10 Bit gleich, in jedem Browser, der ihn dekodiert
+    - H.265, 8 und 10 Bit (die meisten Kombinationen aus Browser und Hardware unterstützen ihn)
     - VP8 und VP9 in MP4 und MOV
-    - AV1, das nur auf neueren Apple-Geräten abspielbar ist
-    - ProRes, im Browser dekodiert
+    - AV1
+    - ProRes (auf der CPU)
     - AC-3, E-AC-3 und anderer Ton in Videodateien
   - **Braucht ffmpeg**
     - DNxHD
@@ -83,9 +80,6 @@ Screenshots: footage from Tears of Steel, (CC) Blender Foundation | mango.blende
   - Bilder: JPEG, PNG, WebP, GIF, AVIF
 - 🌊 **Wellenformen, Vorschaubilder und Scrubbing** beim Überfahren eines Videos
 - 📱 **Voll mobiltauglich:** als Web-App auf iOS und Android, Benachrichtigungen über die offizielle Nextcloud-App
-- ⚡ **Mit ffmpeg auf dem Server**
-  - Proxys, Vorschaubilder und Wellenformen für jedes Format, das ffmpeg liest
-  - Hardware-Kodierung: VAAPI, NVENC, VideoToolbox
 
 **Roadmap**
 
