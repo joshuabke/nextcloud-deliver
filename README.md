@@ -9,26 +9,28 @@
 
 ## What it does
 
-- 📂 **Multimedia Review** with the files in your nextcloud. Deliver has it's own comprehensive interface, but you can also quickly share a reviewlink from the files-sidebar!
+- 📂 **Multimedia Review** with the files in your nextcloud. Deliver has its own comprehensive interface, but you can also quickly share a Review Link from the files-sidebar!
+- **Auto-Transcode**: Even on installations without ffmpeg, deliver will create proxies during upload if needed.
 - 🎯 **Comment on Frames or timecode** with Range-support, Drawings, Replies, Reactions, Mentions and Attachments
 - 🗂️ **Versions** stack by filename or manually (`…_v1`, `…_v2`) and compare side by side or under a wipe
 - ✅ **Sign-off** with Approvals, Due Dates and reminders
-- 🔗 **Individual Links for Clients** password, expiry, Watermark, downloads, and who watched what
+- 🔗 **Review Links for Clients** password, expiry, Watermark, downloads, and who watched what
 - ⬆️ **Uploads in Deliver** resume after an interruption, run in the background and show the processing until it is done
 - 🎬 **Back into the edit** export comments as markers for:
   - Video: DaVinci Resolve (EDL), Premiere Pro (FCP7 XML), Final Cut Pro (FCPXML), CSV
   - Audio: WAV markers, MIDI, REAPER regions, Ableton Live Set
-- 🎞️ **Supported files**
-  - Video: MP4 and MOV (H.264), WebM
-  - Subtitles: srt
-  - Audio: WAV, FLAC, MP3, AAC, Ogg
-  - Images: JPEG, PNG, WebP, GIF, AVIF
-  - Everything else (ProRes, H.265, MXF, AVI …) needs ffmpeg
 - 🌊 **Waveforms, thumbnails and scrubbing** by hovering over a video
 - 📱 **Fully mobile ready**: use it as a web app on iOS and Android, and get notifications through the official Nextcloud app
 - ⚡ **With ffmpeg on the server**
   - Proxies, thumbnails and waveforms for every format ffmpeg reads
   - Hardware encoding: VAAPI, NVENC, VideoToolbox
+ 
+🎞️ **Supported files without ffmpeg**
+  - Video: MP4, MOV, WebM MKV. 
+  - Subtitles: SRT and WebVTT, one file per language
+  - Audio: WAV, FLAC, MP3, AAC, Ogg
+  - Images: JPEG, PNG, WebP, GIF, AVIF
+  - Needs ffmpeg on the server: MXF, AVI, MPEG-TS, DNxHD, and H.265 in browsers that cannot decode it
 
 More screenshots are on the [App Store page](https://apps.nextcloud.com/apps/deliver).
 
