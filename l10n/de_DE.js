@@ -658,7 +658,12 @@ OC.L10N.register(
 		"_%n Asset is not on your Review Links: Files does not let you share its file. On an external storage, an admin switches on \"Enable sharing\" for it._::_%n Assets are not on your Review Links: Files does not let you share their files. On an external storage, an admin switches on \"Enable sharing\" for it._": [
 			"%n Asset ist nicht auf Ihren Review-Links: Dateien lässt Sie seine Datei nicht teilen. Auf einem externen Speicher schaltet eine Administration dafür „Teilen aktivieren“ ein.",
 			"%n Assets sind nicht auf Ihren Review-Links: Dateien lässt Sie ihre Dateien nicht teilen. Auf einem externen Speicher schaltet eine Administration dafür „Teilen aktivieren“ ein."
-		]
+		],
+		"Proxies": "Proxies",
+		"Mail me when a video needs its Proxy made in a browser": "Mir eine E-Mail schicken, wenn ein Video seinen Proxy im Browser erzeugen muss",
+		"{asset}, Version {number}, needs its Proxy made in a browser": "{asset}, Version {number}, braucht seinen Proxy im Browser",
+		"Open the Version": "Version öffnen",
+		"Deliver has no ffmpeg on this server, and this video does not play in browsers as it is. Open it in a browser and choose \"Make missing derived media in this browser\" in its menu, so that it can be reviewed. The browser needs the file on hand, and the tab has to stay open until it is done.": "Auf diesem Server ist kein ffmpeg, und dieses Video spielt in Browsern so nicht ab. Öffnen Sie es in einem Browser und wählen Sie in seinem Menü „Fehlende abgeleitete Medien in diesem Browser erzeugen“, damit es geprüft werden kann. Der Browser braucht die Datei lokal, und der Tab muss offen bleiben, bis er fertig ist."
 	},
 	"nplurals=2; plural=(n != 1);"
 );

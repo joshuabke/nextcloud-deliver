@@ -32,6 +32,7 @@ class NotificationService {
 	public const OVERWRITTEN = 'overwritten';
 	public const DUE_TOMORROW = 'due_tomorrow';
 	public const DUE_TODAY = 'due_today';
+	public const BROWSER_PASS = 'browserpass';
 
 	public function __construct(
 		private INotificationManager $notifications,
@@ -114,6 +115,23 @@ class NotificationService {
 	public function decided(Version $version, string $status, ?string $actor, string $author): void {
 		$subject = $status === ApprovalService::APPROVED ? self::APPROVED : self::CHANGES;
 		$this->notify($version, $subject, 'version', (string)$version->getId(), ['author' => $author], $actor);
+	}
+
+	/**
+	 * A Version without ffmpeg on the server needs its Proxy made in a browser
+	 * (ADR 0019): its Managers hear of it, whatever their Reviewers' settings.
+	 *
+	 * @return list<string> the Managers told
+	 */
+	public function browserPassNeeded(Version $version): array {
+		$managers = $this->members->managersOf($version);
+		$this->send($version, self::BROWSER_PASS, 'browserpass', (string)$version->getId(), [], array_values(array_diff($managers, $this->mutes->mutedBy($version->getProjectId() ?? 0))));
+		return $managers;
+	}
+
+	/** The Proxy is there (handed in), so the notice about it goes */
+	public function browserPassDone(Version $version): void {
+		$this->dismiss('browserpass', (string)$version->getId());
 	}
 
 	/** The file of a Version went to the trash (stories 18 and 63) */

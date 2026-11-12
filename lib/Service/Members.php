@@ -40,6 +40,25 @@ class Members {
 		return array_values(array_filter($members, fn (string $uid) => $this->access->sees($uid, $project)));
 	}
 
+	/**
+	 * The Members of a Version who manage its Project (the ones who can hand in
+	 * a browser's Proxy, ADR 0020); none on No Project
+	 *
+	 * @return list<string> user ids
+	 */
+	public function managersOf(Version $version): array {
+		$projectId = $version->getProjectId();
+		if ($projectId === null) {
+			return [];
+		}
+		try {
+			$project = $this->projects->find($projectId);
+		} catch (DoesNotExistException) {
+			return [];
+		}
+		return array_values(array_filter($this->inReview($version), fn (string $uid) => $this->access->grantFor($uid, $project)->manages()));
+	}
+
 	/** @return list<string> user ids; none while the file is only in the trash */
 	public function of(int $nodeId): array {
 		$node = null;

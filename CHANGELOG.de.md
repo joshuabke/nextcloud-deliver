@@ -1,5 +1,11 @@
 # Änderungen
 
+## Unveröffentlicht
+
+### Neu
+- Die Member mit Manage bei einem Video, das seinen Proxy im Browser erzeugen muss, per Nextcloud-Benachrichtigung und optional per E-Mail benachrichtigt.
+- Eine Einstellung ergänzt, um die E-Mail abzuschalten.
+
 ## 0.12.1 – 2026-11-12
 
 ### Behoben

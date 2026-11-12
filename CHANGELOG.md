@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Notify the Members who manage a video that needs its Proxy made in a browser, by Nextcloud notification and, optionally, by mail.
+- Add a setting to turn that mail off.
+
 ## 0.12.1 – 2026-11-12
 
 ### Fixed
