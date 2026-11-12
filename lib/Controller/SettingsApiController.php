@@ -34,14 +34,19 @@ class SettingsApiController extends OCSController {
 	#[NoAdminRequired]
 	public function browserPassMail(bool $enabled): Response {
 		return $this->guard(function () use ($enabled) {
-			$this->browserPassMail->setEnabled((string)$this->userSession->getUser()?->getUID(), $enabled);
+			$this->browserPassMail->setEnabled($this->uid(), $enabled);
 			return $this->settings();
 		});
 	}
 
 	/** @return array{addressBook: ?string, addressBooks: list<array{key: string, name: string}>, browserPassMail: bool} */
 	private function settings(): array {
-		return $this->contacts->settings() + ['browserPassMail' => $this->browserPassMail->enabled((string)$this->userSession->getUser()?->getUID())];
+		return $this->contacts->settings() + ['browserPassMail' => $this->browserPassMail->enabled($this->uid())];
+	}
+
+	/** The signed-in user, who a NoAdminRequired route always has */
+	private function uid(): string {
+		return $this->userSession->getUser()?->getUID() ?? throw new \RuntimeException('No signed-in user');
 	}
 
 	#[NoAdminRequired]

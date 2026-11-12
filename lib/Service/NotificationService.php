@@ -124,9 +124,9 @@ class NotificationService {
 	 * @return list<string> the Managers told
 	 */
 	public function browserPassNeeded(Version $version): array {
-		$managers = $this->members->managersOf($version);
-		$this->send($version, self::BROWSER_PASS, 'browserpass', (string)$version->getId(), [], array_values(array_diff($managers, $this->mutes->mutedBy($version->getProjectId() ?? 0))));
-		return $managers;
+		$told = array_values(array_diff($this->members->managersOf($version), $this->mutes->mutedBy($version->getProjectId() ?? 0)));
+		$this->send($version, self::BROWSER_PASS, 'browserpass', (string)$version->getId(), [], $told);
+		return $told;
 	}
 
 	/** The Proxy is there (handed in), so the notice about it goes */
