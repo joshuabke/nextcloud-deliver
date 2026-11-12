@@ -1,5 +1,15 @@
 # Änderungen
 
+## 0.12.2 – 2026-11-12
+
+### Neu
+- Die Member mit Manage bei einem Video, das seinen Proxy im Browser erzeugen muss, per Nextcloud-Benachrichtigung und optional per E-Mail benachrichtigt.
+- Eine Einstellung ergänzt, um die E-Mail abzuschalten.
+- Die fehlenden abgeleiteten Medien eines Videos, das ohne sie hereingekommen ist, aus einer Kopie des Originals auf diesem Computer erzeugen, geprüft nach Größe und Datum, statt das Original herunterzuladen.
+
+### Geändert
+- Den Download-Button der Review-Ansicht mit der Beschriftung „Herunterladen“ versehen, unter 1280 px ausgeblendet.
+
 ## 0.12.1 – 2026-11-12
 
 ### Behoben

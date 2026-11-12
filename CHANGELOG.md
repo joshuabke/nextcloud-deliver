@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.2 – 2026-11-12
+
+### Added
+- Notify the Members who manage a video that needs its Proxy made in a browser, by Nextcloud notification and, optionally, by mail.
+- Add a setting to turn that mail off.
+- Make the derived media of a video that arrived without it from a copy of the original on this computer, checked by size and date, instead of downloading the original.
+
+### Changed
+- Show the label "Download" on the download button of the Review view, hidden below 1280 px.
+
 ## 0.12.1 – 2026-11-12
 
 ### Fixed

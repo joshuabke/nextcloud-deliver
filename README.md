@@ -24,15 +24,35 @@
 - ⚡ **With ffmpeg on the server**
   - Proxies, thumbnails and waveforms for every format ffmpeg reads
   - Hardware encoding: VAAPI, NVENC, VideoToolbox
- 
-🎞️ **Supported files without ffmpeg**
-  - Video: MP4, MOV, WebM MKV. 
-  - Subtitles: SRT and WebVTT, one file per language
-  - Audio: WAV, FLAC, MP3, AAC, Ogg
-  - Images: JPEG, PNG, WebP, GIF, AVIF
-  - Needs ffmpeg on the server: MXF, AVI, MPEG-TS, DNxHD, and H.265 in browsers that cannot decode it
+- 🎞️ **Supported files:** what plays directly, what the browser transcodes on upload and what needs ffmpeg, in [the table below](#supported-files)
 
-More screenshots are on the [App Store page](https://apps.nextcloud.com/apps/deliver).
+## Supported files
+
+Without ffmpeg on the server, the browser that uploads a file makes a Proxy of it when the file does not play. A file that plays directly needs no Proxy, unless its bitrate is above the admin's threshold (20 Mbit/s by default). The uploading browser must decode the codec for this.
+
+**Plays directly**
+
+- H.264, 8-bit 4:2:0 (Baseline, Main, High), in MP4, MOV and MKV, with AAC or MP3 audio
+- VP8 and VP9 in WebM and MKV, with Opus or Vorbis audio
+- Audio: MP3, AAC, FLAC, Ogg (Vorbis, Opus, FLAC), WAV (PCM)
+
+**Proxy made on upload**
+
+- H.264, 10-bit or 4:2:2 (High 10, High 4:2:2, High 4:4:4), and H.264 in WebM
+- H.265, 8-bit and 10-bit alike, in every browser that decodes it
+- VP8 and VP9 in MP4 and MOV
+- AV1, which plays only on recent Apple hardware
+- ProRes, decoded in the browser
+- AC-3, E-AC-3 and other audio in video files
+
+**Needs ffmpeg**
+
+- DNxHD
+- MXF, AVI, MPEG-TS
+- Audio-only files in other formats
+
+- Subtitles: SRT and WebVTT, one file per language
+- Images: JPEG, PNG, WebP, GIF, AVIF
 
 ## Roadmap
 
