@@ -206,6 +206,7 @@ async function claim({ name, email, mail }) {
 					<template #icon>
 						<NcIconSvgWrapper :svg="downloadIcon" />
 					</template>
+					<span class="deliver-public__download-label">{{ t('deliver', 'Download') }}</span>
 				</NcButton>
 			</template>
 
@@ -304,6 +305,13 @@ async function claim({ name, email, mail }) {
 	margin-inline-start: var(--default-grid-baseline);
 	font-weight: bold;
 	text-decoration: underline;
+}
+
+/* The label goes first where the toolbar gets tight; the icon keeps its aria-label */
+@media (max-width: 1279px) {
+	.deliver-public__download-label {
+		display: none;
+	}
 }
 
 .deliver-layout__notice code {
