@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.2 – 2026-11-12
+
+### Changed
+- Show the label "Download" on the download button of the Review view, hidden below 1280 px.
+
 ## 0.12.1 – 2026-11-12
 
 ### Fixed
