@@ -8,12 +8,16 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DueDate from './DueDate.vue'
 import MediaStill from './MediaStill.vue'
+import SortMenu from './SortMenu.vue'
+import { LINK_SORTS, SORT_OPTIONS, sortAssets } from '../lib/filters.js'
 import { folderLevel, inFolder, zipped } from '../lib/folders.js'
 import { n, t } from '../lib/l10n.js'
 
 // A link with several Assets opens on its folders and Assets, folders first, under its description (stories 123, 125)
 /** The folder shown, relative to the Project folder; '' for its top. The page above keeps it while an Asset is open */
 const folder = defineModel('folder', { type: String, default: '' })
+/** The order of the Assets, one of LINK_SORTS; kept with the folder while an Asset is open */
+const sort = defineModel('sort', { type: String, default: 'name' })
 const props = defineProps({
 	/** The link's title and description, and where to download all of it, if the link lets */
 	link: { type: Object, required: true },
@@ -28,7 +32,11 @@ const isAudio = (asset) => asset.mimeType?.startsWith('audio/')
 const downloadable = computed(() => props.assets.filter((asset) => asset.downloadUrl))
 
 /** Its folders first, then its Assets, as Files shows a folder */
-const level = computed(() => folderLevel(props.assets, folder.value))
+const level = computed(() => {
+	const found = folderLevel(props.assets, folder.value)
+	return { folders: found.folders, assets: sortAssets(found.assets, sort.value) }
+})
+const sorts = SORT_OPTIONS.filter((each) => LINK_SORTS.includes(each.id))
 /** Every Asset in the folder shown, at any depth */
 const inView = computed(() => props.assets.filter((asset) => inFolder(asset, folder.value)))
 /**
@@ -114,6 +122,7 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 						@click="pickAll">
 						{{ t('deliver', 'Select all') }}
 					</NcButton>
+					<SortMenu v-if="assets.length > 1" v-model="sort" :sorts="sorts" />
 					<!-- The Reviewer's own menu -->
 					<slot name="me" />
 					<template v-if="picked > 0">

@@ -54,6 +54,7 @@ const current = ref(props.versionId)
 const newest = ref(null)
 /** The folder the landing page shows, kept while an Asset is open */
 const landingFolder = ref('')
+const landingSort = ref('name')
 
 /** Who watches, and when: the Reviewer's name once they gave one (story 94) */
 const watermarkText = computed(() => [
@@ -168,6 +169,7 @@ async function claim({ name, email, mail }) {
 		<LinkLanding
 			v-else-if="current === null && newest"
 			v-model:folder="landingFolder"
+			v-model:sort="landingSort"
 			:link="link"
 			:assets="newest"
 			@open="current = $event">

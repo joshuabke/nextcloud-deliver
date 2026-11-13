@@ -6,6 +6,7 @@
 - Show a Project's folders on its Review Links' landing page, folders first.
 - Show a Project's folders in the Project view, folders first, with a flat view as an option.
 - Let Reviewers pick folders for a Review Link's ZIP.
+- Sort the Assets on a Review Link's landing page by name, newest first or Due Date.
 
 ### Changed
 - Step through Assets folders first, in the Review view and on Review Links.

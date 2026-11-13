@@ -1,10 +1,7 @@
 <script setup>
-import sortIcon from '@mdi/svg/svg/sort.svg?raw'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
-import NcActionRadio from '@nextcloud/vue/components/NcActionRadio'
-import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import SortMenu from './SortMenu.vue'
 import { t } from '../lib/l10n.js'
 
 const filter = defineModel('filter', { type: String, required: true })
@@ -37,23 +34,7 @@ const isMobile = useIsMobile()
 				<span v-if="index > 0" class="deliver-filter-bar__count">{{ each.count }}</span>
 			</NcButton>
 		</div>
-		<NcActions
-			:menuName="isMobile ? undefined : sorts.find((each) => each.id === sort)?.label"
-			:title="t('deliver', 'Sort by')"
-			:aria-label="t('deliver', 'Sort by')"
-			variant="tertiary">
-			<template #icon>
-				<NcIconSvgWrapper :svg="sortIcon" />
-			</template>
-			<NcActionRadio
-				v-for="each in sorts"
-				:key="each.id"
-				v-model="sort"
-				:value="each.id"
-				name="deliver-sort">
-				{{ each.label }}
-			</NcActionRadio>
-		</NcActions>
+		<SortMenu v-model="sort" :sorts="sorts" />
 	</div>
 </template>
 
