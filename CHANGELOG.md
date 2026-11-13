@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.13.0 – 2026-11-13
 
 ### Added
 - Show a Project's folders on its Review Links' landing page, folders first.
