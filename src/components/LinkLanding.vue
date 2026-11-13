@@ -3,15 +3,17 @@ import downloadIcon from '@mdi/svg/svg/download.svg?raw'
 import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
 import audioIcon from '@mdi/svg/svg/music-note-outline.svg?raw'
 import videoIcon from '@mdi/svg/svg/play-box-outline.svg?raw'
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DueDate from './DueDate.vue'
 import MediaStill from './MediaStill.vue'
-import { folderLevel } from '../lib/folders.js'
+import { folderLevel, inFolder, zipped } from '../lib/folders.js'
 import { n, t } from '../lib/l10n.js'
 
-// A link with several Assets opens on a grid of them, under its description (stories 123, 125)
+// A link with several Assets opens on its folders and Assets, folders first, under its description (stories 123, 125)
+/** The folder shown, relative to the Project folder; '' for its top. The page above keeps it while an Asset is open */
+const folder = defineModel('folder', { type: String, default: '' })
 const props = defineProps({
 	/** The link's title and description, and where to download all of it, if the link lets */
 	link: { type: Object, required: true },
@@ -25,29 +27,60 @@ const isAudio = (asset) => asset.mimeType?.startsWith('audio/')
 /** What can go into a ZIP: a file shared without downloads shows but never downloads */
 const downloadable = computed(() => props.assets.filter((asset) => asset.downloadUrl))
 
-/** The folder shown, relative to the Project folder; '' for its top */
-const folder = ref('')
 /** Its folders first, then its Assets, as Files shows a folder */
 const level = computed(() => folderLevel(props.assets, folder.value))
+/** Every Asset in the folder shown, at any depth */
+const inView = computed(() => props.assets.filter((asset) => inFolder(asset, folder.value)))
+/**
+ * @param {string} path - a folder of the link
+ * @return {boolean} whether it holds anything that downloads, so it can be picked for the ZIP
+ */
+const downloadsIn = (path) => downloadable.value.some((asset) => inFolder(asset, path))
 /** The way back up, one entry per folder down to the one shown */
 const crumbs = computed(() => folder.value === ''
 	? []
 	: folder.value.split('/').map((name, index, all) => ({ name, path: all.slice(0, index + 1).join('/') })))
 
-/** Assets picked for one ZIP, as on Frame.io */
+/** Assets and folders picked for one ZIP, as on Frame.io; a folder goes down whole, its folders kept */
 const selected = reactive(new Set())
-const selectionUrl = computed(() => props.link.downloadAll + '?assetIds=' + [...selected].join(','))
+const pickedFolders = reactive(new Set())
+const picked = computed(() => selected.size + pickedFolders.size)
+const selectionUrl = computed(() => props.link.downloadAll + '?assetIds=' + zipped(props.assets, selected, pickedFolders).join(','))
+/** What "Select all" picks: whatever downloads in the folder shown, its folders whole */
+const pickable = computed(() => [
+	...level.value.folders.filter((sub) => downloadsIn(sub.path)).map((sub) => ({ folder: sub.path })),
+	...level.value.assets.filter((asset) => asset.downloadUrl).map((asset) => ({ assetId: asset.assetId })),
+])
+const allPicked = computed(() => pickable.value.every((each) => each.folder !== undefined ? pickedFolders.has(each.folder) : selected.has(each.assetId)))
 
 /**
- * @param {number} assetId - the Asset picked or dropped
+ * @param {Set} set - the Assets or the folders picked
+ * @param {number|string} key - the Asset id or folder picked or dropped
  * @param {boolean} on - picked or not
  */
-function toggle(assetId, on) {
+function toggle(set, key, on) {
 	if (on) {
-		selected.add(assetId)
+		set.add(key)
 	} else {
-		selected.delete(assetId)
+		set.delete(key)
 	}
+}
+
+/** Picks whatever downloads in the folder shown */
+function pickAll() {
+	for (const each of pickable.value) {
+		if (each.folder !== undefined) {
+			pickedFolders.add(each.folder)
+		} else {
+			selected.add(each.assetId)
+		}
+	}
+}
+
+/** Drops every pick */
+function clearPicks() {
+	selected.clear()
+	pickedFolders.clear()
 }
 
 // Nextcloud's header and footer step aside, as for the Review view
@@ -68,7 +101,7 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 				<div class="deliver-landing__intro">
 					<h2>{{ link.title }}</h2>
 					<p class="deliver-landing__count">
-						{{ n('deliver', '%n Asset', '%n Assets', assets.length) }}
+						{{ n('deliver', '%n Asset', '%n Assets', inView.length) }}
 					</p>
 					<p v-if="link.description" class="deliver-landing__description">
 						{{ link.description }}
@@ -76,16 +109,16 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 				</div>
 				<div class="deliver-landing__actions">
 					<NcButton
-						v-if="link.downloadAll && selected.size < downloadable.length"
+						v-if="link.downloadAll && pickable.length && !allPicked"
 						variant="tertiary"
-						@click="downloadable.forEach((asset) => selected.add(asset.assetId))">
+						@click="pickAll">
 						{{ t('deliver', 'Select all') }}
 					</NcButton>
 					<!-- The Reviewer's own menu -->
 					<slot name="me" />
-					<template v-if="selected.size > 0">
-						<NcButton variant="tertiary" @click="selected.clear()">
-							{{ n('deliver', 'Deselect %n', 'Deselect %n', selected.size) }}
+					<template v-if="picked > 0">
+						<NcButton variant="tertiary" @click="clearPicks">
+							{{ n('deliver', 'Deselect %n', 'Deselect %n', picked) }}
 						</NcButton>
 						<NcButton :href="selectionUrl" variant="primary" download>
 							<template #icon>
@@ -123,15 +156,21 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 			</div>
 			<ul class="deliver-landing__grid">
 				<li v-for="sub in level.folders" :key="'folder:' + sub.path" class="deliver-landing__card">
-					<button
-						type="button"
-						class="deliver-landing__folder"
-						:aria-label="t('deliver', 'Open folder {name}', { name: sub.name })"
-						@click="folder = sub.path">
-						<NcIconSvgWrapper :svg="folderIcon" :size="40" />
-						<span class="deliver-landing__folder-name">{{ sub.name }}</span>
-						<span class="deliver-landing__count">{{ n('deliver', '%n Asset', '%n Assets', sub.count) }}</span>
-					</button>
+					<div class="deliver-landing__media">
+						<button type="button" class="deliver-landing__folder" @click="folder = sub.path">
+							<NcIconSvgWrapper :svg="folderIcon" :size="40" />
+							<span class="deliver-landing__folder-name">{{ sub.name }}</span>
+							<span class="deliver-landing__count">{{ n('deliver', '%n Asset', '%n Assets', sub.count) }}</span>
+						</button>
+						<input
+							v-if="link.downloadAll && downloadsIn(sub.path)"
+							type="checkbox"
+							class="deliver-landing__pick"
+							:class="{ 'deliver-landing__pick--shown': picked > 0 }"
+							:checked="pickedFolders.has(sub.path)"
+							:aria-label="t('deliver', 'Select {name}', { name: sub.name })"
+							@change="toggle(pickedFolders, sub.path, $event.target.checked)">
+					</div>
 				</li>
 				<li v-for="asset in level.assets" :key="asset.assetId" class="deliver-landing__card">
 					<div class="deliver-landing__media">
@@ -142,7 +181,11 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 							@click="emit('open', asset.newestId)">
 							<span class="deliver-landing__still">
 								<NcIconSvgWrapper :svg="isAudio(asset) ? audioIcon : videoIcon" :size="40" />
-								<MediaStill :fileId="asset.fileId" :playUrl="asset.mimeType?.startsWith('video/') ? asset.playUrl : null" :scrubUrl="asset.scrubUrl" />
+								<MediaStill
+									:fileId="asset.fileId"
+									:playUrl="asset.mimeType?.startsWith('video/') ? asset.playUrl : null"
+									:scrubUrl="asset.scrubUrl"
+									fit="contain" />
 								<span class="deliver-landing__badge">{{ t('deliver', 'V{number}', { number: asset.number }) }}</span>
 							</span>
 						</button>
@@ -150,10 +193,10 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 							v-if="link.downloadAll && asset.downloadUrl"
 							type="checkbox"
 							class="deliver-landing__pick"
-							:class="{ 'deliver-landing__pick--shown': selected.size > 0 }"
+							:class="{ 'deliver-landing__pick--shown': picked > 0 }"
 							:checked="selected.has(asset.assetId)"
 							:aria-label="t('deliver', 'Select {name}', { name: asset.name })"
-							@change="toggle(asset.assetId, $event.target.checked)">
+							@change="toggle(selected, asset.assetId, $event.target.checked)">
 					</div>
 					<div class="deliver-landing__foot">
 						<button

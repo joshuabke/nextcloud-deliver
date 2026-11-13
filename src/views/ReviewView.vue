@@ -31,7 +31,7 @@ import { errorMessage, getVersion, giveWaveform, listMembers, updateAsset } from
 import { useLiveUpdates } from '../composables/live.js'
 import { usePanelOpen } from '../composables/panel.js'
 import { useReview } from '../composables/review.js'
-import { groupByFolder, uploadFolder } from '../lib/folders.js'
+import { folderOrder, uploadFolder } from '../lib/folders.js'
 import { t } from '../lib/l10n.js'
 import { acceptFor, stackKind } from '../lib/media.js'
 import { fpsValue } from '../lib/timecode.js'
@@ -68,7 +68,7 @@ const projectName = computed(() => context.value?.project.none ? t('deliver', 'N
 /** The Project's Assets in the order the Project view shows them, to step through */
 const assets = computed(() => {
 	const project = projects.details[context.value?.project.id]
-	return project ? groupByFolder(project.assets).flatMap((group) => group.assets) : []
+	return project ? folderOrder(project.assets) : []
 })
 const assetIndex = computed(() => assets.value.findIndex((asset) => asset.id === context.value?.asset.id))
 /** The Version to compare with: the one before this, or the newest when this is the first */

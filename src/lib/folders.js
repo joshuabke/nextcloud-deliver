@@ -1,7 +1,7 @@
 /**
  * Assets grouped by the folder of their newest Version, the Project folder
- * itself first. The Project view shows them in this order, and the Review
- * view steps through them in the same order.
+ * itself first: the Project view's flat view, and its results of a filter or
+ * a search.
  *
  * @param {Array<{path: string}>} assets - the Assets of a Project
  * @return {Array<{path: string, assets: object[]}>}
@@ -78,46 +78,62 @@ export function inFolder(asset, folder) {
 }
 
 /**
- * One level of a Review Link's folders, as a file browser shows it: the
- * folders right below, each with how many Assets lie in it at any depth, and
- * the Assets right in it.
+ * The folders of a path, top first. A path with a leading slash runs from the
+ * Member's home, outside the Project folder (ADR 0009), and keeps the slash on
+ * its first folder, as folderTree() does.
  *
- * @param {Array<{path: string}>} assets - every Asset of the link, path relative to the Project folder
+ * @param {string} path - a folder, '' for the Project folder
+ * @return {string[]} its folders
+ */
+function segments(path) {
+	const parts = path.split('/').filter(Boolean)
+	if (path.startsWith('/') && parts.length) {
+		parts[0] = '/' + parts[0]
+	}
+	return parts
+}
+
+/**
+ * One level of a Project's folders, as a file browser shows it: the folders
+ * right below, each with how many Assets lie in it at any depth, and the
+ * Assets right in it.
+ *
+ * @param {Array<{path: string}>} assets - Assets, path relative to the Project folder
  * @param {string} folder - the level shown, '' for the top
  * @return {{folders: Array<{path: string, name: string, count: number}>, assets: object[]}}
  */
 export function folderLevel(assets, folder) {
-	const prefix = folder === '' ? '' : folder + '/'
+	const depth = segments(folder).length
 	const counts = new Map()
 	const here = []
-	for (const asset of assets) {
-		if (asset.path === folder) {
+	for (const asset of assets.filter((each) => inFolder(each, folder))) {
+		const parts = segments(asset.path)
+		if (parts.length === depth) {
 			here.push(asset)
-		} else if (asset.path.startsWith(prefix)) {
-			const name = asset.path.slice(prefix.length).split('/')[0]
-			counts.set(name, (counts.get(name) ?? 0) + 1)
+		} else {
+			const path = parts.slice(0, depth + 1).join('/')
+			counts.set(path, (counts.get(path) ?? 0) + 1)
 		}
 	}
 	return {
 		folders: [...counts.entries()]
 			.sort(([a], [b]) => a.localeCompare(b))
-			.map(([name, count]) => ({ path: prefix + name, name, count })),
+			.map(([path, count]) => ({ path, name: path.split('/').pop(), count })),
 		assets: here,
 	}
 }
 
 /**
  * The order a file browser shows them in, folders before the files beside
- * them at every level, for stepping through a link's Assets as its landing
- * page lists them. Assets in the same folder keep their order.
+ * them at every level, for stepping through Assets as their folders list
+ * them. Assets in the same folder keep their order.
  *
  * @param {Array<{path: string}>} assets - path relative to the Project folder
  * @return {object[]} a sorted copy
  */
 export function folderOrder(assets) {
-	const parts = (asset) => asset.path.split('/').filter(Boolean)
 	return [...assets].sort((a, b) => {
-		const [x, y] = [parts(a), parts(b)]
+		const [x, y] = [segments(a.path), segments(b.path)]
 		for (let i = 0; i < Math.max(x.length, y.length); i++) {
 			if (x[i] === y[i]) {
 				continue
@@ -130,4 +146,20 @@ export function folderOrder(assets) {
 		}
 		return 0
 	})
+}
+
+/**
+ * What a ZIP of picked Assets and folders holds: every downloadable Asset
+ * picked, and every downloadable one in a picked folder at any depth, so a
+ * folder goes down whole without its files being picked one by one.
+ *
+ * @param {Array<{assetId: number, path: string, downloadUrl: ?string}>} assets - every Asset of the link
+ * @param {Set<number>} assetIds - the Assets picked
+ * @param {Set<string>} folders - the folders picked
+ * @return {number[]} the Asset ids to zip, in the order of assets
+ */
+export function zipped(assets, assetIds, folders) {
+	return assets
+		.filter((asset) => asset.downloadUrl && (assetIds.has(asset.assetId) || [...folders].some((folder) => inFolder(asset, folder))))
+		.map((asset) => asset.assetId)
 }

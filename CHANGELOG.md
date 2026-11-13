@@ -2,7 +2,15 @@
 
 ## Unreleased
 
-- Show the folders of a Project on its Review Links' landing page, folders first, and step through Assets in that order.
+### Added
+- Show a Project's folders on its Review Links' landing page, folders first.
+- Show a Project's folders in the Project view, folders first, with a flat view as an option.
+- Let Reviewers pick folders for a Review Link's ZIP.
+
+### Changed
+- Step through Assets folders first, in the Review view and on Review Links.
+- Keep the folders in a Review Link's ZIP.
+- Show stills on a Review Link's landing page uncropped.
 
 ## 0.12.2 – 2026-11-12
 

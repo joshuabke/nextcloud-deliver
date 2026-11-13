@@ -2,7 +2,15 @@
 
 ## Unveröffentlicht
 
-- Die Ordner eines Projekts auf der Startseite seiner Review-Links gezeigt, Ordner zuerst, und die Assets in dieser Reihenfolge durchgeschaltet.
+### Neu
+- Die Ordner eines Projekts auf der Startseite seiner Review-Links gezeigt, Ordner zuerst.
+- Die Ordner eines Projekts in der Projektansicht gezeigt, Ordner zuerst, mit einer flachen Ansicht als Option.
+- Reviewer Ordner für das ZIP eines Review-Links auswählen lassen.
+
+### Geändert
+- Assets in der Review-Ansicht und auf Review-Links Ordner zuerst durchgeschaltet.
+- Die Ordner im ZIP eines Review-Links beibehalten.
+- Standbilder auf der Startseite eines Review-Links unbeschnitten gezeigt.
 
 ## 0.12.2 – 2026-11-12
 

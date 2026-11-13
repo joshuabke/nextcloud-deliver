@@ -152,11 +152,7 @@ class ReviewLink {
 	public function pathOf(Version $version): string {
 		$file = $this->originalFile($version);
 		$folder = $this->projectFolder();
-		if ($file === null || $folder === null) {
-			return '';
-		}
-		$dir = dirname($file->getPath());
-		return str_starts_with($dir . '/', $folder->getPath() . '/') ? ltrim(substr($dir, strlen($folder->getPath())), '/') : '';
+		return $file === null || $folder === null ? '' : ProjectService::folderPath($file, $folder) ?? '';
 	}
 
 	/** The Project's folder as its owner has it; null for No Project and Projects of picked files */
