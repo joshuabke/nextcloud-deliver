@@ -76,3 +76,58 @@ export function folderTree(assets) {
 export function inFolder(asset, folder) {
 	return folder === '' || asset.path === folder || asset.path.startsWith(folder + '/')
 }
+
+/**
+ * One level of a Review Link's folders, as a file browser shows it: the
+ * folders right below, each with how many Assets lie in it at any depth, and
+ * the Assets right in it.
+ *
+ * @param {Array<{path: string}>} assets - every Asset of the link, path relative to the Project folder
+ * @param {string} folder - the level shown, '' for the top
+ * @return {{folders: Array<{path: string, name: string, count: number}>, assets: object[]}}
+ */
+export function folderLevel(assets, folder) {
+	const prefix = folder === '' ? '' : folder + '/'
+	const counts = new Map()
+	const here = []
+	for (const asset of assets) {
+		if (asset.path === folder) {
+			here.push(asset)
+		} else if (asset.path.startsWith(prefix)) {
+			const name = asset.path.slice(prefix.length).split('/')[0]
+			counts.set(name, (counts.get(name) ?? 0) + 1)
+		}
+	}
+	return {
+		folders: [...counts.entries()]
+			.sort(([a], [b]) => a.localeCompare(b))
+			.map(([name, count]) => ({ path: prefix + name, name, count })),
+		assets: here,
+	}
+}
+
+/**
+ * The order a file browser shows them in, folders before the files beside
+ * them at every level, for stepping through a link's Assets as its landing
+ * page lists them. Assets in the same folder keep their order.
+ *
+ * @param {Array<{path: string}>} assets - path relative to the Project folder
+ * @return {object[]} a sorted copy
+ */
+export function folderOrder(assets) {
+	const parts = (asset) => asset.path.split('/').filter(Boolean)
+	return [...assets].sort((a, b) => {
+		const [x, y] = [parts(a), parts(b)]
+		for (let i = 0; i < Math.max(x.length, y.length); i++) {
+			if (x[i] === y[i]) {
+				continue
+			}
+			// The one that has run out of folders is a file at this level, and folders come first
+			if (x[i] === undefined || y[i] === undefined) {
+				return x[i] === undefined ? 1 : -1
+			}
+			return x[i].localeCompare(y[i])
+		}
+		return 0
+	})
+}

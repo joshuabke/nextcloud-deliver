@@ -1,12 +1,14 @@
 <script setup>
 import downloadIcon from '@mdi/svg/svg/download.svg?raw'
+import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
 import audioIcon from '@mdi/svg/svg/music-note-outline.svg?raw'
 import videoIcon from '@mdi/svg/svg/play-box-outline.svg?raw'
-import { computed, onBeforeUnmount, onMounted, reactive } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DueDate from './DueDate.vue'
 import MediaStill from './MediaStill.vue'
+import { folderLevel } from '../lib/folders.js'
 import { n, t } from '../lib/l10n.js'
 
 // A link with several Assets opens on a grid of them, under its description (stories 123, 125)
@@ -22,6 +24,15 @@ const emit = defineEmits(['open'])
 const isAudio = (asset) => asset.mimeType?.startsWith('audio/')
 /** What can go into a ZIP: a file shared without downloads shows but never downloads */
 const downloadable = computed(() => props.assets.filter((asset) => asset.downloadUrl))
+
+/** The folder shown, relative to the Project folder; '' for its top */
+const folder = ref('')
+/** Its folders first, then its Assets, as Files shows a folder */
+const level = computed(() => folderLevel(props.assets, folder.value))
+/** The way back up, one entry per folder down to the one shown */
+const crumbs = computed(() => folder.value === ''
+	? []
+	: folder.value.split('/').map((name, index, all) => ({ name, path: all.slice(0, index + 1).join('/') })))
 
 /** Assets picked for one ZIP, as on Frame.io */
 const selected = reactive(new Set())
@@ -95,8 +106,34 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 					</NcButton>
 				</div>
 			</div>
+			<div v-if="folder !== ''" class="deliver-landing__crumbs">
+				<button type="button" class="deliver-landing__crumb" @click="folder = ''">
+					{{ link.title || t('deliver', 'All files') }}
+				</button>
+				<template v-for="crumb in crumbs" :key="crumb.path">
+					<span aria-hidden="true">/</span>
+					<button
+						type="button"
+						class="deliver-landing__crumb"
+						:aria-current="crumb.path === folder ? 'location' : undefined"
+						@click="folder = crumb.path">
+						{{ crumb.name }}
+					</button>
+				</template>
+			</div>
 			<ul class="deliver-landing__grid">
-				<li v-for="asset in assets" :key="asset.assetId" class="deliver-landing__card">
+				<li v-for="sub in level.folders" :key="'folder:' + sub.path" class="deliver-landing__card">
+					<button
+						type="button"
+						class="deliver-landing__folder"
+						:aria-label="t('deliver', 'Open folder {name}', { name: sub.name })"
+						@click="folder = sub.path">
+						<NcIconSvgWrapper :svg="folderIcon" :size="40" />
+						<span class="deliver-landing__folder-name">{{ sub.name }}</span>
+						<span class="deliver-landing__count">{{ n('deliver', '%n Asset', '%n Assets', sub.count) }}</span>
+					</button>
+				</li>
+				<li v-for="asset in level.assets" :key="asset.assetId" class="deliver-landing__card">
 					<div class="deliver-landing__media">
 						<button
 							type="button"
@@ -217,6 +254,59 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 	flex-wrap: wrap;
 	align-items: center;
 	gap: calc(2 * var(--default-grid-baseline));
+}
+
+/* Nextcloud's global button style would give these a minimum height, padding and a background on hover */
+.deliver-landing__crumbs {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--default-grid-baseline);
+	margin-bottom: calc(3 * var(--default-grid-baseline));
+	color: var(--color-text-maxcontrast);
+}
+
+.deliver-landing__crumb,
+.deliver-landing__crumb:hover {
+	min-height: 0;
+	margin: 0;
+	padding: 0 var(--default-grid-baseline);
+	border: none;
+	background: none;
+	color: var(--color-main-text);
+	font-weight: normal;
+	cursor: pointer;
+}
+
+.deliver-landing__crumb[aria-current] {
+	font-weight: bold;
+	cursor: default;
+}
+
+.deliver-landing__folder,
+.deliver-landing__folder:hover {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: var(--default-grid-baseline);
+	width: 100%;
+	height: 100%;
+	min-height: 160px;
+	margin: 0;
+	padding: calc(4 * var(--default-grid-baseline));
+	border: none;
+	background: none;
+	color: var(--color-main-text);
+	cursor: pointer;
+}
+
+.deliver-landing__folder-name {
+	max-width: 100%;
+	overflow: hidden;
+	font-weight: bold;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .deliver-landing__grid {

@@ -120,6 +120,8 @@ class PublicApiController extends PublicShareController {
 					'newestId' => $newest->getId(),
 					'assetId' => $asset->getId(),
 					'name' => $this->stacks->nameOf($asset),
+					// The landing page shows the Project's folders (relative to it, never the Member's own)
+					'path' => $link->pathOf($newest),
 					'number' => $newest->getNumber(),
 					'count' => count($versions),
 					'mimeType' => $link->originalFile($newest)?->getMimetype(),

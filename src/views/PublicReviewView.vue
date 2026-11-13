@@ -28,6 +28,7 @@ import { claimReviewer, errorMessage, getPublicContext, listPublicAssets } from 
 import { usePanelOpen } from '../composables/panel.js'
 import { useReview } from '../composables/review.js'
 import { conflictMessage } from '../lib/conflict.js'
+import { folderOrder } from '../lib/folders.js'
 import { t } from '../lib/l10n.js'
 import { addressOf } from '../lib/language.js'
 import { useCommentsStore } from '../store/comments.js'
@@ -86,7 +87,8 @@ watch(current, async (versionId) => {
 }, { immediate: true })
 
 listPublicAssets().then((entries) => {
-	newest.value = entries
+	// Stepping through Assets follows the landing page: folders first, at every level
+	newest.value = folderOrder(entries)
 }).catch(() => {
 	newest.value = []
 })

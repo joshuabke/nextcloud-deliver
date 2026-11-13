@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Show the folders of a Project on its Review Links' landing page, folders first, and step through Assets in that order.
+
 ## 0.12.2 – 2026-11-12
 
 ### Added

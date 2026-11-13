@@ -1,5 +1,9 @@
 # Änderungen
 
+## Unveröffentlicht
+
+- Die Ordner eines Projekts auf der Startseite seiner Review-Links gezeigt, Ordner zuerst, und die Assets in dieser Reihenfolge durchgeschaltet.
+
 ## 0.12.2 – 2026-11-12
 
 ### Neu
