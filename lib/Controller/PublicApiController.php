@@ -120,7 +120,11 @@ class PublicApiController extends PublicShareController {
 					'newestId' => $newest->getId(),
 					'assetId' => $asset->getId(),
 					'name' => $this->stacks->nameOf($asset),
+					// The landing page shows the Project's folders (relative to it, never the Member's own)
+					'path' => $link->pathOf($newest),
 					'number' => $newest->getNumber(),
+					// For "Newest first"
+					'createdAt' => $newest->getCreatedAt(),
 					'count' => count($versions),
 					'mimeType' => $link->originalFile($newest)?->getMimetype(),
 					'dueDate' => $asset->getDueDate(),
@@ -164,10 +168,12 @@ class PublicApiController extends PublicShareController {
 			foreach ($zipped as $version) {
 				// downloadable() found it
 				$file = $link->originalFile($version) ?? throw new NotFoundException('Gone while zipping');
-				// Two Assets in different folders can carry the same file name
-				$name = $file->getName();
+				// In the folders the landing page shows; two Assets in one folder can still carry the same file name
+				$dir = $link->pathOf($version);
+				$prefix = $dir === '' ? '' : $dir . '/';
+				$name = $prefix . $file->getName();
 				for ($n = 2; isset($names[$name]); $n++) {
-					$name = pathinfo($file->getName(), PATHINFO_FILENAME) . " ($n)." . $file->getExtension();
+					$name = $prefix . pathinfo($file->getName(), PATHINFO_FILENAME) . " ($n)." . $file->getExtension();
 				}
 				$names[$name] = true;
 				$zip->addResource($file->fopen('rb'), $name, $file->getSize(), $file->getMTime());

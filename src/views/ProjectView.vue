@@ -12,6 +12,7 @@ import addIcon from '@mdi/svg/svg/eye-plus-outline.svg?raw'
 import filesIcon from '@mdi/svg/svg/folder-eye-outline.svg?raw'
 import moveIcon from '@mdi/svg/svg/folder-move-outline.svg?raw'
 import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
+import flatIcon from '@mdi/svg/svg/format-list-bulleted.svg?raw'
 import stackIcon from '@mdi/svg/svg/layers-outline.svg?raw'
 import newVersionIcon from '@mdi/svg/svg/layers-plus.svg?raw'
 import searchIcon from '@mdi/svg/svg/magnify.svg?raw'
@@ -49,7 +50,7 @@ import { assignAsset, deleteAsset, disableAsset, enableFile, errorMessage, regen
 import { useQuery } from '../composables/query.js'
 import { confirmRemoval } from '../confirm.js'
 import { allMissing, between, FILTER_LABELS, FILTERS, found, passes, selectAll, SORT_OPTIONS, sortAssets, SORTS } from '../lib/filters.js'
-import { groupByFolder, inFolder, projectDavPath, projectDir } from '../lib/folders.js'
+import { folderLevel, groupByFolder, inFolder, projectDavPath, projectDir } from '../lib/folders.js'
 import { n, t } from '../lib/l10n.js'
 import { acceptFor, mediaKind, stackKind } from '../lib/media.js'
 import { isOriginal } from '../lib/original.js'
@@ -167,6 +168,8 @@ const folder = useQuery('folder', null, '')
 const filter = useQuery('filter', FILTERS, 'all')
 const sort = useQuery('sort', SORTS, 'activity')
 const query = useQuery('q', null, '')
+/** Folders as Files shows them, or every Asset below the folder at once, grouped by folder */
+const layout = useQuery('view', ['folders', 'flat'], 'folders')
 const inView = computed(() => (project.value?.assets ?? []).filter((asset) => inFolder(asset, folder.value)))
 const filters = computed(() => FILTERS.map((id) => ({
 	id,
@@ -174,16 +177,23 @@ const filters = computed(() => FILTERS.map((id) => ({
 	count: inView.value.filter((asset) => passes(asset, id, me)).length,
 })))
 const shown = computed(() => inView.value.filter((asset) => passes(asset, filter.value, me) && found(asset, query.value)))
+/** The folder's own folders and Assets; a filter or a search looks through every folder, as a flat view */
+const browsing = computed(() => layout.value === 'folders' && filter.value === 'all' && query.value.trim() === '')
+const level = computed(() => folderLevel(shown.value, folder.value))
 // Sorted within each folder, the folders themselves by path
-const groups = computed(() => groupByFolder(sortAssets(shown.value, sort.value)))
+const groups = computed(() => browsing.value
+	? [{ path: folder.value, assets: sortAssets(level.value.assets, sort.value) }]
+	: groupByFolder(sortAssets(shown.value, sort.value)))
+/** The Asset cards on screen, which ticking and the select-all box act on */
+const onScreen = computed(() => groups.value.flatMap((group) => group.assets))
 /** The Assets my Review Links leave out, where I make links: Files does not let me share their files (ADR 0010) */
 const offLinks = computed(() => project.value?.access?.share ? project.value.assets.filter((asset) => asset.offLinks).length : 0)
 // Ticked Assets a filter, a search or another folder takes off the screen are no longer ticked: the menu acts only on what is in sight
-watch(shown, (now) => {
+watch(onScreen, (now) => {
 	selected.value = selected.value.filter((id) => now.some((asset) => asset.id === id))
 })
 /** The Assets on screen that can be ticked */
-const selectable = computed(() => selectAll(shown.value.filter((asset) => asset.manages)))
+const selectable = computed(() => selectAll(onScreen.value.filter((asset) => asset.manages)))
 /** Whether the ticked Assets are Missing ones; null while none is ticked. Missing ones are only ticked together (story 141) */
 const tickedMissing = computed(() => {
 	const first = project.value?.assets.find((asset) => selected.value.includes(asset.id))
@@ -206,7 +216,7 @@ function toggle(asset, range) {
 	}
 	if (range && anchor !== null) {
 		const missing = tickedMissing.value ?? allMissing(asset)
-		const order = groups.value.flatMap((group) => group.assets)
+		const order = onScreen.value
 		const added = between(order, anchor, asset.id).filter((each) => each.manages && allMissing(each) === missing)
 		selected.value = [...new Set([...selected.value, ...added.map((each) => each.id)])]
 	} else {
@@ -233,7 +243,7 @@ function pick(asset, { range, add }) {
 /** Media files in the folder on screen that are no Assets, greyed out under them to add one by one; they have no state to filter by */
 const notUpForReview = computed(() => filter.value !== 'all'
 	? []
-	: (project.value?.notEnabled ?? []).filter((file) => inFolder(file, folder.value) && file.name.toLocaleLowerCase().includes(query.value.trim().toLocaleLowerCase())))
+	: (project.value?.notEnabled ?? []).filter((file) => (browsing.value ? file.path === folder.value : inFolder(file, folder.value)) && file.name.toLocaleLowerCase().includes(query.value.trim().toLocaleLowerCase())))
 /** File ids being added, so a second click waits */
 const adding = ref(new Set())
 /**
@@ -817,6 +827,16 @@ function dropped(event) {
 						:aria-label="selected.length ? t('deliver', 'Clear the selection') : t('deliver', 'Select all')"
 						:title="selected.length ? t('deliver', 'Clear the selection') : t('deliver', 'Select all')"
 						@change="selected = selected.length ? [] : selectable.map((asset) => asset.id)">
+					<NcButton
+						variant="tertiary"
+						:pressed="layout === 'flat'"
+						:aria-label="t('deliver', 'Show every Asset without folders')"
+						:title="t('deliver', 'Show every Asset without folders')"
+						@click="layout = layout === 'flat' ? 'folders' : 'flat'">
+						<template #icon>
+							<NcIconSvgWrapper :svg="flatIcon" />
+						</template>
+					</NcButton>
 				</template>
 			</FilterBar>
 			<NcNoteCard v-if="offLinks" type="warning">
@@ -833,6 +853,15 @@ function dropped(event) {
 					: project.path
 						? t('deliver', 'Enable files for review in the Deliver tab of the Files sidebar.')
 						: t('deliver', 'Add files to this Project in the Deliver tab of the Files sidebar, wherever they lie.')" />
+			<ul v-if="browsing && level.folders.length" class="deliver-project__grid deliver-project__group">
+				<li v-for="sub in level.folders" :key="sub.path">
+					<button type="button" class="deliver-project__folder-card" @click="folder = sub.path">
+						<NcIconSvgWrapper :svg="folderIcon" :size="32" />
+						<span class="deliver-project__folder-name">{{ sub.name }}</span>
+						<span class="deliver-project__folder-count">{{ n('deliver', '%n Asset', '%n Assets', sub.count) }}</span>
+					</button>
+				</li>
+			</ul>
 			<section v-for="group in groups" :key="group.path" class="deliver-project__group">
 				<h3 v-if="group.path !== folder" class="deliver-project__folder">
 					<NcIconSvgWrapper :svg="folderIcon" :size="20" />
@@ -1052,6 +1081,42 @@ function dropped(event) {
 	padding-bottom: calc(2 * var(--default-grid-baseline));
 	border-bottom: 1px solid var(--color-border);
 	font-size: 16px;
+}
+
+/* Nextcloud's global button style would give it a minimum height, padding and a background on hover */
+.deliver-project__folder-card,
+.deliver-project__folder-card:hover {
+	display: flex;
+	align-items: center;
+	gap: calc(2 * var(--default-grid-baseline));
+	width: 100%;
+	min-height: 0;
+	margin: 0;
+	padding: calc(3 * var(--default-grid-baseline));
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	text-align: start;
+	cursor: pointer;
+}
+
+.deliver-project__folder-card:hover,
+.deliver-project__folder-card:focus-visible {
+	border-color: var(--color-primary-element);
+}
+
+.deliver-project__folder-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	font-weight: bold;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.deliver-project__folder-count {
+	color: var(--color-text-maxcontrast);
 }
 
 .deliver-project__grid {

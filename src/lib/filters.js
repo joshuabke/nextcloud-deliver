@@ -66,6 +66,9 @@ export const SORT_OPTIONS = [
 	{ id: 'due', label: t('deliver', 'Due Date') },
 ]
 
+/** The orders a Review Link's landing page offers: a Reviewer sees no activity */
+export const LINK_SORTS = ['name', 'created', 'due']
+
 /**
  * @param {object[]} assets - Assets with name, createdAt, lastActivity and dueDate
  * @param {string} sort - one of SORTS

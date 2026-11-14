@@ -28,6 +28,7 @@ import { claimReviewer, errorMessage, getPublicContext, listPublicAssets } from 
 import { usePanelOpen } from '../composables/panel.js'
 import { useReview } from '../composables/review.js'
 import { conflictMessage } from '../lib/conflict.js'
+import { folderOrder } from '../lib/folders.js'
 import { t } from '../lib/l10n.js'
 import { addressOf } from '../lib/language.js'
 import { useCommentsStore } from '../store/comments.js'
@@ -51,6 +52,9 @@ const reviewerName = computed(() => reviewer.value?.name ?? '')
 const current = ref(props.versionId)
 /** The newest Version of every Asset the link shows, to step through; null while loading */
 const newest = ref(null)
+/** The folder the landing page shows, kept while an Asset is open */
+const landingFolder = ref('')
+const landingSort = ref('name')
 
 /** Who watches, and when: the Reviewer's name once they gave one (story 94) */
 const watermarkText = computed(() => [
@@ -86,10 +90,17 @@ watch(current, async (versionId) => {
 }, { immediate: true })
 
 listPublicAssets().then((entries) => {
-	newest.value = entries
+	// Stepping through Assets follows the landing page: folders first, at every level
+	newest.value = folderOrder(entries)
 }).catch(() => {
 	newest.value = []
 })
+
+/** Back to the landing page, in the folder of the Asset last open, which stepping may have changed */
+function backToLanding() {
+	landingFolder.value = newest.value?.[assetIndex.value]?.path ?? landingFolder.value
+	current.value = null
+}
 
 onBeforeUnmount(() => store.stop())
 
@@ -157,6 +168,8 @@ async function claim({ name, email, mail }) {
 			:description="t('deliver', 'This link shows no file that is enabled for review.')" />
 		<LinkLanding
 			v-else-if="current === null && newest"
+			v-model:folder="landingFolder"
+			v-model:sort="landingSort"
 			:link="link"
 			:assets="newest"
 			@open="current = $event">
@@ -176,7 +189,7 @@ async function claim({ name, email, mail }) {
 					variant="tertiary"
 					:aria-label="t('deliver', 'All Assets')"
 					:title="t('deliver', 'All Assets')"
-					@click="current = null">
+					@click="backToLanding">
 					<template #icon>
 						<NcIconSvgWrapper :svg="backIcon" />
 					</template>

@@ -236,6 +236,32 @@ class ReviewLinkTest extends TestCase {
 		self::assertSame(400, $this->nc->ocs('POST', '/projects/0/invitations', ['name' => 'Mo'])['status'], 'No Project needs Assets picked');
 	}
 
+	public function testALinkShowsTheProjectsFoldersAndNeverTheMembersOwn(): void {
+		$this->nc->mkdir("{$this->root}/B-Roll");
+		$this->nc->mkdir("{$this->root}/B-Roll/Drone");
+		$this->nc->put("{$this->root}/B-Roll/Drone/aerial.mp4", 'not really a video');
+		// An Asset of the Project from outside its folder (ADR 0009): its folder is the Member's own
+		$elsewhere = 'deliver-private-' . bin2hex(random_bytes(4));
+		$this->nc->mkdir($elsewhere);
+		$this->nc->put("$elsewhere/outside.mp4", 'not really a video');
+		try {
+			self::assertSame(201, $this->nc->ocs('POST', '/assets', ['fileId' => $this->nc->fileId("$elsewhere/outside.mp4"), 'projectId' => $this->projectId])['status']);
+			$this->nc->ocs('GET', "/projects/{$this->projectId}");
+			$visitor = $this->visitor($this->link());
+
+			$paths = array_column($visitor->call('GET', '/api/assets')['data'], 'path', 'name');
+			ksort($paths);
+			self::assertSame(['aerial' => 'B-Roll/Drone', 'cut' => '', 'outside' => '', 'teaser' => ''], $paths, 'folders below the Project folder, the rest at its top');
+
+			$zip = $visitor->raw('/download')['body'];
+			self::assertStringContainsString('B-Roll/Drone/aerial.mp4', $zip, 'the ZIP keeps the folders');
+			self::assertStringContainsString('outside.mp4', $zip);
+			self::assertStringNotContainsString($elsewhere, $zip, "the Member's own folders stay out of the ZIP");
+		} finally {
+			$this->nc->delete($elsewhere);
+		}
+	}
+
 	public function testDownloadAllZipsTheNewestOfEveryAsset(): void {
 		$link = $this->link();
 		$visitor = $this->visitor($link);

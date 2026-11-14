@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { folderTree, groupByFolder, inFolder, projectDavPath, projectDir, uploadFolder } from './folders.js'
+import { folderLevel, folderOrder, folderTree, groupByFolder, inFolder, projectDavPath, projectDir, uploadFolder, zipped } from './folders.js'
 
 describe('folders', () => {
 	it('groups Assets by folder, the Project folder first', () => {
@@ -38,5 +38,71 @@ describe('folders', () => {
 
 	it('keeps a folder\'s Assets and those below it', () => {
 		expect([inFolder({ path: 'Interviews/Raw' }, 'Interviews'), inFolder({ path: 'Interviews 2' }, 'Interviews'), inFolder({ path: '' }, '')]).toEqual([true, false, true])
+	})
+})
+
+describe('folderLevel', () => {
+	const assets = [
+		{ id: 1, path: '' },
+		{ id: 2, path: 'B-Roll' },
+		{ id: 3, path: 'B-Roll/Drone' },
+		{ id: 4, path: 'Audio' },
+		{ id: 5, path: 'B-Roll' },
+	]
+
+	it('lists the folders right below, with every Asset in them, and the Assets right here', () => {
+		expect(folderLevel(assets, '')).toEqual({
+			folders: [{ path: 'Audio', name: 'Audio', count: 1 }, { path: 'B-Roll', name: 'B-Roll', count: 3 }],
+			assets: [assets[0]],
+		})
+	})
+
+	it('goes one level down', () => {
+		expect(folderLevel(assets, 'B-Roll')).toEqual({
+			folders: [{ path: 'B-Roll/Drone', name: 'Drone', count: 1 }],
+			assets: [assets[1], assets[4]],
+		})
+	})
+
+	it('does not take a folder whose name only starts the same', () => {
+		expect(folderLevel([{ path: 'B-Rollout' }], 'B-Roll')).toEqual({ folders: [], assets: [] })
+	})
+
+	it('shows a folder outside the Project folder as one from the Member\'s home, slash and all', () => {
+		const outside = [{ path: '/Clients/Showreel' }]
+		expect(folderLevel(outside, '')).toEqual({ folders: [{ path: '/Clients', name: 'Clients', count: 1 }], assets: [] })
+		expect(folderLevel(outside, '/Clients')).toEqual({ folders: [{ path: '/Clients/Showreel', name: 'Showreel', count: 1 }], assets: [] })
+		expect(folderLevel(outside, '/Clients/Showreel').assets).toEqual(outside)
+	})
+})
+
+describe('folderOrder', () => {
+	it('puts folders before the files beside them, at every level', () => {
+		const order = folderOrder([
+			{ id: 1, path: '' },
+			{ id: 2, path: 'B' },
+			{ id: 3, path: 'A' },
+			{ id: 4, path: 'B/C' },
+			{ id: 5, path: '' },
+		]).map((asset) => asset.id)
+		expect(order).toEqual([3, 4, 2, 1, 5])
+	})
+})
+
+describe('zipped', () => {
+	const assets = [
+		{ assetId: 1, path: '', downloadUrl: 'x' },
+		{ assetId: 2, path: 'B-Roll', downloadUrl: 'x' },
+		{ assetId: 3, path: 'B-Roll/Drone', downloadUrl: 'x' },
+		{ assetId: 4, path: 'B-Roll', downloadUrl: null },
+		{ assetId: 5, path: 'Audio', downloadUrl: 'x' },
+	]
+
+	it('takes a picked folder whole, at any depth, without what does not download', () => {
+		expect(zipped(assets, new Set(), new Set(['B-Roll']))).toEqual([2, 3])
+	})
+
+	it('adds the Assets picked one by one, once each', () => {
+		expect(zipped(assets, new Set([1, 3]), new Set(['B-Roll/Drone']))).toEqual([1, 3])
 	})
 })

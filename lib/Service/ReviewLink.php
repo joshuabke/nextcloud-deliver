@@ -16,6 +16,7 @@ use OCA\Deliver\Db\VersionMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Files\File;
+use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
 use OCP\IURLGenerator;
@@ -35,6 +36,8 @@ class ReviewLink {
 
 	/** @var ?array<int, array{asset: Asset, versions: non-empty-list<Version>}> */
 	private ?array $stacks = null;
+	/** Read once: false until then */
+	private Folder|false|null $folder = false;
 	/** @var array<int, File> per Version id, the files the link reaches */
 	private array $files = [];
 
@@ -140,6 +143,26 @@ class ReviewLink {
 			throw new NotFoundException('Version not found');
 		}
 		return $version;
+	}
+
+	/**
+	 * The folder of a Version's file inside the Project folder: '' at its top,
+	 * and for files elsewhere, so a link never shows the Member's own folders
+	 */
+	public function pathOf(Version $version): string {
+		$file = $this->originalFile($version);
+		$folder = $this->projectFolder();
+		return $file === null || $folder === null ? '' : ProjectService::folderPath($file, $folder) ?? '';
+	}
+
+	/** The Project's folder as its owner has it; null for No Project and Projects of picked files */
+	private function projectFolder(): ?Folder {
+		if ($this->folder === false) {
+			$id = $this->project()?->getFolderId();
+			$node = $id === null ? null : $this->root->getUserFolder($this->ownerUid())->getFirstNodeById($id);
+			$this->folder = $node instanceof Folder ? $node : null;
+		}
+		return $this->folder;
 	}
 
 	/** The original, where the link reaches it */

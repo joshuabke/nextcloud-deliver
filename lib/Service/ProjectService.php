@@ -1491,11 +1491,19 @@ class ProjectService {
 	}
 
 	private function pathOf(File $file, ?Folder $folder, Folder $home): string {
+		return ($folder === null ? null : self::folderPath($file, $folder)) ?? $home->getRelativePath(dirname($file->getPath())) ?? '/';
+	}
+
+	/**
+	 * The folder of a file inside another folder, relative to it, '' right in
+	 * it; null where the file lies elsewhere. A Review Link shows no more than
+	 * this, never the Member's own folders.
+	 */
+	public static function folderPath(File $file, Folder $folder): ?string {
 		$dir = dirname($file->getPath());
-		if ($folder !== null && ($dir === $folder->getPath() || str_starts_with($dir, $folder->getPath() . '/'))) {
-			return ltrim(substr($dir, strlen($folder->getPath())), '/');
-		}
-		return $home->getRelativePath($dir) ?? '/';
+		return $dir === $folder->getPath() || str_starts_with($dir, $folder->getPath() . '/')
+			? ltrim(substr($dir, strlen($folder->getPath())), '/')
+			: null;
 	}
 
 	/**
