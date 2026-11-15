@@ -1,15 +1,13 @@
 <script setup>
-import { computed, ref } from 'vue'
-import { hoverSource } from '../lib/media.js'
+import { ref } from 'vue'
 import { previewUrl } from '../lib/preview.js'
 
-// The still of an Asset: Nextcloud's preview, else a frame of the video itself; a mouse over it scrubs through the video, as on Frame.io
+// The still of an Asset: Nextcloud's preview, else a frame of its Scrub Proxy; a mouse over it scrubs through the Scrub Proxy, as on Frame.io.
+// Never the original or the Proxy: a card is not worth their bitrate.
 const props = defineProps({
 	/** The file Nextcloud renders a still of */
 	fileId: { type: Number, required: true },
-	/** The video to take a frame from and scrub through; null for none (audio, images) */
-	playUrl: { type: String, default: null },
-	/** The Scrub Proxy, lighter to scrub through, once it is ready (#169) */
+	/** The Scrub Proxy to take a frame from and scrub through, once it is ready (#169); null for none */
 	scrubUrl: { type: String, default: null },
 	/** How the picture fills the box: cover or contain */
 	fit: { type: String, default: 'cover' },
@@ -17,7 +15,7 @@ const props = defineProps({
 
 /** Nextcloud has no still for it (no ffmpeg on the server) */
 const noStill = ref(false)
-/** The video could not be read; the parent's icon shows through */
+/** The Scrub Proxy could not be read (no H.264 decoder); the still or the parent's icon shows through */
 const noVideo = ref(false)
 /** The mouse is over it, so the video shows once it has a frame */
 const scrubbing = ref(false)
@@ -28,10 +26,6 @@ const ready = ref(false)
 /** Where the mouse is, 0 to 1 */
 const at = ref(0)
 const video = ref(null)
-/** This browser cannot play the Scrub Proxy (no H.264 decoder), so the video goes back to playUrl */
-const scrubBroken = ref(false)
-/** What the video plays: also where Nextcloud has no still, the Scrub Proxy's frame is the still */
-const source = computed(() => props.playUrl ? hoverSource(props.scrubUrl, props.playUrl, scrubBroken.value) : null)
 
 /**
  * Seeks to where the mouse is; seeks pile up on a slow line, so only the latest one counts
@@ -39,7 +33,7 @@ const source = computed(() => props.playUrl ? hoverSource(props.scrubUrl, props.
  * @param {MouseEvent} event - the move over the still
  */
 function scrub(event) {
-	if (!source.value || noVideo.value) {
+	if (!props.scrubUrl || noVideo.value) {
 		return
 	}
 	const box = event.currentTarget.getBoundingClientRect()
@@ -66,13 +60,8 @@ function shown() {
 	catchUp()
 }
 
-/** The video cannot be read: a Scrub Proxy gives way to playUrl; else the still stays, or the parent's icon shows through */
+/** The Scrub Proxy cannot be read: the still stays, or the parent's icon shows through */
 function failed() {
-	if (source.value !== props.playUrl) {
-		scrubBroken.value = true
-		ready.value = false
-		return
-	}
 	noVideo.value = true
 	scrubbing.value = false
 }
@@ -100,10 +89,10 @@ function leave() {
 			loading="lazy"
 			@error="noStill = true">
 		<video
-			v-if="source && !noVideo && (noStill || hovered)"
+			v-if="scrubUrl && !noVideo && (noStill || hovered)"
 			v-show="noStill || (scrubbing && ready)"
 			ref="video"
-			:src="source + '#t=1'"
+			:src="scrubUrl + '#t=1'"
 			preload="metadata"
 			muted
 			playsinline

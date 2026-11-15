@@ -128,11 +128,7 @@ class PublicApiController extends PublicShareController {
 					'count' => count($versions),
 					'mimeType' => $link->originalFile($newest)?->getMimetype(),
 					'dueDate' => $asset->getDueDate(),
-					// For scrubbing on hover, and a frame of it where Nextcloud renders no still (no ffmpeg)
-					'playUrl' => $newest->getProxyState() === DerivedMedia::STATE_READY || !$this->mayPlayOriginal($newest, $download)
-						? $this->mediaUrl($newest, 'proxy')
-						: $original,
-					// Scrubbed through on hover where there is one, also on links without downloads (#169)
+					// Scrubbed through on hover, and a frame of it where Nextcloud renders no still (no ffmpeg), also on links without downloads (#169)
 					'scrubUrl' => $newest->getScrubState() === DerivedMedia::STATE_READY ? $this->mediaUrl($newest, 'scrub') : null,
 					'downloadUrl' => $download ? $original . '?download=1' : null,
 				];
