@@ -1,13 +1,16 @@
 # The changelog section of a release, from the squashed PR titles since the
-# last tag: feat and fix become lines in the style of pulsejet/memories, every
-# other type stays out. `make release` writes it; see docs/development.md.
+# last tag: feat and fix titles become its lines, every other type stays out.
+# `make release` writes it; see docs/development.md.
 
 [changelog]
 header = ""
 body = """
 ## {{ version | trim_start_matches(pat="v") }} – {{ timestamp | date(format="%Y-%m-%d") }}
-
-{% for group, commits in commits | group_by(attribute="group") %}{% for commit in commits %}- **{{ group | striptags }}**: {{ commit.message | split(pat="\n") | first | trim | upper_first }}
+{% set groups = commits | group_by(attribute="group") %}
+{% for group, commits in groups %}{% if groups | length > 1 %}
+### {{ group | striptags }}
+{% endif %}
+{% for commit in commits %}- {{ commit.message | split(pat="\n") | first | trim | upper_first | trim_end_matches(pat=".") }}.
 {% endfor %}{% endfor %}
 """
 footer = ""
@@ -20,11 +23,11 @@ split_commits = false
 tag_pattern = "v[0-9]*"
 # GitHub appends the PR number to a squashed title
 commit_preprocessors = [
-  { pattern = '\(#(\d+)\)', replace = "([#${1}](https://github.com/joshuabke/nextcloud-deliver/pull/${1}))" },
+  { pattern = '(?m) *\(#\d+\)$', replace = "" },
 ]
 commit_parsers = [
-  { message = "^feat", group = "<!-- 0 -->Feature" },
-  { message = "^fix", group = "<!-- 1 -->Fix" },
+  { message = "^feat", group = "<!-- 0 -->Added" },
+  { message = "^fix", group = "<!-- 1 -->Fixed" },
   { message = ".*", skip = true },
 ]
 filter_commits = true
