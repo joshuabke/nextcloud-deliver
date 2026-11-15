@@ -1,0 +1,19 @@
+name: PR title
+
+# The squash merge makes the PR title the commit on main, and feat and fix
+# titles become the changelog lines (cliff.toml): Conventional Commits only.
+# Nothing is checked out, so pull_request_target runs no code of the PR.
+on:
+  pull_request_target:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  title:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

@@ -72,14 +72,10 @@ The built `js/` is gitignored, so a release is always `make package`, never `git
 
 A release:
 
-1. Set the version in `appinfo/info.xml` and `package.json`, and turn the `## Unreleased` section of `CHANGELOG.md` (`## Unveröffentlicht` in `CHANGELOG.de.md`) into `## 1.2.3 – 2026-10-01`. The store shows that section (the German one on German instances) and matches it to the version in `info.xml`. Merge.
-2. Tag the merge on `main` and push the tag:
+1. On a branch off `main`, run `make release` (`make release VERSION=1.2.3` to choose the version). git-cliff (`cliff.toml`) works out the next version from the squashed PR titles since the last tag, a `feat` bumping the minor version and a `fix` the patch, writes it into `appinfo/info.xml` and `package.json`, and puts the new section `## 1.2.3 – 2026-10-01` at the top of both changelogs, one line per `feat` and `fix`. The German section starts as a copy of the English one: translate it (du, the terms in `CONTEXT.md`) and tidy any line. The store shows that section (the German one on German instances) and matches it to the version in `info.xml`.
+2. Open the PR as `chore: Release 1.2.3` and merge it. That is the release; no tag to push.
 
-   ```bash
-   git tag v1.2.3 && git push origin v1.2.3
-   ```
-
-`.github/workflows/release.yml` takes it from there: it refuses a tag that disagrees with `info.xml` or the changelogs, runs `make package`, signs the code with `occ integrity:sign-app` from an unpacked Nextcloud 33 (no installed instance needed), creates the GitHub release with `deliver-1.2.3.tar.gz` and the changelog section as text, and posts the download URL and the tarball's signature to the store. It needs the repository secrets `APP_PRIVATE_KEY` (the app's signing key) and `APPSTORE_TOKEN`; the certificate is the public `deliver.crt` from nextcloud/app-certificate-requests. The build runs in a job of its own, without secrets and without the npm dependencies' install scripts (`make build` leaves them out everywhere), and hands the built app to the job that signs and publishes it, so no dependency ever runs next to the key. Actions in both workflows are pinned to commits; bump them with the release named in the comment.
+`.github/workflows/release.yml` takes it from there, on any push to `main` that brings a version in `info.xml` without its tag yet (a pushed tag `v1.2.3` still works as well): it refuses a version that disagrees with the changelogs, runs `make package`, signs the code with `occ integrity:sign-app` from an unpacked Nextcloud 33 (no installed instance needed), creates the tag and the GitHub release with `deliver-1.2.3.tar.gz` and the changelog section as text, and posts the download URL and the tarball's signature to the store. It needs the repository secrets `APP_PRIVATE_KEY` (the app's signing key) and `APPSTORE_TOKEN`; the certificate is the public `deliver.crt` from nextcloud/app-certificate-requests. The build runs in a job of its own, without secrets and without the npm dependencies' install scripts (`make build` leaves them out everywhere), and hands the built app to the job that signs and publishes it, so no dependency ever runs next to the key. Actions in both workflows are pinned to commits; bump them with the release named in the comment.
 
 The code signature (`appinfo/signature.json`) covers every file, so nothing in the tarball may change after signing. The store requires signed apps, and a signed app has to stay signed.
 

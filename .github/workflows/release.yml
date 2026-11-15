@@ -1,7 +1,10 @@
 name: Release
 
-# A tag v1.2.3 builds and signs the app, attaches it to a GitHub release and
-# publishes it in the App Store. Release steps are in docs/development.md;
+# A release PR merged on main (a version in info.xml without its tag yet), or
+# a pushed tag v1.2.3, builds and signs the app, tags it, attaches it to a
+# GitHub release and publishes it in the App Store. A tag pushed with the
+# workflow's own token starts no workflow, hence both triggers here. Release
+# steps are in docs/development.md;
 # secrets: APP_PRIVATE_KEY (deliver.key) and APPSTORE_TOKEN.
 #
 # The build runs the app's npm dependencies, without their install scripts,
@@ -9,13 +12,42 @@ name: Release
 # the signing key. Actions are pinned to commits, the comment naming the release.
 on:
   push:
+    branches: [main]
+    # Not evaluated for tags
+    paths: [appinfo/info.xml]
     tags: ['v*']
 
 permissions:
   contents: read
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      # Empty where info.xml changed on main without a new version
+      - id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            VERSION=${GITHUB_REF_NAME#v}
+          else
+            VERSION=$(sed -n 's|.*<version>\(.*\)</version>.*|\1|p' appinfo/info.xml)
+            if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$VERSION" >/dev/null 2>&1; then
+              VERSION=
+            fi
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: version
+    if: needs.version.outputs.version != ''
     runs-on: ubuntu-latest
     steps:
       # No token in .git/config, where the dependencies the build runs could read it
@@ -24,8 +56,9 @@ jobs:
           persist-credentials: false
 
       - name: Tag, info.xml and changelog agree
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
-          VERSION=${GITHUB_REF_NAME#v}
           grep -q "<version>$VERSION</version>" appinfo/info.xml
           grep -q "^## $VERSION" CHANGELOG.md
           grep -q "^## $VERSION" CHANGELOG.de.md
@@ -44,7 +77,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: build
+    needs: [version, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -68,8 +101,8 @@ jobs:
       - name: Sign the code
         env:
           APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
-          VERSION=${GITHUB_REF_NAME#v}
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           printf '%s\n' "$APP_PRIVATE_KEY" > "$RUNNER_TEMP/deliver.key"
           curl -fsSL -o "$RUNNER_TEMP/deliver.crt" https://raw.githubusercontent.com/nextcloud/app-certificate-requests/master/deliver/deliver.crt
@@ -89,7 +122,8 @@ jobs:
           awk -v v="## $VERSION" '/^## /{p = index($0, v) == 1; next} p' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
           # 1.0.0-beta.1 and the like: a pre-release here, the beta channel in the store
           pre=false; case $VERSION in *-*) pre=true ;; esac
-          gh release create "v$VERSION" "build/deliver-$VERSION.tar.gz" \
+          # Tags the commit as well, where the tag does not exist yet
+          gh release create "v$VERSION" "build/deliver-$VERSION.tar.gz" --target "$GITHUB_SHA" \
             --title "Deliver $VERSION" --notes-file "$RUNNER_TEMP/notes.md" --prerelease="$pre"
 
       - name: App Store

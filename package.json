@@ -40,6 +40,7 @@
 		"@nextcloud/vite-config": "^2.5.4",
 		"@playwright/test": "^1.63.0",
 		"eslint": "^10.0.0",
+		"git-cliff": "^2.14.2",
 		"vite": "^7.3.6",
 		"vitest": "^5.0.1"
 	},
