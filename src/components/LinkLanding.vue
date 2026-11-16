@@ -3,7 +3,7 @@ import downloadIcon from '@mdi/svg/svg/download.svg?raw'
 import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
 import audioIcon from '@mdi/svg/svg/music-note-outline.svg?raw'
 import videoIcon from '@mdi/svg/svg/play-box-outline.svg?raw'
-import { computed, onBeforeUnmount, onMounted, reactive } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DueDate from './DueDate.vue'
@@ -90,6 +90,8 @@ function clearPicks() {
 	selected.clear()
 	pickedFolders.clear()
 }
+// Another folder starts a new selection, so a ZIP holds only what is in view
+watch(folder, clearPicks)
 
 // Nextcloud's header and footer step aside, as for the Review view
 onMounted(() => document.body.classList.add('deliver-review'))
