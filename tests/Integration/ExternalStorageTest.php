@@ -115,7 +115,7 @@ class ExternalStorageTest extends TestCase {
 
 		[$reviewer, $shown] = $this->onNewLink();
 		self::assertSame(['track'], array_column($shown, 'name'));
-		$played = $reviewer->raw(substr($shown[0]['playUrl'], strpos($shown[0]['playUrl'], '/media/')));
+		$played = $reviewer->raw("/media/{$shown[0]['newestId']}/original");
 		self::assertSame([200, 'not really audio'], [$played['status'], $played['body']], 'and plays from the storage');
 		self::assertSame([false], $this->offLinks());
 	}

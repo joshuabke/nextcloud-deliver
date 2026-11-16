@@ -267,7 +267,7 @@ class ReviewLinkTest extends TestCase {
 		$visitor = $this->visitor($link);
 		$listed = $visitor->call('GET', '/api/assets')['data'];
 		self::assertCount(2, array_filter(array_column($listed, 'downloadUrl')), 'every Asset downloads on its own');
-		self::assertStringContainsString('/media/', $listed[0]['playUrl'], 'a frame of the video stands in for a missing still');
+		self::assertArrayNotHasKey('playUrl', $listed[0], 'a card never loads the original for its still');
 
 		$zip = $visitor->raw('/download');
 		self::assertSame(200, $zip['status']);
