@@ -84,7 +84,7 @@ package: build
 appinfo:
 	$(COMPOSE) exec -u www-data nextcloud php custom_apps/deliver/dev/validate-info.php
 
-# A release PR's changes: version and changelogs from the PR titles since the last tag (docs/development.md);
-# VERSION=1.2.3 overrides the version git-cliff works out
+# Opens the release PR from the newest main: version and changelog from the PR titles since the last tag
+# (docs/development.md); VERSION=1.2.3 overrides the version git-cliff works out
 release:
 	dev/release.sh $(VERSION)
