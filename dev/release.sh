@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Prepares a release on a branch: the next version from the squashed PR titles
 # since the last tag (or $1), in info.xml and package.json, and its changelog
-# section in both files. The German one is the English one until translated.
+# section in CHANGELOG.md.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 cliff=node_modules/.bin/git-cliff
@@ -22,5 +22,4 @@ prepend() {
 	{ head -n 2 "$1"; printf '%s\n\n' "$2"; tail -n +3 "$1"; } >"$1.new" && mv "$1.new" "$1"
 }
 prepend CHANGELOG.md "$section"
-prepend CHANGELOG.de.md "$(sed 's/^### Added$/### Neu/; s/^### Fixed$/### Behoben/' <<<"$section")"
 echo "$version"
