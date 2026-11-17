@@ -2,22 +2,21 @@
 # Opens the release PR: from the newest main, the next version from the squashed
 # PR titles since the last tag (or $1), in info.xml and package.json, and its
 # section in CHANGELOG.md, on a branch release-<version>. Merging it releases.
+# It works in a worktree of its own, so the checkout it runs from stays as it is.
 set -euo pipefail
-# In braces, so bash reads it whole before the switch to main swaps this file
-{
 cd "$(dirname "$0")/.."
-cliff=node_modules/.bin/git-cliff
+cliff=$PWD/node_modules/.bin/git-cliff
+[ -x "$cliff" ] || npm ci --ignore-scripts --silent
 
-if ! git diff --quiet || ! git diff --cached --quiet; then
-	echo "Uncommitted changes here; run it in a clean worktree" >&2
-	exit 1
-fi
 git fetch --quiet --tags origin main
-git switch --quiet --detach origin/main
+work=$(mktemp -d)
+trap 'git worktree remove --force "$work"' EXIT
+git worktree add --quiet --detach "$work" origin/main
+cd "$work"
 
-version=${1:-$($cliff --bumped-version 2>/dev/null)}
+version=${1:-$("$cliff" --bumped-version 2>/dev/null)}
 version=${version#v}
-section=$($cliff --unreleased --tag "v$version" 2>/dev/null | sed "/./,\$!d" | cat -s)
+section=$("$cliff" --unreleased --tag "v$version" 2>/dev/null | sed "/./,\$!d" | cat -s)
 if ! grep -q '^- ' <<<"$section"; then
 	echo "No feat or fix since the last tag" >&2
 	exit 1
@@ -33,6 +32,4 @@ git commit --quiet -am "chore: Release $version"
 git push --quiet -u origin "release-$version"
 gh pr create --base main --title "chore: Release $version" --body "$section
 
-Merging this releases $version: the tag, the GitHub release and the App Store. Tidy the lines on this branch first where they need it."
-exit
-}
+Merging this releases $version: the tag, the GitHub release and the App Store. Tidy the lines on branch release-$version first where they need it."
