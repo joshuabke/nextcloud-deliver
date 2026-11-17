@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.13.1 – 2026-11-17
+
+- Load only the Scrub Proxy for a card's still.
+- Clear the landing page's picks on another folder.
+
 ## 0.13.0 – 2026-11-13
 
 ### Added
