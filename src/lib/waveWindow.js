@@ -40,16 +40,11 @@ export function stepsFor(duration) {
  * @param {number} seconds - where the playhead stands
  * @param {number} span - the seconds across the stage
  * @param {number} duration - the length of the piece
- * @param {boolean} paged - in steps a window at a time instead of scrolling, for reduced motion
  * @return {{start: number, end: number}} the seconds at the left and right edge; before 0 and after the end there is no wave
  */
-export function windowAt(seconds, span, duration, paged = false) {
+export function windowAt(seconds, span, duration) {
 	if (isWhole(span, duration)) {
 		return { start: 0, end: duration }
-	}
-	if (paged) {
-		const start = Math.floor(seconds / span) * span
-		return { start, end: start + span }
 	}
 	return { start: seconds - span / 2, end: seconds + span / 2 }
 }
@@ -95,14 +90,93 @@ export function dragged({ from, dx, x, span, width, duration }) {
 }
 
 /**
+ * @param {number} delta - a wheel's delta
+ * @param {number} deltaMode - 0 for pixels, 1 for lines (Firefox's wheel), 2 for pages
+ * @param {number} page - a page's width or height, in px
+ * @return {number} the delta in px
+ */
+const wheelPixels = (delta, deltaMode, page) => delta * [1, 16, page][deltaMode]
+
+/**
  * @param {number} span - the seconds across the stage now
  * @param {number} deltaY - a wheel's vertical delta; a trackpad pinch comes as one with Ctrl
- * @param {number} deltaMode - 0 for pixels, 1 for lines (Firefox's wheel)
- * @return {number} the span after it, wider for a pull towards the user; not yet clamped
+ * @param {number} deltaMode - as WheelEvent has it
+ * @param {number} duration - the length of the piece
+ * @return {number} the span after it, wider for a pull towards the user, within the zoom steps
  */
-export function wheelZoom(span, deltaY, deltaMode) {
-	const pixels = deltaMode === 1 ? deltaY * 16 : deltaY
-	return span * Math.exp(Math.max(-50, Math.min(50, pixels)) * 0.01)
+export function wheelZoom(span, deltaY, deltaMode, duration) {
+	return clampSpan(span * Math.exp(Math.max(-50, Math.min(50, wheelPixels(deltaY, deltaMode, 800))) * 0.01), duration)
+}
+
+/**
+ * A sideways wheel or a trackpad's swipe moves the wave as a drag does.
+ *
+ * @param {number} seconds - where the playhead stands
+ * @param {number} deltaX - the wheel's sideways delta; to the right goes later
+ * @param {number} deltaMode - as WheelEvent has it
+ * @param {number} span - the seconds across the stage
+ * @param {number} width - the stage's width, in px
+ * @param {number} duration - the length of the piece
+ * @return {number} the seconds the playhead stands at after it
+ */
+export function wheelSeek(seconds, deltaX, deltaMode, span, width, duration) {
+	return Math.min(duration, Math.max(0, seconds + wheelPixels(deltaX, deltaMode, width) / width * Math.min(span, duration)))
+}
+
+/**
+ * @param {number} span - the span when the two fingers came down
+ * @param {number} from - their distance then
+ * @param {number} to - their distance now
+ * @param {number} duration - the length of the piece
+ * @return {number} the span now: fingers apart zoom in, within the zoom steps
+ */
+export function pinchSpan(span, from, to, duration) {
+	return clampSpan(span * from / Math.max(1, to), duration)
+}
+
+/**
+ * @param {number[]} steps - as stepsFor gives them
+ * @param {number} span - the seconds across the stage
+ * @return {number|null} the one step shown now, the nearest within half a second; none in between
+ */
+export function stepAt(steps, span) {
+	const nearest = steps.reduce((best, step) => Math.abs(step - span) < Math.abs(best - span) ? step : best, steps[0])
+	return Math.abs(nearest - span) < 0.5 ? nearest : null
+}
+
+const SPAN_KEY = 'deliver.waveformZoom'
+
+/**
+ * The zoom this browser last chose, for every audio Version; a minute until
+ * it chose, and where storage is closed or throws.
+ *
+ * @param {() => Storage} [storage] - gives localStorage, unless a test brings its own; asked inside the try, as the accessor itself may throw
+ * @return {number} the span, Infinity for the whole piece
+ */
+export function readSpan(storage = () => globalThis.localStorage) {
+	try {
+		const value = storage().getItem(SPAN_KEY)
+		if (value === 'whole') {
+			return Infinity
+		}
+		const span = Number(value)
+		return value !== null && Number.isFinite(span) && span >= STEPS[0] ? span : DEFAULT_SPAN
+	} catch {
+		return DEFAULT_SPAN
+	}
+}
+
+/**
+ * @param {number} span - the span chosen
+ * @param {number} duration - the length of the piece it was chosen on: the whole stays the whole on another
+ * @param {() => Storage} [storage] - as for readSpan
+ */
+export function writeSpan(span, duration, storage = () => globalThis.localStorage) {
+	try {
+		storage().setItem(SPAN_KEY, isWhole(span, duration) ? 'whole' : String(span))
+	} catch {
+		// The zoom then lasts until the page is left
+	}
 }
 
 /**
@@ -148,14 +222,13 @@ export function bars({ rate, peaks }, seconds) {
  * @param {number} seconds - where the playhead stands
  * @param {number} span - the seconds across the stage
  * @param {number} duration - the length of the piece
- * @param {boolean} paged - as windowAt has it
  * @return {{left: number, width: number}} the window on the overview bar, in percent of the piece
  */
-export function overviewWindow(seconds, span, duration, paged = false) {
+export function overviewWindow(seconds, span, duration) {
 	if (!(duration > 0)) {
 		return { left: 0, width: 100 }
 	}
-	const { start, end } = windowAt(seconds, span, duration, paged)
+	const { start, end } = windowAt(seconds, span, duration)
 	const from = Math.max(0, start)
 	const to = Math.min(duration, end)
 	return { left: from / duration * 100, width: Math.max(0, to - from) / duration * 100 }

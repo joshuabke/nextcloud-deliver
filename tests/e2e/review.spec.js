@@ -988,7 +988,7 @@ test.describe('Audio review', () => {
 		await expect(page.getByRole('button', { name: '1 min' })).toHaveAttribute('aria-pressed', 'true')
 		await expect(page.getByRole('button', { name: '5 min' })).toBeVisible()
 		const shown = page.locator('.deliver-player__window')
-		const width = async () => parseFloat(await shown.evaluate((element) => element.style.width))
+		const width = async () => parseFloat(await shown.evaluate((element) => element.style.width.match(/[\d.]+%/)[0]))
 		expect(await width()).toBeCloseTo(30 / 360 * 100, 0)
 		expect(await centre()).toBe(765)
 
@@ -1012,9 +1012,74 @@ test.describe('Audio review', () => {
 		await page.getByRole('button', { name: '15 s' }).click()
 		await expect(page.getByRole('button', { name: '15 s' })).toHaveAttribute('aria-pressed', 'true')
 		expect(await width()).toBeCloseTo(15 / 360 * 100, 0)
-		await page.getByRole('button', { name: 'Whole' }).click()
+		await page.getByRole('button', { name: 'Whole', exact: true }).click()
 		expect(await width()).toBe(100)
 		await page.getByRole('button', { name: 'Pause (Space)' }).click()
+	})
+
+	test('a drag on the wave holds playback and lets it go on, but not past the end; Ctrl and the wheel zoom within the steps, remembered', async () => {
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		const canvas = page.locator('.deliver-wave canvas')
+		await expect(canvas).toBeVisible()
+		const audio = page.locator('video.deliver-player__video')
+		await expect(audio).toHaveJSProperty('readyState', 4)
+		const state = () => audio.evaluate((element) => ({ time: element.currentTime, paused: element.paused }))
+		const shown = page.locator('.deliver-player__window')
+		const width = async () => parseFloat(await shown.evaluate((element) => element.style.width.match(/[\d.]+%/)[0]))
+		// The last test left it on the whole, and this browser remembers that
+		await expect(page.getByRole('button', { name: 'Whole', exact: true })).toHaveAttribute('aria-pressed', 'true')
+		await page.getByRole('button', { name: '1 min' }).click()
+
+		// A quarter of the stage dragged to the left is 15 seconds on; playback holds meanwhile and goes on
+		const box = await canvas.boundingBox()
+		const y = box.y + box.height / 2
+		await page.getByRole('button', { name: 'Play (Space)' }).click()
+		await expect.poll(async () => (await state()).time).toBeGreaterThan(1)
+		const before = (await state()).time
+		await page.mouse.move(box.x + box.width * 0.75, y)
+		await page.mouse.down()
+		for (let step = 1; step <= 10; step++) {
+			await page.mouse.move(box.x + box.width * (0.75 - step * 0.025), y)
+		}
+		expect((await state()).paused).toBe(true)
+		await page.mouse.up()
+		const after = await state()
+		expect(after.paused).toBe(false)
+		expect(after.time - before).toBeGreaterThan(14)
+		expect(after.time - before).toBeLessThan(17)
+
+		// Dragged past the end it stays there, paused, as at the natural end, and does not start over
+		await page.getByRole('button', { name: 'Whole', exact: true }).click()
+		await page.mouse.move(box.x + box.width / 2, y)
+		await page.mouse.down()
+		await page.mouse.move(box.x + box.width * 0.8, y)
+		await page.mouse.move(box.x + box.width + 50, y)
+		await page.mouse.up()
+		await page.waitForTimeout(500)
+		const end = await state()
+		expect(end.paused).toBe(true)
+		expect(end.time).toBeGreaterThan(359)
+
+		// Ctrl and the wheel zoom in down to 15 seconds and out up to the whole, and a reload keeps it
+		await page.getByRole('button', { name: '1 min' }).click()
+		await audio.evaluate((element) => {
+			element.currentTime = 180
+		})
+		await page.mouse.move(box.x + box.width / 2, y)
+		await page.keyboard.down('Control')
+		for (let notch = 0; notch < 5; notch++) {
+			await page.mouse.wheel(0, -100)
+		}
+		await expect(page.getByRole('button', { name: '15 s' })).toHaveAttribute('aria-pressed', 'true')
+		expect(await width()).toBeCloseTo(15 / 360 * 100, 0)
+		for (let notch = 0; notch < 12; notch++) {
+			await page.mouse.wheel(0, 100)
+		}
+		await page.keyboard.up('Control')
+		await expect(page.getByRole('button', { name: 'Whole', exact: true })).toHaveAttribute('aria-pressed', 'true')
+		await page.reload()
+		await expect(page.getByRole('button', { name: 'Whole', exact: true })).toHaveAttribute('aria-pressed', 'true')
+		await page.getByRole('button', { name: '1 min' }).click()
 	})
 })
 

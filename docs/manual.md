@@ -64,9 +64,10 @@ A Review Link shows only the files whoever made it may share in Files. A file sh
 
 ## Reviewing audio
 
-- An audio Version plays on its Waveform, zoomed to one minute, the wave scrolling under the playhead in the middle. Drag the wave sideways to go through time; a click or a tap goes to that place. Neither stops playback: a drag holds it and lets it go on where you let go.
-- Zoom with the buttons on the stage (15 s, 1 min, 5 min, Whole), with two fingers on a phone or tablet, or with Ctrl and the mouse wheel (a trackpad's pinch). The bar under the stage shows the whole piece and, lighter, the part on the stage.
-- With reduced motion switched on in your system, the wave turns a page at a time instead of scrolling.
+- An audio Version plays on its Waveform, at first zoomed to one minute, the wave scrolling under the playhead in the middle. Drag the wave sideways to go through time; a click or a tap goes to that place. Neither stops playback: a drag holds it and lets it go on where you let go, except at the very end, where it stays.
+- Zoom with the buttons at the top of the stage (15 s, 1 min, 5 min, Whole), with two fingers on a phone or tablet, or with Ctrl and the mouse wheel (a trackpad's pinch). The bar under the stage shows the whole piece and, in a bracket, the part on the stage.
+- Deliver remembers your zoom in this browser for the next audio Version.
+- On a phone the wave takes your fingers: a swipe goes through time, not to the next Asset, and tapping, double-tapping and holding work as described above rather than as on a video. The next Asset is in the ⋯ menu.
 
 ## Captions
 

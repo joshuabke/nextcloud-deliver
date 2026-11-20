@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { TAP_SLOP } from '../lib/gestures.js'
 import { t } from '../lib/l10n.js'
 import { fpsValue, timeToFrame } from '../lib/timecode.js'
-import { bars, barSeconds, clampSpan, dragged, isWhole, secondsAt, stepsFor, wheelZoom, windowAt, xAt } from '../lib/waveWindow.js'
+import { bars, barSeconds, clampSpan, dragged, isWhole, pinchSpan, secondsAt, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan, xAt } from '../lib/waveWindow.js'
 
 // The Waveform of an audio Version on the stage (story 180): a window of it,
 // zoomed, scrolling under the playhead fixed in the centre. Drawn on a canvas
@@ -45,9 +45,6 @@ let ratio = 1
 let colors = { played: '#fff', rest: 'rgba(255, 255, 255, 0.3)' }
 /** Bars of the current length, kept while the window slides */
 let cache = { waveform: null, seconds: 0, levels: new Float32Array(0) }
-/** Reduced motion pages a window at a time instead of scrolling */
-const motion = window.matchMedia('(prefers-reduced-motion: reduce)')
-let paged = motion.matches
 let visible = true
 
 /** Where a drag has taken the playhead, until it lets go */
@@ -81,7 +78,7 @@ function draw() {
 	context.setTransform(ratio, 0, 0, ratio, 0, 0)
 	context.clearRect(0, 0, width, height)
 	const at = now()
-	const view = windowAt(at, shown.value, duration.value, paged)
+	const view = windowAt(at, shown.value, duration.value)
 	const across = view.end - view.start
 	const seconds = barSeconds(across, width)
 	if (cache.waveform !== props.waveform || cache.seconds !== seconds) {
@@ -151,21 +148,13 @@ const seen = new IntersectionObserver(([entry]) => {
 	schedule()
 })
 
-/** @param {MediaQueryListEvent} event - reduced motion switched */
-function onMotion(event) {
-	paged = event.matches
-	schedule()
-}
-
 onMounted(() => {
 	resized.observe(host.value)
 	seen.observe(host.value)
-	motion.addEventListener('change', onMotion)
 })
 onBeforeUnmount(() => {
 	resized.disconnect()
 	seen.disconnect()
-	motion.removeEventListener('change', onMotion)
 	cancelAnimationFrame(frameRequest)
 })
 
@@ -229,7 +218,7 @@ function onMove(event) {
 	event.stopPropagation()
 	pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
 	if (pinch && pointers.size === 2) {
-		span.value = clampSpan(pinch.span * pinch.distance / Math.max(1, spread()), duration.value)
+		zoom(pinchSpan(pinch.span, pinch.distance, spread(), duration.value))
 		return
 	}
 	if (press?.id !== event.pointerId) {
@@ -277,7 +266,7 @@ function onUp(event) {
 		endDrag()
 	} else if (event.type === 'pointerup') {
 		// A click or a tap only seeks, and playback goes on as it was
-		const view = windowAt(now(), shown.value, duration.value, paged)
+		const view = windowAt(now(), shown.value, duration.value)
 		emit('seek', frameOf(secondsAt(xOf(event), view, size.width, duration.value)))
 	}
 	press = null
@@ -292,16 +281,27 @@ function onUp(event) {
 function onWheel(event) {
 	if (event.ctrlKey || event.metaKey) {
 		event.preventDefault()
-		span.value = clampSpan(wheelZoom(shown.value, event.deltaY, event.deltaMode), duration.value)
+		zoom(wheelZoom(shown.value, event.deltaY, event.deltaMode, duration.value))
 		return
 	}
 	if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
 		event.preventDefault()
-		const across = Math.min(shown.value, duration.value)
-		const seconds = Math.min(duration.value, Math.max(0, now() + event.deltaX / size.width * across))
-		emit('seek', frameOf(seconds))
+		emit('seek', frameOf(wheelSeek(now(), event.deltaX, event.deltaMode, shown.value, size.width, duration.value)))
 	}
 }
+
+/**
+ * Zooms, and this browser remembers it for every audio Version
+ *
+ * @param {number} value - the seconds across the stage
+ */
+function zoom(value) {
+	span.value = value
+	writeSpan(value, duration.value)
+}
+
+/** The step shown now, pressed; none while zoomed freely between them */
+const pressed = computed(() => stepAt(steps.value, shown.value))
 
 /**
  * @param {number} step - one of the zoom steps, in seconds
@@ -337,8 +337,8 @@ function label(step) {
 				:key="step"
 				type="button"
 				class="deliver-wave__step"
-				:aria-pressed="Math.abs(shown - step) < 0.5 ? 'true' : 'false'"
-				@click="span = step">
+				:aria-pressed="step === pressed ? 'true' : 'false'"
+				@click="zoom(step)">
 				{{ label(step) }}
 			</button>
 		</div>
@@ -367,7 +367,8 @@ function label(step) {
 .deliver-wave__zoom {
 	position: absolute;
 	top: 6px;
-	inset-inline-end: 8px;
+	/* The start side: on a phone held sideways the layout's Comments button sits in the top end corner */
+	inset-inline-start: 8px;
 	display: flex;
 	gap: 2px;
 	padding: 2px;
