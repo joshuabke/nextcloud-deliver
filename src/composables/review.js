@@ -69,6 +69,8 @@ export function useReview({ version, projectMode, projectFps, refresh, collapsed
 		pinnedByTyping = false
 		loose = false
 		written = false
+		// A Comment half written belongs to its Version, as the field under the list did when it went with the view
+		store.draft = { body: '', files: [] }
 		drawing.value = false
 		draft.value = []
 		player.value?.clearRange?.()
@@ -145,12 +147,12 @@ export function useReview({ version, projectMode, projectFps, refresh, collapsed
 
 	// The first keystroke fixes where the Comment goes; emptying the field undoes that, whichever field it is
 	watch(() => store.draft.body.trim() === '', (empty, wasEmpty) => {
-		if (wasEmpty && !empty) {
+		if (!empty && wasEmpty !== false) {
 			hold()
-		} else if (empty && !wasEmpty) {
+		} else if (empty && wasEmpty === false) {
 			release()
 		}
-	})
+	}, { immediate: true })
 
 	/**
 	 * @param {{inFrame: number}} comment - the Comment to seek to
@@ -189,7 +191,8 @@ export function useReview({ version, projectMode, projectFps, refresh, collapsed
 	/** The field was emptied again: follow the player once more */
 	function release() {
 		written = false
-		if (pinnedByTyping || loose) {
+		// The field at the Waveform keeps its place while it is open, empty or not (N12a)
+		if ((pinnedByTyping || loose) && !composing.value) {
 			pinned.value = null
 			pinnedByTyping = false
 			loose = false
@@ -247,7 +250,10 @@ export function useReview({ version, projectMode, projectFps, refresh, collapsed
 			recheck = setTimeout(() => refresh().catch(() => {}), DERIVED_RECHECK)
 		}
 	}, { immediate: true })
-	onBeforeUnmount(() => clearTimeout(recheck))
+	onBeforeUnmount(() => {
+		clearTimeout(recheck)
+		store.draft = { body: '', files: [] }
+	})
 
 	return { player, panel, inline, composing, startComment, closeInline, mode, clock, anchor, pinned, pin, hold, release, letGo, jump, posted, drawing, draft, draw, range, markRange, clearRange }
 }

@@ -5,6 +5,7 @@ import penIcon from '@mdi/svg/svg/draw.svg?raw'
 import attachIcon from '@mdi/svg/svg/paperclip.svg?raw'
 import rangeIcon from '@mdi/svg/svg/ray-start-end.svg?raw'
 import sendIcon from '@mdi/svg/svg/send.svg?raw'
+import { showError, TOAST_PERMANENT_TIMEOUT } from '@nextcloud/dialogs'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, markRaw, ref, watch } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -134,6 +135,25 @@ watch(() => store.versionId, () => {
 defineExpose({ focus: () => input.value?.focus() })
 
 const form = ref(null)
+const root = ref(null)
+
+/**
+ * Leaving the composer lets go of an empty place (N11): the focus going
+ * elsewhere on the page, not to the composer's own controls, their menus or a
+ * file dialog, nor, at the Waveform, anywhere in its card (N12a)
+ *
+ * @param {FocusEvent} event - the focus leaves something in the composer
+ */
+function onFocusout(event) {
+	const within = (props.inline && root.value?.closest('[role="dialog"]')) || root.value
+	setTimeout(() => {
+		const focus = document.activeElement
+		if (!document.hasFocus() || within?.contains(focus) || focus?.closest?.('.v-popper__popper') || within?.contains(event.relatedTarget)) {
+			return
+		}
+		emit('left')
+	}, 0)
+}
 
 /** On a phone, writing makes room for the keyboard: the list steps aside (story 106). Only the text field starts it; a tap on a button beside it must not move the form under the finger */
 function startWriting() {
@@ -164,7 +184,13 @@ function submit() {
 			if (!e.commentPosted) {
 				throw e
 			}
-			error.value = t('deliver', 'The Comment is posted, but {name} could not be attached: {reason}', { name: e.fileName, reason: errorMessage(e) })
+			const message = t('deliver', 'The Comment is posted, but {name} could not be attached: {reason}', { name: e.fileName, reason: errorMessage(e) })
+			// At the Waveform the field closes with the Comment posted: the note stays as a toast until it is read
+			if (props.inline) {
+				showError(message, { timeout: TOAST_PERMANENT_TIMEOUT })
+			} else {
+				error.value = message
+			}
 		}
 		body.value = ''
 		files.value = []
@@ -207,7 +233,11 @@ function onKeydown(event) {
 </script>
 
 <template>
-	<div class="deliver-comments__composer" :class="{ 'deliver-comments__composer--inline': inline }">
+	<div
+		ref="root"
+		class="deliver-comments__composer"
+		:class="{ 'deliver-comments__composer--inline': inline }"
+		@focusout="onFocusout">
 		<NcNoteCard v-if="error" type="error">
 			{{ error }}
 		</NcNoteCard>
@@ -242,7 +272,6 @@ function onKeydown(event) {
 					:placeholder="t('deliver', 'Leave a Comment…')"
 					@keydown="onKeydown"
 					@focus="inline || startWriting()"
-					@blur="emit('left')"
 					@input="onInput"
 					@click="onInput" />
 				<!-- A phone keeps the composer to one row: the tools in a menu, Send in the field -->
@@ -556,5 +585,11 @@ function onKeydown(event) {
 .deliver-comments__composer--inline {
 	padding: 0;
 	border-top: none;
+}
+
+/* The card scrolls and would cut off a list over the field: there it stands in the flow above it, and the card grows */
+.deliver-comments__composer--inline .deliver-comments__mentions {
+	position: static;
+	order: -1;
 }
 </style>
