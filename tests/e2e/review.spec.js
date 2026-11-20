@@ -1099,6 +1099,82 @@ test.describe('Audio review', () => {
 		expect(Math.abs(best.shift - width * 3.3 / 60)).toBeLessThanOrEqual(1)
 	})
 
+	test('after a click the wave glides to the new place within half a second, and jumps under reduced motion', async () => {
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		const canvas = page.locator('.deliver-wave canvas')
+		await expect(canvas).toBeVisible()
+		const audio = page.locator('video.deliver-player__video')
+		await expect(audio).toHaveJSProperty('readyState', 4)
+		await page.getByRole('button', { name: '1 min' }).click()
+		await audio.evaluate((element) => {
+			element.currentTime = 100
+		})
+		await page.waitForTimeout(400)
+		const box = await canvas.boundingBox()
+		// Every frame for 0.7 s: how far the bars right of the playhead have moved since the click, in whole pixels
+		const sample = () => canvas.evaluate((element) => new Promise((resolve) => {
+			const ratio = element.width / element.clientWidth
+			const top = Math.round(40 * ratio)
+			const rows = element.height - 2 * top
+			const heights = () => {
+				const data = element.getContext('2d').getImageData(0, top, element.width, rows).data
+				return Array.from({ length: element.width }, (_, x) => {
+					let count = 0
+					for (let y = 0; y < rows; y++) {
+						count += data[(y * element.width + x) * 4 + 3] > 0 ? 1 : 0
+					}
+					return count
+				})
+			}
+			const before = heights()
+			const width = before.length
+			const samples = []
+			const start = performance.now()
+			const frame = () => {
+				const now = heights()
+				let best = { shift: 0, difference: Infinity }
+				for (let shift = 0; shift <= width / 3; shift++) {
+					let difference = 0
+					for (let x = Math.round(width * 0.55) + shift; x < width - 2; x++) {
+						difference += Math.abs(before[x] - now[x - shift])
+					}
+					if (difference < best.difference) {
+						best = { shift, difference }
+					}
+				}
+				samples.push({ at: performance.now() - start, ...best })
+				if (performance.now() - start < 700) {
+					requestAnimationFrame(frame)
+				} else {
+					resolve({ width, samples })
+				}
+			}
+			requestAnimationFrame(frame)
+		}))
+		const quarterOn = { position: { x: box.width * 0.75, y: box.height / 2 } }
+
+		let sampling = sample()
+		await canvas.click(quarterOn)
+		let { width, samples } = await sampling
+		const target = width / 4
+		const final = samples.at(-1)
+		expect(Math.abs(final.shift - target)).toBeLessThanOrEqual(1)
+		// On the way, whole pixels all along, and somewhere strictly between
+		expect(samples.every((each) => each.difference === 0)).toBe(true)
+		expect(samples.some((each) => each.shift > 2 && each.shift < final.shift - 2)).toBe(true)
+		const moved = samples.find((each) => each.shift > 0)
+		const arrived = samples.find((each) => each.shift === final.shift)
+		expect(arrived.at - moved.at).toBeLessThan(500)
+
+		// With reduced motion it is there at once
+		await page.emulateMedia({ reducedMotion: 'reduce' })
+		sampling = sample()
+		await canvas.click(quarterOn)
+		;({ width, samples } = await sampling)
+		expect(samples.every((each) => each.shift === 0 || Math.abs(each.shift - width / 4) <= 1)).toBe(true)
+		await page.emulateMedia({ reducedMotion: null })
+	})
+
 	test('a drag on the wave holds playback and lets it go on, but not past the end; Ctrl and the wheel zoom within the steps, remembered', async () => {
 		await page.goto(`/apps/deliver/versions/${versionId}`)
 		const canvas = page.locator('.deliver-wave canvas')

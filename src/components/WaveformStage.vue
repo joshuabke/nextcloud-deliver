@@ -7,7 +7,7 @@ import { HOLD_MS, TAP_SLOP } from '../lib/gestures.js'
 import { avatarSeed, initials } from '../lib/initials.js'
 import { t } from '../lib/l10n.js'
 import { fpsValue, timeToFrame } from '../lib/timecode.js'
-import { barGrid, bars, barsShown, CIRCLE, circleAt, clampSpan, dragged, isWhole, pinchSpan, pixelOffset, secondsAt, spreadSpan, stack, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan } from '../lib/waveWindow.js'
+import { barGrid, bars, barsShown, CIRCLE, circleAt, clampSpan, dragged, glided, glideStart, isWhole, pinchSpan, pixelOffset, secondsAt, spreadSpan, stack, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan } from '../lib/waveWindow.js'
 import { useCommentsStore } from '../store/comments.js'
 
 // The Waveform of an audio Version on the stage (story 180): a window of it,
@@ -77,6 +77,14 @@ let pixels = { width: 0, height: 0 }
 let ratio = 1
 let colors = { played: '#fff', rest: 'rgba(255, 255, 255, 0.3)' }
 let visible = true
+/** Further than this from where playing would have taken it, in seconds, the playhead was sought */
+const SEEK_GAP = 0.25
+/** The glide after a seek is decoration: with reduced motion the wave jumps */
+const motion = window.matchMedia('(prefers-reduced-motion: reduce)')
+/** A glide to a new place under way; the seconds drawn last, which a glide starts from; where the playhead was then, and when */
+let glide = null
+let drawnAt = null
+let last = null
 
 /**
  * What only changes with the zoom, the width or the Comments, worked out
@@ -180,7 +188,8 @@ function draw() {
 	}
 	context.setTransform(1, 0, 0, 1, 0, 0)
 	context.clearRect(0, 0, pixels.width, pixels.height)
-	const at = now()
+	const at = drawn()
+	drawnAt = at
 	const offset = pixelsAt(at)
 	const head = Math.round(at / across.value * pixels.width) - offset
 	if (isWhole(shown.value, duration.value)) {
@@ -382,11 +391,39 @@ function schedule() {
 	}
 }
 
+/**
+ * The seconds to draw: where the playhead is, or on the way there after a
+ * seek that was no drag (a click on the wave or the bar, a skip, a jump to a
+ * Comment). The sound is there at once; only the drawing glides, from where
+ * it stood but never from further than a window away (N13). A seek shows as
+ * the playhead standing elsewhere than playing on from the last frame would
+ * have taken it, whatever made it.
+ *
+ * @return {number} the seconds to draw
+ */
+function drawn() {
+	const at = now()
+	const time = performance.now()
+	if (last !== null && dragAt === null && drawnAt !== null && !motion.matches) {
+		const expected = last.at + (props.playing ? (time - last.time) / 1000 * (props.media?.playbackRate || 1) : 0)
+		if (Math.abs(at - expected) > SEEK_GAP) {
+			glide = { from: glideStart(drawnAt, at, across.value), at: time, span: shown.value }
+		}
+	}
+	last = { at, time }
+	const seconds = glide && glide.span === shown.value ? glided(glide, time, at) : null
+	if (seconds === null) {
+		glide = null
+		return at
+	}
+	return seconds
+}
+
 /** One animation frame */
 function tick() {
 	frameRequest = 0
 	draw()
-	if ((props.playing || dragAt !== null) && visible) {
+	if ((props.playing || dragAt !== null || glide !== null) && visible) {
 		schedule()
 	}
 }

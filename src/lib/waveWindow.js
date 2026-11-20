@@ -353,3 +353,34 @@ export function spreadSpan(cluster, perSecond, width, duration) {
 		span = clampSpan(span * 0.8, duration)
 	}
 }
+
+/** How long the wave glides to a new place after a seek, in ms (N13) */
+export const GLIDE_MS = 220
+
+/**
+ * @param {number} progress - 0 to 1 of the glide's time
+ * @return {number} 0 to 1 of its way: fast at first, settling at the end
+ */
+export const easeOut = (progress) => 1 - (1 - Math.min(1, Math.max(0, progress))) ** 3
+
+/**
+ * Where a glide starts: where the wave stood, but at most a window from the
+ * target, so a far jump does not smear the whole piece past.
+ *
+ * @param {number} from - the seconds drawn when the seek came
+ * @param {number} to - the seconds sought
+ * @param {number} across - the seconds across the stage
+ * @return {number} the seconds the glide starts from
+ */
+export const glideStart = (from, to, across) => Math.min(to + across, Math.max(to - across, from))
+
+/**
+ * @param {{from: number, at: number}} glide - where it started, and when (ms)
+ * @param {number} time - now (ms)
+ * @param {number} target - where the playhead is now; it moves on while playing, and the glide lands on it
+ * @return {number|null} the seconds to draw; null once the glide is over
+ */
+export function glided(glide, time, target) {
+	const progress = (time - glide.at) / GLIDE_MS
+	return progress >= 1 ? null : glide.from + (target - glide.from) * easeOut(progress)
+}

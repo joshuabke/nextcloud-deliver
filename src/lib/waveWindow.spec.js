@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { barGrid, bars, barsShown, CIRCLE, circleAt, clampSpan, DEFAULT_SPAN, dragged, isWhole, overviewWindow, pinchSpan, pixelOffset, readSpan, secondsAt, spreadSpan, stack, STACK_STEP, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan, xAt } from './waveWindow.js'
+import { barGrid, bars, barsShown, CIRCLE, easeOut, GLIDE_MS, glided, glideStart, circleAt, clampSpan, DEFAULT_SPAN, dragged, isWhole, overviewWindow, pinchSpan, pixelOffset, readSpan, secondsAt, spreadSpan, stack, STACK_STEP, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan, xAt } from './waveWindow.js'
 
 describe('the window of the scrolling Waveform', () => {
 	it('centres the playhead, the wave left empty before the start and after the end', () => {
@@ -238,5 +238,31 @@ describe('the zoom this browser remembers', () => {
 		expect(readSpan(storage)).toBe(DEFAULT_SPAN)
 		storage().setItem('deliver.waveformZoom', '2')
 		expect(readSpan(storage)).toBe(DEFAULT_SPAN)
+	})
+})
+
+describe('the glide to a new place (N13)', () => {
+	it('eases out from where the wave stood to where the playhead is', () => {
+		expect(easeOut(0)).toBe(0)
+		expect(easeOut(1)).toBe(1)
+		expect(easeOut(0.5)).toBeGreaterThan(0.5)
+		const glide = { from: 100, at: 1000 }
+		expect(glided(glide, 1000, 115)).toBe(100)
+		const half = glided(glide, 1000 + GLIDE_MS / 2, 115)
+		expect(half).toBeGreaterThan(107.5)
+		expect(half).toBeLessThan(115)
+		expect(glided(glide, 1000 + GLIDE_MS, 115)).toBe(null)
+	})
+
+	it('lands on a playhead that moves on meanwhile, without a snap at the end', () => {
+		const glide = { from: 100, at: 0 }
+		const near = glided(glide, GLIDE_MS - 1, 115 + (GLIDE_MS - 1) / 1000)
+		expect(Math.abs(near - (115 + (GLIDE_MS - 1) / 1000))).toBeLessThan(0.001)
+	})
+
+	it('starts at most a window from a far target', () => {
+		expect(glideStart(100, 3000, 60)).toBe(2940)
+		expect(glideStart(3000, 100, 60)).toBe(160)
+		expect(glideStart(100, 115, 60)).toBe(100)
 	})
 })
