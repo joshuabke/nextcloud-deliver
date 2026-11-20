@@ -69,12 +69,12 @@ export function toBase64(bytes) {
 }
 
 /**
- * @param {{rate: number, peaks: string}} json - the Waveform as the server serves it
- * @return {{rate: number, peaks: Uint8Array}} its peaks, a byte each
+ * @param {{rate: number, peaks: string, loudness?: ?{integrated: ?number, peak: ?number, truePeak: boolean}}} json - the Waveform as the server serves it
+ * @return {{rate: number, peaks: Uint8Array, loudness: ?{integrated: ?number, peak: ?number, truePeak: boolean}}} its peaks, a byte each, and its loudness where it was measured (ADR 0021)
  */
 export function readWaveform(json) {
 	const binary = atob(json.peaks)
-	return { rate: json.rate, peaks: Uint8Array.from(binary, (char) => char.charCodeAt(0)) }
+	return { rate: json.rate, peaks: Uint8Array.from(binary, (char) => char.charCodeAt(0)), loudness: json.loudness ?? null }
 }
 
 /**
