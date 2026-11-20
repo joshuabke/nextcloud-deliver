@@ -61,9 +61,11 @@ const props = defineProps({
 	drawing: { type: Boolean, default: false },
 	/** Where the Comment being written goes, once the field holds it: marked on the Waveform */
 	pending: { type: Object, default: null },
+	/** Whether the field is open at the Waveform (N12): the view hands it in as the composer slot */
+	composing: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['comment', 'jump', 'swipe', 'seeked', 'update:mode', 'update:drawing'])
+const emit = defineEmits(['comment', 'jump', 'swipe', 'seeked', 'closeComposer', 'update:mode', 'update:drawing'])
 
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2]
 
@@ -939,11 +941,17 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 				:clock="clock"
 				:canComment="canComment"
 				:pending="pending"
+				:composing="composing"
 				@seek="seekTo"
 				@hold="hold"
 				@release="release"
 				@comment="emit('comment', { inFrame: $event, outFrame: null })"
-				@jump="emit('jump', $event)" />
+				@jump="emit('jump', $event)"
+				@closeComposer="emit('closeComposer')">
+				<template #composer>
+					<slot name="composer" />
+				</template>
+			</WaveformStage>
 			<p v-if="!source || unplayable" class="deliver-player__notice">
 				<template v-if="!proxyPending">
 					{{ unplayableReason }}

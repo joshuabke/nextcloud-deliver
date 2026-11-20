@@ -36,13 +36,15 @@ const props = defineProps({
 	canComment: { type: Boolean, default: false },
 	/** Where the Comment being written goes, {inFrame, outFrame}, while the field holds it */
 	pending: { type: Object, default: null },
+	/** Whether the field is open at the Waveform, at the place it holds (N12); the view hands it in as the composer slot */
+	composing: { type: Boolean, default: false },
 })
 
 /**
  * seek: a Frame to go to, keeping the playback state; hold and release: a drag holds playback and lets it go on;
- * comment: a Frame to comment on; jump: a Comment to go to
+ * comment: a Frame to comment on; jump: a Comment to go to; closeComposer: the field at the Waveform is closed from here
  */
-const emit = defineEmits(['seek', 'hold', 'release', 'comment', 'jump'])
+const emit = defineEmits(['seek', 'hold', 'release', 'comment', 'jump', 'closeComposer'])
 
 /** Room above the wave for the zoom buttons, and below it for the Comments' circles, in px */
 const TOP = 40
@@ -509,6 +511,17 @@ onBeforeUnmount(() => {
 	cancelAnimationFrame(frameRequest)
 })
 
+/** Where the field at the Waveform stands: at its place when it opened, kept on the stage */
+const composeLeft = ref(0)
+watch(() => props.composing && props.pending?.inFrame, () => {
+	if (props.composing && props.pending) {
+		card.value = null
+		// Where the place stands once the wave has come to rest: a glide after the seek of a double click brings the mark under the card, which does not move
+		const x = props.pending.inFrame * perFrame() - offsetAt(now())
+		composeLeft.value = Math.min(size.width - CARD_HALF - 8, Math.max(CARD_HALF + 8, x))
+	}
+})
+
 /** The pointers on the stage, for a pinch */
 const pointers = new Map()
 /** The pointer that came down, until it lifts: a tap, or a drag once it moves */
@@ -753,6 +766,10 @@ function openCircle(circle, x) {
  * @param {?object[]} siblings - the Comments of its place to step through, where no zoom parts them
  */
 function open(comment, x, siblings) {
+	// A Comment's card and the field never show at once
+	if (props.composing) {
+		emit('closeComposer')
+	}
 	card.value = { id: comment.id, left: Math.min(size.width - CARD_HALF - 8, Math.max(CARD_HALF + 8, x)), siblings }
 	store.selected = comment.id
 }
@@ -787,8 +804,12 @@ function onWheel(event) {
 	}
 	if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
 		event.preventDefault()
-		following = true
-		emit('seek', frameOf(wheelSeek(now(), event.deltaX, event.deltaMode, shown.value, size.width, duration.value)))
+		const target = frameOf(wheelSeek(now(), event.deltaX, event.deltaMode, shown.value, size.width, duration.value))
+		// A swipe against the start or the end moves nothing, and must not keep the next seek from gliding
+		if (target !== frameOf(now())) {
+			following = true
+			emit('seek', target)
+		}
 	}
 }
 
@@ -845,6 +866,8 @@ function label(step) {
 				{{ label(step) }}
 			</button>
 		</div>
+		<!-- Toasts of the field at the Waveform, in the stage's top corner: clear of the transport buttons and of a sheet -->
+		<div id="deliver-wave-toasts" class="deliver-wave__toasts" @pointerdown.stop />
 		<!-- The Comment at its circle, with its Replies and a field to answer; on a phone a sheet from below -->
 		<WaveformCard
 			v-if="opened"
@@ -856,6 +879,15 @@ function label(step) {
 			@close="card = null"
 			@jump="goTo"
 			@show="show" />
+		<!-- The field at the Waveform, while the Comment list is out of sight (N12) -->
+		<WaveformCard
+			v-else-if="composing && pending"
+			:label="t('deliver', 'New Comment')"
+			:left="isMobile ? null : composeLeft"
+			:inside="[host]"
+			@close="emit('closeComposer')">
+			<slot name="composer" />
+		</WaveformCard>
 	</div>
 </template>
 
@@ -889,6 +921,25 @@ function label(step) {
 	border-radius: var(--border-radius-pill);
 	background: rgba(255, 255, 255, 0.08);
 	cursor: default;
+}
+
+.deliver-wave__toasts {
+	position: absolute;
+	top: 48px;
+	inset-inline-end: 8px;
+	z-index: 4;
+	max-width: min(360px, calc(100% - 16px));
+	cursor: auto;
+}
+
+.deliver-wave__toasts:empty {
+	display: none;
+}
+
+/* The toasts' own container (@nextcloud/dialogs) is fixed to the window's bottom corner: here it stands in the holder */
+.deliver-wave__toasts :deep([class*='_toastContainer']) {
+	position: static;
+	padding: 0;
 }
 
 /* The resets keep Nextcloud's button style away */

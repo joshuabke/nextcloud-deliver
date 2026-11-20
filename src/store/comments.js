@@ -42,6 +42,8 @@ export const useCommentsStore = defineStore('comments', {
 		seenUntil: 0,
 		/** The thread last clicked, revealed or opened on the Waveform, lifted out in the list and ringed on the Waveform, as Frame.io does */
 		selected: null,
+		/** The Comment being written: the field under the list and the one at the Waveform (N12) show the same text and files */
+		draft: { body: '', files: [] },
 		/** Replies being written, by the Comment they answer: the list and the card on the Waveform share them, and closing the card keeps them */
 		replies: {},
 		/** Who approved or requested changes: [{ author, status, updatedAt }] */

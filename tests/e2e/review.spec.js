@@ -958,6 +958,7 @@ test.describe('Audio review', () => {
 	let page
 	let folder
 	let versionId
+	let clipVersionId
 	let projectId
 
 	test.beforeAll(async ({ playwright }) => {
@@ -967,12 +968,16 @@ test.describe('Audio review', () => {
 		const dav = `/remote.php/dav/files/${USER}/${folder}`
 		expect((await api.fetch(dav, { method: 'MKCOL' })).status()).toBe(201)
 		expect((await api.fetch(`${dav}/long-mix.webm`, { method: 'PUT', data: readFileSync(LONG_MIX) })).status()).toBe(201)
+		// A video beside it, to step to from the Review view
+		expect((await api.fetch(`${dav}/clip.webm`, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(201)
 		const created = await api.post('/ocs/v2.php/apps/deliver/api/v1/projects?format=json', {
 			data: { folderId: await fileId(api, dav), autoIntake: true },
 		})
 		projectId = (await created.json()).ocs.data.id
 		const project = await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)
-		versionId = (await project.json()).ocs.data.assets[0].versions[0].id
+		const assets = (await project.json()).ocs.data.assets
+		versionId = assets.find((asset) => asset.name === 'long-mix').versions[0].id
+		clipVersionId = assets.find((asset) => asset.name === 'clip').versions[0].id
 		await api.dispose()
 		// ffmpeg reads the mix and makes its Waveform
 		execFileSync('docker', ['compose', 'exec', '-T', '-u', 'www-data', 'nextcloud', 'php', 'occ', 'deliver:worker', '--once'], { stdio: 'inherit' })
@@ -1418,6 +1423,249 @@ test.describe('Audio review', () => {
 		await page.locator('.deliver-review__title').click()
 		await page.keyboard.press('Escape')
 		await expect(card).toHaveCount(0)
+	})
+
+	test('with the Comment list hidden, a Comment on audio is written at the Waveform and the list stays hidden', async () => {
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		const canvas = page.locator('.deliver-wave canvas')
+		await expect(canvas).toBeVisible()
+		const audio = page.locator('video.deliver-player__video')
+		await expect(audio).toHaveJSProperty('readyState', 4)
+		await page.getByRole('button', { name: '1 min' }).click()
+		await audio.evaluate((element) => {
+			element.currentTime = 200
+		})
+		await page.getByRole('button', { name: 'Hide Comments' }).click()
+		const list = page.locator('.deliver-layout__panel')
+		await expect(list).toBeHidden()
+		const box = await canvas.boundingBox()
+		const quarterOn = { position: { x: box.width * 0.75, y: box.height / 2 } }
+		const popup = page.getByRole('dialog', { name: 'New Comment' })
+		const field = popup.locator('#deliver-comment-body-inline')
+
+		// A double click opens the field at the wave, at that Frame, instead of the list
+		await canvas.dblclick(quarterOn)
+		await expect(popup).toBeVisible()
+		await expect(field).toBeFocused()
+		await expect(popup.locator('.deliver-comments__anchor')).toHaveText('3:35.000')
+		await field.fill('written at the wave')
+		await field.press('Enter')
+		await expect(popup).toHaveCount(0)
+		await expect(list).toBeHidden()
+		// Its circle stands under the playhead, which stands on its Frame
+		await expect.poll(() => canvas.evaluate((element) => {
+			const ratio = element.width / element.clientWidth
+			const pixel = element.getContext('2d').getImageData(Math.round(element.width / 2) + Math.round(8 * ratio), element.height - Math.round(20 * ratio), 1, 1).data
+			return pixel[3]
+		})).toBeGreaterThan(0)
+
+		// Escape on the empty field closes it and lets go of the place
+		await canvas.dblclick(quarterOn)
+		await expect(field).toBeFocused()
+		await field.press('Escape')
+		await expect(popup).toHaveCount(0)
+		await audio.evaluate((element) => {
+			element.currentTime = 250
+		})
+
+		// The draft is the list's: opening the list mid-sentence takes it there and closes the field at the wave
+		await canvas.dblclick(quarterOn)
+		await field.fill('half a thought')
+		await page.getByRole('button', { name: 'Show Comments' }).click()
+		await expect(popup).toHaveCount(0)
+		await expect(page.locator('#deliver-comment-body')).toHaveValue('half a thought')
+		await expect(page.locator('.deliver-comments__list')).toContainText('written at the wave')
+		await expect(page.locator('.deliver-comments__anchor')).toHaveText('4:25.000')
+		// Emptied, the field follows the player again
+		await page.locator('#deliver-comment-body').fill('')
+		await audio.evaluate((element) => {
+			element.currentTime = 300
+		})
+		await expect(page.locator('.deliver-comments__anchor')).toHaveText('5:00.000')
+	})
+
+	test('the field at the Waveform keeps its place while empty, takes its own buttons, keeps text on an outside click, and never shows with a Comment card', async () => {
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		const canvas = page.locator('.deliver-wave canvas')
+		await expect(canvas).toBeVisible()
+		const audio = page.locator('video.deliver-player__video')
+		await expect(audio).toHaveJSProperty('readyState', 4)
+		await page.getByRole('button', { name: '1 min' }).click()
+		// Standing on the Comment written at the wave before, 3:35
+		await audio.evaluate((element) => {
+			element.currentTime = 215
+		})
+		await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - document.querySelector('video.deliver-player__video').currentTime))).toBeLessThan(0.01)
+		if (await page.getByRole('button', { name: 'Hide Comments' }).isVisible()) {
+			await page.getByRole('button', { name: 'Hide Comments' }).click()
+		}
+		const box = await canvas.boundingBox()
+		const quarterOn = { position: { x: box.width * 0.75, y: box.height / 2 } }
+		const popup = page.getByRole('dialog', { name: 'New Comment' })
+		const field = popup.locator('#deliver-comment-body-inline')
+		const anchor = popup.locator('.deliver-comments__anchor')
+
+		// Emptied again, it stays with its place, and keys go on into the field, not to the player
+		await canvas.dblclick(quarterOn)
+		await expect(anchor).toHaveText('3:50.000')
+		await field.pressSequentially('ab')
+		await field.press('Backspace')
+		await field.press('Backspace')
+		await expect(popup).toBeVisible()
+		await expect(field).toBeFocused()
+		await field.press('k')
+		await expect(field).toHaveValue('k')
+		expect(await audio.evaluate((element) => element.paused)).toBe(true)
+		await field.fill('')
+
+		// Its own buttons do not let go of an empty field: the paperclip opens the file dialog, the Range starts
+		const chooser = page.waitForEvent('filechooser')
+		await popup.getByRole('button', { name: 'Attach files' }).click()
+		await (await chooser).setFiles([])
+		await expect(popup).toBeVisible()
+		await popup.getByRole('button', { name: 'Start a Range here' }).click()
+		await expect(popup).toBeVisible()
+		await expect(popup.getByRole('button', { name: 'End the Range here' })).toBeVisible()
+		// Ending and clearing the Range keep the card and a place, with and without text
+		await popup.getByRole('button', { name: 'End the Range here' }).click()
+		await popup.getByRole('button', { name: 'Clear the Range' }).click()
+		await expect(popup).toBeVisible()
+		await expect(field).toBeFocused()
+		await field.fill('about this stretch')
+		await popup.getByRole('button', { name: 'Start a Range here' }).click()
+		await popup.getByRole('button', { name: 'End the Range here' }).click()
+		await popup.getByRole('button', { name: 'Clear the Range' }).click()
+		await expect(popup).toBeVisible()
+		await expect(field).toHaveValue('about this stretch')
+		await field.fill('')
+		// A file's ✕ goes away when clicked: the card stays, the focus goes back into the field
+		const picking = page.waitForEvent('filechooser')
+		await popup.getByRole('button', { name: 'Attach files' }).click()
+		await (await picking).setFiles({ name: 'wrong.txt', mimeType: 'text/plain', buffer: Buffer.from('x') })
+		await popup.getByRole('button', { name: 'Remove wrong.txt' }).click()
+		await expect(popup).toBeVisible()
+		await expect(field).toBeFocused()
+		// As in Safari, where a clicked button takes no focus: the field is left for the page, and still the card stays
+		await popup.getByRole('button', { name: 'Start a Range here' }).evaluate((button) => button.addEventListener('mousedown', (event) => {
+			event.preventDefault()
+			document.activeElement.blur()
+		}))
+		await popup.getByRole('button', { name: 'Start a Range here' }).click()
+		await expect(popup).toBeVisible()
+		await page.keyboard.press('Escape')
+		await expect(popup).toHaveCount(0)
+
+		// With text, a click outside leaves it open; emptied, the next one closes it
+		await canvas.dblclick(quarterOn)
+		await field.fill('kept')
+		await page.locator('.deliver-review__title').click()
+		await expect(popup).toBeVisible()
+		await expect(field).toHaveValue('kept')
+		await field.fill('')
+		await page.locator('.deliver-review__title').click()
+		await expect(popup).toHaveCount(0)
+
+		// A Comment's card and the field never show at once
+		await audio.evaluate((element) => {
+			element.currentTime = 215
+		})
+		await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - document.querySelector('video.deliver-player__video').currentTime))).toBeLessThan(0.01)
+		await canvas.dblclick(quarterOn)
+		await expect(popup).toBeVisible()
+		// 3:35 is a quarter of the stage left of the playhead now standing at 3:50, once the wave has glided there
+		await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - document.querySelector('video.deliver-player__video').currentTime))).toBeLessThan(0.01)
+		await canvas.click({ position: { x: box.width * 0.25, y: box.height - 20 } })
+		const card = page.getByRole('dialog', { name: /^Comment #/ })
+		await expect(card).toContainText('written at the wave')
+		await expect(popup).toHaveCount(0)
+		await canvas.dblclick(quarterOn)
+		await expect(popup).toBeVisible()
+		await expect(card).toHaveCount(0)
+		await page.keyboard.press('Escape')
+		await page.getByRole('button', { name: 'Show Comments' }).click()
+	})
+
+	test('under the list an empty pinned field lets go on a click elsewhere and on another Comment\'s Reply, but not on its own buttons', async () => {
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		const canvas = page.locator('.deliver-wave canvas')
+		await expect(canvas).toBeVisible()
+		const audio = page.locator('video.deliver-player__video')
+		await expect(audio).toHaveJSProperty('readyState', 4)
+		await page.getByRole('button', { name: '1 min' }).click()
+		if (await page.getByRole('button', { name: 'Show Comments' }).isVisible()) {
+			await page.getByRole('button', { name: 'Show Comments' }).click()
+		}
+		const anchor = page.locator('.deliver-comments__anchor')
+		const goTo = async (seconds) => {
+			await audio.evaluate((element, at) => {
+				element.currentTime = at
+			}, seconds)
+			await expect(anchor).toHaveText(new RegExp(`^${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`))
+		}
+		await goTo(20)
+		await page.keyboard.press('c')
+		await expect(page.locator('#deliver-comment-body')).toBeFocused()
+		// Its own paperclip keeps the place
+		const picking = page.waitForEvent('filechooser')
+		await page.locator('.deliver-comments__form').getByRole('button', { name: 'Attach files' }).click()
+		await (await picking).setFiles([])
+		await audio.evaluate((element) => {
+			element.currentTime = 30
+		})
+		await expect(anchor).toHaveText(/^0:20/)
+		// A click elsewhere lets go
+		await page.locator('.deliver-review__title').click()
+		await goTo(40)
+		// So does a click into another Comment's Reply
+		await page.keyboard.press('c')
+		await expect(anchor).toHaveText(/^0:40/)
+		await page.locator('.deliver-comments__list > .deliver-comment').first().getByRole('button', { name: 'Reply', exact: true }).click()
+		await goTo(50)
+	})
+
+	test('a Comment half written stays with its Version: on the next Asset the field is empty and a keystroke stops the video', async () => {
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		await expect(page.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
+		await page.locator('#deliver-comment-body').fill('left behind')
+		const next = page.getByRole('button', { name: 'Next Asset' })
+		await (await next.isEnabled() ? next : page.getByRole('button', { name: 'Previous Asset' })).click()
+		await expect(page).toHaveURL(new RegExp(`/versions/${clipVersionId}$`))
+		const video = page.locator('video.deliver-player__video')
+		await expect(video).toHaveJSProperty('readyState', 4)
+		const field = page.locator('#deliver-comment-body')
+		await expect(field).toHaveValue('')
+		await page.getByRole('button', { name: 'Play (Space)' }).click()
+		await expect.poll(() => video.evaluate((element) => element.currentTime)).toBeGreaterThan(0.3)
+		await field.pressSequentially('x')
+		await expect.poll(() => video.evaluate((element) => element.paused)).toBe(true)
+		await field.fill('')
+	})
+
+	test('on a phone held sideways with the list closed, the field opens as a sheet and sends from there', async () => {
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: { width: 844, height: 390 } })
+		const member = await phone.newPage()
+		await login(member)
+		await member.goto(`/apps/deliver/versions/${versionId}`)
+		const canvas = member.locator('.deliver-wave canvas')
+		await expect(canvas).toBeVisible()
+		await expect(member.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
+		await expect(member.locator('.deliver-layout__panel')).toBeHidden()
+		const box = await canvas.boundingBox()
+		const touch = await phone.newCDPSession(member)
+		await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: box.x + box.width * 0.75, y: box.y + box.height / 2 }] })
+		await member.waitForTimeout(700)
+		await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+		const sheet = member.getByRole('dialog', { name: 'New Comment' })
+		await expect(sheet).toBeVisible()
+		// From below, across the width
+		const at = await sheet.boundingBox()
+		expect(Math.round(at.y + at.height)).toBe(390)
+		expect(Math.round(at.width)).toBe(844)
+		await member.locator('#deliver-comment-body-inline').fill('from the sheet')
+		await sheet.getByRole('button', { name: 'Send (Enter)' }).tap()
+		await expect(sheet).toHaveCount(0)
+		await expect(member.locator('.deliver-layout__panel')).toBeHidden()
+		await phone.close()
 	})
 
 	test('on a phone a pinch only zooms, a long press comments, and the card hands the focus back; a Reviewer who may not comment reads the cards and writes nothing', async ({ playwright }) => {
