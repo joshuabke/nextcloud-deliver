@@ -470,8 +470,11 @@ class DerivedMedia {
 	 * makes it.
 	 */
 	public function opened(Version $version): void {
-		if ($version->getHasAudio() && $version->getWaveformState() === self::STATE_NONE && $version->getPlayable() !== null && $this->ffmpeg->available()) {
+		if ($version->getHasAudio() && $version->getWaveformState() === self::STATE_NONE && $version->getPlayable() !== null
+			&& $version->getState() === Version::STATE_READY && $this->ffmpeg->available()) {
 			$this->enqueue($version->getId(), Job::KIND_WAVEFORM);
+			// What is shown next of this Version says so, and the view asks again until it is there
+			$version->setWaveformState(self::STATE_QUEUED);
 		}
 	}
 
@@ -572,12 +575,13 @@ class DerivedMedia {
 			...Ffmpeg::input($path),
 			'-map', '0:a:0', '-ar', (string)self::WAVEFORM_PCM_RATE,
 			'-c:a', 'pcm_s16le', '-f', 's16le', 'pipe:1',
-		], 3600, function (string $pcm) use ($peaks, $channels, &$bytes): void {
-			$peaks->add($pcm);
+		], 3600, function (string $pcm) use ($peaks, $channels, &$bytes): bool {
 			$bytes += strlen($pcm);
 			$this->reached((int)($bytes / (2 * $channels * self::WAVEFORM_PCM_RATE) * 1e6));
+			return $peaks->add($pcm);
 		});
-		if ($result['code'] !== 0 || $bytes === 0) {
+		// A track without a sample is a Waveform without a peak, as silent as it is, not a failure
+		if ($result['code'] !== 0) {
 			throw new \RuntimeException($result['stderr'] ?: 'ffmpeg exited with ' . $result['code']);
 		}
 		$this->put($version, 'waveform', self::waveformJson($rate, $peaks->peaks()));
@@ -629,10 +633,9 @@ class DerivedMedia {
 		if (!$version->getHasAudio() && $version->getPlayable() !== null || $version->getWaveformState() !== self::STATE_NONE) {
 			throw new ProjectConflictException('This Version has its Waveform from the server');
 		}
-		// Once read, the Version's own length; before, the one handed in, in milliseconds, as a delivering tool hands in audio
-		$seconds = $version->getDurationFrames() !== null && $version->getFpsNum() && $version->getFpsDen()
-			? $version->getDurationFrames() * $version->getFpsDen() / $version->getFpsNum()
-			: $durationFrames / 1000;
+		// The Version's own length once read; where it has a rate but no length (an MKV without Duration), the one handed in, in its Frames; before it is read, in milliseconds, as a delivering tool hands in audio
+		$fps = $version->getFpsNum() && $version->getFpsDen() ? $version->getFpsNum() / $version->getFpsDen() : null;
+		$seconds = $fps === null ? $durationFrames / 1000 : ($version->getDurationFrames() ?? $durationFrames) / $fps;
 		$expected = self::waveformRate($seconds);
 		if ($rate !== $expected) {
 			throw new InvalidRequestException('A Waveform of this duration has ' . $expected . ' peaks a second');

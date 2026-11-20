@@ -521,6 +521,17 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertCount(100, $this->nc->waveform($version['derived']['waveform']['url'])['peaks']);
 	}
 
+	public function testAVideoWithARateButNoLengthCountsItsFrames(): void {
+		// Written live: its Segment has no Duration
+		$this->make('-f lavfi -i testsrc=size=320x180:rate=25:duration=2 -f lavfi -i sine=duration=2 -c:v libvpx-vp9 -c:a libopus -shortest -live 1 -f webm');
+		$version = $this->upload('live.webm');
+		self::assertSame(['num' => 25, 'den' => 1], $version['fps']);
+		self::assertNull($version['durationFrames']);
+		$given = $this->nc->ocs('POST', "/versions/{$version['id']}/waveform", NextcloudClient::handIn(array_fill(0, 100, 60), 50));
+		self::assertSame(200, $given['status'], json_encode($given['data']));
+		self::assertCount(100, $this->nc->waveform($given['data']['derived']['waveform']['url'])['peaks'], '50 Frames at 25 are two seconds, not 50 milliseconds');
+	}
+
 	public function testAMasterLacksItsProxyTooAndASilentVideoNoWaveform(): void {
 		$this->make(self::PRORES);
 		$version = $this->upload('master.mov');
