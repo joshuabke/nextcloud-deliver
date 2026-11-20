@@ -790,6 +790,105 @@ test.describe('Review view', () => {
 		await expect(page.locator('.deliver-player__hover canvas')).toBeVisible()
 	})
 
+	test('a click on the timeline keeps playing if it played, and stays paused if it did not', async () => {
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		const video = page.locator('video.deliver-player__video')
+		await expect(video).toHaveJSProperty('readyState', 4)
+		const bar = await page.locator('.deliver-player__timeline').boundingBox()
+		const clickAt = (share) => page.mouse.click(bar.x + bar.width * share, bar.y + bar.height / 2)
+
+		await clickAt(0.1)
+		await page.waitForTimeout(300)
+		expect(await video.evaluate((element) => element.paused)).toBe(true)
+
+		await page.getByRole('button', { name: /^Play \(/ }).click()
+		await expect.poll(() => video.evaluate((element) => element.currentTime)).toBeGreaterThan(0.1)
+		await clickAt(0.5)
+		await page.waitForTimeout(300)
+		expect(await video.evaluate((element) => element.paused)).toBe(false)
+		expect(await video.evaluate((element) => element.currentTime)).toBeGreaterThan(1.9)
+		await expect(page.getByRole('button', { name: /^Pause \(/ })).toBeVisible()
+	})
+
+	test('a click on a Comment\'s marker pauses', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		// The Compare test stacked a newer Version on the Asset; only the newest takes Comments
+		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
+		const newest = Math.max(...project.ocs.data.assets[0].versions.map((each) => each.id))
+		const commented = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${newest}/comments?format=json`, { data: { inFrame: 50, body: 'stop here' } })
+		expect(commented.ok()).toBe(true)
+		await api.dispose()
+		await page.goto(`/apps/deliver/versions/${newest}`)
+		const video = page.locator('video.deliver-player__video')
+		await expect(video).toHaveJSProperty('readyState', 4)
+		await page.getByRole('button', { name: /^Play \(/ }).click()
+		await expect.poll(() => video.evaluate((element) => element.paused)).toBe(false)
+		await page.locator('.deliver-player__marker').first().click()
+		await expect.poll(() => video.evaluate((element) => element.paused)).toBe(true)
+		expect(await video.evaluate((element) => element.currentTime)).toBeCloseTo(2, 1)
+	})
+
+	test('a finger on the timeline holds playback and resumes on lifting only if it played', async () => {
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const touchPage = await phone.newPage()
+		await login(touchPage)
+		await touchPage.goto(`/apps/deliver/versions/${versionId}`)
+		const video = touchPage.locator('video.deliver-player__video')
+		await expect(video).toHaveJSProperty('readyState', 4)
+		const cdp = await phone.newCDPSession(touchPage)
+		const bar = await touchPage.locator('.deliver-player__timeline').boundingBox()
+		const y = bar.y + bar.height / 2
+		const touch = (type, x) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] })
+		const paused = () => video.evaluate((element) => element.paused)
+
+		// Playing: held while the finger is down, going on from where it lifted
+		await touchPage.getByRole('button', { name: 'Play', exact: true }).tap()
+		await expect.poll(paused).toBe(false)
+		await touch('touchStart', bar.x + bar.width * 0.2)
+		await touch('touchMove', bar.x + bar.width * 0.6)
+		await expect.poll(paused).toBe(true)
+		await touch('touchEnd')
+		await expect.poll(paused).toBe(false)
+		expect(await video.evaluate((element) => element.currentTime)).toBeGreaterThan(2)
+
+		// A second finger lands during the drag: both lift, and it still goes on
+		await touch('touchStart', bar.x + bar.width * 0.2)
+		await touch('touchMove', bar.x + bar.width * 0.4)
+		await expect.poll(paused).toBe(true)
+		await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: bar.x + bar.width * 0.4, y, id: 0 }, { x: bar.x + bar.width * 0.7, y, id: 1 }] })
+		await touch('touchEnd')
+		await expect.poll(paused).toBe(false)
+
+		// Paused: stays paused
+		await touchPage.getByRole('button', { name: 'Pause', exact: true }).tap()
+		await touch('touchStart', bar.x + bar.width * 0.2)
+		await touch('touchMove', bar.x + bar.width * 0.3)
+		await touch('touchEnd')
+		await touchPage.waitForTimeout(400)
+		expect(await paused()).toBe(true)
+		await phone.close()
+	})
+
+	test('a click on the Compare timeline starts a side that had run out again', async ({ playwright }) => {
+		// The Compare test left a second Version on the Asset
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
+		await api.dispose()
+		const stack = project.ocs.data.assets.find((each) => each.versions.length >= 2).versions
+		await page.goto(`/apps/deliver/compare/${stack[1].id}/${stack[0].id}`)
+		const videos = page.locator('.deliver-compare video')
+		await expect(videos.first()).toHaveJSProperty('readyState', 4)
+		// B runs 50 Frames (2 s) ahead of A, so it is out of picture before A is
+		await page.locator('.deliver-compare__offset').fill('50')
+		await page.getByRole('button', { name: /^Play \(/ }).click()
+		await expect.poll(() => videos.nth(1).evaluate((element) => element.ended), { timeout: 10_000 }).toBe(true)
+		const bar = await page.locator('.deliver-compare__timeline').boundingBox()
+		await page.mouse.click(bar.x + bar.width * 0.1, bar.y + bar.height / 2)
+		await page.waitForTimeout(300)
+		expect(await videos.first().evaluate((element) => element.paused)).toBe(false)
+		expect(await videos.nth(1).evaluate((element) => element.paused)).toBe(false)
+	})
+
 	test('a Review Link remembers the list for itself', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		// The landing page opens only where a link shows several Assets
