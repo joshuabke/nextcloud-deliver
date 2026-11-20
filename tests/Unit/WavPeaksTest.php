@@ -36,6 +36,8 @@ class WavPeaksTest extends TestCase {
 			'no sample rate' => [1, 0, 2, 16],
 			'a block that does not fit the channels' => [1, 8000, 4096, 16],
 			'no channels' => [0, 8000, 0, 16],
+			// 8 MB at one sample a second: past 2 000 000 seconds a peak a second, 4 million of them
+			'a sample rate so low it makes millions of peaks' => [1, 1, 2, 16],
 		];
 	}
 

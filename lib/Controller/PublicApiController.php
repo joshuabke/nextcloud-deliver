@@ -75,6 +75,7 @@ class PublicApiController extends PublicShareController {
 		return $this->guard(function () use ($versionId) {
 			$link = $this->link();
 			$version = $this->links->version($link, $versionId);
+			$this->media->opened($version);
 			$project = $this->projects->settingsOf($version);
 			$stack = $link->assets()[$version->getAssetId()] ?? null;
 			// A Member previews the Version read only, never as the Reviewer whose key this browser carries (story 59)

@@ -132,33 +132,59 @@ class DerivedMediaTest extends TestCase {
 		self::assertGreaterThan(0, max($waveform['peaks']), 'the sound is heard');
 	}
 
-	public function testAWaveformFromBeforeTheFixedRateIsMadeAgainOnceNothingElseWaits(): void {
+	public function testAWaveformFromBeforeTheFixedRateIsMadeAgainOnceNothingElseWaitsOrWhenOpened(): void {
 		$mp3 = sys_get_temp_dir() . '/deliver-take-' . bin2hex(random_bytes(4)) . '.mp3';
 		[$code, $output] = $this->shell('ffmpeg -v error -y -f lavfi -i sine=duration=3 -c:a libmp3lame ' . escapeshellarg($mp3));
 		self::assertSame(0, $code, $output);
 		$this->nc->put("{$this->root}/old.mp3", (string)file_get_contents($mp3));
+		$this->nc->put("{$this->root}/opened.mp3", (string)file_get_contents($mp3));
+		@unlink($mp3);
 		$this->drainQueue();
-		$old = $this->idOf('old.mp3');
+		[$old, $opened] = [$this->idOf('old.mp3'), $this->idOf('opened.mp3')];
 		self::assertSame('ready', $this->version($old)['derived']['waveform']['state']);
 
 		$this->inNextcloud('(new \\OCA\\Deliver\\Migration\\Version1021Date20261120000000(\\OCP\\Server::get(\\OCP\\IDBConnection::class)))->postSchemaChange(new \\OC\\Migration\\NullOutput(), fn () => null, []);');
-		self::assertSame(['none', null], array_values($this->version($old)['derived']['waveform']), 'the Waveform from before counts as missing');
+		self::assertSame('none', $this->waveformState($old), 'the Waveform from before counts as missing');
 
-		$this->nc->put("{$this->root}/new.mp3", (string)file_get_contents($mp3));
-		@unlink($mp3);
-		$hourly = '\\OCP\\Server::get(\\OCA\\Deliver\\BackgroundJob\\ScanProjects::class)->start(\\OCP\\Server::get(\\OCP\\BackgroundJob\\IJobList::class));';
-		$this->inNextcloud($hourly);
-		self::assertSame('none', $this->version($old)['derived']['waveform']['state'], 'it waits while an upload has work queued');
+		self::assertSame(['queued', null], array_values($this->version($opened)['derived']['waveform']), 'opening it queues its Waveform, ahead of the rest');
+		$this->makeFixture();
+		$this->nc->put("{$this->root}/master.mov", (string)file_get_contents($this->fixture));
+		self::assertSame('NULL none', trim($this->inNextcloud('var_export(\\OCP\\Server::get(\\OCA\\Deliver\\Service\\DerivedMedia::class)->queueMissingWaveform()); echo " ", \\OCP\\Server::get(\\OCA\\Deliver\\Db\\VersionMapper::class)->find(' . $old . ')->getWaveformState();')), 'it waits while an upload has work queued');
 
-		$this->drainQueue();
-		$this->inNextcloud($hourly);
-		self::assertSame('queued', $this->version($old)['derived']['waveform']['state']);
+		// The worker runs out of other work, then makes it
 		$this->drainQueue();
 		$version = $this->version($old);
 		self::assertSame('ready', $version['derived']['waveform']['state']);
 		$waveform = $this->nc->waveform($version['derived']['waveform']['url']);
 		self::assertSame(50, $waveform['rate']);
 		self::assertEqualsWithDelta(150, count($waveform['peaks']), 3, 'three seconds at 50 a second');
+	}
+
+	public function testFfmpegsWaveformHearsEveryChannelAndHighNotes(): void {
+		$flac = sys_get_temp_dir() . '/deliver-phase-' . bin2hex(random_bytes(4)) . '.flac';
+		// A 6 kHz tone at half of full scale, the right side out of phase with the left
+		[$code, $output] = $this->shell('ffmpeg -v error -y -f lavfi -i "aevalsrc=0.5*sin(2*PI*6000*t)|-0.5*sin(2*PI*6000*t):d=2:s=48000" -c:a flac ' . escapeshellarg($flac));
+		self::assertSame(0, $code, $output);
+		$this->nc->put("{$this->root}/phase.flac", (string)file_get_contents($flac));
+		@unlink($flac);
+		$this->drainQueue();
+		$peaks = $this->nc->waveform($this->version($this->idOf('phase.flac'))['derived']['waveform']['url'])['peaks'];
+		self::assertCount(100, $peaks);
+		self::assertEqualsWithDelta(128, min(array_slice($peaks, 1, 98)), 8, 'neither a mono mix nor 8 kHz would hear it');
+
+		$mono = sys_get_temp_dir() . '/deliver-mono-' . bin2hex(random_bytes(4)) . '.flac';
+		[$code, $output] = $this->shell('ffmpeg -v error -y -f lavfi -i "aevalsrc=0.5*sin(2*PI*440*t):d=2:s=48000" -c:a flac ' . escapeshellarg($mono));
+		self::assertSame(0, $code, $output);
+		$this->nc->put("{$this->root}/mono.flac", (string)file_get_contents($mono));
+		@unlink($mono);
+		$this->drainQueue();
+		$peaks = $this->nc->waveform($this->version($this->idOf('mono.flac'))['derived']['waveform']['url'])['peaks'];
+		self::assertEqualsWithDelta(128, max($peaks), 3, 'mono at its own level, not 3 dB down as stereo');
+	}
+
+	/** The state of a Version's Waveform as the database has it, without opening the Version, which would queue it */
+	private function waveformState(int $versionId): string {
+		return $this->inNextcloud('echo \\OCP\\Server::get(\\OCA\\Deliver\\Db\\VersionMapper::class)->find(' . $versionId . ')->getWaveformState();');
 	}
 
 	private function idOf(string $name): int {
