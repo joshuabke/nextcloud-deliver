@@ -105,8 +105,9 @@ class DerivedMedia {
 	 */
 	private static bool $requestRead = false;
 	/** Integrated loudness in LUFS and peak in dB that are shown at all, from ffmpeg or handed in (A5) */
-	private const LOUDNESS_RANGE = [-70.0, 9.9];
-	private const PEAK_RANGE = [-200.0, 30.0];
+	// The loudest masters lie near −3 LUFS and only full-scale square-like signal reaches +5 (the K-weighting lifts highs by about 4 dB); real material peaks below about +6 dBTP even with inter-sample overs and float files: past these, a file is broken
+	private const LOUDNESS_RANGE = [-70.0, 5.0];
+	private const PEAK_RANGE = [-200.0, 12.0];
 	/** Set while the queue makes a Waveform because it had nothing else to do: such a Waveform gets no loudness (A5) */
 	private bool $idle = false;
 	/** Set while a request makes a Waveform itself: ffmpeg then has a short time and reads no further than the length its header says */
@@ -755,8 +756,8 @@ class DerivedMedia {
 
 	/**
 	 * The loudness a browser or a delivering tool hands in with a Waveform:
-	 * optional, else integrated LUFS from −70 to +9.9 and a peak from −200 to
-	 * +30 dB, each a number or null, and whether the peak is a true peak
+	 * optional, else integrated LUFS from −70 to +5 and a peak from −200 to
+	 * +12 dB, each a number or null, and whether the peak is a true peak
 	 *
 	 * @return ?array{integrated: ?float, peak: ?float, truePeak: bool}
 	 * @throws InvalidRequestException out of shape
@@ -767,7 +768,7 @@ class DerivedMedia {
 		}
 		$within = static fn (mixed $value, float $low, float $high): bool => $value === null || (is_int($value) || is_float($value)) && is_finite((float)$value) && $value >= $low && $value <= $high;
 		if (!is_array($loudness) || !$within($loudness['integrated'] ?? null, ...self::LOUDNESS_RANGE) || !$within($loudness['peak'] ?? null, ...self::PEAK_RANGE) || !is_bool($loudness['truePeak'] ?? null)) {
-			throw new InvalidRequestException('Loudness is {integrated: LUFS from -70 to 9.9 or null, peak: dB from -200 to 30 or null, truePeak: true or false}');
+			throw new InvalidRequestException('Loudness is {integrated: LUFS from -70 to 5 or null, peak: dB from -200 to 12 or null, truePeak: true or false}');
 		}
 		$round = static fn (mixed $value): ?float => $value === null ? null : round((float)$value, 1);
 		return ['integrated' => $round($loudness['integrated'] ?? null), 'peak' => $round($loudness['peak'] ?? null), 'truePeak' => $loudness['truePeak']];
