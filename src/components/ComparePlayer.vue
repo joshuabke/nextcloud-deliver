@@ -117,6 +117,10 @@ function onLoaded() {
 function scrub(event) {
 	const box = event.currentTarget.getBoundingClientRect()
 	seekTo(Math.floor(Math.min(1, Math.max(0, (event.clientX - box.left) / box.width)) * durationFrames.value))
+	// A side that had run out stands paused: playing again starts both from the new Frame
+	if (playing.value) {
+		play()
+	}
 }
 
 /**

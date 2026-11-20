@@ -418,7 +418,10 @@ function onDragStart(event) {
 	if (event.pointerType === 'mouse' || !durationFrames.value) {
 		return
 	}
-	heldWhilePlaying = playing.value
+	// A second finger comes down on a drag that already holds playback
+	if (!dragging.value) {
+		heldWhilePlaying = playing.value
+	}
 	pause()
 	dragging.value = true
 	event.currentTarget.setPointerCapture(event.pointerId)

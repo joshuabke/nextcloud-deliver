@@ -41,7 +41,7 @@ Deliver becomes a proper Nextcloud app, rebuilt from scratch, in which media fil
 
 ### Playback
 
-21. As a Member or Reviewer, I want to play a Version in the browser with frame stepping (arrow keys and `,` `.`), J/K/L shuttle, buttons and Shift+arrows that skip ten seconds, space, loop of a Range and playback speed, and to click or drag on the timeline without stopping playback, so that I can inspect any frame.
+21. As a Member or Reviewer, I want to play a Version in the browser with frame stepping (arrow keys and `,` `.`), J/K/L shuttle, buttons and Shift+arrows that skip ten seconds, space, loop of a Range and playback speed, and to click on the timeline without stopping playback (a finger dragging on it holds playback and resumes on lifting), so that I can inspect any frame.
 22. As a Member or Reviewer, I want the current position shown as SMPTE timecode or frame counter according to the Project setting, and audio-only Versions as `m:ss.mmm`, with a session-local toggle between them, so that I can read it the way I think.
 23. As a Member or Reviewer, I want a marker strip on the timeline showing every Comment and Range, and to jump to one by clicking it, so that I can navigate feedback visually.
 24. As a Member or Reviewer, I want hover thumbnails on the timeline and a waveform under it, so that I can find a moment quickly, especially in audio-only material.
