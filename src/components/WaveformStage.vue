@@ -725,9 +725,14 @@ function label(step) {
 	outline: none;
 }
 
+/* Always in reach, also where a long thread scrolls in a low sheet */
 .deliver-wave__card-actions {
+	position: sticky;
+	bottom: calc(-2 * var(--default-grid-baseline));
 	display: flex;
 	justify-content: flex-end;
 	gap: var(--default-grid-baseline);
+	padding-block: var(--default-grid-baseline);
+	background: inherit;
 }
 </style>
