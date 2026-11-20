@@ -104,7 +104,7 @@ class DerivedMedia {
 	 * queue's. Per PHP process, which is one request.
 	 */
 	private static bool $requestRead = false;
-	/** Integrated loudness in LUFS and peak in dB that are shown at all, from ffmpeg or handed in (A5) */
+	/** Integrated loudness in LUFS and peak in dB that are shown at all, from ffmpeg or handed in (A5); the source of truth, which the browser's meter (src/lib/loudness.js) keeps as well */
 	// Sanity bounds, not properties of programme material: BS.1770 adds the channel powers, so full-scale multichannel signal reads well above full scale, but no real file reaches +15 LUFS; real material peaks below about +6 dBTP even with inter-sample overs and float files
 	private const LOUDNESS_RANGE = [-70.0, 15.0];
 	private const PEAK_RANGE = [-200.0, 12.0];

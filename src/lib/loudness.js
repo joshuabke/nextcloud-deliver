@@ -9,6 +9,17 @@
 const ABSOLUTE_GATE = -70
 /** Blocks this far below the loudness of those above the absolute gate do not count either (relative gate), in LU */
 const RELATIVE_GATE = -10
+/** The highest integrated loudness in LUFS and the range of the peak in dB the server takes; DerivedMedia::LOUDNESS_RANGE and PEAK_RANGE are the source of truth */
+export const MOST_LOUDNESS = 15
+export const PEAK_RANGE = [-200, 12]
+
+/**
+ * @param {{integrated: ?number, peak: ?number}} measured - a measurement
+ * @return {boolean} whether the server takes its numbers
+ */
+export function withinRanges({ integrated, peak }) {
+	return !(integrated > MOST_LOUDNESS) && (peak === null || (peak >= PEAK_RANGE[0] && peak <= PEAK_RANGE[1]))
+}
 
 /**
  * The two biquads of the K-weighting for this sample rate: a high shelf for
@@ -61,7 +72,7 @@ export function channelWeights(channels) {
  * A meter that takes decoded audio piece by piece and tells its integrated
  * loudness and sample peak once it has heard all of it.
  *
- * @return {{add: (channels: Float32Array[], sampleRate: number) => void, done: () => ?{integrated: ?number, peak: ?number, truePeak: boolean}}} the meter; done gives null where the sound changed its rate or channels midway, or had a sample that is no number
+ * @return {{add: (channels: Float32Array[], sampleRate: number) => void, done: () => ?{integrated: ?number, peak: ?number, truePeak: boolean}}} the meter; done gives null where the sound changed its rate or channels midway, had a sample that is no number, or a number came out past the server's ranges
  */
 export function loudnessMeter() {
 	let rate = 0
@@ -159,11 +170,13 @@ export function loudnessMeter() {
 			const audible = blocks.filter((energy) => loudness(energy) > ABSOLUTE_GATE)
 			const threshold = audible.length > 0 ? loudness(mean(audible)) + RELATIVE_GATE : Infinity
 			const gated = audible.filter((energy) => loudness(energy) > threshold)
-			return {
+			const measured = {
 				integrated: gated.length > 0 ? Math.round(loudness(mean(gated)) * 10) / 10 : null,
 				peak: peak > 0 ? Math.round(20 * Math.log10(peak) * 10) / 10 : null,
 				truePeak: false,
 			}
+			// One number past the server's ranges means a broken decode: the Waveform goes in without loudness rather than not at all
+			return withinRanges(measured) ? measured : null
 		},
 	}
 }
