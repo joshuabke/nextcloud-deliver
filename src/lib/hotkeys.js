@@ -37,5 +37,9 @@ export function actionFor(event) {
 	if (event.ctrlKey || event.metaKey || event.altKey || isTyping(event.target)) {
 		return null
 	}
-	return KEYS[event.key.toLowerCase()] ?? null
+	const key = event.key.toLowerCase()
+	if (event.shiftKey && (key === 'arrowright' || key === 'arrowleft')) {
+		return key === 'arrowright' ? 'skipForward' : 'skipBack'
+	}
+	return KEYS[key] ?? null
 }
