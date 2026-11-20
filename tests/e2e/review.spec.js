@@ -784,13 +784,13 @@ test.describe('Review view', () => {
 		await page.waitForTimeout(300)
 		expect(await video.evaluate((element) => element.paused)).toBe(true)
 
-		await page.getByRole('button', { name: /^Play/ }).click()
+		await page.getByRole('button', { name: /^Play \(/ }).click()
 		await expect.poll(() => video.evaluate((element) => element.currentTime)).toBeGreaterThan(0.1)
 		await clickAt(0.5)
 		await page.waitForTimeout(300)
 		expect(await video.evaluate((element) => element.paused)).toBe(false)
 		expect(await video.evaluate((element) => element.currentTime)).toBeGreaterThan(1.9)
-		await expect(page.getByRole('button', { name: /^Pause/ })).toBeVisible()
+		await expect(page.getByRole('button', { name: /^Pause \(/ })).toBeVisible()
 	})
 })
 
