@@ -187,11 +187,39 @@ export function writeSpan(span, duration, storage = () => globalThis.localStorag
 }
 
 /**
- * @param {number} span - the seconds across the stage
- * @param {number} width - the stage's width, in px
- * @return {number} the seconds one bar of the wave stands for
+ * The bars' grid, in device pixels, so that the wave stands still on the
+ * screen's pixels while it slides: a bar every whole number of device pixels
+ * (about BAR_PITCH CSS px), each a whole number wide with a gap of at least
+ * one, each standing for a fixed length of the file counted from its start.
+ *
+ * @param {number} across - the seconds across the stage
+ * @param {number} pixels - the stage's width, in device pixels
+ * @param {number} ratio - device pixels to a CSS px
+ * @return {{pitch: number, width: number, seconds: number}} from one bar to the next and a bar's width, in device pixels; the seconds a bar stands for
  */
-export const barSeconds = (span, width) => span / Math.max(1, Math.round(width / BAR_PITCH))
+export function barGrid(across, pixels, ratio) {
+	const pitch = Math.max(2, Math.round(BAR_PITCH * ratio))
+	return { pitch, width: pitch - Math.max(1, Math.round(ratio)), seconds: across * pitch / Math.max(1, pixels) }
+}
+
+/**
+ * @param {number} start - the window's left edge, in seconds
+ * @param {number} across - the seconds across the stage
+ * @param {number} pixels - the stage's width, in device pixels
+ * @return {number} the left edge in whole device pixels from the start of the piece: the wave moves a pixel at a time, never between them
+ */
+export const pixelOffset = (start, across, pixels) => Math.round(start / across * pixels)
+
+/**
+ * @param {number} offset - the window's left edge, as pixelOffset gives it
+ * @param {number} pitch - as barGrid gives it
+ * @param {number} pixels - the stage's width, in device pixels
+ * @param {number} count - how many bars the piece has
+ * @return {{first: number, last: number}} the bars on the stage; bar k stands at k × pitch − offset
+ */
+export function barsShown(offset, pitch, pixels, count) {
+	return { first: Math.max(0, Math.floor(offset / pitch)), last: Math.min(count - 1, Math.ceil((offset + pixels) / pitch)) }
+}
 
 /**
  * The wave in bars of a fixed length of time, counted from the start of the

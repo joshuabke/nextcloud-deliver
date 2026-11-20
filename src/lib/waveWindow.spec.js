@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bars, barSeconds, CIRCLE, circleAt, clampSpan, DEFAULT_SPAN, dragged, isWhole, overviewWindow, pinchSpan, readSpan, secondsAt, spreadSpan, stack, STACK_STEP, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan, xAt } from './waveWindow.js'
+import { barGrid, bars, barsShown, CIRCLE, circleAt, clampSpan, DEFAULT_SPAN, dragged, isWhole, overviewWindow, pinchSpan, pixelOffset, readSpan, secondsAt, spreadSpan, stack, STACK_STEP, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan, xAt } from './waveWindow.js'
 
 describe('the window of the scrolling Waveform', () => {
 	it('centres the playhead, the wave left empty before the start and after the end', () => {
@@ -87,10 +87,52 @@ describe('the bars of the scrolling Waveform', () => {
 		expect(bars({ rate: 1, peaks: Uint8Array.from([19]) }, 1)[0]).toBeCloseTo(0.5, 1)
 	})
 
-	it('are three pixels apart, an hour at 50 a second staying a few thousand values per zoom', () => {
-		expect(barSeconds(60, 390)).toBeCloseTo(60 / 130)
+	it('are about three CSS px apart on whole device pixels, at every pixel ratio and zoom', () => {
+		for (const ratio of [1, 1.5, 2, 3]) {
+			for (const across of [15, 60, 300, 3600]) {
+				const pixels = Math.round(390 * ratio)
+				const grid = barGrid(across, pixels, ratio)
+				expect(Number.isInteger(grid.pitch) && Number.isInteger(grid.width)).toBe(true)
+				expect(grid.pitch - grid.width).toBeGreaterThanOrEqual(1)
+				expect(grid.pitch / ratio).toBeCloseTo(3, 0)
+				// A bar's seconds are its pitch at this zoom
+				expect(grid.seconds / across * pixels).toBeCloseTo(grid.pitch)
+			}
+		}
+		expect(barGrid(60, 1170, 3)).toEqual({ pitch: 9, width: 6, seconds: 60 * 9 / 1170 })
+	})
+
+	it('stay the same bars with the same heights wherever the window starts, moved by whole device pixels', () => {
+		const waveform = { rate: 50, peaks: Uint8Array.from({ length: 180000 }, (_, at) => (at * 7919) % 256) }
+		const pixels = 1170
+		const across = 60
+		const grid = barGrid(across, pixels, 3)
+		const levels = bars(waveform, grid.seconds)
+		const drawn = (start) => {
+			const offset = pixelOffset(start, across, pixels)
+			const { first, last } = barsShown(offset, grid.pitch, pixels, levels.length)
+			return new Map(Array.from({ length: last - first + 1 }, (_, at) => [first + at, { x: (first + at) * grid.pitch - offset, level: levels[first + at] }]))
+		}
+		for (const [from, to] of [[600, 600.0173], [600, 601.3], [1234.567, 1240.001]]) {
+			const before = drawn(from)
+			const after = drawn(to)
+			const shift = pixelOffset(to, across, pixels) - pixelOffset(from, across, pixels)
+			let common = 0
+			for (const [bar, { x, level }] of before) {
+				if (after.has(bar)) {
+					common++
+					expect(after.get(bar).level).toBe(level)
+					expect(Number.isInteger(after.get(bar).x)).toBe(true)
+					expect(x - after.get(bar).x).toBe(shift)
+				}
+			}
+			expect(common).toBeGreaterThan(100)
+		}
+	})
+
+	it('keep an hour at 50 peaks a second to a few thousand values per zoom', () => {
 		const hour = { rate: 50, peaks: new Uint8Array(180000) }
-		expect(bars(hour, barSeconds(15, 1200)).length).toBe(96000)
+		expect(bars(hour, barGrid(15, 1200, 1).seconds).length).toBe(96000)
 	})
 })
 
