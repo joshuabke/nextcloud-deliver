@@ -48,6 +48,12 @@ class JobRunner {
 				return true;
 			}
 		}
+		// Nothing else to do: a Waveform a Version lacks, such as one from before the fixed rate (ADR 0021)
+		$job = $this->media->queueMissingWaveform();
+		if ($job !== null && $this->jobs->claim($job, $worker, $now)) {
+			$this->media->process($job);
+			return true;
+		}
 		return false;
 	}
 
