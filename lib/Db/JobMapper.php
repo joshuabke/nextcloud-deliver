@@ -96,6 +96,16 @@ class JobMapper extends Mapper {
 			->executeStatement();
 	}
 
+	/** Puts a claimed job back for whoever works the queue next; written directly, as the entity still holds the state from before its claim */
+	public function requeue(int $jobId): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('state', $qb->createNamedParameter(Job::STATE_QUEUED))
+			->set('claimed_by', $qb->createNamedParameter(null))
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($jobId, IQueryBuilder::PARAM_INT)))
+			->executeStatement();
+	}
+
 	/** Puts back jobs a request claimed and did not finish, as a request that died leaves them: none takes that long */
 	public function requeueStaleRequests(int $startedBefore): void {
 		$qb = $this->db->getQueryBuilder();

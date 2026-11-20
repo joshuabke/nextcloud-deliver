@@ -259,9 +259,7 @@ class DerivedMedia {
 				return;
 			}
 			if ($this->inRequest && $e->getCode() === self::TO_QUEUE) {
-				$job->setState(Job::STATE_QUEUED);
-				$job->setClaimedBy(null);
-				$this->jobs->update($job);
+				$this->jobs->requeue($job->getId());
 				$this->mark($version->getId(), $job->getKind(), self::STATE_QUEUED);
 				return;
 			}

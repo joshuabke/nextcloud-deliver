@@ -173,8 +173,8 @@ class DerivedMediaTest extends TestCase {
 		// No worker, no cron: what is there came with the upload
 		$take = $this->version($this->idOf('take.mp3'));
 		self::assertTrue($take['audioOnly']);
-		self::assertSame([4000, 'ready'], [$take['durationFrames'], $take['derived']['waveform']['state']], 'read and drawn in the request that took it in');
-		self::assertCount(200, $this->nc->waveform($take['derived']['waveform']['url'])['peaks']);
+		self::assertSame('ready', $take['derived']['waveform']['state'], 'read and drawn in the request that took it in');
+		self::assertEqualsWithDelta(200, count($this->nc->waveform($take['derived']['waveform']['url'])['peaks']), 5, 'four seconds');
 		self::assertNull($this->version($this->idOf('master.mov'))['playable'], 'a video waits for the queue');
 
 		$order = $this->inNextcloud('foreach (\\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->findQueued(10) as $job) { echo $job->getKind(), " "; }');
@@ -182,6 +182,56 @@ class DerivedMediaTest extends TestCase {
 		$this->inNextcloud('$jobs = \\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class); $job = $jobs->findQueued(1)[0]; $jobs->claim($job, "test", time()); \\OCP\\Server::get(\\OCA\\Deliver\\Service\\DerivedMedia::class)->process($job);');
 		$order = $this->inNextcloud('foreach (\\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->findQueued(10) as $job) { echo $job->getKind(), " "; }');
 		self::assertSame('waveform proxy thumbs scrub', trim($order), 'the Waveform takes seconds, so it goes before the Proxy');
+	}
+
+	/** A sine of so many seconds, as MP3 or FLAC by the name's extension */
+	private function mp3(string $name, int $seconds): string {
+		$file = sys_get_temp_dir() . '/deliver-' . bin2hex(random_bytes(4)) . '-' . $name;
+		$codec = str_ends_with($name, '.flac') ? 'flac' : 'libmp3lame -b:a 8k';
+		[$code, $output] = $this->shell("ffmpeg -v error -y -f lavfi -i sine=duration=$seconds -ac 1 -ar 8000 -c:a $codec " . escapeshellarg($file));
+		self::assertSame(0, $code, $output);
+		return $file;
+	}
+
+	public function testAudioTooLongForARequestOrOneTooManyAtOnceIsLeftToTheQueue(): void {
+		// Half an hour and a minute
+		$long = $this->mp3('long.mp3', 1860);
+		$this->nc->put("{$this->root}/long.mp3", (string)file_get_contents($long));
+		@unlink($long);
+		$version = $this->version($this->idOf('long.mp3'));
+		self::assertGreaterThan(1800000, $version['durationFrames'], 'read in the request');
+		self::assertSame('queued', $version['derived']['waveform']['state'], 'its Waveform in the queue');
+
+		// Its STREAMINFO says two seconds, the sound goes on for a minute: the request stops where the header ends
+		$head = $this->mp3('head.flac', 2);
+		$tail = $this->mp3('tail.flac', 60);
+		$this->nc->put("{$this->root}/liar.flac", file_get_contents($head) . file_get_contents($tail));
+		@unlink($head);
+		@unlink($tail);
+		$version = $this->version($this->idOf('liar.flac'));
+		self::assertLessThan(3000, $version['durationFrames']);
+		self::assertSame('queued', $version['derived']['waveform']['state'], 'more sound than its header says is the queue\'s');
+		self::assertSame('queued', trim($this->inNextcloud('echo \\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->findPending(' . $version['id'] . ', "waveform")->getState();')), 'and its job is put back');
+
+		// A request making a Waveform already fills max_jobs (1)
+		$busy = $this->inNextcloud('$job = new \\OCA\\Deliver\\Db\\Job(); $job->setKind("waveform"); $job->setVersionId(' . $version['id'] . '); $job->setState("running"); $job->setClaimedBy("request"); $job->setCreatedAt(time()); $job->setStartedAt(time()); echo \\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->insert($job)->getId();');
+		$short = $this->mp3('short.mp3', 3);
+		$this->nc->put("{$this->root}/short.mp3", (string)file_get_contents($short));
+		@unlink($short);
+		self::assertSame('none', $this->waveformState($this->idOf('short.mp3')), 'not read in the request: its probe waits in the queue');
+
+		// A request that died ten minutes ago leaves its job to the queue again
+		$this->inNextcloud('$q = \\OCP\\Server::get(\\OCP\\IDBConnection::class)->getQueryBuilder(); $q->update("deliver_jobs")->set("started_at", $q->createNamedParameter(time() - 600))->where($q->expr()->eq("id", $q->createNamedParameter(' . (int)$busy . ')))->executeStatement();');
+		$this->drainQueue();
+		foreach (['long.mp3', 'liar.flac', 'short.mp3'] as $name) {
+			self::assertSame('ready', $this->waveformState($this->idOf($name)), $name);
+		}
+		self::assertSame('', trim($this->inNextcloud('foreach (\\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->findQueued(10) as $job) { echo $job->getKind(); }')), 'nothing stuck');
+	}
+
+	public function testCronDrainsTheQueueAtEveryRun(): void {
+		// A cron every five minutes starts the job a few seconds into its run: an interval of five minutes misses every other one
+		self::assertLessThanOrEqual(60, (int)$this->inNextcloud('echo \\OCP\\Server::get(\\OCA\\Deliver\\BackgroundJob\\ProcessDerivedMedia::class)->getInterval();'));
 	}
 
 	public function testFfmpegsWaveformHearsEveryChannelAndHighNotes(): void {
