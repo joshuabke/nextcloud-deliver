@@ -7,7 +7,7 @@ import { HOLD_MS, TAP_SLOP } from '../lib/gestures.js'
 import { avatarSeed, initials } from '../lib/initials.js'
 import { t } from '../lib/l10n.js'
 import { fpsValue, timeToFrame } from '../lib/timecode.js'
-import { bars, barSeconds, CIRCLE, circleAt, clampSpan, dragged, isWhole, pinchSpan, secondsAt, spreadSpan, stack, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan } from '../lib/waveWindow.js'
+import { barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, clampSpan, dragged, isWhole, pinchSpan, pixelPlace, secondsAt, spreadSpan, stack, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan } from '../lib/waveWindow.js'
 import { useCommentsStore } from '../store/comments.js'
 
 // The Waveform of an audio Version on the stage (story 180): a window of it,
@@ -71,8 +71,9 @@ const steps = computed(() => stepsFor(duration.value))
 const shown = computed(() => clampSpan(span.value, duration.value))
 const lastFrame = computed(() => Math.max(0, props.durationFrames - 1))
 
-/** The canvas in CSS px, and the device pixels to each */
+/** The canvas in CSS px, in device pixels, and the device pixels to a CSS px */
 let size = { width: 0, height: 0 }
+let pixels = { width: 0, height: 0 }
 let ratio = 1
 let colors = { played: '#fff', rest: 'rgba(255, 255, 255, 0.3)' }
 let visible = true
@@ -153,50 +154,63 @@ function frameOf(seconds) {
 
 /**
  * @param {number} at - where the playhead stands, in seconds
- * @return {number} the window's left edge, in px from the start of the piece
+ * @return {{head: number, offset: number}} the playhead's column and the window's left edge, in whole device pixels
  */
-function offsetAt(at) {
-	return windowAt(at, shown.value, duration.value).start / across.value * size.width
+function placeAt(at) {
+	return pixelPlace(at, across.value, pixels.width, isWhole(shown.value, duration.value))
 }
 
-/** Draws the window around the playhead */
+/**
+ * @param {number} at - where the playhead stands, in seconds
+ * @return {number} the window's left edge, in CSS px from the start of the piece, on the same pixel as the wave
+ */
+function offsetAt(at) {
+	return placeAt(at).offset / ratio
+}
+
+/**
+ * Draws the window around the playhead. The wave is drawn in device pixels
+ * and moves by whole ones, so a bar keeps its edges and its height on every
+ * frame it shows (no moiré against the screen's pixels); the rest in CSS px.
+ */
 function draw() {
 	const context = canvas.value?.getContext('2d')
-	const { width, height } = size
-	if (!context || !width) {
+	if (!context || !pixels.width) {
 		return
 	}
-	context.setTransform(ratio, 0, 0, ratio, 0, 0)
-	context.clearRect(0, 0, width, height)
-	const at = now()
-	const offset = offsetAt(at)
-	const head = at / across.value * width - offset
+	context.setTransform(1, 0, 0, 1, 0, 0)
+	context.clearRect(0, 0, pixels.width, pixels.height)
+	const { head, offset } = placeAt(now())
 	if (isWhole(shown.value, duration.value)) {
 		// The wave stands: it is drawn once, the played part laid over it up to the playhead
-		const layers = keep('layers', [props.waveform, props.comments, width, height, ratio, colors.played, store.selected, card.value?.id, props.pending], () => ({
+		const layers = keep('layers', [props.waveform, props.comments, pixels.width, pixels.height, colors.played, store.selected, card.value?.id, props.pending], () => ({
 			rest: layer((each) => {
+				each.setTransform(ratio, 0, 0, ratio, 0, 0)
 				drawSpans(each, 0)
+				each.setTransform(1, 0, 0, 1, 0, 0)
 				drawBars(each, 0, -Infinity)
 			}),
 			played: layer((each) => drawBars(each, 0, Infinity)),
-			top: layer((each) => drawTop(each, 0)),
+			top: layer((each) => {
+				each.setTransform(ratio, 0, 0, ratio, 0, 0)
+				drawTop(each, 0)
+			}),
 		}))
-		context.setTransform(1, 0, 0, 1, 0, 0)
 		context.drawImage(layers.rest, 0, 0)
-		const clip = Math.max(0, Math.round(head * ratio))
-		if (clip > 0) {
-			context.drawImage(layers.played, 0, 0, clip, layers.played.height, 0, 0, clip, layers.played.height)
+		if (head > 0) {
+			context.drawImage(layers.played, 0, 0, head, pixels.height, 0, 0, head, pixels.height)
 		}
-		context.setTransform(ratio, 0, 0, ratio, 0, 0)
 		drawHead(context, head)
-		context.setTransform(1, 0, 0, 1, 0, 0)
 		context.drawImage(layers.top, 0, 0)
 		return
 	}
-	drawSpans(context, offset)
+	context.setTransform(ratio, 0, 0, ratio, 0, 0)
+	drawSpans(context, offset / ratio)
+	context.setTransform(1, 0, 0, 1, 0, 0)
 	drawBars(context, offset, head)
 	drawHead(context, head)
-	drawTop(context, offset)
+	context.setTransform(ratio, 0, 0, ratio, 0, 0)
+	drawTop(context, offset / ratio)
 }
 
 /**
@@ -205,11 +219,9 @@ function draw() {
  */
 function layer(paint) {
 	const each = document.createElement('canvas')
-	each.width = canvas.value.width
-	each.height = canvas.value.height
-	const context = each.getContext('2d')
-	context.setTransform(ratio, 0, 0, ratio, 0, 0)
-	paint(context)
+	each.width = pixels.width
+	each.height = pixels.height
+	paint(each.getContext('2d'))
 	return each
 }
 
@@ -237,44 +249,47 @@ function drawSpans(context, offset) {
 }
 
 /**
- * @param {CanvasRenderingContext2D} context - where to draw
- * @param {number} offset - the window's left edge, in px from the start of the piece
+ * The bars, in device pixels: bar k at k × pitch − offset, whole pixels
+ * wide and high, its height the same on every frame
+ *
+ * @param {CanvasRenderingContext2D} context - where to draw, untransformed
+ * @param {number} offset - the window's left edge, in device pixels from the start of the piece
  * @param {number} head - bars before it are played: Infinity for all, -Infinity for none
  */
 function drawBars(context, offset, head) {
-	const { width, height } = size
-	const seconds = barSeconds(across.value, width)
-	const levels = keep('bars', [props.waveform, seconds], () => bars(props.waveform, seconds))
-	const step = seconds / across.value * width
-	const barWidth = Math.max(1, step - 1)
-	const room = Math.max(8, height - TOP - BOTTOM) / 2
-	const middle = TOP + room
+	// Over the whole piece the wave stands; scrolling, it moves at the playback rate
+	const grid = barGrid(across.value, pixels.width, ratio, isWhole(shown.value, duration.value) ? 0 : props.media?.playbackRate || 1)
+	const levels = keep('bars', [props.waveform, grid.seconds], () => bars(props.waveform, grid.seconds))
+	const top = Math.round(TOP * ratio)
+	const room = Math.max(8, pixels.height - top - Math.round(BOTTOM * ratio)) / 2
+	const middle = Math.round(top + room)
 	// The loudest bar keeps a margin above and below
 	const half = room * 0.85
-	const first = Math.max(0, Math.floor(offset / step))
-	const last = Math.min(levels.length - 1, Math.ceil((offset + width) / step))
+	const { first, last } = barsShown(offset, grid.pitch, pixels.width, levels.length)
 	let played = true
 	context.fillStyle = colors.played
 	for (let bar = first; bar <= last; bar++) {
-		const x = bar * step - offset
-		if (played && x + barWidth / 2 > head) {
+		const x = bar * grid.pitch - offset
+		if (played && x + grid.width / 2 > head) {
 			played = false
 			context.fillStyle = colors.rest
 		}
-		const level = Math.max(0.5, levels[bar] * half)
-		context.fillRect(x, middle - level, barWidth, 2 * level)
+		const level = Math.max(1, Math.round(levels[bar] * half))
+		context.fillRect(x, middle - level, grid.width, 2 * level)
 	}
 }
 
 /**
- * The playhead, under the zoom buttons
+ * The playhead, under the zoom buttons, on whole device pixels
  *
- * @param {CanvasRenderingContext2D} context - where to draw
- * @param {number} head - its x
+ * @param {CanvasRenderingContext2D} context - where to draw, untransformed
+ * @param {number} head - its x, in device pixels
  */
 function drawHead(context, head) {
+	const width = Math.max(2, Math.round(2 * ratio))
+	const top = Math.round(waveTop * ratio)
 	context.fillStyle = '#fff'
-	context.fillRect(head - 1, waveTop, 2, size.height - waveTop)
+	context.fillRect(head - Math.floor(width / 2), top, width, pixels.height - top)
 }
 
 /**
@@ -377,12 +392,23 @@ function tick() {
 
 watch([() => props.playing, () => props.frame, () => props.waveform, shown, () => props.comments, () => store.selected, () => props.pending, card], schedule)
 
-/** The canvas takes the stage's size in device pixels, so the wave stays sharp */
-const resized = new ResizeObserver(([entry]) => {
-	size = { width: entry.contentRect.width, height: entry.contentRect.height }
-	ratio = window.devicePixelRatio || 1
-	canvas.value.width = Math.round(size.width * ratio)
-	canvas.value.height = Math.round(size.height * ratio)
+/** The stage's size in CSS px, and the browser's count of its device pixels, as last measured */
+let measured = { width: 0, height: 0, device: null }
+
+/**
+ * The canvas takes as many device pixels as it covers on the screen, so that
+ * one of its pixels is one of the screen's and nothing is resampled on the
+ * way (canvasPixels)
+ */
+function measure() {
+	const fit = canvasPixels(measured.width, measured.height, window.devicePixelRatio || 1, measured.device)
+	pixels = { width: fit.width, height: fit.height }
+	ratio = fit.ratio
+	size = fit.css ?? { width: measured.width, height: measured.height }
+	canvas.value.style.width = fit.css ? fit.css.width + 'px' : ''
+	canvas.value.style.height = fit.css ? fit.css.height + 'px' : ''
+	canvas.value.width = pixels.width
+	canvas.value.height = pixels.height
 	const style = getComputedStyle(host.value)
 	colors = {
 		played: style.getPropertyValue('--color-primary-element').trim() || colors.played,
@@ -390,7 +416,29 @@ const resized = new ResizeObserver(([entry]) => {
 	}
 	kept = {}
 	draw()
+}
+
+const resized = new ResizeObserver(([entry]) => {
+	const device = entry.devicePixelContentBoxSize?.[0]
+	measured = { width: entry.contentRect.width, height: entry.contentRect.height, device: device ? { width: device.inlineSize, height: device.blockSize } : null }
+	measure()
 })
+
+/** The pixel ratio changes while the view is open: the window went to another screen, or the browser zooms */
+let resolution = null
+
+/** Measures again, and listens for the next change of the ratio */
+function onResolution() {
+	resolution?.removeEventListener('change', onResolution)
+	resolution = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`)
+	resolution.addEventListener('change', onResolution)
+	if (measured.width) {
+		// The browser counts the device pixels anew with its next report; until then the ratio decides
+		measured = { ...measured, device: null }
+		measure()
+	}
+}
+
 /** Off screen, as under a phone's Comment list pulled up, the loop stops */
 const seen = new IntersectionObserver(([entry]) => {
 	visible = entry.isIntersecting
@@ -398,10 +446,17 @@ const seen = new IntersectionObserver(([entry]) => {
 })
 
 onMounted(() => {
-	resized.observe(host.value)
+	// The stage, not the canvas, whose CSS box may be cut down to whole device pixels
+	try {
+		resized.observe(host.value, { box: 'device-pixel-content-box' })
+	} catch {
+		resized.observe(host.value)
+	}
 	seen.observe(host.value)
+	onResolution()
 })
 onBeforeUnmount(() => {
+	resolution?.removeEventListener('change', onResolution)
 	resized.disconnect()
 	seen.disconnect()
 	cancelAnimationFrame(frameRequest)
