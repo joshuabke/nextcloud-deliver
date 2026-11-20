@@ -50,6 +50,10 @@ export function useReview({ version, projectMode, projectFps, refresh }) {
 	const pinned = ref(null)
 	/** Whether typing set the pin, so emptying the field lets go of it again */
 	let pinnedByTyping = false
+	/** A place on audio pinned by C, a double click or a long press: let go again while nothing is written (story 181) */
+	let loose = false
+	/** Whether the field holds text */
+	let written = false
 	const anchor = computed(() => pinned.value ?? { inFrame: player.value?.frame ?? 0, outFrame: null })
 	/** Drawing on the picture, and the shapes drawn so far for the next Comment (story 89) */
 	const drawing = ref(false)
@@ -57,6 +61,8 @@ export function useReview({ version, projectMode, projectFps, refresh }) {
 	watch(() => version.value?.id, () => {
 		pinned.value = null
 		pinnedByTyping = false
+		loose = false
+		written = false
 		drawing.value = false
 		draft.value = []
 		player.value?.clearRange?.()
@@ -81,6 +87,7 @@ export function useReview({ version, projectMode, projectFps, refresh }) {
 	 */
 	function pin(where) {
 		pinnedByTyping = false
+		loose = audio.value && where.outFrame === null
 		pinned.value = where
 		sheet.aside.value = true
 		nextTick(() => panel.value?.focus())
@@ -110,6 +117,7 @@ export function useReview({ version, projectMode, projectFps, refresh }) {
 	 * Audio plays on while it is commented on (story 181).
 	 */
 	function hold() {
+		written = true
 		if (pinned.value === null) {
 			if (!audio.value) {
 				player.value?.pause()
@@ -121,9 +129,23 @@ export function useReview({ version, projectMode, projectFps, refresh }) {
 
 	/** The field was emptied again: follow the player once more */
 	function release() {
-		if (pinnedByTyping) {
+		written = false
+		if (pinnedByTyping || loose) {
 			pinned.value = null
 			pinnedByTyping = false
+			loose = false
+		}
+	}
+
+	/**
+	 * Escape or leaving the empty field, or a seek: a place on audio pinned
+	 * without a word written is let go, and the next Comment follows the player
+	 * again; once something is written it stays until sent or emptied
+	 */
+	function letGo() {
+		if (loose && !written) {
+			pinned.value = null
+			loose = false
 		}
 	}
 
@@ -151,6 +173,8 @@ export function useReview({ version, projectMode, projectFps, refresh }) {
 	/** The pinned anchor is used up once its Comment is posted */
 	function posted() {
 		pinnedByTyping = false
+		loose = false
+		written = false
 		pinned.value = null
 		drawing.value = false
 		draft.value = []
@@ -166,5 +190,5 @@ export function useReview({ version, projectMode, projectFps, refresh }) {
 	}, { immediate: true })
 	onBeforeUnmount(() => clearTimeout(recheck))
 
-	return { player, panel, mode, clock, anchor, pinned, pin, hold, release, jump, posted, drawing, draft, draw, range, markRange, clearRange }
+	return { player, panel, mode, clock, anchor, pinned, pin, hold, release, letGo, jump, posted, drawing, draft, draw, range, markRange, clearRange }
 }

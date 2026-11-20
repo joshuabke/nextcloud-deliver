@@ -79,7 +79,7 @@ const compareWith = computed(() => {
 })
 const folderUrl = computed(() => uploadFolder(context.value?.versions ?? []))
 
-const { player, panel, mode, clock, anchor, pinned, pin, hold, release, jump, posted, drawing, draft, draw, range, markRange, clearRange } = useReview({
+const { player, panel, mode, clock, anchor, pinned, pin, hold, release, letGo, jump, posted, drawing, draft, draw, range, markRange, clearRange } = useReview({
 	version,
 	projectMode: computed(() => context.value?.project.timecodeMode ?? 'smpte'),
 	projectFps: computed(() => context.value?.project.fps ?? { num: 25, den: 1 }),
@@ -319,7 +319,8 @@ function upload(event) {
 			:pending="pinned"
 			@comment="pin($event); panelOpen = true"
 			@jump="jump"
-			@swipe="step" />
+			@swipe="step"
+			@seeked="letGo" />
 
 		<template #panel>
 			<CommentPanel
@@ -337,6 +338,7 @@ function upload(event) {
 				@jump="jump"
 				@posted="posted"
 				@typing="hold"
+				@left="letGo"
 				@cleared="release">
 				<template #tools>
 					<ExportMenu

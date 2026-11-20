@@ -49,7 +49,13 @@ const editing = ref(false)
 const draft = ref('')
 const replying = ref(false)
 const showReplies = ref(true)
-const reply = ref('')
+/** Kept in the store, so a Reply half written survives the card on the Waveform closing */
+const reply = computed({
+	get: () => store.replies[props.comment.id] ?? '',
+	set: (text) => {
+		store.replies[props.comment.id] = text
+	},
+})
 const { busy, error, run } = useBusy()
 
 const mine = computed(() => store.mine(props.comment))

@@ -1035,6 +1035,22 @@ test.describe('Audio review', () => {
 		expect(await width()).toBeCloseTo(15 / 360 * 100, 0)
 		await page.getByRole('button', { name: 'Whole', exact: true }).click()
 		expect(await width()).toBe(100)
+		// Over the whole piece the wave after the playhead is not drawn as played
+		const playedAfter = await canvas.evaluate((element) => {
+			const probe = document.createElement('span')
+			probe.style.color = 'var(--color-primary-element)'
+			element.parentElement.append(probe)
+			const primary = getComputedStyle(probe).color.match(/\d+/g).map(Number)
+			probe.remove()
+			const ratio = element.width / element.clientWidth
+			const row = element.getContext('2d').getImageData(Math.round(element.width / 2), Math.round((40 + (element.clientHeight - 80) / 2) * ratio), Math.round(element.width / 2), 1).data
+			let count = 0
+			for (let at = 0; at < row.length; at += 4) {
+				count += Math.max(...[0, 1, 2].map((channel) => Math.abs(row[at + channel] - primary[channel]))) < 8 ? 1 : 0
+			}
+			return count
+		})
+		expect(playedAfter).toBe(0)
 		await page.getByRole('button', { name: 'Pause (Space)' }).click()
 	})
 
@@ -1101,27 +1117,54 @@ test.describe('Audio review', () => {
 		await page.getByRole('button', { name: '1 min' }).click()
 	})
 
-	test('a double click and C comment on the wave, C while it plays on, and a circle opens a card to answer in', async () => {
+	test('a double click and C comment on the wave, an empty field lets go of the place, and a circle opens a card that follows the list and keeps a Reply half written', async () => {
 		await page.goto(`/apps/deliver/versions/${versionId}`)
 		const canvas = page.locator('.deliver-wave canvas')
 		await expect(canvas).toBeVisible()
 		const audio = page.locator('video.deliver-player__video')
 		await expect(audio).toHaveJSProperty('readyState', 4)
+		await page.getByRole('button', { name: '1 min' }).click()
 		const box = await canvas.boundingBox()
 		const field = page.locator('#deliver-comment-body')
 		const anchor = page.locator('.deliver-comments__anchor')
+		const goTo = (seconds) => audio.evaluate((element, at) => {
+			element.currentTime = at
+		}, seconds)
+		const send = () => page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
+		const quarterOn = { position: { x: box.width * 0.75, y: box.height / 2 } }
 
 		// A double click a quarter of the stage on comments 15 seconds on, where the first click went
-		await canvas.dblclick({ position: { x: box.width * 0.75, y: box.height / 2 } })
+		await canvas.dblclick(quarterOn)
 		await expect(field).toBeFocused()
 		await expect(anchor).toHaveText('0:15.000')
+		// Escape in the empty field lets go of it: the next Comment follows the player again
+		await field.press('Escape')
+		await goTo(40)
+		await expect(anchor).toHaveText('0:40.000')
+		// With a word in the field the place stays, until the field is emptied
+		await canvas.dblclick(quarterOn)
+		await expect(anchor).toHaveText('0:55.000')
+		await field.fill('kept')
+		await field.press('Escape')
+		await goTo(100)
+		await expect(anchor).toHaveText('0:55.000')
+		await field.fill('')
+		await expect(anchor).toHaveText('1:40.000')
+		// A click on the wave, which seeks, lets go too
+		await canvas.dblclick(quarterOn)
+		await expect(anchor).toHaveText('1:55.000')
+		await canvas.click({ position: { x: box.width * 0.25, y: box.height / 2 } })
+		await expect(anchor).toHaveText('1:40.000')
+
+		await canvas.dblclick(quarterOn)
+		await expect(anchor).toHaveText('1:55.000')
 		await field.fill('double-clicked here')
-		await page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
+		await send()
 		await expect(page.locator('.deliver-comment').filter({ hasText: 'double-clicked here' })).toBeVisible()
 
 		// C on audio leaves it playing, the Comment where it was at the key press
 		await page.getByRole('button', { name: 'Play (Space)' }).click()
-		await expect.poll(() => audio.evaluate((element) => element.currentTime)).toBeGreaterThan(16)
+		await expect.poll(() => audio.evaluate((element) => element.currentTime)).toBeGreaterThan(117)
 		await page.locator('.deliver-review__title').click()
 		await page.keyboard.press('c')
 		await expect(field).toBeFocused()
@@ -1130,30 +1173,53 @@ test.describe('Audio review', () => {
 		expect(await audio.evaluate((element) => element.paused)).toBe(false)
 		await expect(anchor).toHaveText(pinned)
 		await field.fill('while it played')
-		await page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
+		await send()
 		await expect(page.locator('.deliver-comment').filter({ hasText: 'while it played' })).toBeVisible()
 		await page.getByRole('button', { name: 'Pause (Space)' }).click()
 
-		// Standing on the first Comment, its circle is under the playhead; a click on it opens its card and does not seek.
-		// At a minute across, the second one 1.6 s later stacks on top of it: 15 seconds across sets them apart
+		// Standing on the first Comment, its circle is under the playhead; a click on it opens its card and does not seek
 		await page.getByRole('button', { name: '15 s' }).click()
-		await page.locator('.deliver-comment').filter({ hasText: 'double-clicked here' }).locator('.deliver-comment__anchor').click()
-		const at = await audio.evaluate((element) => element.currentTime)
-		await canvas.click({ position: { x: box.width / 2, y: box.height - 20 } })
+		const first = page.locator('.deliver-comments__list > .deliver-comment').filter({ hasText: 'double-clicked here' })
+		const second = page.locator('.deliver-comments__list > .deliver-comment').filter({ hasText: 'while it played' })
+		const openFirst = async () => {
+			await first.locator('.deliver-comment__anchor').click()
+			const at = await audio.evaluate((element) => element.currentTime)
+			await canvas.click({ position: { x: box.width / 2, y: box.height - 20 } })
+			expect(await audio.evaluate((element) => element.currentTime)).toBe(at)
+		}
+		await openFirst()
 		const card = page.getByRole('dialog', { name: /^Comment #/ })
 		await expect(card).toContainText('double-clicked here')
-		expect(await audio.evaluate((element) => element.currentTime)).toBe(at)
-		// It is selected in the list too, and a Reply written on the card shows there
-		await expect(page.locator('.deliver-comments__list .deliver-comment--selected')).toContainText('double-clicked here')
+		await expect(first).toHaveClass(/deliver-comment--selected/)
+		// It follows the list: another Comment picked there shows in it
+		await second.locator('.deliver-comment__body').click()
+		await expect(card).toContainText('while it played')
+		await first.locator('.deliver-comment__body').click()
+		await expect(card).toContainText('double-clicked here')
+		// Escape leaves a Reply half written alone; a click on the bar closes the card, and the Reply waits for it
+		await card.getByPlaceholder('Write a Reply').fill('half')
+		await page.keyboard.press('Escape')
+		await expect(card).toBeVisible()
+		await page.locator('.deliver-player__timeline').click()
+		await expect(card).toHaveCount(0)
+		await openFirst()
+		await expect(card.getByPlaceholder('Write a Reply')).toHaveValue('half')
 		await card.getByPlaceholder('Write a Reply').fill('answered on the wave')
 		await card.getByRole('button', { name: 'Reply', exact: true }).click()
-		await expect(page.locator('.deliver-comments__list .deliver-comment--reply')).toContainText('answered on the wave')
+		await expect(first.locator('.deliver-comment--reply')).toContainText('answered on the wave')
 		await expect(card.locator('.deliver-comment--reply')).toContainText('answered on the wave')
-		await card.getByRole('button', { name: 'Close' }).click()
+		// With nothing half written, Escape closes it wherever the focus is
+		await page.locator('.deliver-review__title').click()
+		await page.keyboard.press('Escape')
 		await expect(card).toHaveCount(0)
 	})
 
-	test('on a phone a long press comments; a Reviewer who may not comment reads the cards and writes nothing', async ({ playwright }) => {
+	test('on a phone a pinch only zooms, a long press comments, and the card hands the focus back; a Reviewer who may not comment reads the cards and writes nothing', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const comments = `/ocs/v2.php/apps/deliver/api/v1/versions/${versionId}/comments?format=json`
+		const parent = (await (await api.post(comments, { data: { inFrame: 7500, body: 'for the phone' } })).json()).ocs.data
+		expect((await api.post(comments, { data: { inFrame: 7500, body: 'and a reply', parentId: parent.id } })).ok()).toBe(true)
+
 		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
 		const member = await phone.newPage()
 		await login(member)
@@ -1161,26 +1227,60 @@ test.describe('Audio review', () => {
 		const canvas = member.locator('.deliver-wave canvas')
 		await expect(canvas).toBeVisible()
 		await expect(member.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
+		const field = member.locator('#deliver-comment-body')
+		const anchor = member.locator('.deliver-comments__anchor')
 		const box = await canvas.boundingBox()
-		// A finger resting a quarter of the stage to the right, 15 seconds on, opens the field there; it neither seeks nor goes fullscreen
+		const y = box.y + box.height / 2
 		const touch = await phone.newCDPSession(member)
-		const point = { x: box.x + box.width * 0.75, y: box.y + box.height / 2 }
-		await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] })
+		const fingers = (type, points) => touch.send('Input.dispatchTouchEvent', { type, touchPoints: points.map(([x, at], id) => ({ x, y: at, id })) })
+		const shown = () => member.locator('.deliver-player__window').evaluate((element) => parseFloat(element.style.width.match(/[\d.]+%/)[0]))
+
+		// Two fingers moving apart for most of a second zoom in and open no field
+		const before = await shown()
+		await fingers('touchStart', [[box.x + 150, y], [box.x + 240, y]])
+		for (let step = 1; step <= 8; step++) {
+			await member.waitForTimeout(100)
+			await fingers('touchMove', [[box.x + 150 - step * 10, y], [box.x + 240 + step * 10, y]])
+		}
+		await fingers('touchEnd', [])
+		await member.waitForTimeout(300)
+		expect(await shown()).toBeLessThan(before)
+		await expect(field).not.toBeFocused()
+		await expect(anchor).toHaveText('0:00.000')
+
+		// A finger resting a quarter of the stage to the right, 15 seconds on, opens the field there; it neither seeks nor goes fullscreen
+		await member.getByRole('button', { name: '1 min' }).tap()
+		await fingers('touchStart', [[box.x + box.width * 0.75, y]])
 		await member.waitForTimeout(700)
-		await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
-		await expect(member.locator('#deliver-comment-body')).toBeFocused()
-		await expect(member.locator('.deliver-comments__anchor')).toHaveText('0:15.000')
+		await fingers('touchEnd', [])
+		await expect(field).toBeFocused()
+		await expect(anchor).toHaveText('0:15.000')
 		// The place waits on the wave as a line in the primary colour, over the wave not yet played
 		const mark = await canvas.evaluate((element) => {
+			const probe = document.createElement('span')
+			probe.style.color = 'var(--color-primary-element)'
+			element.parentElement.append(probe)
+			const primary = getComputedStyle(probe).color.match(/\d+/g).map(Number)
+			probe.remove()
 			const ratio = element.width / element.clientWidth
-			return [...element.getContext('2d').getImageData(Math.round(element.width * 0.75), Math.round(42 * ratio), 1, 1).data]
+			const pixel = element.getContext('2d').getImageData(Math.round(element.width * 0.75), Math.round(42 * ratio), 1, 1).data
+			return Math.max(...primary.slice(0, 3).map((value, at) => Math.abs(value - pixel[at])))
 		})
-		expect(mark[2]).toBeGreaterThan(mark[0] + 60)
+		expect(mark).toBeLessThan(8)
 		expect(await member.locator('video.deliver-player__video').evaluate((element) => element.currentTime)).toBeLessThan(1)
 		await expect(member.locator('.deliver-player--fullscreen')).toHaveCount(0)
+		// A tap on a circle, 7.5 seconds on, opens its card; closing it hands the focus back to the field
+		const lane = await canvas.boundingBox()
+		await fingers('touchStart', [[lane.x + lane.width * 0.625, lane.y + lane.height - 20]])
+		await fingers('touchEnd', [])
+		const sheet = member.getByRole('dialog', { name: /^Comment #/ })
+		await expect(sheet).toContainText('for the phone')
+		await expect(sheet).toBeFocused()
+		await sheet.getByRole('button', { name: 'Close' }).tap()
+		await expect(sheet).toHaveCount(0)
+		await expect(field).toBeFocused()
 		await phone.close()
 
-		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		const link = (await (await api.post(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`)).json()).ocs.data
 		expect((await api.put(`/ocs/v2.php/apps/deliver/api/v1/links/${link.id}?format=json`, { data: { canComment: false } })).ok()).toBe(true)
 		await api.dispose()
@@ -1189,13 +1289,12 @@ test.describe('Audio review', () => {
 		await reviewer.goto(`/apps/deliver/s/${link.token}/versions/${versionId}`)
 		const wave = reviewer.locator('.deliver-wave canvas')
 		await expect(wave).toBeVisible()
-		await expect(reviewer.locator('.deliver-comment').filter({ hasText: 'double-clicked here' })).toBeVisible()
 		await reviewer.getByRole('button', { name: '15 s' }).click()
-		await reviewer.locator('.deliver-comment').filter({ hasText: 'double-clicked here' }).locator('.deliver-comment__anchor').click()
+		await reviewer.locator('.deliver-comment').filter({ hasText: 'for the phone' }).locator('.deliver-comment__anchor').click()
 		const stage = await wave.boundingBox()
 		await wave.click({ position: { x: stage.width / 2, y: stage.height - 20 } })
 		const card = reviewer.getByRole('dialog', { name: /^Comment #/ })
-		await expect(card).toContainText('answered on the wave')
+		await expect(card).toContainText('and a reply')
 		await expect(card.locator('textarea')).toHaveCount(0)
 		await expect(card.getByRole('button', { name: 'Go to' })).toBeVisible()
 		// A double click elsewhere seeks but opens no field

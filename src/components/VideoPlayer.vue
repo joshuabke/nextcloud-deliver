@@ -63,7 +63,7 @@ const props = defineProps({
 	pending: { type: Object, default: null },
 })
 
-const emit = defineEmits(['comment', 'jump', 'swipe', 'update:mode', 'update:drawing'])
+const emit = defineEmits(['comment', 'jump', 'swipe', 'seeked', 'update:mode', 'update:drawing'])
 
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2]
 
@@ -617,6 +617,7 @@ function seekTo(target) {
 		video.value.currentTime = frameToTime(clamped, fps.value)
 	}
 	frame.value = clamped
+	emit('seeked')
 }
 
 /**

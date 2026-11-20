@@ -678,7 +678,9 @@ OC.L10N.register(
 		"Zoom the Waveform": "Wellenform zoomen",
 		"Go to": "Hinspringen",
 		"Comment #{number}": "Kommentar #{number}",
-		"Show the Assets as a list": "Assets als Liste zeigen"
+		"Show the Assets as a list": "Assets als Liste zeigen",
+		"Previous Comment": "Vorheriger Kommentar",
+		"Next Comment": "Nächster Kommentar"
 	},
 	undefined
 );

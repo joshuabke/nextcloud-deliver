@@ -44,7 +44,7 @@ const props = defineProps({
 	range: { type: Object, default: null },
 })
 
-const emit = defineEmits(['jump', 'claim', 'posted', 'typing', 'cleared', 'draw', 'range', 'clearRange'])
+const emit = defineEmits(['jump', 'claim', 'posted', 'typing', 'cleared', 'left', 'draw', 'range', 'clearRange'])
 
 const store = useCommentsStore()
 /** A phone has no keyboard shortcuts to hint at */
@@ -254,6 +254,9 @@ function onKeydown(event) {
 		event.preventDefault()
 		submit()
 	}
+	if (event.key === 'Escape') {
+		emit('left')
+	}
 }
 
 /** Hands the Reviewer's name to the view, which registers it */
@@ -408,6 +411,7 @@ function claim() {
 						:placeholder="t('deliver', 'Leave a Comment…')"
 						@keydown="onKeydown"
 						@focus="startWriting"
+						@blur="emit('left')"
 						@input="onInput"
 						@click="onInput" />
 					<!-- A phone keeps the composer to one row: the tools in a menu, Send in the field -->
