@@ -7,7 +7,7 @@ import { HOLD_MS, TAP_SLOP } from '../lib/gestures.js'
 import { avatarSeed, initials } from '../lib/initials.js'
 import { t } from '../lib/l10n.js'
 import { fpsValue, timeToFrame } from '../lib/timecode.js'
-import { barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, clampSpan, dragged, isWhole, pinchSpan, pixelPlace, secondsAt, spreadSpan, stack, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan } from '../lib/waveWindow.js'
+import { barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, clampSpan, dragged, glided, glideStart, isWhole, pinchSpan, pixelPlace, retarget, secondsAt, spreadSpan, stack, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan } from '../lib/waveWindow.js'
 import { useCommentsStore } from '../store/comments.js'
 
 // The Waveform of an audio Version on the stage (story 180): a window of it,
@@ -79,6 +79,16 @@ let pixels = { width: 0, height: 0 }
 let ratio = 1
 let colors = { played: '#fff', rest: 'rgba(255, 255, 255, 0.3)' }
 let visible = true
+/** Set by the stage's own continuous seeks (the wheel): the wave follows them without a glide */
+let following = false
+/** Further than this from where playing would have taken it, in seconds, the playhead was sought */
+const SEEK_GAP = 0.25
+/** The glide after a seek is decoration: with reduced motion the wave jumps */
+const motion = window.matchMedia('(prefers-reduced-motion: reduce)')
+/** A glide to a new place under way; the seconds drawn last, which a glide starts from; where the playhead was then, and when */
+let glide = null
+let drawnAt = null
+let last = null
 
 /**
  * What only changes with the zoom, the width or the Comments, worked out
@@ -182,7 +192,11 @@ function draw() {
 	}
 	context.setTransform(1, 0, 0, 1, 0, 0)
 	context.clearRect(0, 0, pixels.width, pixels.height)
-	const { head, offset } = placeAt(now())
+	const at = drawn()
+	drawnAt = at
+	// What is on screen, readable from outside without reading pixels (browser tests)
+	canvas.value.drawnAt = at
+	const { head, offset } = placeAt(at)
 	if (isWhole(shown.value, duration.value)) {
 		// The wave stands: it is drawn once, the played part laid over it up to the playhead
 		const layers = keep('layers', [props.waveform, props.comments, pixels.width, pixels.height, colors.played, store.selected, card.value?.id, props.pending], () => ({
@@ -383,11 +397,44 @@ function schedule() {
 	}
 }
 
+/**
+ * The seconds to draw: where the playhead is, or on the way there after a
+ * seek that was no drag (a click on the wave or the bar, a skip, a jump to a
+ * Comment). The sound is there at once; only the drawing glides, from where
+ * it stood but never from further than a window away (N13). A seek shows as
+ * the playhead standing elsewhere than playing on from the last frame would
+ * have taken it, whatever made it.
+ *
+ * @return {number} the seconds to draw
+ */
+function drawn() {
+	const at = now()
+	const time = performance.now()
+	if (following) {
+		// The stage's own continuous seeks, a sideways wheel or swipe, are followed at once, as a drag is
+		following = false
+		glide = null
+	} else if (last !== null && dragAt === null && drawnAt !== null && !motion.matches) {
+		const expected = last.at + (props.playing ? (time - last.time) / 1000 * (props.media?.playbackRate || 1) : 0)
+		if (Math.abs(at - expected) > SEEK_GAP) {
+			const running = glide && glide.span === shown.value && glided(glide, time, at) !== null
+			glide = running ? retarget(glide, at, across.value) : { from: glideStart(drawnAt, at, across.value), at: time, span: shown.value }
+		}
+	}
+	last = { at, time }
+	const seconds = glide && glide.span === shown.value ? glided(glide, time, at) : null
+	if (seconds === null) {
+		glide = null
+		return at
+	}
+	return seconds
+}
+
 /** One animation frame */
 function tick() {
 	frameRequest = 0
 	draw()
-	if ((props.playing || dragAt !== null) && visible) {
+	if ((props.playing || dragAt !== null || glide !== null) && visible) {
 		schedule()
 	}
 }
@@ -527,7 +574,7 @@ function onDown(event) {
 		pinch = { distance: spread(), span: shown.value }
 		return
 	}
-	press = { id: event.pointerId, x: event.clientX, y: event.clientY, from: now(), moved: false, long: false }
+	press = { id: event.pointerId, x: event.clientX, y: event.clientY, from: onScreen(), moved: false, long: false }
 	// A finger or a pen resting on a circle opens its card, as a tap does; elsewhere, where one may comment, the Comment field for that place
 	if (event.pointerType !== 'mouse') {
 		const at = press
@@ -550,7 +597,14 @@ function onDown(event) {
  * @return {number} the Frame there
  */
 function frameAtX(x) {
-	return frameOf(secondsAt(x, windowAt(now(), shown.value, duration.value), size.width, duration.value))
+	return frameOf(secondsAt(x, windowAt(onScreen(), shown.value, duration.value), size.width, duration.value))
+}
+
+/**
+ * @return {number} the seconds the stage shows: during a glide where the wave is drawn, not where the sound already is
+ */
+function onScreen() {
+	return glide !== null && drawnAt !== null ? drawnAt : now()
 }
 
 /**
@@ -561,7 +615,7 @@ function frameAtX(x) {
  */
 function hit(clientX, clientY, pointerType) {
 	const box = host.value.getBoundingClientRect()
-	const x = clientX - box.left + offsetAt(now())
+	const x = clientX - box.left + offsetAt(onScreen())
 	return circleAt(circles(), x, clientY - box.top - (size.height - BOTTOM / 2), pointerType === 'mouse' ? CIRCLE / 2 : CIRCLE)
 }
 
@@ -749,6 +803,7 @@ function onWheel(event) {
 	}
 	if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
 		event.preventDefault()
+		following = true
 		emit('seek', frameOf(wheelSeek(now(), event.deltaX, event.deltaMode, shown.value, size.width, duration.value)))
 	}
 }
