@@ -572,6 +572,7 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 	flex-direction: row;
 	min-height: 0;
 	padding: calc(2 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline));
+	padding-inline-start: 40px;
 }
 
 .deliver-landing__grid--list .deliver-landing__folder-name {

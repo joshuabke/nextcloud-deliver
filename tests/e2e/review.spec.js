@@ -96,6 +96,23 @@ test.describe('Review view', () => {
 		await expect(page).toHaveURL(new RegExp(`/projects/${projectId}$`))
 	})
 
+	test('the list is remembered for the Project, and a card keeps its actions as a row', async () => {
+		await page.goto(`/apps/deliver/projects/${projectId}`)
+		await expect(page.locator('.deliver-card')).not.toHaveClass(/deliver-card--row/)
+		await page.getByRole('button', { name: 'Show the Assets as a list' }).click()
+		await expect(page.locator('.deliver-card').first()).toHaveClass(/deliver-card--row/)
+		await expect(page.locator('.deliver-card__facts').first()).toContainText('V1')
+		await page.reload()
+		await expect(page.locator('.deliver-card').first()).toHaveClass(/deliver-card--row/)
+		await expect(page.getByRole('button', { name: 'Show the Assets as a list' })).toHaveAttribute('aria-pressed', 'true')
+		// The menu is still there, as a row
+		await page.getByRole('button', { name: /^Actions for / }).first().click()
+		await expect(page.getByRole('menuitem', { name: 'Rename…' })).toBeVisible()
+		await page.keyboard.press('Escape')
+		await page.getByRole('button', { name: 'Show the Assets as cards' }).click()
+		await expect(page.locator('.deliver-card').first()).not.toHaveClass(/deliver-card--row/)
+	})
+
 	test('uploads into the Project, then filters and finds its Assets', async () => {
 		await page.goto(`/apps/deliver/projects/${projectId}`)
 		// The upload button opens the Uploads dialog (story 133)

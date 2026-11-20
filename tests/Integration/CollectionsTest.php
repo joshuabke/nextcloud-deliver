@@ -134,6 +134,10 @@ class CollectionsTest extends TestCase {
 		self::assertSame([0, [$teaser['assetId']]], [$link['data']['projectId'], $link['data']['assetIds']]);
 		$visitor = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $link['data']['token']);
 		self::assertSame(['teaser'], array_column($visitor->call('GET', '/api/assets')['data'], 'name'));
+		// The list on the landing page shows the newest Version's Comments and decision beside the name
+		$entry = $visitor->call('GET', '/api/assets')['data'][0];
+		self::assertSame([0, ['approved' => 0, 'changes' => 0]], [$entry['comments'], $entry['approvals']]);
+		self::assertArrayHasKey('durationFrames', $entry);
 		self::assertSame([$link['data']['id']], array_column($this->owner->ocs('GET', '/projects/0/links')['data']['links'], 'id'), 'No Project lists its links');
 
 		$this->owner->ocs('PUT', "/assets/{$teaser['assetId']}/project", ['projectId' => $project]);

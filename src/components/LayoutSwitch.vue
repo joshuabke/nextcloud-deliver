@@ -1,6 +1,6 @@
 <script setup>
+import listIcon from '@mdi/svg/svg/view-agenda-outline.svg?raw'
 import gridIcon from '@mdi/svg/svg/view-grid-outline.svg?raw'
-import listIcon from '@mdi/svg/svg/view-list.svg?raw'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import { t } from '../lib/l10n.js'
