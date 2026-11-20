@@ -105,8 +105,8 @@ class DerivedMedia {
 	 */
 	private static bool $requestRead = false;
 	/** Integrated loudness in LUFS and peak in dB that are shown at all, from ffmpeg or handed in (A5) */
-	// The loudest masters lie near −3 LUFS and only full-scale square-like signal reaches +5 (the K-weighting lifts highs by about 4 dB); real material peaks below about +6 dBTP even with inter-sample overs and float files: past these, a file is broken
-	private const LOUDNESS_RANGE = [-70.0, 5.0];
+	// Sanity bounds, not properties of programme material: BS.1770 adds the channel powers, so full-scale multichannel signal reads well above full scale, but no real file reaches +15 LUFS; real material peaks below about +6 dBTP even with inter-sample overs and float files
+	private const LOUDNESS_RANGE = [-70.0, 15.0];
 	private const PEAK_RANGE = [-200.0, 12.0];
 	/** Set while the queue makes a Waveform because it had nothing else to do: such a Waveform gets no loudness (A5) */
 	private bool $idle = false;
@@ -756,7 +756,7 @@ class DerivedMedia {
 
 	/**
 	 * The loudness a browser or a delivering tool hands in with a Waveform:
-	 * optional, else integrated LUFS from −70 to +5 and a peak from −200 to
+	 * optional, else integrated LUFS from −70 to +15 and a peak from −200 to
 	 * +12 dB, each a number or null, and whether the peak is a true peak
 	 *
 	 * @return ?array{integrated: ?float, peak: ?float, truePeak: bool}
@@ -768,7 +768,7 @@ class DerivedMedia {
 		}
 		$within = static fn (mixed $value, float $low, float $high): bool => $value === null || (is_int($value) || is_float($value)) && is_finite((float)$value) && $value >= $low && $value <= $high;
 		if (!is_array($loudness) || !$within($loudness['integrated'] ?? null, ...self::LOUDNESS_RANGE) || !$within($loudness['peak'] ?? null, ...self::PEAK_RANGE) || !is_bool($loudness['truePeak'] ?? null)) {
-			throw new InvalidRequestException('Loudness is {integrated: LUFS from -70 to 5 or null, peak: dB from -200 to 12 or null, truePeak: true or false}');
+			throw new InvalidRequestException('Loudness is {integrated: LUFS from -70 to 15 or null, peak: dB from -200 to 12 or null, truePeak: true or false}');
 		}
 		$round = static fn (mixed $value): ?float => $value === null ? null : round((float)$value, 1);
 		return ['integrated' => $round($loudness['integrated'] ?? null), 'peak' => $round($loudness['peak'] ?? null), 'truePeak' => $loudness['truePeak']];
@@ -778,7 +778,7 @@ class DerivedMedia {
 	 * The integrated loudness and true peak from the summary ffmpeg's ebur128
 	 * prints at its end (A5)
 	 *
-	 * @return ?array{integrated: ?float, peak: ?float, truePeak: bool} null without a summary; integrated null below the absolute gate (silence), peak null without a sample
+	 * @return ?array{integrated: ?float, peak: ?float, truePeak: bool} null without a summary or where a number lies past its range; integrated null below the absolute gate (silence), peak null without a sample
 	 */
 	public static function loudnessOf(string $stderr): ?array {
 		$number = '(-?inf|nan|-?\d+(?:[.,]\d+)?)';
@@ -792,10 +792,14 @@ class DerivedMedia {
 		$value = static fn (string $text): ?float => is_numeric($text = str_replace(',', '.', $text)) ? round((float)$text, 1) : null;
 		$lufs = $value($integrated[1]);
 		$dB = $value($peak[1]);
-		// The ranges a hand-in is held to: a broken file can make ffmpeg print numbers nobody should be shown; ebur128 says −70.0 where every block lies below the absolute gate
+		// One number past the ranges a hand-in is held to means the decode was broken: none of the measurement is shown
+		if ($lufs !== null && $lufs > self::LOUDNESS_RANGE[1] || $dB !== null && ($dB < self::PEAK_RANGE[0] || $dB > self::PEAK_RANGE[1])) {
+			return null;
+		}
 		return [
-			'integrated' => $lufs === null || $lufs <= self::LOUDNESS_RANGE[0] || $lufs > self::LOUDNESS_RANGE[1] ? null : $lufs,
-			'peak' => $dB === null || $dB < self::PEAK_RANGE[0] || $dB > self::PEAK_RANGE[1] ? null : $dB,
+			// ebur128 says −70.0 where every block lies below the absolute gate: no value
+			'integrated' => $lufs === null || $lufs <= self::LOUDNESS_RANGE[0] ? null : $lufs,
+			'peak' => $dB,
 			'truePeak' => true,
 		];
 	}
