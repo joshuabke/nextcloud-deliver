@@ -7,7 +7,7 @@ import { HOLD_MS, TAP_SLOP } from '../lib/gestures.js'
 import { avatarSeed, initials } from '../lib/initials.js'
 import { t } from '../lib/l10n.js'
 import { fpsValue, timeToFrame } from '../lib/timecode.js'
-import { barGrid, bars, barsShown, CIRCLE, circleAt, clampSpan, dragged, glided, glideStart, isWhole, pinchSpan, pixelOffset, secondsAt, spreadSpan, stack, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan } from '../lib/waveWindow.js'
+import { barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, clampSpan, dragged, glided, glideStart, isWhole, pinchSpan, pixelPlace, secondsAt, spreadSpan, stack, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan } from '../lib/waveWindow.js'
 import { useCommentsStore } from '../store/comments.js'
 
 // The Waveform of an audio Version on the stage (story 180): a window of it,
@@ -162,10 +162,10 @@ function frameOf(seconds) {
 
 /**
  * @param {number} at - where the playhead stands, in seconds
- * @return {number} the window's left edge, in whole device pixels from the start of the piece
+ * @return {{head: number, offset: number}} the playhead's column and the window's left edge, in whole device pixels
  */
-function pixelsAt(at) {
-	return pixelOffset(windowAt(at, shown.value, duration.value).start, across.value, pixels.width)
+function placeAt(at) {
+	return pixelPlace(at, across.value, pixels.width, isWhole(shown.value, duration.value))
 }
 
 /**
@@ -173,7 +173,7 @@ function pixelsAt(at) {
  * @return {number} the window's left edge, in CSS px from the start of the piece, on the same pixel as the wave
  */
 function offsetAt(at) {
-	return pixelsAt(at) / ratio
+	return placeAt(at).offset / ratio
 }
 
 /**
@@ -190,8 +190,7 @@ function draw() {
 	context.clearRect(0, 0, pixels.width, pixels.height)
 	const at = drawn()
 	drawnAt = at
-	const offset = pixelsAt(at)
-	const head = Math.round(at / across.value * pixels.width) - offset
+	const { head, offset } = placeAt(at)
 	if (isWhole(shown.value, duration.value)) {
 		// The wave stands: it is drawn once, the played part laid over it up to the playhead
 		const layers = keep('layers', [props.waveform, props.comments, pixels.width, pixels.height, colors.played, store.selected, card.value?.id, props.pending], () => ({
@@ -268,7 +267,8 @@ function drawSpans(context, offset) {
  * @param {number} head - bars before it are played: Infinity for all, -Infinity for none
  */
 function drawBars(context, offset, head) {
-	const grid = barGrid(across.value, pixels.width, ratio)
+	// Over the whole piece the wave stands; scrolling, it moves at the playback rate
+	const grid = barGrid(across.value, pixels.width, ratio, isWhole(shown.value, duration.value) ? 0 : props.media?.playbackRate || 1)
 	const levels = keep('bars', [props.waveform, grid.seconds], () => bars(props.waveform, grid.seconds))
 	const top = Math.round(TOP * ratio)
 	const room = Math.max(8, pixels.height - top - Math.round(BOTTOM * ratio)) / 2
@@ -430,21 +430,21 @@ function tick() {
 
 watch([() => props.playing, () => props.frame, () => props.waveform, shown, () => props.comments, () => store.selected, () => props.pending, card], schedule)
 
+/** The stage's size in CSS px, and the browser's count of its device pixels, as last measured */
+let measured = { width: 0, height: 0, device: null }
+
 /**
- * The canvas takes the device pixels it covers on the screen, so that one of
- * its pixels is one of the screen's and nothing is scaled on the way; where
- * the browser cannot tell them (Safari), its size times the pixel ratio
+ * The canvas takes as many device pixels as it covers on the screen, so that
+ * one of its pixels is one of the screen's and nothing is resampled on the
+ * way (canvasPixels)
  */
-const resized = new ResizeObserver(([entry]) => {
-	size = { width: entry.contentRect.width, height: entry.contentRect.height }
-	const device = entry.devicePixelContentBoxSize?.[0]
-	const dpr = window.devicePixelRatio || 1
-	pixels = { width: Math.round(size.width * dpr), height: Math.round(size.height * dpr) }
-	// The browser's own count corrects the rounding; one far off is an emulated pixel ratio, as in tests
-	if (device && Math.abs(device.inlineSize - pixels.width) <= 1 && Math.abs(device.blockSize - pixels.height) <= 1) {
-		pixels = { width: device.inlineSize, height: device.blockSize }
-	}
-	ratio = size.width ? pixels.width / size.width : dpr
+function measure() {
+	const fit = canvasPixels(measured.width, measured.height, window.devicePixelRatio || 1, measured.device)
+	pixels = { width: fit.width, height: fit.height }
+	ratio = fit.ratio
+	size = fit.css ?? { width: measured.width, height: measured.height }
+	canvas.value.style.width = fit.css ? fit.css.width + 'px' : ''
+	canvas.value.style.height = fit.css ? fit.css.height + 'px' : ''
 	canvas.value.width = pixels.width
 	canvas.value.height = pixels.height
 	const style = getComputedStyle(host.value)
@@ -454,7 +454,29 @@ const resized = new ResizeObserver(([entry]) => {
 	}
 	kept = {}
 	draw()
+}
+
+const resized = new ResizeObserver(([entry]) => {
+	const device = entry.devicePixelContentBoxSize?.[0]
+	measured = { width: entry.contentRect.width, height: entry.contentRect.height, device: device ? { width: device.inlineSize, height: device.blockSize } : null }
+	measure()
 })
+
+/** The pixel ratio changes while the view is open: the window went to another screen, or the browser zooms */
+let resolution = null
+
+/** Measures again, and listens for the next change of the ratio */
+function onResolution() {
+	resolution?.removeEventListener('change', onResolution)
+	resolution = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`)
+	resolution.addEventListener('change', onResolution)
+	if (measured.width) {
+		// The browser counts the device pixels anew with its next report; until then the ratio decides
+		measured = { ...measured, device: null }
+		measure()
+	}
+}
+
 /** Off screen, as under a phone's Comment list pulled up, the loop stops */
 const seen = new IntersectionObserver(([entry]) => {
 	visible = entry.isIntersecting
@@ -462,14 +484,17 @@ const seen = new IntersectionObserver(([entry]) => {
 })
 
 onMounted(() => {
+	// The stage, not the canvas, whose CSS box may be cut down to whole device pixels
 	try {
-		resized.observe(canvas.value, { box: 'device-pixel-content-box' })
+		resized.observe(host.value, { box: 'device-pixel-content-box' })
 	} catch {
-		resized.observe(canvas.value)
+		resized.observe(host.value)
 	}
 	seen.observe(host.value)
+	onResolution()
 })
 onBeforeUnmount(() => {
+	resolution?.removeEventListener('change', onResolution)
 	resized.disconnect()
 	seen.disconnect()
 	cancelAnimationFrame(frameRequest)

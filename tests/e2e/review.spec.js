@@ -1054,7 +1054,9 @@ test.describe('Audio review', () => {
 		await page.getByRole('button', { name: 'Pause (Space)' }).click()
 	})
 
-	test('the bars keep their heights and move by whole pixels from one moment to another', async () => {
+	test('the bars keep their heights and move by whole pixels from one moment to another, on a stage of an odd width too', async () => {
+		// An odd number of pixels across, where a playhead and window rounded apart trembled
+		await page.setViewportSize({ width: 1281, height: 800 })
 		await page.goto(`/apps/deliver/versions/${versionId}`)
 		const canvas = page.locator('.deliver-wave canvas')
 		await expect(canvas).toBeVisible()
@@ -1063,10 +1065,24 @@ test.describe('Audio review', () => {
 		await page.getByRole('button', { name: '1 min' }).click()
 		// The coverage of each device-pixel column right of the playhead, where every bar is drawn alike
 		const columns = async (seconds) => {
-			await audio.evaluate((element, at) => {
+			// Once the audio stands there, and the stage has glided there and stands still
+			await audio.evaluate((element, at) => new Promise((resolve) => {
+				element.addEventListener('seeked', resolve, { once: true })
 				element.currentTime = at
-			}, seconds)
-			await page.waitForTimeout(400)
+			}), seconds)
+			await canvas.evaluate((element) => new Promise((resolve) => {
+				let before = ''
+				const frame = () => {
+					const now = element.toDataURL()
+					if (now === before) {
+						resolve()
+					} else {
+						before = now
+						setTimeout(() => requestAnimationFrame(frame), 50)
+					}
+				}
+				requestAnimationFrame(frame)
+			}))
 			return canvas.evaluate((element) => {
 				const ratio = element.width / element.clientWidth
 				const top = Math.round(40 * ratio)
@@ -1097,6 +1113,7 @@ test.describe('Audio review', () => {
 		}
 		expect(best.difference).toBe(0)
 		expect(Math.abs(best.shift - width * 3.3 / 60)).toBeLessThanOrEqual(1)
+		await page.setViewportSize({ width: 1280, height: 720 })
 	})
 
 	test('after a click the wave glides to the new place within half a second, and jumps under reduced motion', async () => {

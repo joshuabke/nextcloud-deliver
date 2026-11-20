@@ -186,32 +186,78 @@ export function writeSpan(span, duration, storage = () => globalThis.localStorag
 	}
 }
 
+/** At most this share of a bar's pitch may the wave move in a frame at 60 Hz, or the bars seem to stand, flicker or run backwards */
+export const MOTION_PER_PITCH = 0.25
+
 /**
  * The bars' grid, in device pixels, so that the wave stands still on the
- * screen's pixels while it slides: a bar every whole number of device pixels
- * (about BAR_PITCH CSS px), each a whole number wide with a gap of at least
- * one, each standing for a fixed length of the file counted from its start.
+ * screen's pixels while it slides: a bar every whole number of device pixels,
+ * each a whole number wide with a gap of at least one, each standing for a
+ * fixed length of the file counted from its start. About BAR_PITCH CSS px
+ * apart, doubled (bar and gap alike) as long as the wave would move more
+ * than a quarter of that in a frame at this zoom, width and playback rate,
+ * so a fast wave does not strobe. It depends on nothing that changes from
+ * frame to frame.
  *
  * @param {number} across - the seconds across the stage
  * @param {number} pixels - the stage's width, in device pixels
  * @param {number} ratio - device pixels to a CSS px
+ * @param {number} rate - the playback rate; 0 where the wave stands, over the whole piece
  * @return {{pitch: number, width: number, seconds: number}} from one bar to the next and a bar's width, in device pixels; the seconds a bar stands for
  */
-export function barGrid(across, pixels, ratio) {
-	const pitch = Math.max(2, Math.round(BAR_PITCH * ratio))
-	return { pitch, width: pitch - Math.max(1, Math.round(ratio)), seconds: across * pitch / Math.max(1, pixels) }
+export function barGrid(across, pixels, ratio, rate = 1) {
+	const perFrame = pixels / across * Math.abs(rate) / 60
+	let pitch = Math.max(2, Math.round(BAR_PITCH * ratio))
+	let gap = Math.max(1, Math.round(ratio))
+	while (perFrame > pitch * MOTION_PER_PITCH) {
+		pitch *= 2
+		gap *= 2
+	}
+	return { pitch, width: pitch - gap, seconds: across * pitch / Math.max(1, pixels) }
 }
 
 /**
- * @param {number} start - the window's left edge, in seconds
+ * Where the playhead and the window stand, in whole device pixels: the
+ * playhead on one pixel, in the middle or, over the whole piece, at its
+ * time, and the window's left edge taken from it, so the two never round
+ * apart and the playhead stays put while the wave moves under it.
+ *
+ * @param {number} at - where the playhead stands, in seconds
  * @param {number} across - the seconds across the stage
  * @param {number} pixels - the stage's width, in device pixels
- * @return {number} the left edge in whole device pixels from the start of the piece: the wave moves a pixel at a time, never between them
+ * @param {boolean} whole - whether the stage shows the whole piece
+ * @return {{head: number, offset: number}} the playhead's column on the stage, and the window's left edge from the start of the piece
  */
-export const pixelOffset = (start, across, pixels) => Math.round(start / across * pixels)
+export function pixelPlace(at, across, pixels, whole) {
+	const time = Math.round(at / across * pixels)
+	return whole ? { head: time, offset: 0 } : { head: Math.floor(pixels / 2), offset: time - Math.floor(pixels / 2) }
+}
 
 /**
- * @param {number} offset - the window's left edge, as pixelOffset gives it
+ * The canvas's size: as many device pixels as it covers. Where the browser
+ * counts them (device-pixel-content-box) that count; where it does not, or
+ * counts CSS pixels instead (an emulated ratio), the whole device pixels
+ * that fit, and a CSS box cut down to exactly those, so the canvas is never
+ * resampled on its way to the screen and the last fraction of a pixel stays
+ * background.
+ *
+ * @param {number} width - the stage's width, in CSS px
+ * @param {number} height - its height
+ * @param {number} ratio - window.devicePixelRatio
+ * @param {?{width: number, height: number}} device - the browser's count of device pixels, if any
+ * @return {{width: number, height: number, ratio: number, css: ?{width: number, height: number}}} device pixels, device pixels to a CSS px, and the CSS box to set (null: the stage's)
+ */
+export function canvasPixels(width, height, ratio, device) {
+	if (device && Math.abs(device.width - width * ratio) <= 1 && Math.abs(device.height - height * ratio) <= 1) {
+		return { width: device.width, height: device.height, ratio: width ? device.width / width : ratio, css: null }
+	}
+	const pixels = { width: Math.floor(width * ratio + 1e-6), height: Math.floor(height * ratio + 1e-6) }
+	const exact = pixels.width === width * ratio && pixels.height === height * ratio
+	return { ...pixels, ratio, css: exact ? null : { width: pixels.width / ratio, height: pixels.height / ratio } }
+}
+
+/**
+ * @param {number} offset - the window's left edge, as pixelPlace gives it
  * @param {number} pitch - as barGrid gives it
  * @param {number} pixels - the stage's width, in device pixels
  * @param {number} count - how many bars the piece has
