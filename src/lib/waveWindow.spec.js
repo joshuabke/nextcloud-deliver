@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { barGrid, bars, barsShown, CIRCLE, easeOut, GLIDE_MS, glided, glideStart, circleAt, clampSpan, DEFAULT_SPAN, dragged, isWhole, overviewWindow, pinchSpan, pixelOffset, readSpan, secondsAt, spreadSpan, stack, STACK_STEP, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan, xAt } from './waveWindow.js'
+import { barGrid, bars, barsShown, CIRCLE, circleAt, clampSpan, DEFAULT_SPAN, dragged, easeOut, GLIDE_MS, glided, glideStart, isWhole, overviewWindow, pinchSpan, pixelOffset, readSpan, secondsAt, spreadSpan, stack, STACK_STEP, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan, xAt } from './waveWindow.js'
 
 describe('the window of the scrolling Waveform', () => {
 	it('centres the playhead, the wave left empty before the start and after the end', () => {
