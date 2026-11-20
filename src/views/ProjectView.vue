@@ -174,8 +174,6 @@ const query = useQuery('q', null, '')
 const layout = useQuery('view', ['folders', 'flat'], 'folders')
 /** Cards or compact rows, remembered in this browser for this Project; not the folders/flat layout above */
 const look = useLayout(() => `project-${props.id}`)
-/** Without folders the view without them is the same view, so its button would do nothing */
-const hasFolders = computed(() => (project.value?.assets ?? []).some((asset) => asset.path !== ''))
 const inView = computed(() => (project.value?.assets ?? []).filter((asset) => inFolder(asset, folder.value)))
 const filters = computed(() => FILTERS.map((id) => ({
 	id,
@@ -834,7 +832,6 @@ function dropped(event) {
 						:title="selected.length ? t('deliver', 'Clear the selection') : t('deliver', 'Select all')"
 						@change="selected = selected.length ? [] : selectable.map((asset) => asset.id)">
 					<NcButton
-						v-if="hasFolders || layout === 'flat'"
 						variant="tertiary"
 						:pressed="layout === 'flat'"
 						:aria-label="t('deliver', 'Show every Asset without folders')"
