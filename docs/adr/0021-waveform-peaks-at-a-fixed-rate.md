@@ -12,7 +12,7 @@ A peak is the loudest sample over all channels of its share: from a WAV's PCM an
 
 Making one keeps only the peaks in memory: ffmpeg streams its PCM into PHP, which reduces it a share at a time; a WAV is read from its PCM in pieces of at most 512 KiB, at most 1 GiB in all, and a header whose rate would make more peaks than a Waveform has is not read; the browser grows its peaks as the decoder goes, up to the most a Waveform has.
 
-The hand-in takes up to 2 000 000 peaks at the rate of the length: the Version's own once it is read, before that the duration handed in (milliseconds; a browser's pass over a video has the server read the original first). Peaks past that length are left out rather than refused, as a decoder or a video's sound may run on a little.
+The hand-in takes up to 2 000 000 peaks at the rate of the length: the Version's own once it is read (a video not read yet is read in the request first; one with a rate but no length counts the duration handed in in its Frames), before that the duration handed in, in milliseconds. Peaks past that length are left out rather than refused, as a decoder or a video's sound may run on a little.
 
 Every Waveform made before counts as missing: a migration sets the state of every ready one to none. With ffmpeg, whoever works the queue makes them one at a time whenever it has nothing else to do, so they never hold up an upload, and opening a Version (a Member or a Reviewer) queues its own Waveform ahead of them, so it shows in that visit. Without ffmpeg the browser ways remake them.
 

@@ -138,15 +138,20 @@ class DerivedMediaTest extends TestCase {
 		self::assertSame(0, $code, $output);
 		$this->nc->put("{$this->root}/old.mp3", (string)file_get_contents($mp3));
 		$this->nc->put("{$this->root}/opened.mp3", (string)file_get_contents($mp3));
+		$this->nc->put("{$this->root}/linked.mp3", (string)file_get_contents($mp3));
 		@unlink($mp3);
 		$this->drainQueue();
-		[$old, $opened] = [$this->idOf('old.mp3'), $this->idOf('opened.mp3')];
+		[$old, $opened, $linked] = [$this->idOf('old.mp3'), $this->idOf('opened.mp3'), $this->idOf('linked.mp3')];
 		self::assertSame('ready', $this->version($old)['derived']['waveform']['state']);
 
 		$this->inNextcloud('(new \\OCA\\Deliver\\Migration\\Version1021Date20261120000000(\\OCP\\Server::get(\\OCP\\IDBConnection::class)))->postSchemaChange(new \\OC\\Migration\\NullOutput(), fn () => null, []);');
 		self::assertSame('none', $this->waveformState($old), 'the Waveform from before counts as missing');
 
 		self::assertSame(['queued', null], array_values($this->version($opened)['derived']['waveform']), 'opening it queues its Waveform, ahead of the rest');
+		$link = $this->nc->ocs('POST', "/projects/{$this->projectId}/links")['data'];
+		$reviewer = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $link['token']);
+		$seen = array_values(array_filter($reviewer->call('GET', "/api/context?versionId=$linked")['data']['versions'], static fn (array $each) => $each['id'] === $linked))[0];
+		self::assertSame('queued', $seen['derived']['waveform']['state'], 'a Reviewer opening it too, and the page says so, so it asks again');
 		$this->makeFixture();
 		$this->nc->put("{$this->root}/master.mov", (string)file_get_contents($this->fixture));
 		self::assertSame('NULL none', trim($this->inNextcloud('var_export(\\OCP\\Server::get(\\OCA\\Deliver\\Service\\DerivedMedia::class)->queueMissingWaveform()); echo " ", \\OCP\\Server::get(\\OCA\\Deliver\\Db\\VersionMapper::class)->find(' . $old . ')->getWaveformState();')), 'it waits while an upload has work queued');
@@ -232,6 +237,35 @@ class DerivedMediaTest extends TestCase {
 	public function testCronDrainsTheQueueAtEveryRun(): void {
 		// A cron every five minutes starts the job a few seconds into its run: an interval of five minutes misses every other one
 		self::assertLessThanOrEqual(60, (int)$this->inNextcloud('echo \\OCP\\Server::get(\\OCA\\Deliver\\BackgroundJob\\ProcessDerivedMedia::class)->getInterval();'));
+
+	public function testAFailedWaveformWhileIdleStopsTheRestForThatRun(): void {
+		foreach (['first.mp3', 'second.mp3'] as $name) {
+			$mp3 = $this->mp3($name, 2);
+			$this->nc->put("{$this->root}/$name", (string)file_get_contents($mp3));
+			@unlink($mp3);
+		}
+		$this->drainQueue();
+		[$first, $second] = [$this->idOf('first.mp3'), $this->idOf('second.mp3')];
+		foreach ([$first, $second] as $id) {
+			$this->inNextcloud('$q = \\OCP\\Server::get(\\OCP\\IDBConnection::class)->getQueryBuilder(); $q->update("deliver_versions")->set("waveform_state", $q->createNamedParameter("none"))->where($q->expr()->eq("id", $q->createNamedParameter(' . $id . ')))->executeStatement();');
+		}
+		// The newest goes first, and its file is gone from the disk behind Nextcloud's back, as on storage that went offline
+		[$code, $output] = $this->shell('rm ' . escapeshellarg("/var/www/html/data/admin/files/{$this->root}/second.mp3"));
+		self::assertSame(0, $code, $output);
+		$this->drainQueue();
+		self::assertSame(['failed', 'none'], [$this->waveformState($second), $this->waveformState($first)], 'one failure stops the idle work of the run');
+	}
+
+	public function testATrackWithoutASampleHasAnEmptyWaveform(): void {
+		$wav = sys_get_temp_dir() . '/deliver-empty-' . bin2hex(random_bytes(4)) . '.wav';
+		[$code, $output] = $this->shell('ffmpeg -v error -y -f lavfi -i anullsrc=r=48000:cl=stereo -t 0 ' . escapeshellarg($wav));
+		self::assertSame(0, $code, $output);
+		$this->nc->put("{$this->root}/empty.wav", (string)file_get_contents($wav));
+		@unlink($wav);
+		$this->drainQueue();
+		$version = $this->version($this->idOf('empty.wav'));
+		self::assertSame('ready', $version['derived']['waveform']['state'], 'silent, not failed');
+		self::assertSame([], $this->nc->waveform($version['derived']['waveform']['url'])['peaks']);
 	}
 
 	public function testFfmpegsWaveformHearsEveryChannelAndHighNotes(): void {
