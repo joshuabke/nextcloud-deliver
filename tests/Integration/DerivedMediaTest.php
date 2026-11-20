@@ -237,6 +237,7 @@ class DerivedMediaTest extends TestCase {
 	public function testCronDrainsTheQueueAtEveryRun(): void {
 		// A cron every five minutes starts the job a few seconds into its run: an interval of five minutes misses every other one
 		self::assertLessThanOrEqual(60, (int)$this->inNextcloud('echo \\OCP\\Server::get(\\OCA\\Deliver\\BackgroundJob\\ProcessDerivedMedia::class)->getInterval();'));
+	}
 
 	public function testAFailedWaveformWhileIdleStopsTheRestForThatRun(): void {
 		foreach (['first.mp3', 'second.mp3'] as $name) {
