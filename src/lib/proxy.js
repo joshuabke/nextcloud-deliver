@@ -8,6 +8,7 @@
 import axios from '@nextcloud/axios'
 import { chunkSizeFor, errorMessage, getVersion, giveProxy, giveScrub, giveThumbs, giveWaveform, reportProxy, uploadsUrl } from '../api.js'
 import { t } from './l10n.js'
+import { loudnessMeter } from './loudness.js'
 import { AUDIO_BITRATE, fits, lowerTarget, needsProxy, plays, proxyBytes, proxySize, SCRUB_BITRATE, scrubFits, scrubSize, THUMB_WIDTH, thumbGrid, thumbSlot, verdict, videoBitrate, whyNot } from './proxyPlan.js'
 import { unsupported } from './unsupported.js'
 import { browserEnv, uploadFile } from './upload.js'
@@ -265,7 +266,7 @@ async function scrubber(size, frames, seconds) {
  * @param {() => void} hooks.onWithoutProxy - the pass goes on without the Proxy it was to make, before it decodes anything
  * @param {AbortSignal} signal - stops it
  * @param {number} [target] - the picture's bitrate in bit/s, for the second go after the first came out above the threshold
- * @return {Promise<{file: ?File, error: ?Error, again: boolean, scrub: ?File, done: () => Promise<void>, frames: number, seconds: number, bitrate: number, thumbs: ?{image: Blob, every: number, count: number}, peaks: ?{rate: number, peaks: Uint8Array}}>}
+ * @return {Promise<{file: ?File, error: ?Error, again: boolean, scrub: ?File, done: () => Promise<void>, frames: number, seconds: number, bitrate: number, thumbs: ?{image: Blob, every: number, count: number}, peaks: ?{rate: number, peaks: Uint8Array, loudness: ?object}}>}
  *   the Proxy and the Scrub Proxy (null where not made), why the Proxy was left out, whether it is to be made once more at
  *   a lower bitrate, what deletes them once handed in, the Frames of the original, its Thumbnail Strip (WebP, JPEG where
  *   the browser encodes no WebP) and its Waveform (null without sound)
@@ -314,6 +315,7 @@ async function convert(source, { maxHeight, maxBitrate, thumbCap }, want, { onPr
 			scrub = await scrubber(scrubSize({ width: video.displayWidth, height: video.displayHeight }), frames, seconds).catch(() => null)
 		}
 		const peaks = collectPeaks(rateFor(seconds), seconds)
+		const meter = loudnessMeter()
 		let heard = false
 		let first = null
 		signal.throwIfAborted()
@@ -342,7 +344,9 @@ async function convert(source, { maxHeight, maxBitrate, thumbCap }, want, { onPr
 		/** @param {object} sample - sound, which goes into the Waveform */
 		const hear = (sample) => {
 			if (want.waveform) {
-				peaks.add(channelsOf(sample), sample.timestamp, sample.sampleRate)
+				const channels = channelsOf(sample)
+				peaks.add(channels, sample.timestamp, sample.sampleRate)
+				meter.add(channels, sample.sampleRate)
 				heard = true
 			}
 		}
@@ -455,7 +459,7 @@ async function convert(source, { maxHeight, maxBitrate, thumbCap }, want, { onPr
 			seconds,
 			bitrate,
 			thumbs: image?.type === stripType ? { image, every: grid.every, count: grid.count } : null,
-			peaks: heard ? peaks.done() : null,
+			peaks: heard ? { ...peaks.done(), loudness: meter.done() } : null,
 		}
 	} catch (error) {
 		await scrub?.drop()

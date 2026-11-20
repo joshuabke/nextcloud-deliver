@@ -3,6 +3,8 @@
  * file once and hands the peaks to the server, for everyone after it.
  */
 
+import { loudnessMeter } from './loudness.js'
+
 /** Peaks a second, as the server has them (ADR 0021); fewer only where a file would go past MAX_PEAKS */
 export const RATE = 50
 export const MAX_PEAKS = 2_000_000
@@ -69,12 +71,12 @@ export function toBase64(bytes) {
 }
 
 /**
- * @param {{rate: number, peaks: string}} json - the Waveform as the server serves it
- * @return {{rate: number, peaks: Uint8Array}} its peaks, a byte each
+ * @param {{rate: number, peaks: string, loudness?: ?{integrated: ?number, peak: ?number, truePeak: boolean}}} json - the Waveform as the server serves it
+ * @return {{rate: number, peaks: Uint8Array, loudness: ?{integrated: ?number, peak: ?number, truePeak: boolean}}} its peaks, a byte each, and its loudness where it was measured (ADR 0021)
  */
 export function readWaveform(json) {
 	const binary = atob(json.peaks)
-	return { rate: json.rate, peaks: Uint8Array.from(binary, (char) => char.charCodeAt(0)) }
+	return { rate: json.rate, peaks: Uint8Array.from(binary, (char) => char.charCodeAt(0)), loudness: json.loudness ?? null }
 }
 
 /**
@@ -156,10 +158,13 @@ async function streamWaveform(source, onProgress) {
 			return null
 		}
 		const peaks = collectPeaks(rateFor(seconds), seconds)
+		const meter = loudnessMeter()
 		let end = 0
 		for await (const sample of new AudioSampleSink(track).samples()) {
 			try {
-				peaks.add(channelsOf(sample), sample.timestamp, sample.sampleRate)
+				const channels = channelsOf(sample)
+				peaks.add(channels, sample.timestamp, sample.sampleRate)
+				meter.add(channels, sample.sampleRate)
 				end = Math.max(end, sample.timestamp + sample.duration)
 				onProgress(Math.min(99, Math.floor(end / seconds * 100)))
 			} finally {
@@ -167,7 +172,7 @@ async function streamWaveform(source, onProgress) {
 			}
 		}
 		// The duration the decoder reached is exact; the one from the container may be rounded
-		return { ...peaks.done(), seconds: end || seconds }
+		return { ...peaks.done(), loudness: meter.done(), seconds: end || seconds }
 	} finally {
 		input.dispose()
 	}
@@ -188,7 +193,8 @@ async function decodeWhole(source) {
 	const audio = await new OfflineAudioContext(1, 1, 8000).decodeAudioData(await body.arrayBuffer())
 	const peaks = collectPeaks(rateFor(audio.duration), audio.duration)
 	peaks.add(Array.from({ length: audio.numberOfChannels }, (_, index) => audio.getChannelData(index)), 0, audio.sampleRate)
-	return { ...peaks.done(), seconds: audio.duration }
+	// Resampled to 8 kHz, its loudness would be off: none
+	return { ...peaks.done(), loudness: null, seconds: audio.duration }
 }
 
 /** UploadStatus.FINISHED of @nextcloud/upload 1.x */
