@@ -29,7 +29,7 @@ make occ ARGS="deliver:worker --once"  # any occ command inside the dev containe
 make down
 ```
 
-CI (`.github/workflows/ci.yml`) runs the same checks on every pull request, then starts the dev instance with `.github/compose.ci.yml` (no GPU, bound to localhost only) for the integration and browser tests.
+CI (`.github/workflows/ci.yml`) runs the same checks on every pull request that is not a draft (so a PR stays a draft until its review approves and CI runs once), then starts the dev instance with `.github/compose.ci.yml` (no GPU, bound to localhost only) for the integration and browser tests.
 
 `docker/` holds the instance data and is gitignored. Every mail the instance sends lands in a Mailpit container instead of going out; its inbox is on port 8025, bound like Nextcloud. `dev/opcache.ini` makes the container pick up PHP edits immediately.
 
