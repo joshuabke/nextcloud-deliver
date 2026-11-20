@@ -81,6 +81,12 @@ class PublicApiController extends PublicShareController {
 			$version = $this->links->version($link, $versionId);
 			$project = $this->projects->settingsOf($version);
 			$stack = $link->assets()[$version->getAssetId()] ?? null;
+			// The Version as the link holds it, so what it says next shows its Waveform queued
+			foreach ($stack['versions'] ?? [] as $each) {
+				if ($each->getId() === $version->getId()) {
+					$this->media->opened($each);
+				}
+			}
 			// A Member previews the Version read only, never as the Reviewer whose key this browser carries (story 59)
 			$member = $this->member($version);
 			// A key opens only a link its Reviewer is on already (ADR 0014)

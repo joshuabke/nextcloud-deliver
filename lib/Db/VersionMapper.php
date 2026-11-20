@@ -108,6 +108,21 @@ class VersionMapper extends Mapper {
 		return $this->findEntities($qb);
 	}
 
+	/** @return Version[] Versions with sound that were read but have no Waveform, the newest first, without those of Deleted Projects */
+	public function findWithoutWaveform(int $limit): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('v.*')->from($this->getTableName(), 'v')
+			->leftJoin('v', 'deliver_projects', 'p', $qb->expr()->eq('p.id', 'v.project_id'))
+			->where($qb->expr()->eq('v.has_audio', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('v.waveform_state', $qb->createNamedParameter('none')))
+			->andWhere($qb->expr()->eq('v.state', $qb->createNamedParameter(Version::STATE_READY)))
+			->andWhere($qb->expr()->isNotNull('v.playable'))
+			->andWhere($qb->expr()->isNull('p.deleted_at'))
+			->orderBy('v.id', 'DESC')
+			->setMaxResults($limit);
+		return $this->findEntities($qb);
+	}
+
 	/** Copies an Asset's Project onto its Versions */
 	public function setProjectOfAsset(int $assetId, ?int $projectId): void {
 		$qb = $this->db->getQueryBuilder();

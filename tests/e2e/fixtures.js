@@ -16,6 +16,8 @@ export const CLIP_SCRUB = join(FIXTURES, 'clip-25fps-scrub.mp4')
 
 /** A WAV, which plays as it is, so it goes up without ffmpeg too */
 export const MIX = join(FIXTURES, 'mix.wav')
+/** Six minutes of Opus, mono and low: long enough for the scrolling Waveform to zoom and scroll (story 180), yet tiny */
+export const LONG_MIX = join(FIXTURES, 'long-mix.webm')
 /** DNxHR in MOV: no browser decodes it, so without ffmpeg it is refused before it goes up (ADR 0019) */
 export const DNXHR = join(FIXTURES, 'master-dnxhr.mov')
 /** A Proxy of it as an editor renders it, with its Frames (ADR 0020) */
@@ -48,6 +50,7 @@ export default function globalSetup() {
 	make(LONG, ['-f', 'lavfi', '-i', 'testsrc=size=160x90:rate=25:duration=30', '-c:v', 'libvpx-vp9', '-b:v', '50k'])
 	make(CLIP_SCRUB, ['-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=25:duration=4', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-b:v', '200k', '-g', '25', '-f', 'mp4'])
 	make(MIX, ['-f', 'lavfi', '-i', 'sine=duration=1', '-f', 'wav'])
+	make(LONG_MIX, ['-f', 'lavfi', '-i', "aevalsrc=exprs='sin(2*PI*220*t)*(0.1+0.9*abs(sin(2*PI*t/7)))':s=8000:d=360", '-c:a', 'libopus', '-b:a', '6k', '-f', 'webm'])
 	make(DNXHR, ['-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=25:duration=1', '-c:v', 'dnxhd', '-profile:v', 'dnxhr_lb', '-pix_fmt', 'yuv422p', '-f', 'mov'])
 	make(HAND_PROXY, ['-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=25:duration=1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-f', 'mp4'])
 }

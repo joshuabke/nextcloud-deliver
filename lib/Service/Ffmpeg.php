@@ -80,8 +80,8 @@ class Ffmpeg {
 
 	/**
 	 * @param list<string> $args
-	 * @param ?callable(string): void $onStdout gets stdout as it arrives, for progress
-	 * @return array{code: int, stdout: string, stderr: string}
+	 * @param ?callable(string): (bool|void) $onStdout gets stdout as it arrives, for progress or PCM, which then is not kept; false stops ffmpeg, as a success
+	 * @return array{code: int, stdout: string, stderr: string} stdout only without $onStdout
 	 */
 	public function run(string $binary, array $args, int $timeout = 3600, ?callable $onStdout = null): array {
 		$descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
@@ -96,15 +96,24 @@ class Ffmpeg {
 		$stderr = '';
 		$deadline = time() + $timeout;
 		$code = null;
-		while ($code === null) {
+		$enough = false;
+		$take = function () use ($pipes, $onStdout, &$stdout, &$enough): void {
 			$chunk = (string)stream_get_contents($pipes[1]);
-			$stdout .= $chunk;
-			if ($chunk !== '' && $onStdout !== null) {
-				$onStdout($chunk);
+			if ($onStdout === null) {
+				$stdout .= $chunk;
+			} elseif ($chunk !== '' && !$enough) {
+				$enough = $onStdout($chunk) === false;
 			}
+		};
+		while ($code === null) {
+			$take();
 			$stderr .= stream_get_contents($pipes[2]);
 			$status = proc_get_status($process);
-			if (!$status['running']) {
+			if ($enough) {
+				// Stopped, not left waiting on a full pipe until the timeout
+				proc_terminate($process, 9);
+				$code = 0;
+			} elseif (!$status['running']) {
 				// Before PHP 8.3 only this first status after the exit knows the code
 				$code = $status['exitcode'];
 			} elseif (time() > $deadline) {
@@ -112,10 +121,13 @@ class Ffmpeg {
 				$stderr .= "\ntimed out after {$timeout}s";
 				$code = 124;
 			} else {
-				usleep(20000);
+				// Wakes as soon as there is output, so PCM streams at the speed ffmpeg makes it
+				$read = [$pipes[1], $pipes[2]];
+				$none = null;
+				@stream_select($read, $none, $none, 0, 200000);
 			}
 		}
-		$stdout .= stream_get_contents($pipes[1]);
+		$take();
 		$stderr .= stream_get_contents($pipes[2]);
 		fclose($pipes[1]);
 		fclose($pipes[2]);

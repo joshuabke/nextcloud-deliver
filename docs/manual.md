@@ -62,6 +62,13 @@ A Review Link shows only the files whoever made it may share in Files. A file sh
 - Any other Project it made is deleted for good at once, since nobody else could restore it.
 - Its Comments, Approvals and Reactions elsewhere stay, by a Deleted user.
 
+## Reviewing audio
+
+- An audio Version plays on its Waveform, at first zoomed to one minute, the wave scrolling under the playhead in the middle. Drag the wave sideways to go through time; a click or a tap goes to that place. Neither stops playback: a drag holds it and lets it go on where you let go, except at the very end, where it stays.
+- Zoom with the buttons at the top of the stage (15 s, 1 min, 5 min, Whole), with two fingers on a phone or tablet, or with Ctrl and the mouse wheel (a trackpad's pinch). The bar under the stage shows the whole piece and, in a bracket, the part on the stage.
+- Deliver remembers your zoom in this browser for the next audio Version.
+- On a phone the wave takes your fingers: a swipe goes through time, not to the next Asset, and a tap goes to that place instead of into fullscreen; double-tapping and holding do not jump or play faster as on a video. The next Asset is in the ⋯ menu.
+
 ## Captions
 
 A video can carry **Captions**, one SRT or WebVTT file per language.
