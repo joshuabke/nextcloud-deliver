@@ -15,10 +15,9 @@ const FADE = 0.008
  * first one; until it runs, or where there is no Web Audio, the sides fall
  * back to muting the one not heard.
  *
- * @param {() => void} joined - called once the gains have taken over, on the first gesture: the sides start apart from there
- * @return {{mixing: import('vue').Ref<boolean>, start: (elements: HTMLMediaElement[], heard: number) => void, hear: (elements: HTMLMediaElement[], heard: number) => void}} whether the gains decide, and what starts and switches them
+ * @return {{mixing: import('vue').Ref<boolean>, start: (elements: HTMLMediaElement[], heard: number) => ?Promise<void>, hear: (elements: HTMLMediaElement[], heard: number) => void}} whether the gains decide, and what starts and switches them
  */
-export function useSoundMix(joined) {
+export function useSoundMix() {
 	const mixing = ref(false)
 	let context = null
 	/** Each element's gain; an element joins a context once and for good */
@@ -43,33 +42,26 @@ export function useSoundMix(joined) {
 	}
 
 	/**
-	 * From a gesture: makes the context, and once it runs, routes the sides through it
+	 * From a gesture: makes the context or wakes it, and once it runs routes the sides through it
 	 *
 	 * @param {HTMLMediaElement[]} elements - the sides, A first
 	 * @param {number} heard - the index of the side heard
+	 * @return {?Promise<void>} settled once the context runs with both sides in it, or will not run; null without Web Audio
 	 */
 	function start(elements, heard) {
 		const Context = window.AudioContext ?? window.webkitAudioContext
 		if (!Context || elements.some((element) => !element)) {
-			return
+			return null
 		}
 		try {
 			context ??= new Context()
 		} catch {
-			return
+			return null
 		}
-		if (context.state === 'running') {
-			if (!mixing.value) {
+		// Called within the gesture; until it runs, muting stands in
+		return context.resume().then(() => {
+			if (context?.state === 'running') {
 				connect(elements, heard)
-				joined()
-			}
-			return
-		}
-		// Within the gesture; until it runs, muting stands in
-		context.resume().then(() => {
-			if (context?.state === 'running' && !mixing.value) {
-				connect(elements, heard)
-				joined()
 			}
 		}).catch(() => {})
 	}

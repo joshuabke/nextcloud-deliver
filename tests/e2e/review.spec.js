@@ -1929,8 +1929,14 @@ test.describe('Comparing sound', () => {
 			await fresh.goto(`/apps/deliver/compare/${pair[1].id}/${pair[0].id}`)
 			const videos = fresh.locator('.deliver-compare video')
 			await expect(videos.first()).toHaveJSProperty('readyState', 4)
+			// Each side is sought once, by the start itself: the heard side is never sought again
+			await fresh.evaluate(() => {
+				window.seeks = [0, 0]
+				document.querySelectorAll('.deliver-compare video').forEach((video, side) => video.addEventListener('seeking', () => window.seeks[side]++))
+			})
 			await fresh.getByRole('button', { name: 'Play (Space)' }).click()
 			await fresh.waitForTimeout(1000)
+			expect(await fresh.evaluate(() => window.seeks)).toEqual([1, 1])
 			const apart = await fresh.evaluate(() => new Promise((resolve) => {
 				const [a, b] = document.querySelectorAll('.deliver-compare video')
 				const found = []
@@ -1946,6 +1952,7 @@ test.describe('Comparing sound', () => {
 				requestAnimationFrame(tick)
 			}))
 			expect(apart).toBeLessThan(0.005)
+			expect(await fresh.evaluate(() => window.seeks)).toEqual([1, 1])
 			await fresh.close()
 		}
 	})
