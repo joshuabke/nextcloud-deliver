@@ -16,8 +16,7 @@ use OCP\BackgroundJob\TimedJob;
  * trash, and turns a Folder Project whose folder is gone for good into a
  * plain Project. It also forgets how people came to a Project they
  * no longer reach (ADR 0016), and queues a few Scrub Proxies for video
- * Versions made before there were any (#169) and Waveforms for those made
- * before their fixed rate (ADR 0021).
+ * Versions made before there were any (#169).
  */
 class ScanProjects extends TimedJob {
 	/** Scrub Proxies queued at a time for older Versions */
@@ -38,6 +37,5 @@ class ScanProjects extends TimedJob {
 		$this->projects->scanAll();
 		$this->members->forgetLostAll();
 		$this->media->queueMissingScrubs(self::SCRUBS);
-		$this->media->queueMissingWaveforms();
 	}
 }
