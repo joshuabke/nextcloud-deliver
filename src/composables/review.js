@@ -1,5 +1,5 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { isStill } from '../lib/media.js'
+import { derivedPending, isStill } from '../lib/media.js'
 import { sheet } from './panel.js'
 
 /** How long to wait before asking again while derived media is being made */
@@ -181,10 +181,10 @@ export function useReview({ version, projectMode, projectFps, refresh }) {
 	}
 
 	let recheck = null
-	watch(() => version.value?.derived, (derived) => {
+	// A refresh brings a new derived object, so this asks again for as long as the server is at it
+	watch(() => version.value?.derived, () => {
 		clearTimeout(recheck)
-		const pending = ['proxy', 'thumbs', 'waveform'].some((kind) => ['queued', 'running'].includes(derived?.[kind]?.state))
-		if (pending) {
+		if (derivedPending(version.value)) {
 			recheck = setTimeout(() => refresh().catch(() => {}), DERIVED_RECHECK)
 		}
 	}, { immediate: true })

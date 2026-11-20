@@ -18,7 +18,8 @@ class ProcessDerivedMedia extends TimedJob {
 		private JobRunner $runner,
 	) {
 		parent::__construct($time);
-		$this->setInterval(5 * 60);
+		// Every cron run: at its own five minutes it missed every other run of a cron every five minutes, as it starts a few seconds into one
+		$this->setInterval(60);
 	}
 
 	protected function run($argument): void {

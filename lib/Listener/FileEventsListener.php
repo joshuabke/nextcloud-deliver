@@ -88,7 +88,8 @@ class FileEventsListener implements IEventListener {
 		$project = $this->projects->findAbove($node);
 		// A Deleted Project takes nothing in (ADR 0015)
 		if ($project?->getAutoIntake() === true && !$project->isDeleted()) {
-			$this->stacks->intake($project, $node, deliveredBy: $this->actor());
+			// The one file this request brought: its Waveform comes with it (ADR 0022)
+			$this->media->readAudioNow($this->stacks->intake($project, $node, deliveredBy: $this->actor()));
 		}
 	}
 
@@ -111,6 +112,7 @@ class FileEventsListener implements IEventListener {
 			$version->setDeliveredBy($this->actor() ?? $version->getDeliveredBy());
 			$this->stacks->overwritten($version, !$this->fileLock->inOwnScope());
 			$this->media->reread($version);
+			$this->media->readAudioNow($version);
 		}
 	}
 

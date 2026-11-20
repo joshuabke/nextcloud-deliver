@@ -35,6 +35,7 @@ class DerivedMediaTest extends TestCase {
 	}
 
 	protected function tearDown(): void {
+		$this->resumeIdle();
 		$this->nc->ocs('PUT', '/admin/settings', ['hwEncoder' => 'none', 'hwDevice' => '', 'extraArgs' => '', 'maxHeight' => 1080, 'maxBitrate' => 20]);
 		$this->nc->deleteProject($this->projectId);
 		$this->nc->delete($this->root);
@@ -165,6 +166,36 @@ class DerivedMediaTest extends TestCase {
 		self::assertEqualsWithDelta(150, count($waveform['peaks']), 3, 'three seconds at 50 a second');
 	}
 
+	public function testAudioHasItsWaveformWhenItsUploadIsDone(): void {
+		$mp3 = sys_get_temp_dir() . '/deliver-take-' . bin2hex(random_bytes(4)) . '.mp3';
+		[$code, $output] = $this->shell('ffmpeg -v error -y -f lavfi -i sine=duration=4 -c:a libmp3lame ' . escapeshellarg($mp3));
+		self::assertSame(0, $code, $output);
+		$this->makeFixture();
+		// A video first, whose Proxy, Thumbnail Strip and Scrub Proxy would be ahead in the queue
+		$this->nc->put("{$this->root}/master.mov", (string)file_get_contents($this->fixture));
+		$this->nc->put("{$this->root}/take.mp3", (string)file_get_contents($mp3));
+		@unlink($mp3);
+
+		// No worker, no cron: what is there came with the upload
+		$take = $this->version($this->idOf('take.mp3'));
+		self::assertTrue($take['audioOnly']);
+		self::assertSame('ready', $take['derived']['waveform']['state'], 'read and drawn in the request that took it in');
+		self::assertEqualsWithDelta(200, count($this->nc->waveform($take['derived']['waveform']['url'])['peaks']), 5, 'four seconds');
+		self::assertNull($this->version($this->idOf('master.mov'))['playable'], 'a video waits for the queue');
+
+		$order = $this->inNextcloud('foreach (\\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->findQueued(10) as $job) { echo $job->getKind(), " "; }');
+		self::assertSame('probe', trim($order));
+		$this->inNextcloud('$jobs = \\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class); $job = $jobs->findQueued(1)[0]; $jobs->claim($job, "test", time()); \\OCP\\Server::get(\\OCA\\Deliver\\Service\\DerivedMedia::class)->process($job);');
+		$order = $this->inNextcloud('foreach (\\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->findQueued(10) as $job) { echo $job->getKind(), " "; }');
+		self::assertSame('proxy thumbs waveform scrub', trim($order), 'a video\'s Waveform reads the whole master, so it keeps its place after the Proxy');
+		// Audio too long for its request: its Waveform goes before the video's Proxy
+		$long = $this->mp3('long.mp3', 1860);
+		$this->nc->put("{$this->root}/long.mp3", (string)file_get_contents($long));
+		@unlink($long);
+		$order = $this->inNextcloud('foreach (\\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->findQueued(10) as $job) { echo $job->getKind(), " "; }');
+		self::assertSame('waveform proxy thumbs waveform scrub', trim($order), 'audio\'s Waveform takes seconds, so it goes first');
+	}
+
 	/** A sine of so many seconds, as MP3 or FLAC by the name's extension */
 	private function mp3(string $name, int $seconds): string {
 		$file = sys_get_temp_dir() . '/deliver-' . bin2hex(random_bytes(4)) . '-' . $name;
@@ -174,7 +205,48 @@ class DerivedMediaTest extends TestCase {
 		return $file;
 	}
 
-	public function testAFailedWaveformWhileIdleStopsTheRestForThatRun(): void {
+	public function testAudioTooLongForARequestOrOneTooManyAtOnceIsLeftToTheQueue(): void {
+		// Half an hour and a minute
+		$long = $this->mp3('long.mp3', 1860);
+		$this->nc->put("{$this->root}/long.mp3", (string)file_get_contents($long));
+		@unlink($long);
+		$version = $this->version($this->idOf('long.mp3'));
+		self::assertGreaterThan(1800000, $version['durationFrames'], 'read in the request');
+		self::assertSame('queued', $version['derived']['waveform']['state'], 'its Waveform in the queue');
+
+		// Its STREAMINFO says two seconds, the sound goes on for a minute: the request stops where the header ends
+		$head = $this->mp3('head.flac', 2);
+		$tail = $this->mp3('tail.flac', 60);
+		$this->nc->put("{$this->root}/liar.flac", file_get_contents($head) . file_get_contents($tail));
+		@unlink($head);
+		@unlink($tail);
+		$version = $this->version($this->idOf('liar.flac'));
+		self::assertLessThan(3000, $version['durationFrames']);
+		self::assertSame('queued', $version['derived']['waveform']['state'], 'more sound than its header says is the queue\'s');
+		self::assertSame('queued', trim($this->inNextcloud('echo \\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->findPending(' . $version['id'] . ', "waveform")->getState();')), 'and its job is put back');
+
+		// A request making a Waveform already fills max_jobs (1)
+		$busy = $this->inNextcloud('$job = new \\OCA\\Deliver\\Db\\Job(); $job->setKind("waveform"); $job->setVersionId(' . $version['id'] . '); $job->setState("running"); $job->setClaimedBy("request"); $job->setCreatedAt(time()); $job->setStartedAt(time()); echo \\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->insert($job)->getId();');
+		$short = $this->mp3('short.mp3', 3);
+		$this->nc->put("{$this->root}/short.mp3", (string)file_get_contents($short));
+		@unlink($short);
+		self::assertSame('none', $this->waveformState($this->idOf('short.mp3')), 'not read in the request: its probe waits in the queue');
+
+		// A request that died ten minutes ago leaves its job to the queue again
+		$this->inNextcloud('$q = \\OCP\\Server::get(\\OCP\\IDBConnection::class)->getQueryBuilder(); $q->update("deliver_jobs")->set("started_at", $q->createNamedParameter(time() - 600))->where($q->expr()->eq("id", $q->createNamedParameter(' . (int)$busy . ')))->executeStatement();');
+		$this->drainQueue();
+		foreach (['long.mp3', 'liar.flac', 'short.mp3'] as $name) {
+			self::assertSame('ready', $this->waveformState($this->idOf($name)), $name);
+		}
+		self::assertSame('', trim($this->inNextcloud('foreach (\\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->findQueued(10) as $job) { echo $job->getKind(); }')), 'nothing stuck');
+	}
+
+	public function testCronDrainsTheQueueAtEveryRun(): void {
+		// A cron every five minutes starts the job a few seconds into its run: an interval of five minutes misses every other one
+		self::assertLessThanOrEqual(60, (int)$this->inNextcloud('echo \\OCP\\Server::get(\\OCA\\Deliver\\BackgroundJob\\ProcessDerivedMedia::class)->getInterval();'));
+	}
+
+	public function testAWaveformWhileIdleThatFailsOrCannotBeReadPausesTheRest(): void {
 		foreach (['first.mp3', 'second.mp3'] as $name) {
 			$mp3 = $this->mp3($name, 2);
 			$this->nc->put("{$this->root}/$name", (string)file_get_contents($mp3));
@@ -185,11 +257,82 @@ class DerivedMediaTest extends TestCase {
 		foreach ([$first, $second] as $id) {
 			$this->inNextcloud('$q = \\OCP\\Server::get(\\OCP\\IDBConnection::class)->getQueryBuilder(); $q->update("deliver_versions")->set("waveform_state", $q->createNamedParameter("none"))->where($q->expr()->eq("id", $q->createNamedParameter(' . $id . ')))->executeStatement();');
 		}
-		// The newest goes first, and its file is gone from the disk behind Nextcloud's back, as on storage that went offline
-		[$code, $output] = $this->shell('rm ' . escapeshellarg("/var/www/html/data/admin/files/{$this->root}/second.mp3"));
-		self::assertSame(0, $code, $output);
+		$disk = "/var/www/html/data/admin/files/{$this->root}/second.mp3";
+
+		// The newest goes first; its file is gone from the disk behind Nextcloud's back, as on storage that went offline
+		rename($disk, "$disk.away");
 		$this->drainQueue();
-		self::assertSame(['failed', 'none'], [$this->waveformState($second), $this->waveformState($first)], 'one failure stops the idle work of the run');
+		self::assertSame(['none', 'ready'], [$this->waveformState($second), $this->waveformState($first)], 'nothing is failed for a file that is not there, and the look steps past it at once');
+		self::assertSame(0, (int)$this->inNextcloud('echo \\OCP\\Server::get(\\OCP\\IAppConfig::class)->getValueInt("deliver", "idle_waveforms_after");'), 'no pause for it');
+
+		// Back, but no sound in it any more: a failure of its own, which pauses the rest as well
+		rename("$disk.away", $disk);
+		file_put_contents($disk, str_repeat("\0", 4096));
+		$this->inNextcloud('$q = \\OCP\\Server::get(\\OCP\\IDBConnection::class)->getQueryBuilder(); $q->update("deliver_versions")->set("waveform_state", $q->createNamedParameter("none"))->where($q->expr()->eq("id", $q->createNamedParameter(' . $first . ')))->executeStatement();');
+		$this->resumeIdle();
+		$this->drainQueue();
+		self::assertSame(['failed', 'none'], [$this->waveformState($second), $this->waveformState($first)], 'one failure stops the idle work');
+	}
+
+	private function resumeIdle(): void {
+		$this->shell('php /var/www/html/occ config:app:delete deliver idle_waveforms_after');
+		$this->shell('php /var/www/html/occ config:app:delete deliver idle_waveforms_below');
+	}
+
+	public function testAnUploadOfManyFilesInOneRequestReadsOnlyItsFirst(): void {
+		// A sync client's bulk upload: several new files in one request
+		$boundary = 'deliver' . bin2hex(random_bytes(6));
+		$body = '';
+		foreach (['one.mp3', 'two.mp3', 'three.mp3'] as $name) {
+			$mp3 = $this->mp3($name, 2);
+			$content = (string)file_get_contents($mp3);
+			@unlink($mp3);
+			$body .= "--$boundary\r\nX-File-Path: /{$this->root}/$name\r\nX-File-MD5: " . md5($content) . "\r\nX-File-Mtime: " . time() . "\r\nContent-Length: " . strlen($content) . "\r\n\r\n$content\r\n";
+		}
+		$started = microtime(true);
+		$sent = $this->nc->request('POST', '/remote.php/dav/bulk', "$body--$boundary--\r\n", ["Content-Type: multipart/related; boundary=$boundary"]);
+		self::assertSame(200, $sent['status'], $sent['body']);
+		self::assertLessThan(30, microtime(true) - $started);
+		$states = array_map(fn (string $name) => $this->waveformState($this->idOf($name)), ['one.mp3', 'two.mp3', 'three.mp3']);
+		self::assertSame(['ready', 'none', 'none'], $states, 'the request reads the first and leaves the rest to the queue');
+		$this->drainQueue();
+		self::assertSame(['ready', 'ready', 'ready'], array_map(fn (string $name) => $this->waveformState($this->idOf($name)), ['one.mp3', 'two.mp3', 'three.mp3']));
+	}
+
+	public function testAFolderTakenInAtOnceLeavesItsAudioToTheQueue(): void {
+		$folder = $this->root . '-stems';
+		$this->nc->mkdir($folder);
+		try {
+			foreach (['bass.mp3', 'drums.mp3', 'vox.mp3'] as $name) {
+				$mp3 = $this->mp3($name, 2);
+				$this->nc->put("$folder/$name", (string)file_get_contents($mp3));
+				@unlink($mp3);
+			}
+			$created = $this->nc->ocs('POST', '/projects', ['folderId' => $this->nc->fileId($folder), 'autoIntake' => true]);
+			self::assertSame(201, $created['status'], json_encode($created['data']));
+			$assets = $this->nc->ocs('GET', "/projects/{$created['data']['id']}")['data']['assets'];
+			self::assertCount(3, $assets);
+			foreach ($assets as $asset) {
+				self::assertSame('none', $this->waveformState($asset['versions'][0]['id']), 'not read in the request that made the Project');
+			}
+		} finally {
+			if (isset($created['data']['id'])) {
+				$this->nc->deleteProject($created['data']['id']);
+			}
+			$this->nc->delete($folder);
+		}
+	}
+
+	public function testAFileMadeEmptyAndWrittenAfterIsReadWhenItsContentComes(): void {
+		// As Finder and Windows put a file over WebDAV: empty first, then its content
+		self::assertSame(201, $this->nc->davStatus('PUT', "{$this->root}/late.mp3", ''));
+		$late = $this->idOf('late.mp3');
+		self::assertSame('none', $this->waveformState($late));
+		self::assertNull($this->version($late)['derived']['error'], 'no failed read of nothing');
+		$mp3 = $this->mp3('late.mp3', 2);
+		$this->nc->put("{$this->root}/late.mp3", (string)file_get_contents($mp3));
+		@unlink($mp3);
+		self::assertSame('ready', $this->waveformState($late), 'read and drawn in the request that brought the content');
 	}
 
 	public function testATrackWithoutASampleHasAnEmptyWaveform(): void {

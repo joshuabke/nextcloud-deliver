@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { acceptFor, extensionOf, hoverSource, isStill, mediaKind, reviewable, stackKind } from './media.js'
+import { acceptFor, derivedPending, extensionOf, hoverSource, isStill, mediaKind, reviewable, stackKind } from './media.js'
 
 describe('media kinds', () => {
 	it('reviews video, audio and the stills browsers show', () => {
@@ -29,5 +29,25 @@ describe('media kinds', () => {
 
 	it('reads the extension a rename keeps', () => {
 		expect(['cut.MP4', 'cut.v2.mov', 'cut', '.hidden'].map(extensionOf)).toEqual(['.mp4', '.mov', '', ''])
+	})
+})
+
+describe('a Version the server is still at', () => {
+	const none = { proxy: { state: 'none' }, thumbs: { state: 'none' }, waveform: { state: 'none' }, error: null }
+
+	it('is asked for again before its file is read, when every state still says none', () => {
+		expect(derivedPending({ playable: null, derived: none })).toBe(true)
+	})
+
+	it('and while something is queued or made', () => {
+		expect(derivedPending({ playable: true, derived: { ...none, waveform: { state: 'queued' } } })).toBe(true)
+		expect(derivedPending({ playable: false, derived: { ...none, proxy: { state: 'running' } } })).toBe(true)
+	})
+
+	it('but not once it is read with nothing on its way, nor when it cannot be read', () => {
+		expect(derivedPending({ playable: true, derived: none })).toBe(false)
+		expect(derivedPending({ playable: null, derived: { ...none, error: 'Without ffmpeg, Deliver cannot read this format' } })).toBe(false)
+		expect(derivedPending(null)).toBe(false)
+		expect(derivedPending({ playable: null, state: 'missing', derived: none })).toBe(false)
 	})
 })

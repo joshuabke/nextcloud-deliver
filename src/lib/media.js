@@ -57,3 +57,18 @@ export const extensionOf = (name) => name.lastIndexOf('.') > 0 ? name.slice(name
  * @return {string|null} the Scrub Proxy where there is one and it plays; until then, and where it never does, the fallback
  */
 export const hoverSource = (scrub, fallback, broken = false) => (broken ? null : scrub) ?? fallback ?? null
+
+/**
+ * Whether the server is still at a Version, so a view showing it asks again:
+ * while its derived media is queued or made, and before its file is read,
+ * when nothing but the probe is queued and every state still says none;
+ * not for a Version whose file went missing before it was read
+ *
+ * @param {?object} version - as the API gives it
+ * @return {boolean} whether to ask again
+ */
+export function derivedPending(version) {
+	return !!version
+		&& ((version.playable === null && !version.derived?.error && version.state !== 'missing')
+			|| ['proxy', 'thumbs', 'waveform'].some((kind) => ['queued', 'running'].includes(version.derived?.[kind]?.state)))
+}

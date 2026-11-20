@@ -188,6 +188,12 @@ class StartInTheFileTest extends TestCase {
 		self::assertSame(!$ffmpeg, $this->nc->ocs('GET', $asset)['data']['waveformFromBrowser'], 'the uploading browser decodes it only where the server cannot');
 		$peaks = array_fill(0, 100, 26);
 		$given = $this->nc->ocs('POST', "/versions/$id/waveform", NextcloudClient::handIn($peaks, 2000));
+		if ($ffmpeg) {
+			// The server read the audio and drew it in the upload's own request, so the tool's comes too late
+			self::assertSame(409, $given['status'], json_encode($given['data']));
+			self::assertSame('ready', $this->processed($id)['derived']['waveform']['state']);
+			return;
+		}
 		self::assertSame(200, $given['status'], json_encode($given['data']));
 		self::assertSame(409, $this->nc->ocs('POST', "/versions/$id/waveform", NextcloudClient::handIn($peaks, 2000))['status'], 'once is enough');
 		self::assertFalse($this->nc->ocs('GET', $asset)['data']['waveformFromBrowser'], 'once is enough');

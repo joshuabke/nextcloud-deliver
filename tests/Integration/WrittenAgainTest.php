@@ -37,6 +37,7 @@ class WrittenAgainTest extends TestCase {
 	}
 
 	protected function tearDown(): void {
+		$this->db('DELETE FROM *PREFIX*deliver_jobs WHERE version_id = 0');
 		$this->nc->ocs('PUT', '/admin/settings', ['ffprobePath' => '']);
 		array_map('unlink', glob($this->fixture . '*') ?: []);
 		$this->nc->deleteProject($this->projectId);
@@ -49,6 +50,15 @@ class WrittenAgainTest extends TestCase {
 		exec('ffmpeg -v error -y ' . $args . ' ' . escapeshellarg($this->fixture) . ' 2>&1', $output, $code);
 		self::assertSame(0, $code, implode("\n", $output));
 		$this->nc->put("{$this->root}/$name", (string)file_get_contents($this->fixture));
+	}
+
+	/**
+	 * Fills the requests' own limit (max_jobs, 1), so audio waits in the queue
+	 * as video does, rather than being read in the request that writes it:
+	 * what is tested here is the queue's
+	 */
+	private function busyRequests(): void {
+		$this->db('INSERT INTO *PREFIX*deliver_jobs (kind, version_id, state, claimed_by, created_at, started_at) VALUES (?, 0, ?, ?, ?, ?)', ['waveform', 'running', 'request', time(), time()]);
 	}
 
 	private function drainQueue(): void {
@@ -80,6 +90,7 @@ class WrittenAgainTest extends TestCase {
 	}
 
 	public function testAMixWrittenAgainIsReadAgainAndDropsAWaveformHandedIn(): void {
+		$this->busyRequests();
 		$this->write('mix.wav', '-f lavfi -i sine=frequency=440:duration=2 -ar 48000 -write_bext 1 -metadata time_reference=172800000 -f wav');
 		$mix = $this->versionId();
 		$this->drainQueue();
@@ -140,6 +151,7 @@ class WrittenAgainTest extends TestCase {
 	}
 
 	public function testAProbeOfTheOldContentDoesNotLandOverTheNewOne(): void {
+		$this->busyRequests();
 		$this->write('mix.wav', '-f lavfi -i sine=duration=2 -ar 48000 -write_bext 1 -metadata time_reference=172800000 -f wav');
 		$mix = $this->versionId();
 		exec('ffmpeg -v error -y -f lavfi -i sine=duration=1 -f wav ' . escapeshellarg($this->fixture . '.new'));
@@ -164,6 +176,7 @@ class WrittenAgainTest extends TestCase {
 	public function testANewFileIsQueuedOnce(): void {
 		// A job already in the table tells which id the next one gets
 		$this->db('INSERT INTO *PREFIX*deliver_jobs (kind, version_id, created_at) VALUES (?, 0, 0)', ['probe']);
+		$this->busyRequests();
 		$marker = (int)$this->db('SELECT MAX(id) AS id FROM *PREFIX*deliver_jobs')[0]['id'];
 		try {
 			$this->write('new.wav', '-f lavfi -i sine=duration=1 -f wav');

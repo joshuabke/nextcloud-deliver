@@ -15,7 +15,7 @@ class JobMapper extends Mapper {
 
 	/**
 	 * @param ?string $kind only jobs of this kind
-	 * @return Job[] the oldest waiting work first, then Scrub Proxies, the newest Version's first; a Deleted Project's waits until it is restored (ADR 0015)
+	 * @return Job[] probes first, then the Waveforms of audio, which take seconds and make a fresh upload of audio reviewable, then the rest, the oldest first, then Scrub Proxies, the newest Version's first; a Deleted Project's waits until it is restored (ADR 0015)
 	 */
 	public function findQueued(int $limit, ?string $kind = null): array {
 		$qb = $this->db->getQueryBuilder();
@@ -24,7 +24,8 @@ class JobMapper extends Mapper {
 			->leftJoin('v', 'deliver_projects', 'p', $qb->expr()->eq('p.id', 'v.project_id'))
 			->where($qb->expr()->eq('j.state', $qb->createNamedParameter(Job::STATE_QUEUED)))
 			->andWhere($qb->expr()->isNull('p.deleted_at'))
-			->orderBy($qb->createFunction('CASE WHEN j.kind = ' . $qb->expr()->literal(Job::KIND_SCRUB) . ' THEN 1 ELSE 0 END'))
+			// The Waveform of audio before the rest; a video's reads the whole master, so it keeps its place
+			->orderBy($qb->createFunction('CASE WHEN j.kind = ' . $qb->expr()->literal(Job::KIND_PROBE) . ' THEN 0 WHEN j.kind = ' . $qb->expr()->literal(Job::KIND_WAVEFORM) . ' AND v.has_video = ' . $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL) . ' THEN 1 WHEN j.kind = ' . $qb->expr()->literal(Job::KIND_SCRUB) . ' THEN 3 ELSE 2 END'))
 			// A fresh upload's before the batch of older Versions (DerivedMedia::queueMissingScrubs)
 			->addOrderBy($qb->createFunction('CASE WHEN j.kind = ' . $qb->expr()->literal(Job::KIND_SCRUB) . ' THEN j.version_id ELSE 0 END'), 'DESC')
 			->addOrderBy('j.id')
@@ -96,6 +97,41 @@ class JobMapper extends Mapper {
 			->executeStatement();
 	}
 
+	/** Puts a claimed job back for whoever works the queue next; written directly, as the entity still holds the state from before its claim */
+	public function requeue(int $jobId): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('state', $qb->createNamedParameter(Job::STATE_QUEUED))
+			->set('claimed_by', $qb->createNamedParameter(null))
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($jobId, IQueryBuilder::PARAM_INT)))
+			->executeStatement();
+	}
+
+	/** Puts back jobs a request claimed and did not finish, as a request that died leaves them: none takes that long */
+	public function requeueStaleRequests(int $startedBefore): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('state', $qb->createNamedParameter(Job::STATE_QUEUED))
+			->set('claimed_by', $qb->createNamedParameter(null))
+			->where($qb->expr()->eq('state', $qb->createNamedParameter(Job::STATE_RUNNING)))
+			->andWhere($qb->expr()->eq('claimed_by', $qb->createNamedParameter(Job::REQUEST)))
+			->andWhere($qb->expr()->lt('started_at', $qb->createNamedParameter($startedBefore, IQueryBuilder::PARAM_INT)))
+			->executeStatement();
+	}
+
+	/** How many jobs requests run themselves right now */
+	public function countRunningInRequests(): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->count('*', 'amount'))
+			->from($this->getTableName())
+			->where($qb->expr()->eq('state', $qb->createNamedParameter(Job::STATE_RUNNING)))
+			->andWhere($qb->expr()->eq('claimed_by', $qb->createNamedParameter(Job::REQUEST)));
+		$result = $qb->executeQuery();
+		$amount = (int)$result->fetchOne();
+		$result->closeCursor();
+		return $amount;
+	}
+
 	/**
 	 * How many jobs the server runs right now, without the Proxies browsers make
 	 *
@@ -116,9 +152,10 @@ class JobMapper extends Mapper {
 		return $amount;
 	}
 
+	/** Jobs the queue's workers run: not a browser's Proxy, nor a request's own work, which has a limit of its own and a lapse of minutes (requeueStaleRequests) */
 	private function onServer(IQueryBuilder $qb): string {
 		// Every running row has a claimed_by (claim(), DerivedMedia::proxyProgress)
-		return $qb->expr()->neq('claimed_by', $qb->createNamedParameter(Job::BROWSER));
+		return $qb->expr()->notIn('claimed_by', $qb->createNamedParameter([Job::BROWSER, Job::REQUEST], IQueryBuilder::PARAM_STR_ARRAY));
 	}
 
 	/** @return Job[] failed jobs, the latest first; all of them without a limit */

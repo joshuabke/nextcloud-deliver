@@ -77,6 +77,35 @@ class DerivedMedia {
 	 * lose sound on one side, two sides out of phase or 3 dB of mono
 	 */
 	private const WAVEFORM_PCM_RATE = 16000;
+	/**
+	 * Audio up to this long and this large, at no more bytes a second than
+	 * 192 kHz 32-bit stereo PCM, is read and gets its Waveform in the request
+	 * that takes it in: ffmpeg needs about 3 seconds an hour of MP3, while the
+	 * queue may wait for the next cron run and for Proxies before it
+	 */
+	private const AUDIO_NOW_SECONDS = 1800;
+	private const AUDIO_NOW_BYTES = 256 * 1024 * 1024;
+	private const AUDIO_NOW_BYTES_PER_SECOND = 192000 * 4 * 2;
+	/** How long ffmpeg may take for a Waveform in a request before the queue takes it over */
+	private const AUDIO_NOW_TIMEOUT = 15;
+	/** The exception code of a Waveform a request leaves to the queue */
+	private const TO_QUEUE = 124;
+	/** App config: the time from which Waveforms are made while idle again (pauseIdleWaveforms) */
+	private const IDLE_WAVEFORMS_AFTER = 'idle_waveforms_after';
+	/** App config: the Version below which the idle look goes on, past one whose file was not there */
+	private const IDLE_WAVEFORMS_BELOW = 'idle_waveforms_below';
+	/** Versions the idle look steps past at most, before it leaves the rest to the next run */
+	private const IDLE_LOOK = 20;
+	private const IDLE_PAUSE = 3600;
+	/**
+	 * Whether this request has read an audio file already: a request may bring
+	 * many (a sync client's bulk upload, an app unpacking an archive), and
+	 * reads only the first, so it stays within its seconds; the rest is the
+	 * queue's. Per PHP process, which is one request.
+	 */
+	private static bool $requestRead = false;
+	/** Set while a request makes a Waveform itself: ffmpeg then has a short time and reads no further than the length its header says */
+	private bool $inRequest = false;
 	/** Seconds between two progress writes to the job row */
 	private const PROGRESS_INTERVAL = 2;
 
@@ -126,6 +155,61 @@ class DerivedMedia {
 	/** Queues the probe, which then queues whatever else the Version needs */
 	public function queue(int $versionId): void {
 		$this->enqueue($versionId, Job::KIND_PROBE);
+	}
+
+	/**
+	 * With ffmpeg, the one audio file a request brings (an upload in Files,
+	 * a sync client, Deliver's upload, delivering again; never a folder taken
+	 * in at once) is read and gets its Waveform in that request, so it is
+	 * there when the upload is (ADR 0022). Only a file on local storage,
+	 * unencrypted, of 1 byte to 256 MB, at most 30 minutes long and at no more
+	 * bytes a second than 192 kHz 32-bit stereo PCM, each step in a few
+	 * seconds and no further than its header says, and no more requests at
+	 * once than `max_jobs`; anything else, and whatever runs out of time,
+	 * goes on in the queue. The jobs are claimed as by any worker: should the
+	 * request die, they are queued again (JobRunner). Nothing here fails the
+	 * request that brought the file.
+	 */
+	public function readAudioNow(?Version $version): void {
+		try {
+			$this->takeAudioNow($version);
+		} catch (\Throwable $e) {
+			$this->logger->warning('Deliver left the audio of Version {version} to the queue', ['version' => $version?->getId(), 'exception' => $e]);
+		}
+	}
+
+	private function takeAudioNow(?Version $version): void {
+		$file = $version === null ? null : $this->fileOf($version);
+		$bytes = $file?->getSize() ?? 0;
+		// A file made empty and written after (Finder, Windows) is read when its content comes
+		if ($version === null || $file === null || !str_starts_with($file->getMimeType(), 'audio/') || $bytes < 1 || $bytes > self::AUDIO_NOW_BYTES
+			// Elsewhere ffmpeg reads a copy, made first at that storage's speed
+			|| !$file->getStorage()->isLocal() || $file->isEncrypted()
+			|| !$this->ffmpeg->available()
+			// ponytail: count, then claim; two requests can overshoot by one at the same instant, as in JobRunner
+			|| $this->jobs->countRunningInRequests() >= max(1, $this->config->getValueInt(Application::APP_ID, 'max_jobs', 1))) {
+			return;
+		}
+		if (self::$requestRead) {
+			return;
+		}
+		self::$requestRead = true;
+		$versionId = $version->getId();
+		foreach ([Job::KIND_PROBE, Job::KIND_WAVEFORM] as $kind) {
+			$job = $this->jobs->findPending($versionId, $kind);
+			$version = $this->versions->find($versionId);
+			$seconds = $version === null ? INF : $this->durationSeconds($version, INF);
+			if ($job === null || $kind === Job::KIND_WAVEFORM && ($seconds > self::AUDIO_NOW_SECONDS || $bytes > max(1, $seconds) * self::AUDIO_NOW_BYTES_PER_SECOND)
+				|| !$this->jobs->claim($job, Job::REQUEST, $this->time->getTime())) {
+				return;
+			}
+			$this->inRequest = true;
+			try {
+				$this->process($job);
+			} finally {
+				$this->inRequest = false;
+			}
+		}
 	}
 
 	/** Deletes the derived media of a Version and queues it again */
@@ -206,6 +290,11 @@ class DerivedMedia {
 			if ($this->withdrawn($job)) {
 				return;
 			}
+			if ($this->inRequest && $e->getCode() === self::TO_QUEUE) {
+				$this->jobs->requeue($job->getId());
+				$this->mark($version->getId(), $job->getKind(), self::STATE_QUEUED);
+				return;
+			}
 			$error = $this->ffmpeg->tail($e->getMessage());
 			// Into Nextcloud's log too, where an admin without a shell looks first
 			$this->logger->warning('Deliver could not make the {kind} of Version {version}', ['kind' => $job->getKind(), 'version' => $version->getId(), 'exception' => $e]);
@@ -236,7 +325,7 @@ class DerivedMedia {
 	}
 
 	private function runProbe(Version $version, string $path): void {
-		$probed = $this->probe->apply($version, $path);
+		$probed = $this->probe->apply($version, $path, $this->inRequest ? self::AUDIO_NOW_TIMEOUT : 120);
 		if ($probed === null) {
 			throw new \RuntimeException($this->ffmpeg->version($this->ffmpeg->ffprobe()) === null
 				? 'Without ffmpeg, Deliver cannot read this format'
@@ -452,15 +541,40 @@ class DerivedMedia {
 	 * @return ?Job the job, to claim; null when there is other work or none
 	 */
 	public function queueMissingWaveform(): ?Job {
-		if ($this->jobs->findQueued(1) !== [] || !$this->ffmpeg->available()) {
+		if ($this->time->getTime() < $this->config->getValueInt(Application::APP_ID, self::IDLE_WAVEFORMS_AFTER) || $this->jobs->findQueued(1) !== [] || !$this->ffmpeg->available()) {
 			return null;
 		}
-		$version = $this->versions->findWithoutWaveform(1)[0] ?? null;
-		if ($version === null) {
-			return null;
+		// A file that is not there fails no Version (its storage may be offline, and every other would fail the same): the look steps past it, at most this many a time, and goes on below it next time
+		$below = $this->config->getValueInt(Application::APP_ID, self::IDLE_WAVEFORMS_BELOW);
+		$missing = $this->versions->findWithoutWaveform(self::IDLE_LOOK, $below ?: null);
+		foreach ($missing as $version) {
+			$file = $this->fileOf($version);
+			try {
+				$there = $file !== null && $file->getStorage()->file_exists($file->getInternalPath());
+			} catch (\Throwable) {
+				$there = false;
+			}
+			if ($there) {
+				$this->enqueue($version->getId(), Job::KIND_WAVEFORM);
+				return $this->jobs->findPending($version->getId(), Job::KIND_WAVEFORM);
+			}
+			$this->config->setValueInt(Application::APP_ID, self::IDLE_WAVEFORMS_BELOW, $version->getId());
 		}
-		$this->enqueue($version->getId(), Job::KIND_WAVEFORM);
-		return $this->jobs->findPending($version->getId(), Job::KIND_WAVEFORM);
+		// Past the oldest: from the newest again next time, also those whose file was not there
+		if (count($missing) < self::IDLE_LOOK && $this->config->hasKey(Application::APP_ID, self::IDLE_WAVEFORMS_BELOW)) {
+			$this->config->deleteKey(Application::APP_ID, self::IDLE_WAVEFORMS_BELOW);
+		}
+		return null;
+	}
+
+	/**
+	 * No Waveform is made while idle for an hour, across cron runs and
+	 * workers: one that failed, or a file that is not there, may have a cause
+	 * no Version has (storage offline), which would otherwise fail one old
+	 * Version every cron run.
+	 */
+	public function pauseIdleWaveforms(): void {
+		$this->config->setValueInt(Application::APP_ID, self::IDLE_WAVEFORMS_AFTER, $this->time->getTime() + self::IDLE_PAUSE);
 	}
 
 	/**
@@ -558,7 +672,7 @@ class DerivedMedia {
 	/** PCM from ffmpeg, reduced to peaks as it streams out, without another binary and without holding it */
 	private function runWaveform(Version $version, string $path): void {
 		$channels = 0;
-		foreach ($this->probe->streams($this->probe->read($path) ?? []) as $stream) {
+		foreach ($this->probe->streams($this->probe->read($path, $this->inRequest ? self::AUDIO_NOW_TIMEOUT : 120) ?? []) as $stream) {
 			if (($stream['codec_type'] ?? '') === 'audio') {
 				$channels = (int)($stream['channels'] ?? 0);
 				break;
@@ -570,16 +684,22 @@ class DerivedMedia {
 		$rate = self::waveformRate($this->durationSeconds($version));
 		$peaks = new PcmPeaks(self::WAVEFORM_PCM_RATE, $channels, $rate);
 		$bytes = 0;
+		// In a request no further than the header says, and a little: sound that runs on is the queue's
+		$bound = $this->inRequest ? $this->durationSeconds($version) + 5 : null;
 		$result = $this->ffmpeg->run($this->ffmpeg->ffmpeg(), [
 			'-nostdin', '-v', 'error',
 			...Ffmpeg::input($path),
 			'-map', '0:a:0', '-ar', (string)self::WAVEFORM_PCM_RATE,
+			...($bound === null ? [] : ['-t', (string)$bound]),
 			'-c:a', 'pcm_s16le', '-f', 's16le', 'pipe:1',
-		], 3600, function (string $pcm) use ($peaks, $channels, &$bytes): bool {
+		], $this->inRequest ? self::AUDIO_NOW_TIMEOUT : 3600, function (string $pcm) use ($peaks, $channels, &$bytes): bool {
 			$bytes += strlen($pcm);
 			$this->reached((int)($bytes / (2 * $channels * self::WAVEFORM_PCM_RATE) * 1e6));
 			return $peaks->add($pcm);
 		});
+		if ($bound !== null && ($result['code'] === 124 || $bytes >= ($bound - 1) * 2 * $channels * self::WAVEFORM_PCM_RATE)) {
+			throw new \RuntimeException('Left to the queue: more than a request may take', self::TO_QUEUE);
+		}
 		// A track without a sample is a Waveform without a peak, as silent as it is, not a failure
 		if ($result['code'] !== 0) {
 			throw new \RuntimeException($result['stderr'] ?: 'ffmpeg exited with ' . $result['code']);
@@ -848,7 +968,7 @@ class DerivedMedia {
 		}
 		$job = $this->jobs->findPending($version->getId(), Job::KIND_PROBE);
 		// Claimed as by any worker: should the request die, the probe is queued again like theirs
-		if ($job !== null && $this->jobs->claim($job, 'request', $this->time->getTime())) {
+		if ($job !== null && $this->jobs->claim($job, Job::REQUEST, $this->time->getTime())) {
 			$this->process($job);
 		}
 		$version = $this->versions->find($version->getId()) ?? throw new \RuntimeException('The Version is gone');
