@@ -184,16 +184,16 @@ class DerivedMediaTest extends TestCase {
 		self::assertNull($this->version($this->idOf('master.mov'))['playable'], 'a video waits for the queue');
 
 		$order = $this->inNextcloud('foreach (\\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->findQueued(10) as $job) { echo $job->getKind(), " "; }');
-		self::assertSame('probe', trim($order));
+		self::assertSame('probe loudness', trim($order), 'the loudness of the audio follows last (A5)');
 		$this->inNextcloud('$jobs = \\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class); $job = $jobs->findQueued(1)[0]; $jobs->claim($job, "test", time()); \\OCP\\Server::get(\\OCA\\Deliver\\Service\\DerivedMedia::class)->process($job);');
 		$order = $this->inNextcloud('foreach (\\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->findQueued(10) as $job) { echo $job->getKind(), " "; }');
-		self::assertSame('proxy thumbs waveform scrub', trim($order), 'a video\'s Waveform reads the whole master, so it keeps its place after the Proxy');
+		self::assertSame('proxy thumbs waveform scrub loudness', trim($order), 'a video\'s Waveform reads the whole master, so it keeps its place after the Proxy');
 		// Audio too long for its request: its Waveform goes before the video's Proxy
-		$long = $this->mp3('long.mp3', 960);
+		$long = $this->mp3('long.mp3', 1860);
 		$this->nc->put("{$this->root}/long.mp3", (string)file_get_contents($long));
 		@unlink($long);
 		$order = $this->inNextcloud('foreach (\\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->findQueued(10) as $job) { echo $job->getKind(), " "; }');
-		self::assertSame('waveform proxy thumbs waveform scrub', trim($order), 'audio\'s Waveform takes seconds, so it goes first');
+		self::assertSame('waveform proxy thumbs waveform scrub loudness', trim($order), 'audio\'s Waveform takes seconds, so it goes first, its loudness last');
 	}
 
 	/** A sine of so many seconds, as MP3 or FLAC by the name's extension */
@@ -206,12 +206,12 @@ class DerivedMediaTest extends TestCase {
 	}
 
 	public function testAudioTooLongForARequestOrOneTooManyAtOnceIsLeftToTheQueue(): void {
-		// A quarter of an hour and a minute
-		$long = $this->mp3('long.mp3', 960);
+		// Half an hour and a minute
+		$long = $this->mp3('long.mp3', 1860);
 		$this->nc->put("{$this->root}/long.mp3", (string)file_get_contents($long));
 		@unlink($long);
 		$version = $this->version($this->idOf('long.mp3'));
-		self::assertGreaterThan(900000, $version['durationFrames'], 'read in the request');
+		self::assertGreaterThan(1800000, $version['durationFrames'], 'read in the request');
 		self::assertSame('queued', $version['derived']['waveform']['state'], 'its Waveform in the queue');
 
 		// Its STREAMINFO says two seconds, the sound goes on for a minute: the request stops where the header ends
@@ -363,10 +363,14 @@ class DerivedMediaTest extends TestCase {
 		@unlink($wav);
 		@unlink("$wav.flac");
 
-		// Short audio is drawn in the request that brought it, its loudness too; the others in the queue
+		// Short audio is drawn in the request that brought it, at its own pace: the loudness follows, last in the queue
 		$ebu = $this->version($this->idOf('ebu.wav'));
-		self::assertSame(['integrated' => -23.0, 'peak' => -23.0, 'truePeak' => true], $this->loudness($ebu));
+		self::assertNull($this->loudness($ebu), 'not in the request');
+		$order = $this->inNextcloud('foreach (\\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->findQueued(10) as $job) { echo $job->getKind(), " "; }');
+		self::assertSame('loudness loudness loudness', trim($order), 'each file drawn in its own request, each loudness queued');
 		$this->drainQueue();
+		self::assertSame(['integrated' => -23.0, 'peak' => -23.0, 'truePeak' => true], $this->loudness($ebu));
+		self::assertCount(1000, $this->nc->waveform($this->version($this->idOf('ebu.wav'))['derived']['waveform']['url'])['peaks'], 'the Waveform as it was, its loudness beside it');
 		self::assertSame(-24.5, $this->loudness($this->version($this->idOf('surround.flac')))['integrated']);
 		self::assertSame(['integrated' => null, 'peak' => -23.0, 'truePeak' => true], $this->loudness($this->version($this->idOf('lfe.flac'))), 'the LFE has a peak, but no loudness');
 	}

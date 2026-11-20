@@ -80,12 +80,10 @@ class DerivedMedia {
 	/**
 	 * Audio up to this long and this large, at no more bytes a second than
 	 * 192 kHz 32-bit stereo PCM, is read and gets its Waveform in the request
-	 * that takes it in: ffmpeg needs about 25 seconds an hour of MP3 with the
-	 * loudness (A5), so a quarter of an hour stays within the request's 15
-	 * seconds, while the queue may wait for the next cron run and for
-	 * Proxies before it
+	 * that takes it in: ffmpeg needs about 3 seconds an hour of MP3, while the
+	 * queue may wait for the next cron run and for Proxies before it
 	 */
-	private const AUDIO_NOW_SECONDS = 900;
+	private const AUDIO_NOW_SECONDS = 1800;
 	private const AUDIO_NOW_BYTES = 256 * 1024 * 1024;
 	private const AUDIO_NOW_BYTES_PER_SECOND = 192000 * 4 * 2;
 	/** How long ffmpeg may take for a Waveform in a request before the queue takes it over */
@@ -164,7 +162,7 @@ class DerivedMedia {
 	 * a sync client, Deliver's upload, delivering again; never a folder taken
 	 * in at once) is read and gets its Waveform in that request, so it is
 	 * there when the upload is (ADR 0022). Only a file on local storage,
-	 * unencrypted, of 1 byte to 256 MB, at most 15 minutes long and at no more
+	 * unencrypted, of 1 byte to 256 MB, at most 30 minutes long and at no more
 	 * bytes a second than 192 kHz 32-bit stereo PCM, each step in a few
 	 * seconds and no further than its header says, and no more requests at
 	 * once than `max_jobs`; anything else, and whatever runs out of time,
@@ -283,6 +281,7 @@ class DerivedMedia {
 				Job::KIND_THUMBS => $this->runThumbs($version, $path),
 				Job::KIND_WAVEFORM => $this->runWaveform($version, $path),
 				Job::KIND_SCRUB => $this->runScrub($version, $path),
+				Job::KIND_LOUDNESS => $this->runLoudness($version, $path),
 				default => throw new \RuntimeException('Unknown job kind ' . $job->getKind()),
 			};
 			$this->guard();
@@ -688,14 +687,12 @@ class DerivedMedia {
 		$bytes = 0;
 		// In a request no further than the header says, and a little: sound that runs on is the queue's
 		$bound = $this->inRequest ? $this->durationSeconds($version) + 5 : null;
-		// One decode for both: the PCM of the peaks, and the loudness measured at the original rate over every channel (A5); its summary is at the info level
 		$result = $this->ffmpeg->run($this->ffmpeg->ffmpeg(), [
-			'-nostdin', '-nostats', '-hide_banner', '-v', 'info',
-			...($bound === null ? [] : ['-t', (string)$bound]),
+			'-nostdin', '-v', 'error',
 			...Ffmpeg::input($path),
-			'-filter_complex', '[0:a:0]asplit=2[pcm][meter];[meter]ebur128=peak=true:framelog=quiet[measured]',
-			'-map', '[pcm]', '-ar', (string)self::WAVEFORM_PCM_RATE, '-c:a', 'pcm_s16le', '-f', 's16le', 'pipe:1',
-			'-map', '[measured]', '-f', 'null', '-',
+			'-map', '0:a:0', '-ar', (string)self::WAVEFORM_PCM_RATE,
+			...($bound === null ? [] : ['-t', (string)$bound]),
+			'-c:a', 'pcm_s16le', '-f', 's16le', 'pipe:1',
 		], $this->inRequest ? self::AUDIO_NOW_TIMEOUT : 3600, function (string $pcm) use ($peaks, $channels, &$bytes): bool {
 			$bytes += strlen($pcm);
 			$this->reached((int)($bytes / (2 * $channels * self::WAVEFORM_PCM_RATE) * 1e6));
@@ -708,8 +705,31 @@ class DerivedMedia {
 		if ($result['code'] !== 0) {
 			throw new \RuntimeException($result['stderr'] ?: 'ffmpeg exited with ' . $result['code']);
 		}
-		// Stopped at the most peaks a Waveform has, ffmpeg printed no summary: no numbers rather than those of a part
-		$this->put($version, 'waveform', self::waveformJson($rate, $peaks->peaks(), self::loudnessOf($result['stderr'])));
+		$this->put($version, 'waveform', self::waveformJson($rate, $peaks->peaks()));
+		// Measuring the loudness would cost the Waveform five times its time, so it follows when the queue has nothing else to do (A5)
+		$this->enqueue($version->getId(), Job::KIND_LOUDNESS);
+	}
+
+	/**
+	 * The loudness of a Version with a Waveform from ffmpeg (A5): integrated
+	 * loudness and true peak by ffmpeg's ebur128 at the original rate over
+	 * every channel (it weights the surrounds of 5.1 and 7.1 and leaves out
+	 * the LFE), written into the Waveform's JSON, which takes its name only
+	 * once whole. A run stopped early prints no summary and gives no numbers.
+	 */
+	private function runLoudness(Version $version, string $path): void {
+		$result = $this->ffmpeg->run($this->ffmpeg->ffmpeg(), [
+			// The summary comes at the info level
+			'-nostdin', '-nostats', '-hide_banner', '-v', 'info', '-progress', 'pipe:1',
+			...Ffmpeg::input($path),
+			'-map', '0:a:0', '-af', 'ebur128=peak=true:framelog=quiet', '-f', 'null', '-',
+		], 3600, fn (string $chunk) => $this->progressed($chunk));
+		$loudness = $result['code'] === 0 ? self::loudnessOf($result['stderr']) : null;
+		if ($loudness === null) {
+			throw new \RuntimeException($this->ffmpeg->tail($result['stderr']) ?: 'ffmpeg gave no loudness');
+		}
+		$waveform = json_decode($this->file($version, 'waveform')->getContent(), true, 4, JSON_THROW_ON_ERROR);
+		$this->put($version, 'waveform', json_encode(['loudness' => $loudness] + $waveform, JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION));
 	}
 
 	/**
@@ -1325,7 +1345,8 @@ class DerivedMedia {
 	/** Sets the state of one kind on the Version; a failure also records its error */
 	private function mark(int $versionId, string $kind, string $state, ?string $error = null): void {
 		$version = $this->versions->find($versionId);
-		if ($version === null) {
+		// The loudness has no state on the Version, and its failure fails nothing a Member sees: the job keeps its error for the admin
+		if ($version === null || $kind === Job::KIND_LOUDNESS) {
 			return;
 		}
 		match ($kind) {

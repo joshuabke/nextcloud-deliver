@@ -7,7 +7,7 @@ status: accepted
 ADR 0003 has all derived media made by Nextcloud's background jobs, one ffmpeg at a time by default. On a plain install that is cron every five minutes, and a fresh audio upload's Waveform waited for the next cron run, then behind every Proxy queued before it: a reviewer opening the mix right after the upload found none. Audio is cheap to read, so with ffmpeg the first audio file a request brings (an upload in Files, a sync client, Deliver's own upload, delivering again) is read and gets its Waveform in that request, and it is there when the upload is.
 
 Only within bounds, so an upload never waits long and a request never does a job's work:
-- a file on local, unencrypted storage (elsewhere ffmpeg would read a copy made first at that storage's speed), of 1 byte to 256 MB, at most 15 minutes long and at no more bytes a second than 192 kHz 32-bit stereo PCM;
+- a file on local, unencrypted storage (elsewhere ffmpeg would read a copy made first at that storage's speed), of 1 byte to 256 MB, at most 30 minutes long and at no more bytes a second than 192 kHz 32-bit stereo PCM;
 - ffprobe and ffmpeg each for at most 15 seconds, ffmpeg no further than the header's length and 5 seconds;
 - at most `max_jobs` requests at once, beside the queue's own `max_jobs`: with one shared count an audio upload beside a running Proxy would wait for the queue again, which is what this changes;
 - one file a request: a request that brings many (a sync client's bulk upload of up to about a hundred small files, an app unpacking an archive) reads only its first, so it stays within 30 seconds, and its others go to the queue; never a folder taken in at once (a Folder Project made or switched to Auto Intake, the hourly scan).

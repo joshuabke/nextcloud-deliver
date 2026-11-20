@@ -38,6 +38,10 @@ class Job extends Entity {
 	public const KIND_THUMBS = 'thumbs';
 	public const KIND_WAVEFORM = 'waveform';
 	public const KIND_SCRUB = 'scrub';
+	/** The loudness of a Version with a Waveform from ffmpeg, made after everything else (A5) */
+	public const KIND_LOUDNESS = 'loudness';
+	/** Kinds that hold up no other work: they run last, and others start beside them */
+	public const BACKGROUND_KINDS = [self::KIND_SCRUB, self::KIND_LOUDNESS];
 
 	/** Who works on a job a request runs itself, to read an original or make a Waveform right away */
 	public const REQUEST = 'request';
