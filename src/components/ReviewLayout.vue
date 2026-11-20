@@ -336,7 +336,7 @@ body.deliver-review footer {
 	height: calc(56.25vw + 102px);
 }
 
-@media (max-width: 460px) {
+@media (max-width: 440px) {
 	.deliver-layout--upright.deliver-layout--middle .deliver-layout__main {
 		height: calc(56.25vw + 136.5px);
 	}

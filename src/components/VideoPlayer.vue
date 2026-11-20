@@ -1303,6 +1303,8 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	display: flex;
 	flex-direction: column;
 	height: 100%;
+	/* The bar asks how wide the player is, not the window: beside a list it is narrower */
+	container: deliver-player / inline-size;
 	background: var(--color-main-background);
 	/* Holding a finger down plays faster; it must not select text or open the callout */
 	user-select: none;
@@ -1653,8 +1655,8 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	grid-template-columns: minmax(max-content, 1fr) auto minmax(0, 1fr);
 }
 
-/* Where five transport buttons and the time do not fit one row, the time goes under them */
-@media (max-width: 460px) {
+/* Where five transport buttons and the time do not fit one row (438 px with the video's buttons), the time goes under them */
+@container deliver-player (max-width: 440px) {
 	.deliver-player--mobile .deliver-player__controls {
 		grid-template-columns: minmax(0, 1fr) auto;
 	}
