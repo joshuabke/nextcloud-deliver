@@ -36,13 +36,15 @@ const props = defineProps({
 	canComment: { type: Boolean, default: false },
 	/** Where the Comment being written goes, {inFrame, outFrame}, while the field holds it */
 	pending: { type: Object, default: null },
+	/** Whether the field is open at the Waveform, at the place it holds (N12); the view hands it in as the composer slot */
+	composing: { type: Boolean, default: false },
 })
 
 /**
  * seek: a Frame to go to, keeping the playback state; hold and release: a drag holds playback and lets it go on;
- * comment: a Frame to comment on; jump: a Comment to go to
+ * comment: a Frame to comment on; jump: a Comment to go to; closeComposer: the field at the Waveform is closed from here
  */
-const emit = defineEmits(['seek', 'hold', 'release', 'comment', 'jump'])
+const emit = defineEmits(['seek', 'hold', 'release', 'comment', 'jump', 'closeComposer'])
 
 /** Room above the wave for the zoom buttons, and below it for the Comments' circles, in px */
 const TOP = 40
@@ -407,6 +409,16 @@ onBeforeUnmount(() => {
 	cancelAnimationFrame(frameRequest)
 })
 
+/** Where the field at the Waveform stands: at its place when it opened, kept on the stage */
+const composeLeft = ref(0)
+watch(() => props.composing && props.pending?.inFrame, () => {
+	if (props.composing && props.pending) {
+		card.value = null
+		const x = props.pending.inFrame * perFrame() - offsetAt(now())
+		composeLeft.value = Math.min(size.width - CARD_HALF - 8, Math.max(CARD_HALF + 8, x))
+	}
+})
+
 /** The pointers on the stage, for a pinch */
 const pointers = new Map()
 /** The pointer that came down, until it lifts: a tap, or a drag once it moves */
@@ -644,6 +656,10 @@ function openCircle(circle, x) {
  * @param {?object[]} siblings - the Comments of its place to step through, where no zoom parts them
  */
 function open(comment, x, siblings) {
+	// A Comment's card and the field never show at once
+	if (props.composing) {
+		emit('closeComposer')
+	}
 	card.value = { id: comment.id, left: Math.min(size.width - CARD_HALF - 8, Math.max(CARD_HALF + 8, x)), siblings }
 	store.selected = comment.id
 }
@@ -746,6 +762,15 @@ function label(step) {
 			@close="card = null"
 			@jump="goTo"
 			@show="show" />
+		<!-- The field at the Waveform, while the Comment list is out of sight (N12) -->
+		<WaveformCard
+			v-else-if="composing && pending"
+			:label="t('deliver', 'New Comment')"
+			:left="isMobile ? null : composeLeft"
+			:inside="[host]"
+			@close="emit('closeComposer')">
+			<slot name="composer" />
+		</WaveformCard>
 	</div>
 </template>
 

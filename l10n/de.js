@@ -680,7 +680,8 @@ OC.L10N.register(
 		"Comment #{number}": "Kommentar #{number}",
 		"Show the Assets as a list": "Assets als Liste zeigen",
 		"Previous Comment": "Vorheriger Kommentar",
-		"Next Comment": "Nächster Kommentar"
+		"Next Comment": "Nächster Kommentar",
+		"New Comment": "Neuer Kommentar"
 	},
 	undefined
 );

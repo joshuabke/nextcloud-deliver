@@ -16,6 +16,7 @@ import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import ApprovalControl from '../components/ApprovalControl.vue'
 import AssetStepper from '../components/AssetStepper.vue'
+import CommentComposer from '../components/CommentComposer.vue'
 import CommentPanel from '../components/CommentPanel.vue'
 import DueDate from '../components/DueDate.vue'
 import ImageViewer from '../components/ImageViewer.vue'
@@ -25,7 +26,7 @@ import ReviewLayout from '../components/ReviewLayout.vue'
 import VersionPicker from '../components/VersionPicker.vue'
 import VideoPlayer from '../components/VideoPlayer.vue'
 import { claimReviewer, errorMessage, getPublicContext, listPublicAssets } from '../api.js'
-import { usePanelOpen } from '../composables/panel.js'
+import { listOutOfSight, usePanelOpen } from '../composables/panel.js'
 import { useReview } from '../composables/review.js'
 import { conflictMessage } from '../lib/conflict.js'
 import { folderOrder } from '../lib/folders.js'
@@ -65,11 +66,15 @@ const version = computed(() => context.value?.versions.find((each) => each.id ==
 const assetIndex = computed(() => (newest.value ?? []).findIndex((each) => each.assetId === context.value?.asset?.id))
 const assetCount = computed(() => newest.value?.length ?? 0)
 
-const { player, panel, mode, clock, anchor, pinned, pin, hold, release, letGo, jump, posted, drawing, draft, draw, range, markRange, clearRange } = useReview({
+const { player, panel, inline, composing, startComment, closeInline, mode, clock, anchor, pinned, letGo, jump, posted, drawing, draft, draw, range, markRange, clearRange } = useReview({
 	version,
 	projectMode: computed(() => context.value?.project.timecodeMode ?? 'smpte'),
 	projectFps: computed(() => context.value?.project.fps ?? { num: 25, den: 1 }),
 	refresh: reload,
+	collapsed: listOutOfSight(panelOpen, isMobile),
+	openPanel: () => {
+		panelOpen.value = true
+	},
 })
 
 watch(current, async (versionId) => {
@@ -279,10 +284,26 @@ async function claim({ name, email, mail }) {
 				:canComment="store.canComment === true && store.me?.type !== 'unnamed'"
 				:pending="pinned"
 				:watermark="context.flags.watermark ? watermarkText : null"
-				@comment="pin($event); panelOpen = true"
+				:composing="composing"
+				@comment="startComment"
 				@jump="jump"
 				@swipe="step"
-				@seeked="letGo" />
+				@seeked="letGo"
+				@closeComposer="closeInline">
+				<!-- With the list out of sight, a Comment on audio is written at the Waveform (N12): the same field as under the list -->
+				<template #composer>
+					<CommentComposer
+						ref="inline"
+						inline
+						:clock="clock"
+						:anchor="anchor"
+						:range="range"
+						@posted="posted"
+						@left="letGo"
+						@range="markRange"
+						@clearRange="clearRange" />
+				</template>
+			</component>
 
 			<template #panel>
 				<CommentPanel
@@ -299,9 +320,7 @@ async function claim({ name, email, mail }) {
 					@claim="claim"
 					@jump="jump"
 					@posted="posted"
-					@typing="hold"
-					@left="letGo"
-					@cleared="release" />
+					@left="letGo" />
 			</template>
 		</ReviewLayout>
 	</div>

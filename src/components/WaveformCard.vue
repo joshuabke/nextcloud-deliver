@@ -14,7 +14,10 @@ import { useCommentsStore } from '../store/comments.js'
 // "Go to". At the wave, or on a phone a sheet from below.
 
 const props = defineProps({
-	comment: { type: Object, required: true },
+	/** The Comment shown; none for the field a new one is written in, handed in as the default slot (N12) */
+	comment: { type: Object, default: null },
+	/** Its name for a screen reader where it shows no Comment */
+	label: { type: String, default: '' },
 	/** How time is shown */
 	clock: { type: Object, required: true },
 	/** Where on the stage it stands, its middle; null for the sheet */
@@ -30,8 +33,8 @@ const emit = defineEmits(['close', 'jump', 'show'])
 
 const store = useCommentsStore()
 const root = ref(null)
-const number = computed(() => store.numbers.get(props.comment.id) ?? null)
-const index = computed(() => props.siblings?.findIndex((each) => each.id === props.comment.id) ?? -1)
+const number = computed(() => props.comment ? store.numbers.get(props.comment.id) ?? null : null)
+const index = computed(() => props.siblings?.findIndex((each) => each.id === props.comment?.id) ?? -1)
 /** Where the focus was, to have it back when the card goes */
 const before = document.activeElement
 
@@ -67,15 +70,37 @@ function onOutside(event) {
 		|| props.inside.some((element) => element?.contains(target))) {
 		return
 	}
+	// The field for a new Comment stays while it holds text: its place is kept until the Comment is sent or the field emptied
+	if (props.comment === null && busy()) {
+		return
+	}
 	emit('close')
 }
 
+/**
+ * A phone's keyboard covers the bottom of the layout viewport without
+ * shrinking it (iOS): the sheet sits on the keyboard's top edge, so its
+ * field stays visible while one writes in it
+ */
+const keyboardRoom = ref(null)
+const viewport = window.visualViewport
+
+/** The visual viewport moved or shrank */
+function onViewport() {
+	const covered = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+	keyboardRoom.value = covered > 0 ? { bottom: covered + 'px' } : null
+}
+
 onMounted(() => {
+	viewport?.addEventListener('resize', onViewport)
+	viewport?.addEventListener('scroll', onViewport)
 	root.value.focus()
 	window.addEventListener('keydown', onKey)
 	document.addEventListener('pointerdown', onOutside, true)
 })
 onBeforeUnmount(() => {
+	viewport?.removeEventListener('resize', onViewport)
+	viewport?.removeEventListener('scroll', onViewport)
 	window.removeEventListener('keydown', onKey)
 	document.removeEventListener('pointerdown', onOutside, true)
 	// The focus goes back where it was, unless it has moved on elsewhere meanwhile
@@ -91,14 +116,15 @@ onBeforeUnmount(() => {
 		ref="root"
 		class="deliver-wave-card"
 		:class="{ 'deliver-wave-card--sheet': left === null }"
-		:style="left === null ? null : { left: left + 'px' }"
+		:style="left === null ? keyboardRoom : { left: left + 'px' }"
 		role="dialog"
-		:aria-label="t('deliver', 'Comment #{number}', { number })"
+		:aria-label="comment ? t('deliver', 'Comment #{number}', { number }) : label"
 		tabindex="-1"
 		@pointerdown.stop
 		@dblclick.stop
 		@wheel.stop>
-		<ul class="deliver-wave-card__thread">
+		<slot v-if="!comment" />
+		<ul v-else class="deliver-wave-card__thread">
 			<CommentItem
 				:comment="comment"
 				:clock="clock"
@@ -106,7 +132,7 @@ onBeforeUnmount(() => {
 				replyOpen
 				@jump="emit('jump', $event)" />
 		</ul>
-		<div class="deliver-wave-card__actions">
+		<div v-if="comment" class="deliver-wave-card__actions">
 			<template v-if="siblings">
 				<NcButton
 					variant="tertiary"

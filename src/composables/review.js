@@ -1,5 +1,6 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { derivedPending, isStill } from '../lib/media.js'
+import { useCommentsStore } from '../store/comments.js'
 import { sheet } from './panel.js'
 
 /** How long to wait before asking again while derived media is being made */
@@ -15,10 +16,15 @@ const DERIVED_RECHECK = 10000
  * @param {import('vue').Ref<string>} options.projectMode - the Project's timecode display
  * @param {import('vue').Ref<{num: number, den: number}>} options.projectFps - the Project's frame rate, at which audio is read as timecode
  * @param {() => Promise<void>} options.refresh - reloads the view's context
+ * @param {import('vue').Ref<boolean>} options.collapsed - whether the Comment list is out of sight: on a desktop the panel closed, on a phone held sideways the list not beside the picture
+ * @param {() => void} options.openPanel - brings the Comment list out
  */
-export function useReview({ version, projectMode, projectFps, refresh }) {
+export function useReview({ version, projectMode, projectFps, refresh, collapsed, openPanel }) {
 	const player = ref(null)
 	const panel = ref(null)
+	/** The field at the Waveform, while it is open (N12) */
+	const inline = ref(null)
+	const store = useCommentsStore()
 	/** Session-local override of the Project's timecode display (story 22); audio has its own, starting at milliseconds */
 	const videoMode = ref(projectMode.value)
 	const audioMode = ref('ms')
@@ -80,6 +86,13 @@ export function useReview({ version, projectMode, projectFps, refresh }) {
 	}
 
 	/**
+	 * Whether the field is open at the Waveform: on audio with its Waveform
+	 * while the Comment list is out of sight, a Comment begins there instead
+	 * of bringing the list out (N12)
+	 */
+	const composing = ref(false)
+
+	/**
 	 * The field gets the focus once a hidden panel is out; on a phone held
 	 * sideways the list comes out beside the picture for it
 	 *
@@ -89,9 +102,55 @@ export function useReview({ version, projectMode, projectFps, refresh }) {
 		pinnedByTyping = false
 		loose = audio.value && where.outFrame === null
 		pinned.value = where
+		if (composing.value) {
+			nextTick(() => inline.value?.focus())
+			return
+		}
 		sheet.aside.value = true
 		nextTick(() => panel.value?.focus())
 	}
+
+	/**
+	 * C, the Comment button, a double click or a long press on the Waveform
+	 *
+	 * @param {{inFrame: number, outFrame: ?number}} where - the Frame or Range to comment on
+	 */
+	function startComment(where) {
+		if (audio.value && version.value?.derived?.waveform?.state === 'ready' && collapsed?.value) {
+			composing.value = true
+		} else {
+			openPanel?.()
+		}
+		pin(where)
+	}
+
+	/** The field at the Waveform closes by itself once its place is let go or used up; opening the list takes the Comment there */
+	watch(pinned, (place) => {
+		if (place === null) {
+			composing.value = false
+		}
+	})
+	watch(() => collapsed?.value, (now) => {
+		if (!now && composing.value) {
+			composing.value = false
+			nextTick(() => panel.value?.focus())
+		}
+	})
+
+	/** The field at the Waveform is closed from there: Escape, a click outside, a Comment's card; its place goes with an empty field */
+	function closeInline() {
+		composing.value = false
+		letGo()
+	}
+
+	// The first keystroke fixes where the Comment goes; emptying the field undoes that, whichever field it is
+	watch(() => store.draft.body.trim() === '', (empty, wasEmpty) => {
+		if (wasEmpty && !empty) {
+			hold()
+		} else if (empty && !wasEmpty) {
+			release()
+		}
+	})
 
 	/**
 	 * @param {{inFrame: number}} comment - the Comment to seek to
@@ -190,5 +249,5 @@ export function useReview({ version, projectMode, projectFps, refresh }) {
 	}, { immediate: true })
 	onBeforeUnmount(() => clearTimeout(recheck))
 
-	return { player, panel, mode, clock, anchor, pinned, pin, hold, release, letGo, jump, posted, drawing, draft, draw, range, markRange, clearRange }
+	return { player, panel, inline, composing, startComment, closeInline, mode, clock, anchor, pinned, pin, hold, release, letGo, jump, posted, drawing, draft, draw, range, markRange, clearRange }
 }

@@ -1214,6 +1214,65 @@ test.describe('Audio review', () => {
 		await expect(card).toHaveCount(0)
 	})
 
+	test('with the Comment list hidden, a Comment on audio is written at the Waveform and the list stays hidden', async () => {
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		const canvas = page.locator('.deliver-wave canvas')
+		await expect(canvas).toBeVisible()
+		const audio = page.locator('video.deliver-player__video')
+		await expect(audio).toHaveJSProperty('readyState', 4)
+		await page.getByRole('button', { name: '1 min' }).click()
+		await audio.evaluate((element) => {
+			element.currentTime = 200
+		})
+		await page.getByRole('button', { name: 'Hide Comments' }).click()
+		const list = page.locator('.deliver-layout__panel')
+		await expect(list).toBeHidden()
+		const box = await canvas.boundingBox()
+		const quarterOn = { position: { x: box.width * 0.75, y: box.height / 2 } }
+		const popup = page.getByRole('dialog', { name: 'New Comment' })
+		const field = popup.locator('#deliver-comment-body-inline')
+
+		// A double click opens the field at the wave, at that Frame, instead of the list
+		await canvas.dblclick(quarterOn)
+		await expect(popup).toBeVisible()
+		await expect(field).toBeFocused()
+		await expect(popup.locator('.deliver-comments__anchor')).toHaveText('3:35.000')
+		await field.fill('written at the wave')
+		await field.press('Enter')
+		await expect(popup).toHaveCount(0)
+		await expect(list).toBeHidden()
+		// Its circle stands under the playhead, which stands on its Frame
+		await expect.poll(() => canvas.evaluate((element) => {
+			const ratio = element.width / element.clientWidth
+			const pixel = element.getContext('2d').getImageData(Math.round(element.width / 2) + Math.round(8 * ratio), element.height - Math.round(20 * ratio), 1, 1).data
+			return pixel[3]
+		})).toBeGreaterThan(0)
+
+		// Escape on the empty field closes it and lets go of the place
+		await canvas.dblclick(quarterOn)
+		await expect(field).toBeFocused()
+		await field.press('Escape')
+		await expect(popup).toHaveCount(0)
+		await audio.evaluate((element) => {
+			element.currentTime = 250
+		})
+
+		// The draft is the list's: opening the list mid-sentence takes it there and closes the field at the wave
+		await canvas.dblclick(quarterOn)
+		await field.fill('half a thought')
+		await page.getByRole('button', { name: 'Show Comments' }).click()
+		await expect(popup).toHaveCount(0)
+		await expect(page.locator('#deliver-comment-body')).toHaveValue('half a thought')
+		await expect(page.locator('.deliver-comments__list')).toContainText('written at the wave')
+		await expect(page.locator('.deliver-comments__anchor')).toHaveText('4:25.000')
+		// Emptied, the field follows the player again
+		await page.locator('#deliver-comment-body').fill('')
+		await audio.evaluate((element) => {
+			element.currentTime = 300
+		})
+		await expect(page.locator('.deliver-comments__anchor')).toHaveText('5:00.000')
+	})
+
 	test('on a phone a pinch only zooms, a long press comments, and the card hands the focus back; a Reviewer who may not comment reads the cards and writes nothing', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		const comments = `/ocs/v2.php/apps/deliver/api/v1/versions/${versionId}/comments?format=json`

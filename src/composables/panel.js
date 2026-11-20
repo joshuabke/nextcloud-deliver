@@ -1,4 +1,4 @@
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 const KEY = 'deliver.panelOpen'
 
@@ -36,3 +36,16 @@ export const landscape = ref(sideways.matches)
 sideways.addEventListener('change', () => {
 	landscape.value = sideways.matches
 })
+
+/**
+ * Whether the Comment list is out of sight: on a desktop the panel closed,
+ * on a phone held sideways the list not beside the picture. Upright, a phone
+ * always shows the field under the picture.
+ *
+ * @param {import('vue').Ref<boolean>} panelOpen - the desktop's panel
+ * @param {import('vue').Ref<boolean>} isMobile - whether this is a phone
+ * @return {import('vue').ComputedRef<boolean>}
+ */
+export function listOutOfSight(panelOpen, isMobile) {
+	return computed(() => isMobile.value ? landscape.value && !sheet.aside.value : !panelOpen.value)
+}
