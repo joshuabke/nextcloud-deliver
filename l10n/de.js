@@ -133,7 +133,7 @@ OC.L10N.register(
 		"Language": "Sprache",
 		"Last failed job": "Zuletzt fehlgeschlagener Job",
 		"Latest activity": "Letzte Aktivität",
-		"Layout": "Anordnung",
+		"Layout": "Darstellung",
 		"Leave a Comment…": "Kommentar schreiben …",
 		"Leave fullscreen": "Vollbild verlassen",
 		"Link copied": "Link kopiert",
@@ -667,7 +667,9 @@ OC.L10N.register(
 		"Make missing derived media from a file on this computer": "Fehlende abgeleitete Medien aus einer Datei auf diesem Computer erzeugen",
 		"This file is not the original of this Version: its size or date differs.": "Diese Datei ist nicht das Original dieser Version: Größe oder Datum weichen ab.",
 		"All files": "Alle Dateien",
-		"Show every Asset without folders": "Alle Assets ohne Ordner zeigen"
+		"Show every Asset without folders": "Alle Assets ohne Ordner zeigen",
+		"Show the Assets as cards": "Assets als Karten zeigen",
+		"Show the Assets as a list": "Assets als Liste zeigen"
 	},
 	undefined
 );

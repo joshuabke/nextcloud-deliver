@@ -1,17 +1,26 @@
 <script setup>
+import changesIcon from '@mdi/svg/svg/alert-circle-outline.svg?raw'
+import approvedIcon from '@mdi/svg/svg/check-decagram.svg?raw'
+import commentIcon from '@mdi/svg/svg/comment-outline.svg?raw'
 import downloadIcon from '@mdi/svg/svg/download.svg?raw'
 import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
 import audioIcon from '@mdi/svg/svg/music-note-outline.svg?raw'
 import videoIcon from '@mdi/svg/svg/play-box-outline.svg?raw'
+import { loadState } from '@nextcloud/initial-state'
 import { computed, onBeforeUnmount, onMounted, reactive, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DueDate from './DueDate.vue'
+import LayoutSwitch from './LayoutSwitch.vue'
 import MediaStill from './MediaStill.vue'
 import SortMenu from './SortMenu.vue'
+import { useLayout } from '../composables/layout.js'
 import { LINK_SORTS, SORT_OPTIONS, sortAssets } from '../lib/filters.js'
 import { folderLevel, inFolder, zipped } from '../lib/folders.js'
 import { n, t } from '../lib/l10n.js'
+import { decisionOf } from '../lib/listView.js'
+import { isStill } from '../lib/media.js'
+import { runtime } from '../lib/timecode.js'
 
 // A link with several Assets opens on its folders and Assets, folders first, under its description (stories 123, 125)
 /** The folder shown, relative to the Project folder; '' for its top. The page above keeps it while an Asset is open */
@@ -27,6 +36,17 @@ const props = defineProps({
 
 const emit = defineEmits(['open'])
 
+/** Cards or compact rows, remembered in this browser for this link */
+const look = useLayout(() => `link-${loadState('deliver', 'token', '')}`)
+/**
+ * @param {object} asset - a link's Asset with its newest Version
+ * @return {{kind: string, text: string, icon: string}|null} what the Reviewers decided on it
+ */
+function decisionOfAsset(asset) {
+	const found = decisionOf(asset.approvals)
+	return found && { ...found, icon: found.kind === 'changes' ? changesIcon : approvedIcon }
+}
+const lengthOf = (asset) => isStill(asset) ? null : runtime(asset.durationFrames, asset.fps)
 const isAudio = (asset) => asset.mimeType?.startsWith('audio/')
 /** What can go into a ZIP: a file shared without downloads shows but never downloads */
 const downloadable = computed(() => props.assets.filter((asset) => asset.downloadUrl))
@@ -124,6 +144,7 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 						@click="pickAll">
 						{{ t('deliver', 'Select all') }}
 					</NcButton>
+					<LayoutSwitch v-model="look" />
 					<SortMenu v-if="assets.length > 1" v-model="sort" :sorts="sorts" />
 					<!-- The Reviewer's own menu -->
 					<slot name="me" />
@@ -165,8 +186,8 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 					</button>
 				</template>
 			</div>
-			<ul class="deliver-landing__grid">
-				<li v-for="sub in level.folders" :key="'folder:' + sub.path" class="deliver-landing__card">
+			<ul class="deliver-landing__grid" :class="{ 'deliver-landing__grid--list': look === 'list' }">
+				<li v-for="sub in level.folders" :key="'folder:' + sub.path" class="deliver-landing__card deliver-landing__card--folder">
 					<div class="deliver-landing__media">
 						<button type="button" class="deliver-landing__folder" @click="folder = sub.path">
 							<NcIconSvgWrapper :svg="folderIcon" :size="40" />
@@ -196,7 +217,7 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 									:fileId="asset.fileId"
 									:scrubUrl="asset.scrubUrl"
 									fit="contain" />
-								<span class="deliver-landing__badge">{{ t('deliver', 'V{number}', { number: asset.number }) }}</span>
+								<span v-if="look === 'grid'" class="deliver-landing__badge">{{ t('deliver', 'V{number}', { number: asset.number }) }}</span>
 							</span>
 						</button>
 						<input
@@ -209,13 +230,26 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 							@change="toggle(selected, asset.assetId, $event.target.checked)">
 					</div>
 					<div class="deliver-landing__foot">
-						<button
-							type="button"
-							class="deliver-landing__name"
-							:title="asset.name"
-							@click="emit('open', asset.newestId)">
-							{{ asset.name }}
-						</button>
+						<div class="deliver-landing__text">
+							<button
+								type="button"
+								class="deliver-landing__name"
+								:title="asset.name"
+								@click="emit('open', asset.newestId)">
+								{{ asset.name }}
+							</button>
+							<div v-if="look === 'list'" class="deliver-landing__facts">
+								<span class="deliver-landing__fact-version">{{ t('deliver', 'V{number}', { number: asset.number }) }}</span>
+								<span v-if="lengthOf(asset)">{{ lengthOf(asset) }}</span>
+								<span v-if="decisionOfAsset(asset)" :title="decisionOfAsset(asset).text" :class="`deliver-landing__fact--${decisionOfAsset(asset).kind}`">
+									<NcIconSvgWrapper :svg="decisionOfAsset(asset).icon" :size="14" inline />
+								</span>
+								<span v-if="asset.comments">
+									<NcIconSvgWrapper :svg="commentIcon" :size="14" inline />
+									{{ asset.comments }}
+								</span>
+							</div>
+						</div>
 						<DueDate v-if="asset.dueDate" :modelValue="asset.dueDate" />
 						<NcButton
 							v-if="asset.downloadUrl"
@@ -480,5 +514,79 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	font-weight: bold;
+}
+
+.deliver-landing__text {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.deliver-landing__facts {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px calc(2 * var(--default-grid-baseline));
+	color: var(--color-text-maxcontrast);
+	font-size: 13px;
+}
+
+.deliver-landing__fact-version {
+	color: var(--color-main-text);
+	font-weight: bold;
+}
+
+.deliver-landing__fact--approved {
+	color: #4caf50;
+}
+
+.deliver-landing__fact--changes {
+	color: #f0a030;
+}
+
+/* Compact rows: the still shrinks to a thumbnail beside the name and its facts */
+.deliver-landing__grid--list {
+	grid-template-columns: minmax(0, 1fr);
+	gap: calc(2 * var(--default-grid-baseline));
+}
+
+.deliver-landing__grid--list .deliver-landing__card {
+	flex-direction: row;
+	align-items: center;
+}
+
+.deliver-landing__grid--list .deliver-landing__media {
+	flex: none;
+	width: 96px;
+}
+
+.deliver-landing__grid--list .deliver-landing__foot {
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	border-top: none;
+}
+
+.deliver-landing__grid--list .deliver-landing__folder,
+.deliver-landing__grid--list .deliver-landing__folder:hover {
+	flex-direction: row;
+	min-height: 0;
+	padding: calc(2 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline));
+}
+
+.deliver-landing__grid--list .deliver-landing__folder-name {
+	flex: 1;
+	text-align: start;
+}
+
+.deliver-landing__grid--list .deliver-landing__card--folder .deliver-landing__media {
+	flex: 1;
+	width: auto;
+}
+
+@media (max-width: 480px) {
+	.deliver-landing__grid--list .deliver-landing__card:not(.deliver-landing__card--folder) .deliver-landing__media {
+		width: 72px;
+	}
 }
 </style>

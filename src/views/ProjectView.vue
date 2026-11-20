@@ -42,11 +42,13 @@ import CaptionsDialog from '../components/CaptionsDialog.vue'
 import ContextMenu from '../components/ContextMenu.vue'
 import DueDateDialog from '../components/DueDateDialog.vue'
 import FilterBar from '../components/FilterBar.vue'
+import LayoutSwitch from '../components/LayoutSwitch.vue'
 import NotUpForReviewCard from '../components/NotUpForReviewCard.vue'
 import ProjectSettingsDialog from '../components/ProjectSettingsDialog.vue'
 import RenameDialog from '../components/RenameDialog.vue'
 import VersionStack from '../components/VersionStack.vue'
 import { assignAsset, deleteAsset, disableAsset, enableFile, errorMessage, regenerateVersion, removeProxy, renameFile, stackVersion, updateAsset } from '../api.js'
+import { useLayout } from '../composables/layout.js'
 import { useQuery } from '../composables/query.js'
 import { confirmRemoval } from '../confirm.js'
 import { allMissing, between, FILTER_LABELS, FILTERS, found, passes, selectAll, SORT_OPTIONS, sortAssets, SORTS } from '../lib/filters.js'
@@ -170,6 +172,8 @@ const sort = useQuery('sort', SORTS, 'activity')
 const query = useQuery('q', null, '')
 /** Folders as Files shows them, or every Asset below the folder at once, grouped by folder */
 const layout = useQuery('view', ['folders', 'flat'], 'folders')
+/** Cards or compact rows, remembered in this browser for this Project; not the folders/flat layout above */
+const look = useLayout(() => `project-${props.id}`)
 const inView = computed(() => (project.value?.assets ?? []).filter((asset) => inFolder(asset, folder.value)))
 const filters = computed(() => FILTERS.map((id) => ({
 	id,
@@ -837,6 +841,7 @@ function dropped(event) {
 							<NcIconSvgWrapper :svg="flatIcon" />
 						</template>
 					</NcButton>
+					<LayoutSwitch v-model="look" />
 				</template>
 			</FilterBar>
 			<NcNoteCard v-if="offLinks" type="warning">
@@ -853,7 +858,7 @@ function dropped(event) {
 					: project.path
 						? t('deliver', 'Enable files for review in the Deliver tab of the Files sidebar.')
 						: t('deliver', 'Add files to this Project in the Deliver tab of the Files sidebar, wherever they lie.')" />
-			<ul v-if="browsing && level.folders.length" class="deliver-project__grid deliver-project__group">
+			<ul v-if="browsing && level.folders.length" class="deliver-project__grid deliver-project__group" :class="{ 'deliver-project__grid--list': look === 'list' }">
 				<li v-for="sub in level.folders" :key="sub.path">
 					<button type="button" class="deliver-project__folder-card" @click="folder = sub.path">
 						<NcIconSvgWrapper :svg="folderIcon" :size="32" />
@@ -867,7 +872,7 @@ function dropped(event) {
 					<NcIconSvgWrapper :svg="folderIcon" :size="20" />
 					{{ group.path }}
 				</h3>
-				<ul class="deliver-project__grid">
+				<ul class="deliver-project__grid" :class="{ 'deliver-project__grid--list': look === 'list' }">
 					<AssetCard
 						v-for="asset in group.assets"
 						:key="asset.id"
@@ -878,6 +883,7 @@ function dropped(event) {
 						:selecting="selected.length > 0"
 						:locked="tickedMissing !== null && tickedMissing !== allMissing(asset)"
 						:offLinks="offLinks > 0 && asset.offLinks"
+						:list="look === 'list'"
 						@select="toggle(asset, $event)"
 						@pick="pick(asset, $event)"
 						@stack="accept"
@@ -891,7 +897,7 @@ function dropped(event) {
 					<NcIconSvgWrapper :svg="notUpIcon" :size="20" />
 					{{ t('deliver', 'Not up for review') }}
 				</h3>
-				<ul class="deliver-project__grid">
+				<ul class="deliver-project__grid" :class="{ 'deliver-project__grid--list': look === 'list' }">
 					<NotUpForReviewCard
 						v-for="file in notUpForReview"
 						:key="file.fileId"
@@ -899,6 +905,7 @@ function dropped(event) {
 						:where="file.path ? file.path : project.name"
 						:canAdd="file.canAdd"
 						:adding="adding.has(file.fileId)"
+						:list="look === 'list'"
 						@add="add(file)"
 						@contextmenu.prevent="openFileMenu($event, file)"
 						@menu="openFileMenu($event, file)" />
@@ -1123,6 +1130,22 @@ function dropped(event) {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 	gap: calc(2 * var(--default-grid-baseline));
+}
+
+.deliver-project__grid--list {
+	grid-template-columns: minmax(0, 1fr);
+	gap: 0;
+}
+
+.deliver-project__grid--list > li {
+	border-bottom: 1px solid var(--color-border);
+}
+
+.deliver-project__grid--list .deliver-project__folder-card {
+	border-width: 0;
+	border-radius: var(--border-radius-large);
+	padding-block: var(--default-grid-baseline);
+	min-height: calc(var(--default-clickable-area) + 2 * var(--default-grid-baseline));
 }
 
 .deliver-project__hint {
