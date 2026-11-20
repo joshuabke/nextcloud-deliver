@@ -634,10 +634,10 @@ class DerivedMedia {
 			'-map', '0:a:0', '-ar', (string)self::WAVEFORM_PCM_RATE,
 			...($bound === null ? [] : ['-t', (string)$bound]),
 			'-c:a', 'pcm_s16le', '-f', 's16le', 'pipe:1',
-		], $this->inRequest ? self::AUDIO_NOW_TIMEOUT : 3600, function (string $pcm) use ($peaks, $channels, &$bytes): void {
-			$peaks->add($pcm);
+		], $this->inRequest ? self::AUDIO_NOW_TIMEOUT : 3600, function (string $pcm) use ($peaks, $channels, &$bytes): bool {
 			$bytes += strlen($pcm);
 			$this->reached((int)($bytes / (2 * $channels * self::WAVEFORM_PCM_RATE) * 1e6));
+			return $peaks->add($pcm);
 		});
 		if ($bound !== null && ($result['code'] === 124 || $bytes >= ($bound - 1) * 2 * $channels * self::WAVEFORM_PCM_RATE)) {
 			throw new \RuntimeException('Left to the queue: more than a request may take', self::TO_QUEUE);
