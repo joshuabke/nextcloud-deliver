@@ -516,6 +516,7 @@ const composeLeft = ref(0)
 watch(() => props.composing && props.pending?.inFrame, () => {
 	if (props.composing && props.pending) {
 		card.value = null
+		// Where the place stands once the wave has come to rest: a glide after the seek of a double click brings the mark under the card, which does not move
 		const x = props.pending.inFrame * perFrame() - offsetAt(now())
 		composeLeft.value = Math.min(size.width - CARD_HALF - 8, Math.max(CARD_HALF + 8, x))
 	}
@@ -803,8 +804,12 @@ function onWheel(event) {
 	}
 	if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
 		event.preventDefault()
-		following = true
-		emit('seek', frameOf(wheelSeek(now(), event.deltaX, event.deltaMode, shown.value, size.width, duration.value)))
+		const target = frameOf(wheelSeek(now(), event.deltaX, event.deltaMode, shown.value, size.width, duration.value))
+		// A swipe against the start or the end moves nothing, and must not keep the next seek from gliding
+		if (target !== frameOf(now())) {
+			following = true
+			emit('seek', target)
+		}
 	}
 }
 

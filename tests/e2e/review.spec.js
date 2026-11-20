@@ -1495,6 +1495,7 @@ test.describe('Audio review', () => {
 		await audio.evaluate((element) => {
 			element.currentTime = 215
 		})
+		await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - document.querySelector('video.deliver-player__video').currentTime))).toBeLessThan(0.01)
 		if (await page.getByRole('button', { name: 'Hide Comments' }).isVisible()) {
 			await page.getByRole('button', { name: 'Hide Comments' }).click()
 		}
@@ -1568,9 +1569,11 @@ test.describe('Audio review', () => {
 		await audio.evaluate((element) => {
 			element.currentTime = 215
 		})
+		await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - document.querySelector('video.deliver-player__video').currentTime))).toBeLessThan(0.01)
 		await canvas.dblclick(quarterOn)
 		await expect(popup).toBeVisible()
-		// 3:35 is a quarter of the stage left of the playhead now standing at 3:50
+		// 3:35 is a quarter of the stage left of the playhead now standing at 3:50, once the wave has glided there
+		await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - document.querySelector('video.deliver-player__video').currentTime))).toBeLessThan(0.01)
 		await canvas.click({ position: { x: box.width * 0.25, y: box.height - 20 } })
 		const card = page.getByRole('dialog', { name: /^Comment #/ })
 		await expect(card).toContainText('written at the wave')
@@ -1589,6 +1592,9 @@ test.describe('Audio review', () => {
 		const audio = page.locator('video.deliver-player__video')
 		await expect(audio).toHaveJSProperty('readyState', 4)
 		await page.getByRole('button', { name: '1 min' }).click()
+		if (await page.getByRole('button', { name: 'Show Comments' }).isVisible()) {
+			await page.getByRole('button', { name: 'Show Comments' }).click()
+		}
 		const anchor = page.locator('.deliver-comments__anchor')
 		const goTo = async (seconds) => {
 			await audio.evaluate((element, at) => {
