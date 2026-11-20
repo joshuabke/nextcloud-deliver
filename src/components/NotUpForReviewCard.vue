@@ -15,6 +15,8 @@ defineProps({
 	/** Whether the Member may add it for review */
 	canAdd: { type: Boolean, default: false },
 	adding: { type: Boolean, default: false },
+	/** One compact row instead of a card */
+	list: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['add', 'menu'])
@@ -24,7 +26,7 @@ const { press, fromButton } = useLongPress((where) => emit('menu', where))
 </script>
 
 <template>
-	<li class="deliver-not-up deliver-card__menu-host" v-on="press">
+	<li class="deliver-not-up deliver-card__menu-host" :class="{ 'deliver-card--row': list }" v-on="press">
 		<div class="deliver-card__link">
 			<div class="deliver-card__still">
 				<NcIconSvgWrapper :svg="file.mimeType.startsWith('audio/') ? audioIcon : videoIcon" :size="40" />
@@ -75,6 +77,7 @@ const { press, fromButton } = useLongPress((where) => emit('menu', where))
 
 .deliver-not-up__add {
 	align-self: flex-start;
+	justify-self: start;
 	margin-inline-start: calc(2 * var(--default-grid-baseline));
 }
 </style>

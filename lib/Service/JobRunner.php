@@ -26,6 +26,11 @@ class JobRunner {
 	/** How long that lasts in a worker; a cron run ends long before */
 	private const IDLE_PAUSE = 3600;
 
+	/** Until when no Waveform is made while idle: one that failed may have failed for a cause no Version has (storage offline), which would fail them all */
+	private int $idlePausedUntil = 0;
+	/** How long that lasts in a worker; a cron run ends long before */
+	private const IDLE_PAUSE = 3600;
+
 	public function __construct(
 		private JobMapper $jobs,
 		private DerivedMedia $media,

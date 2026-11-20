@@ -123,6 +123,29 @@ class CollectionsTest extends TestCase {
 		self::assertSame(404, $this->guest->ocs('GET', "/versions/{$final['data']['versionId']}")['status']);
 	}
 
+	public function testALinkListsTheCommentsAndDecisionOfTheNewestVersion(): void {
+		$project = $this->owner->ocs('POST', '/projects', ['name' => 'Acme spot'])['data']['id'];
+		$cut = $this->enable('clients/acme/cut.mp4', $project);
+		// Two Comments and an approval on the first Version, written before it has a newer one (a Stack takes review data on its newest Version only)
+		foreach ([['POST', 'comments', ['inFrame' => 1, 'body' => 'first']], ['POST', 'comments', ['inFrame' => 2, 'body' => 'second']], ['PUT', 'approval', ['status' => 'approved']]] as [$verb, $what, $data]) {
+			$done = $this->owner->ocs($verb, "/versions/{$cut['versionId']}/$what", $data);
+			self::assertContains($done['status'], [200, 201], json_encode($done['data']));
+		}
+		$this->owner->put('clients/acme/cut_v2.mp4', 'not really a video');
+		$final = $this->owner->ocs('POST', '/assets', ['fileId' => $this->owner->fileId('clients/acme/cut_v2.mp4'), 'assetId' => $cut['assetId']])['data'];
+		// One Comment and a request for changes on the newest
+		foreach ([['POST', 'comments', ['inFrame' => 1, 'body' => 'final']], ['PUT', 'approval', ['status' => 'changes']]] as [$verb, $what, $data]) {
+			$done = $this->owner->ocs($verb, "/versions/{$final['versionId']}/$what", $data);
+			self::assertContains($done['status'], [200, 201], json_encode($done['data']));
+		}
+
+		$link = $this->owner->ocs('POST', "/projects/$project/links")['data'];
+		$visitor = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $link['token']);
+		$entry = $visitor->call('GET', '/api/assets')['data'][0];
+		self::assertSame([1, ['approved' => 0, 'changes' => 1]], [$entry['comments'], $entry['approvals']], 'the list shows the newest Version, not the Stack');
+		self::assertArrayHasKey('durationFrames', $entry);
+	}
+
 	public function testALinkOnNoProjectShowsThePickedAssets(): void {
 		$project = $this->owner->ocs('POST', '/projects', ['name' => 'Acme spot'])['data']['id'];
 		$this->enable('clients/acme/cut.mp4', $project);
