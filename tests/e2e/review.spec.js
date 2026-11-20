@@ -1065,11 +1065,24 @@ test.describe('Audio review', () => {
 		await page.getByRole('button', { name: '1 min' }).click()
 		// The coverage of each device-pixel column right of the playhead, where every bar is drawn alike
 		const columns = async (seconds) => {
-			// Once the audio stands there, and the stage has drawn it
+			// Once the audio stands there, and the stage has glided there and stands still
 			await audio.evaluate((element, at) => new Promise((resolve) => {
-				element.addEventListener('seeked', () => requestAnimationFrame(() => requestAnimationFrame(resolve)), { once: true })
+				element.addEventListener('seeked', resolve, { once: true })
 				element.currentTime = at
 			}), seconds)
+			await canvas.evaluate((element) => new Promise((resolve) => {
+				let before = ''
+				const frame = () => {
+					const now = element.toDataURL()
+					if (now === before) {
+						resolve()
+					} else {
+						before = now
+						setTimeout(() => requestAnimationFrame(frame), 50)
+					}
+				}
+				requestAnimationFrame(frame)
+			}))
 			return canvas.evaluate((element) => {
 				const ratio = element.width / element.clientWidth
 				const top = Math.round(40 * ratio)
@@ -1101,6 +1114,143 @@ test.describe('Audio review', () => {
 		expect(best.difference).toBe(0)
 		expect(Math.abs(best.shift - width * 3.3 / 60)).toBeLessThanOrEqual(1)
 		await page.setViewportSize({ width: 1280, height: 720 })
+	})
+
+	test('after a click the wave glides to the new place within half a second, and jumps under reduced motion', async () => {
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		const canvas = page.locator('.deliver-wave canvas')
+		await expect(canvas).toBeVisible()
+		const audio = page.locator('video.deliver-player__video')
+		await expect(audio).toHaveJSProperty('readyState', 4)
+		await page.getByRole('button', { name: '1 min' }).click()
+		await audio.evaluate((element) => {
+			element.currentTime = 100
+		})
+		await expect.poll(() => canvas.evaluate((element) => element.drawnAt)).toBeCloseTo(100.0005, 2)
+		const box = await canvas.boundingBox()
+		// The seconds drawn, on every frame for 0.7 s: cheap to record, analysed afterwards
+		const record = () => canvas.evaluate((element) => new Promise((resolve) => {
+			const samples = []
+			const start = performance.now()
+			const frame = () => {
+				samples.push({ at: performance.now() - start, drawn: element.drawnAt })
+				if (performance.now() - start < 700) {
+					requestAnimationFrame(frame)
+				} else {
+					resolve(samples)
+				}
+			}
+			requestAnimationFrame(frame)
+		}))
+		const quarterOn = { position: { x: box.width * 0.75, y: box.height / 2 } }
+
+		let recording = record()
+		await canvas.click(quarterOn)
+		let samples = await recording
+		const target = await audio.evaluate((element) => element.currentTime)
+		expect(target).toBeCloseTo(115, 0)
+		expect(samples.at(-1).drawn).toBeCloseTo(target, 2)
+		// On the way, somewhere strictly between, and there within half a second of setting off
+		expect(samples.some((each) => each.drawn > 100.5 && each.drawn < target - 0.5)).toBe(true)
+		const moved = samples.find((each) => each.drawn > 100.01)
+		const arrived = samples.find((each) => Math.abs(each.drawn - target) < 0.01)
+		expect(arrived.at - moved.at).toBeLessThan(500)
+
+		// With reduced motion it is there at once
+		await page.emulateMedia({ reducedMotion: 'reduce' })
+		recording = record()
+		await canvas.click(quarterOn)
+		samples = await recording
+		expect(samples.every((each) => Math.abs(each.drawn - target) < 0.01 || Math.abs(each.drawn - (target + 15)) < 0.01)).toBe(true)
+		await page.emulateMedia({ reducedMotion: null })
+	})
+
+	test('the wave follows a swipe at once, never falls a glide behind a held key, and a click during a glide lands where the pointer is', async () => {
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		const canvas = page.locator('.deliver-wave canvas')
+		await expect(canvas).toBeVisible()
+		const audio = page.locator('video.deliver-player__video')
+		await expect(audio).toHaveJSProperty('readyState', 4)
+		await page.getByRole('button', { name: '1 min' }).click()
+		const goTo = async (seconds) => {
+			await audio.evaluate((element, at) => {
+				element.currentTime = at
+			}, seconds)
+			await expect.poll(() => canvas.evaluate((element) => element.drawnAt)).toBeCloseTo(seconds + 0.0005, 2)
+		}
+
+		// A trackpad's sideways swipe sends a wheel event on every frame: the wave stays with the sound
+		await goTo(100)
+		const swipe = await canvas.evaluate((element) => new Promise((resolve) => {
+			const audio = document.querySelector('video.deliver-player__video')
+			const gaps = []
+			let count = 0
+			const frame = () => {
+				gaps.push(Math.abs(element.drawnAt - audio.currentTime))
+				if (count++ < 50) {
+					element.dispatchEvent(new WheelEvent('wheel', { deltaX: 6, bubbles: true, cancelable: true }))
+					requestAnimationFrame(frame)
+				} else {
+					resolve({ gaps, end: audio.currentTime })
+				}
+			}
+			requestAnimationFrame(frame)
+		}))
+		expect(swipe.end).toBeGreaterThan(110)
+		// One wheel event is 6 px of 840: less than half a second
+		expect(Math.max(...swipe.gaps)).toBeLessThan(1)
+
+		// Shift+→ held: the wave is never behind where the sound was a glide (and a frame) earlier
+		await goTo(100)
+		const watching = canvas.evaluate((element) => new Promise((resolve) => {
+			const audio = document.querySelector('video.deliver-player__video')
+			const samples = []
+			const start = performance.now()
+			const frame = () => {
+				samples.push({ at: performance.now() - start, drawn: element.drawnAt, sound: audio.currentTime })
+				if (performance.now() - start < 1200) {
+					requestAnimationFrame(frame)
+				} else {
+					resolve(samples)
+				}
+			}
+			requestAnimationFrame(frame)
+		}))
+		await page.locator('.deliver-review__title').click()
+		await page.keyboard.down('Shift')
+		for (let repeat = 0; repeat < 15; repeat++) {
+			await page.keyboard.press('ArrowRight')
+			await page.waitForTimeout(33)
+		}
+		await page.keyboard.up('Shift')
+		const held = await watching
+		const soundAt = (time) => [...held].reverse().find((each) => each.at <= time)?.sound ?? 100
+		for (const each of held) {
+			expect(each.drawn).toBeGreaterThanOrEqual(soundAt(each.at - 250) - 0.01)
+		}
+		expect(held.at(-1).drawn).toBeCloseTo(held.at(-1).sound, 2)
+
+		// A click 40 px right of the playhead while a glide runs goes to what is drawn under it, not beside it
+		await goTo(100)
+		const box = await canvas.boundingBox()
+		// Two clicks in the page itself, two frames apart, so the second surely comes while the first one's glide runs
+		const { drawn, landed } = await canvas.evaluate((element) => new Promise((resolve) => {
+			const audio = document.querySelector('video.deliver-player__video')
+			const box = element.getBoundingClientRect()
+			const click = (x) => {
+				const at = { clientX: box.left + x, clientY: box.top + box.height / 2, pointerId: 7, pointerType: 'mouse', button: 0, bubbles: true }
+				element.dispatchEvent(new PointerEvent('pointerdown', at))
+				element.dispatchEvent(new PointerEvent('pointerup', at))
+			}
+			click(box.width * 0.75)
+			requestAnimationFrame(() => requestAnimationFrame(() => {
+				const drawn = element.drawnAt
+				click(box.width / 2 + 40)
+				resolve({ drawn, landed: audio.currentTime })
+			}))
+		}))
+		expect(drawn).toBeLessThan(114.5)
+		expect(Math.abs(landed - (drawn + 40 / box.width * 60))).toBeLessThan(0.4)
 	})
 
 	test('a drag on the wave holds playback and lets it go on, but not past the end; Ctrl and the wheel zoom within the steps, remembered', async () => {
@@ -1176,9 +1326,13 @@ test.describe('Audio review', () => {
 		const box = await canvas.boundingBox()
 		const field = page.locator('#deliver-comment-body')
 		const anchor = page.locator('.deliver-comments__anchor')
-		const goTo = (seconds) => audio.evaluate((element, at) => {
-			element.currentTime = at
-		}, seconds)
+		// A seek, and the wave glided there: clicks land on what is drawn
+		const goTo = async (seconds) => {
+			await audio.evaluate((element, at) => {
+				element.currentTime = at
+			}, seconds)
+			await expect.poll(() => canvas.evaluate((element) => element.drawnAt)).toBeCloseTo(seconds + 0.0005, 2)
+		}
 		const send = () => page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
 		const quarterOn = { position: { x: box.width * 0.75, y: box.height / 2 } }
 
@@ -1202,8 +1356,11 @@ test.describe('Audio review', () => {
 		// A click on the wave, which seeks, lets go too
 		await canvas.dblclick(quarterOn)
 		await expect(anchor).toHaveText('1:55.000')
+		// Once the wave has glided there: a click lands on what is drawn under it
+		await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - document.querySelector('video.deliver-player__video').currentTime))).toBeLessThan(0.01)
 		await canvas.click({ position: { x: box.width * 0.25, y: box.height / 2 } })
 		await expect(anchor).toHaveText('1:40.000')
+		await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - document.querySelector('video.deliver-player__video').currentTime))).toBeLessThan(0.01)
 
 		await canvas.dblclick(quarterOn)
 		await expect(anchor).toHaveText('1:55.000')
