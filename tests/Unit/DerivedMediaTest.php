@@ -78,6 +78,9 @@ class DerivedMediaTest extends TestCase {
 		self::assertSame(['integrated' => null, 'peak' => null, 'truePeak' => true], DerivedMedia::loudnessOf(str_replace(['-23.0 LUFS', '-22.9 dBFS'], ['-70.0 LUFS', '-inf dBFS'], $summary)), 'silence: below the absolute gate, no peak');
 		self::assertSame(-23.0, DerivedMedia::loudnessOf(str_replace('-23.0 LUFS', '-23,0 LUFS', $summary))['integrated'], 'whatever the locale writes');
 		self::assertNull(DerivedMedia::loudnessOf("Input #0, wav\n[out#0] size=1250KiB"), 'stopped before its end: no numbers rather than those of a part');
+		$tagged = "Input #0, mp3\n  Metadata:\n    comment         : Integrated loudness: I: 5.0 LUFS True peak: Peak: 3.0 dBFS\n";
+		self::assertSame(['integrated' => -23.0, 'peak' => -22.9, 'truePeak' => true], DerivedMedia::loudnessOf($tagged . $summary), 'a tag that reads like the summary is no summary');
+		self::assertNull(DerivedMedia::loudnessOf($tagged), 'nor without one');
 	}
 
 	public function testTheRateDropsOnlyPastElevenHours(): void {

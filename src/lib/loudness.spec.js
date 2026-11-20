@@ -84,12 +84,15 @@ describe('integrated loudness after EBU Tech 3341', () => {
 		expect(measure(tones([[20, -23]], 2, 44100), 44100, 1152).integrated).toBeCloseTo(-23, 1)
 	})
 
-	it('has none for silence, and none at all where the sound changes its rate midway', () => {
+	it('has none for silence, and none at all where the sound changes its rate midway or a sample is no number', () => {
 		expect(measure([new Float32Array(RATE * 5), new Float32Array(RATE * 5)])).toEqual({ integrated: null, peak: null, truePeak: false })
 		const meter = loudnessMeter()
 		meter.add(tones([[1, -23]]), RATE)
 		meter.add(tones([[1, -23]], 2, 44100), 44100)
 		expect(meter.done()).toBeNull()
+		const poisoned = tones([[2, -23]])[0].slice()
+		poisoned[RATE] = NaN
+		expect(measure([poisoned, poisoned])).toBeNull()
 	})
 })
 

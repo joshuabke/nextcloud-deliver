@@ -345,6 +345,7 @@ class DerivedMediaTest extends TestCase {
 		$version = $this->version($this->idOf('empty.wav'));
 		self::assertSame('ready', $version['derived']['waveform']['state'], 'silent, not failed');
 		self::assertSame([], $this->nc->waveform($version['derived']['waveform']['url'])['peaks']);
+		self::assertSame(['integrated' => null, 'peak' => null, 'truePeak' => true], $this->loudness($this->version($this->idOf('empty.wav'))), 'no sample, no peak');
 	}
 
 	public function testFfmpegMeasuresTheLoudnessWithTheWaveform(): void {
@@ -373,6 +374,26 @@ class DerivedMediaTest extends TestCase {
 		self::assertCount(1000, $this->nc->waveform($this->version($this->idOf('ebu.wav'))['derived']['waveform']['url'])['peaks'], 'the Waveform as it was, its loudness beside it');
 		self::assertSame(-24.5, $this->loudness($this->version($this->idOf('surround.flac')))['integrated']);
 		self::assertSame(['integrated' => null, 'peak' => -23.0, 'truePeak' => true], $this->loudness($this->version($this->idOf('lfe.flac'))), 'the LFE has a peak, but no loudness');
+	}
+
+	public function testAWaveformMadeWhileIdleGetsNoLoudnessAndGoesBeforeIt(): void {
+		foreach (['old.mp3', 'new.mp3'] as $name) {
+			$mp3 = $this->mp3($name, 2);
+			$this->nc->put("{$this->root}/$name", (string)file_get_contents($mp3));
+			@unlink($mp3);
+		}
+		$this->drainQueue();
+		[$old, $new] = [$this->idOf('old.mp3'), $this->idOf('new.mp3')];
+		self::assertNotNull($this->loudness($this->version($old)));
+		// As a Waveform from before; and new.mp3's loudness waits in the queue, as after an upload
+		$this->inNextcloud('$q = \\OCP\\Server::get(\\OCP\\IDBConnection::class)->getQueryBuilder(); $q->update("deliver_versions")->set("waveform_state", $q->createNamedParameter("none"))->where($q->expr()->eq("id", $q->createNamedParameter(' . $old . ')))->executeStatement();');
+		$this->inNextcloud('$job = new \\OCA\\Deliver\\Db\\Job(); $job->setKind("loudness"); $job->setVersionId(' . $new . '); $job->setState("queued"); $job->setCreatedAt(time()); \\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->insert($job);');
+
+		$this->inNextcloud('\\OCP\\Server::get(\\OCA\\Deliver\\Service\\JobRunner::class)->runNext("test");');
+		self::assertSame('ready', $this->waveformState($old), 'the idle Waveform first, though a loudness waits');
+		$order = $this->inNextcloud('foreach (\\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->findQueued(10) as $job) { echo $job->getKind(), ":", $job->getVersionId(), " "; }');
+		self::assertSame("loudness:$new", trim($order), 'and it queues none of its own: old files are not read again for their loudness');
+		self::assertNull($this->loudness($this->version($old)), 'the remade Waveform carries none');
 	}
 
 	/** @return ?array<string, mixed> the loudness the served Waveform carries */

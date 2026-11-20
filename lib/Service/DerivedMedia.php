@@ -104,6 +104,8 @@ class DerivedMedia {
 	 * queue's. Per PHP process, which is one request.
 	 */
 	private static bool $requestRead = false;
+	/** Set while the queue makes a Waveform because it had nothing else to do: such a Waveform gets no loudness (A5) */
+	private bool $idle = false;
 	/** Set while a request makes a Waveform itself: ffmpeg then has a short time and reads no further than the length its header says */
 	private bool $inRequest = false;
 	/** Seconds between two progress writes to the job row */
@@ -261,7 +263,8 @@ class DerivedMedia {
 	 * stderr for the admin panel. Failures are never thrown, so an install
 	 * without ffmpeg keeps working.
 	 */
-	public function process(Job $job): void {
+	public function process(Job $job, bool $idle = false): void {
+		$this->idle = $idle;
 		$version = $this->versions->find($job->getVersionId());
 		if ($version === null) {
 			$this->jobs->delete($job);
@@ -542,7 +545,9 @@ class DerivedMedia {
 	 * @return ?Job the job, to claim; null when there is other work or none
 	 */
 	public function queueMissingWaveform(): ?Job {
-		if ($this->time->getTime() < $this->config->getValueInt(Application::APP_ID, self::IDLE_WAVEFORMS_AFTER) || $this->jobs->findQueued(1) !== [] || !$this->ffmpeg->available()) {
+		// Waits for all other work but the loudness (A5), which waits for this
+		$next = $this->jobs->findQueued(1)[0] ?? null;
+		if ($this->time->getTime() < $this->config->getValueInt(Application::APP_ID, self::IDLE_WAVEFORMS_AFTER) || $next !== null && $next->getKind() !== Job::KIND_LOUDNESS || !$this->ffmpeg->available()) {
 			return null;
 		}
 		// A file that is not there fails no Version (its storage may be offline, and every other would fail the same): the look steps past it, at most this many a time, and goes on below it next time
@@ -706,8 +711,10 @@ class DerivedMedia {
 			throw new \RuntimeException($result['stderr'] ?: 'ffmpeg exited with ' . $result['code']);
 		}
 		$this->put($version, 'waveform', self::waveformJson($rate, $peaks->peaks()));
-		// Measuring the loudness would cost the Waveform five times its time, so it follows when the queue has nothing else to do (A5)
-		$this->enqueue($version->getId(), Job::KIND_LOUDNESS);
+		// Measuring the loudness would cost the Waveform five times its time, so it follows, last in the queue (A5); not for the old Waveforms made while idle, which are no reason to read every file again
+		if (!$this->idle) {
+			$this->enqueue($version->getId(), Job::KIND_LOUDNESS);
+		}
 	}
 
 	/**
@@ -719,16 +726,26 @@ class DerivedMedia {
 	 */
 	private function runLoudness(Version $version, string $path): void {
 		$result = $this->ffmpeg->run($this->ffmpeg->ffmpeg(), [
-			// The summary comes at the info level
+			// The summary comes at the info level; frame lines only at verbose, so ffmpeg 4.4 and 5.1, which know no framelog=quiet, print none either
 			'-nostdin', '-nostats', '-hide_banner', '-v', 'info', '-progress', 'pipe:1',
 			...Ffmpeg::input($path),
-			'-map', '0:a:0', '-af', 'ebur128=peak=true:framelog=quiet', '-f', 'null', '-',
+			'-map', '0:a:0', '-af', 'ebur128=peak=true:framelog=verbose', '-f', 'null', '-',
 		], 3600, fn (string $chunk) => $this->progressed($chunk));
 		$loudness = $result['code'] === 0 ? self::loudnessOf($result['stderr']) : null;
-		if ($loudness === null) {
-			throw new \RuntimeException($this->ffmpeg->tail($result['stderr']) ?: 'ffmpeg gave no loudness');
+		try {
+			$waveform = json_decode($this->file($version, 'waveform')->getContent(), true, 4, JSON_THROW_ON_ERROR);
+		} catch (NotFoundException|\JsonException) {
+			$waveform = null;
 		}
-		$waveform = json_decode($this->file($version, 'waveform')->getContent(), true, 4, JSON_THROW_ON_ERROR);
+		// No numbers is no failure of anything a Member or the admin can act on: the Waveform shows none
+		if ($loudness === null || !is_array($waveform)) {
+			$this->logger->info('Deliver measured no loudness for Version {version}', ['version' => $version->getId(), 'stderr' => $this->ffmpeg->tail($result['stderr'])]);
+			return;
+		}
+		// ebur128 says 0.0 dBFS for a track without a sample, which has no peak
+		if (($waveform['peaks'] ?? '') === '') {
+			$loudness['peak'] = null;
+		}
 		$this->put($version, 'waveform', json_encode(['loudness' => $loudness] + $waveform, JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION));
 	}
 
@@ -760,8 +777,11 @@ class DerivedMedia {
 	 */
 	public static function loudnessOf(string $stderr): ?array {
 		$number = '(-?inf|nan|-?\d+(?:[.,]\d+)?)';
-		if (preg_match('/Integrated loudness:\s*I:\s*' . $number . '\s*LUFS/', $stderr, $integrated) !== 1
-			|| preg_match('/True peak:\s*Peak:\s*' . $number . '\s*dBFS/', $stderr, $peak) !== 1) {
+		// From the summary on: before it, ffmpeg prints the file's own tags, which may say anything
+		$at = strrpos($stderr, 'Summary:');
+		$summary = $at === false ? '' : substr($stderr, $at);
+		if (preg_match('/Integrated loudness:\s*I:\s*' . $number . '\s*LUFS/', $summary, $integrated) !== 1
+			|| preg_match('/True peak:\s*Peak:\s*' . $number . '\s*dBFS/', $summary, $peak) !== 1) {
 			return null;
 		}
 		$value = static fn (string $text): ?float => is_numeric($text = str_replace(',', '.', $text)) ? round((float)$text, 1) : null;

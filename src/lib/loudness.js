@@ -61,7 +61,7 @@ export function channelWeights(channels) {
  * A meter that takes decoded audio piece by piece and tells its integrated
  * loudness and sample peak once it has heard all of it.
  *
- * @return {{add: (channels: Float32Array[], sampleRate: number) => void, done: () => ?{integrated: ?number, peak: ?number, truePeak: boolean}}} the meter; done gives null where the sound changed its rate or channels midway
+ * @return {{add: (channels: Float32Array[], sampleRate: number) => void, done: () => ?{integrated: ?number, peak: ?number, truePeak: boolean}}} the meter; done gives null where the sound changed its rate or channels midway, or had a sample that is no number
  */
 export function loudnessMeter() {
 	let rate = 0
@@ -126,6 +126,11 @@ export function loudnessMeter() {
 					z[7] = z[6]
 					z[6] = w
 					energy += weights[c] * w * w
+				}
+				// A sample that is no number would carry through the filters for the rest: no loudness rather than that of a part
+				if (!Number.isFinite(energy)) {
+					broken = true
+					return
 				}
 				current += energy
 				heard++
