@@ -72,8 +72,16 @@
 }
 
 /* The compact row: a small still, the name over a line of facts, the menu at the end. The still goes by the width of the row, the name never drops */
-.deliver-card--row {
-	display: block;
+/* A grid, so the menu button and the checkbox centre on the row itself and not on a suggestion line below it */
+.deliver-card--row.deliver-card__menu-host {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.deliver-card--row .deliver-card__link,
+.deliver-card--row .deliver-card__select,
+.deliver-card--row .deliver-card__more {
+	grid-area: 1 / 1;
 }
 
 .deliver-card--row .deliver-card__link {

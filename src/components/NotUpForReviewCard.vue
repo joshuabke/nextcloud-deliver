@@ -77,6 +77,7 @@ const { press, fromButton } = useLongPress((where) => emit('menu', where))
 
 .deliver-not-up__add {
 	align-self: flex-start;
+	justify-self: start;
 	margin-inline-start: calc(2 * var(--default-grid-baseline));
 }
 </style>

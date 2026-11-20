@@ -123,6 +123,25 @@ class CollectionsTest extends TestCase {
 		self::assertSame(404, $this->guest->ocs('GET', "/versions/{$final['data']['versionId']}")['status']);
 	}
 
+	public function testALinkListsTheCommentsAndDecisionOfTheNewestVersion(): void {
+		$project = $this->owner->ocs('POST', '/projects', ['name' => 'Acme spot'])['data']['id'];
+		$cut = $this->enable('clients/acme/cut.mp4', $project);
+		$this->owner->put('clients/acme/cut_v2.mp4', 'not really a video');
+		$final = $this->owner->ocs('POST', '/assets', ['fileId' => $this->owner->fileId('clients/acme/cut_v2.mp4'), 'assetId' => $cut['assetId']])['data'];
+		// Two Comments and an approval on the first Version, one Comment and a request for changes on the newest
+		$this->owner->ocs('POST', "/versions/{$cut['versionId']}/comments", ['inFrame' => 1, 'body' => 'first']);
+		$this->owner->ocs('POST', "/versions/{$cut['versionId']}/comments", ['inFrame' => 2, 'body' => 'second']);
+		$this->owner->ocs('PUT', "/versions/{$cut['versionId']}/approval", ['status' => 'approved']);
+		$this->owner->ocs('POST', "/versions/{$final['versionId']}/comments", ['inFrame' => 1, 'body' => 'final']);
+		$this->owner->ocs('PUT', "/versions/{$final['versionId']}/approval", ['status' => 'changes']);
+
+		$link = $this->owner->ocs('POST', "/projects/$project/links")['data'];
+		$visitor = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $link['token']);
+		$entry = $visitor->call('GET', '/api/assets')['data'][0];
+		self::assertSame([1, ['approved' => 0, 'changes' => 1]], [$entry['comments'], $entry['approvals']], 'the list shows the newest Version, not the Stack');
+		self::assertArrayHasKey('durationFrames', $entry);
+	}
+
 	public function testALinkOnNoProjectShowsThePickedAssets(): void {
 		$project = $this->owner->ocs('POST', '/projects', ['name' => 'Acme spot'])['data']['id'];
 		$this->enable('clients/acme/cut.mp4', $project);
@@ -134,10 +153,6 @@ class CollectionsTest extends TestCase {
 		self::assertSame([0, [$teaser['assetId']]], [$link['data']['projectId'], $link['data']['assetIds']]);
 		$visitor = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $link['data']['token']);
 		self::assertSame(['teaser'], array_column($visitor->call('GET', '/api/assets')['data'], 'name'));
-		// The list on the landing page shows the newest Version's Comments and decision beside the name
-		$entry = $visitor->call('GET', '/api/assets')['data'][0];
-		self::assertSame([0, ['approved' => 0, 'changes' => 0]], [$entry['comments'], $entry['approvals']]);
-		self::assertArrayHasKey('durationFrames', $entry);
 		self::assertSame([$link['data']['id']], array_column($this->owner->ocs('GET', '/projects/0/links')['data']['links'], 'id'), 'No Project lists its links');
 
 		$this->owner->ocs('PUT', "/assets/{$teaser['assetId']}/project", ['projectId' => $project]);

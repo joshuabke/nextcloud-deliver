@@ -248,9 +248,10 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 									<NcIconSvgWrapper :svg="commentIcon" :size="14" inline />
 									{{ asset.comments }}
 								</span>
+								<DueDate v-if="asset.dueDate" :modelValue="asset.dueDate" />
 							</div>
 						</div>
-						<DueDate v-if="asset.dueDate" :modelValue="asset.dueDate" />
+						<DueDate v-if="asset.dueDate && look === 'grid'" :modelValue="asset.dueDate" />
 						<NcButton
 							v-if="asset.downloadUrl"
 							:href="asset.downloadUrl"
@@ -555,8 +556,21 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 	align-items: center;
 }
 
+/* The pick box has a column of its own before the still, only where the link lets pick */
 .deliver-landing__grid--list .deliver-landing__media {
+	display: flex;
 	flex: none;
+	align-items: center;
+}
+
+.deliver-landing__grid--list .deliver-landing__pick {
+	position: static;
+	flex: none;
+	order: -1;
+	margin-inline: calc(3 * var(--default-grid-baseline)) 0;
+}
+
+.deliver-landing__grid--list .deliver-landing__open {
 	width: 96px;
 }
 
@@ -569,10 +583,12 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 
 .deliver-landing__grid--list .deliver-landing__folder,
 .deliver-landing__grid--list .deliver-landing__folder:hover {
+	flex: 1;
 	flex-direction: row;
+	width: auto;
+	min-width: 0;
 	min-height: 0;
 	padding: calc(2 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline));
-	padding-inline-start: 40px;
 }
 
 .deliver-landing__grid--list .deliver-landing__folder-name {
@@ -582,11 +598,10 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 
 .deliver-landing__grid--list .deliver-landing__card--folder .deliver-landing__media {
 	flex: 1;
-	width: auto;
 }
 
 @media (max-width: 480px) {
-	.deliver-landing__grid--list .deliver-landing__card:not(.deliver-landing__card--folder) .deliver-landing__media {
+	.deliver-landing__grid--list .deliver-landing__open {
 		width: 72px;
 	}
 }

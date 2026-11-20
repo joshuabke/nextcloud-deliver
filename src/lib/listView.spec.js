@@ -3,12 +3,13 @@ import { decisionOf, readLayout, writeLayout } from './listView.js'
 
 function memory() {
 	const map = new Map()
-	return { getItem: (k) => map.get(k) ?? null, setItem: (k, v) => map.set(k, v) }
+	const storage = { getItem: (k) => map.get(k) ?? null, setItem: (k, v) => map.set(k, v) }
+	return () => storage
 }
 function refuse() {
 	throw new Error('closed')
 }
-const closed = { getItem: refuse, setItem: refuse }
+const closed = refuse
 
 describe('the remembered layout', () => {
 	it('is the grid until chosen', () => {
@@ -25,7 +26,7 @@ describe('the remembered layout', () => {
 
 	it('ignores what is not a layout', () => {
 		const storage = memory()
-		storage.setItem('deliver.layout.project-1', 'tiles')
+		storage().setItem('deliver.layout.project-1', 'tiles')
 		expect(readLayout('project-1', storage)).toBe('grid')
 	})
 

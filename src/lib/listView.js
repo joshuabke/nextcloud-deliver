@@ -10,12 +10,12 @@ const key = (scope) => `deliver.layout.${scope}`
  * it was told otherwise, and where storage is closed or throws.
  *
  * @param {string} scope - 'project-12' or 'link-<token>'
- * @param {Storage} [storage] - localStorage, unless a test brings its own
+ * @param {() => Storage} [storage] - gives localStorage, unless a test brings its own; asked inside the try, as the accessor itself may throw
  * @return {'grid'|'list'}
  */
-export function readLayout(scope, storage = globalThis.localStorage) {
+export function readLayout(scope, storage = () => globalThis.localStorage) {
 	try {
-		const value = storage.getItem(key(scope))
+		const value = storage().getItem(key(scope))
 		return LAYOUTS.includes(value) ? value : 'grid'
 	} catch {
 		return 'grid'
@@ -25,11 +25,11 @@ export function readLayout(scope, storage = globalThis.localStorage) {
 /**
  * @param {string} scope - as for readLayout
  * @param {'grid'|'list'} layout - the choice
- * @param {Storage} [storage] - localStorage, unless a test brings its own
+ * @param {() => Storage} [storage] - gives localStorage, unless a test brings its own; asked inside the try, as the accessor itself may throw
  */
-export function writeLayout(scope, layout, storage = globalThis.localStorage) {
+export function writeLayout(scope, layout, storage = () => globalThis.localStorage) {
 	try {
-		storage.setItem(key(scope), layout)
+		storage().setItem(key(scope), layout)
 	} catch {
 		// The choice then lasts until the page is left
 	}
