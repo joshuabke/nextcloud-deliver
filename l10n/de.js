@@ -668,6 +668,10 @@ OC.L10N.register(
 		"This file is not the original of this Version: its size or date differs.": "Diese Datei ist nicht das Original dieser Version: Größe oder Datum weichen ab.",
 		"All files": "Alle Dateien",
 		"Show every Asset without folders": "Alle Assets ohne Ordner zeigen",
+		"{seconds} s": "{seconds} s",
+		"{minutes} min": "{minutes} min",
+		"Whole": "Alles",
+		"Zoom the Waveform": "Wellenform zoomen",
 		"Show the Assets as a list": "Assets als Liste zeigen"
 	},
 	undefined
