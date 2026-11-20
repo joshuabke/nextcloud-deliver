@@ -10,7 +10,7 @@ import { HOLD_MS, TAP_SLOP } from '../lib/gestures.js'
 import { avatarSeed, initials } from '../lib/initials.js'
 import { t } from '../lib/l10n.js'
 import { fpsValue, timeToFrame } from '../lib/timecode.js'
-import { bars, barSeconds, CIRCLE, circleAt, clampSpan, dragged, isWhole, secondsAt, stack, stepsFor, wheelZoom, windowAt, xAt } from '../lib/waveWindow.js'
+import { bars, barSeconds, CIRCLE, circleAt, clampSpan, dragged, isWhole, pinchSpan, secondsAt, stack, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan, xAt } from '../lib/waveWindow.js'
 import { useCommentsStore } from '../store/comments.js'
 
 // The Waveform of an audio Version on the stage (story 180): a window of it,
@@ -37,6 +37,8 @@ const props = defineProps({
 	clock: { type: Object, required: true },
 	/** Whether a double click or a long press opens the Comment field */
 	canComment: { type: Boolean, default: false },
+	/** Where the Comment being written goes, {inFrame, outFrame}, while the field holds it */
+	pending: { type: Object, default: null },
 })
 
 /**
@@ -72,9 +74,6 @@ let ratio = 1
 let colors = { played: '#fff', rest: 'rgba(255, 255, 255, 0.3)' }
 /** Bars of the current length, kept while the window slides */
 let cache = { waveform: null, seconds: 0, levels: new Float32Array(0) }
-/** Reduced motion pages a window at a time instead of scrolling */
-const motion = window.matchMedia('(prefers-reduced-motion: reduce)')
-let paged = motion.matches
 let visible = true
 
 /** The circles at the current zoom, worked out again only when it or the Comments change */
@@ -143,7 +142,7 @@ function draw() {
 	context.setTransform(ratio, 0, 0, ratio, 0, 0)
 	context.clearRect(0, 0, width, height)
 	const at = now()
-	const view = windowAt(at, shown.value, duration.value, paged)
+	const view = windowAt(at, shown.value, duration.value)
 	const across = view.end - view.start
 	const seconds = barSeconds(across, width)
 	if (cache.waveform !== props.waveform || cache.seconds !== seconds) {
@@ -186,6 +185,39 @@ function draw() {
 	context.fillStyle = '#fff'
 	context.fillRect(head - 1, TOP - 4, 2, height - TOP + 4)
 	drawCircles(context, circlesAt(perFrame), offset, height - BOTTOM / 2)
+	if (props.pending) {
+		drawPending(context, props.pending, perFrame, offset, height)
+	}
+}
+
+/**
+ * The place the Comment being written goes: a line over the wave, its Range tinted, and an open circle on the lane
+ *
+ * @param {CanvasRenderingContext2D} context - the canvas
+ * @param {{inFrame: number, outFrame: ?number}} pending - the place
+ * @param {number} perFrame - px per Frame at this zoom
+ * @param {number} offset - the window's left edge, in px from the start of the piece
+ * @param {number} height - the canvas's height
+ */
+function drawPending(context, pending, perFrame, offset, height) {
+	const x = pending.inFrame * perFrame - offset
+	context.fillStyle = colors.played
+	if (pending.outFrame !== null) {
+		context.globalAlpha = 0.25
+		context.fillRect(x, TOP - 4, (pending.outFrame + 1) * perFrame - offset - x, height - TOP - BOTTOM + 4)
+		context.globalAlpha = 1
+	}
+	context.fillRect(x - 1, TOP - 4, 2, height - TOP - BOTTOM + 4)
+	context.beginPath()
+	context.arc(x, height - BOTTOM / 2, CIRCLE / 2 - 1, 0, 2 * Math.PI)
+	context.fillStyle = '#000'
+	context.fill()
+	context.strokeStyle = colors.played
+	context.setLineDash([3, 3])
+	context.stroke()
+	context.setLineDash([])
+	context.fillStyle = colors.played
+	context.fillText('+', x, height - BOTTOM / 2 + 0.5)
 }
 
 /**
@@ -241,7 +273,7 @@ function tick() {
 	}
 }
 
-watch([() => props.playing, () => props.frame, () => props.waveform, shown, () => props.comments, () => store.selected], schedule)
+watch([() => props.playing, () => props.frame, () => props.waveform, shown, () => props.comments, () => store.selected, () => props.pending], schedule)
 
 /** The canvas takes the stage's size in device pixels, so the wave stays sharp */
 const resized = new ResizeObserver(([entry]) => {
@@ -262,21 +294,13 @@ const seen = new IntersectionObserver(([entry]) => {
 	schedule()
 })
 
-/** @param {MediaQueryListEvent} event - reduced motion switched */
-function onMotion(event) {
-	paged = event.matches
-	schedule()
-}
-
 onMounted(() => {
 	resized.observe(host.value)
 	seen.observe(host.value)
-	motion.addEventListener('change', onMotion)
 })
 onBeforeUnmount(() => {
 	resized.disconnect()
 	seen.disconnect()
-	motion.removeEventListener('change', onMotion)
 	cancelAnimationFrame(frameRequest)
 })
 
@@ -349,7 +373,7 @@ function onDown(event) {
  * @return {number} the Frame there
  */
 function frameAtX(x) {
-	return frameOf(secondsAt(x, windowAt(now(), shown.value, duration.value, paged), size.width, duration.value))
+	return frameOf(secondsAt(x, windowAt(now(), shown.value, duration.value), size.width, duration.value))
 }
 
 /**
@@ -360,7 +384,7 @@ function frameAtX(x) {
  */
 function hit(clientX, clientY, pointerType) {
 	const box = host.value.getBoundingClientRect()
-	const view = windowAt(now(), shown.value, duration.value, paged)
+	const view = windowAt(now(), shown.value, duration.value)
 	const perFrame = perFrameIn(view)
 	const x = clientX - box.left + view.start * fpsValue(props.fps) * perFrame
 	return circleAt(circlesAt(perFrame), x, clientY - box.top - (size.height - BOTTOM / 2), pointerType === 'mouse' ? CIRCLE / 2 : CIRCLE)
@@ -376,7 +400,7 @@ function onMove(event) {
 	event.stopPropagation()
 	pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
 	if (pinch && pointers.size === 2) {
-		span.value = clampSpan(pinch.span * pinch.distance / Math.max(1, spread()), duration.value)
+		zoom(pinchSpan(pinch.span, pinch.distance, spread(), duration.value))
 		return
 	}
 	if (press?.id !== event.pointerId) {
@@ -505,16 +529,27 @@ function goTo(comment) {
 function onWheel(event) {
 	if (event.ctrlKey || event.metaKey) {
 		event.preventDefault()
-		span.value = clampSpan(wheelZoom(shown.value, event.deltaY, event.deltaMode), duration.value)
+		zoom(wheelZoom(shown.value, event.deltaY, event.deltaMode, duration.value))
 		return
 	}
 	if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
 		event.preventDefault()
-		const across = Math.min(shown.value, duration.value)
-		const seconds = Math.min(duration.value, Math.max(0, now() + event.deltaX / size.width * across))
-		emit('seek', frameOf(seconds))
+		emit('seek', frameOf(wheelSeek(now(), event.deltaX, event.deltaMode, shown.value, size.width, duration.value)))
 	}
 }
+
+/**
+ * Zooms, and this browser remembers it for every audio Version
+ *
+ * @param {number} value - the seconds across the stage
+ */
+function zoom(value) {
+	span.value = value
+	writeSpan(value, duration.value)
+}
+
+/** The step shown now, pressed; none while zoomed freely between them */
+const pressed = computed(() => stepAt(steps.value, shown.value))
 
 /**
  * @param {number} step - one of the zoom steps, in seconds
@@ -551,8 +586,8 @@ function label(step) {
 				:key="step"
 				type="button"
 				class="deliver-wave__step"
-				:aria-pressed="Math.abs(shown - step) < 0.5 ? 'true' : 'false'"
-				@click="span = step">
+				:aria-pressed="step === pressed ? 'true' : 'false'"
+				@click="zoom(step)">
 				{{ label(step) }}
 			</button>
 		</div>
@@ -614,7 +649,8 @@ function label(step) {
 .deliver-wave__zoom {
 	position: absolute;
 	top: 6px;
-	inset-inline-end: 8px;
+	/* The start side: on a phone held sideways the layout's Comments button sits in the top end corner */
+	inset-inline-start: 8px;
 	display: flex;
 	gap: 2px;
 	padding: 2px;

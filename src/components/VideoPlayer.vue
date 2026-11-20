@@ -38,7 +38,7 @@ import { hoverSource } from '../lib/media.js'
 import { formatAt, fpsValue, frameToTime, modesFor, stepOf, timeToFrame } from '../lib/timecode.js'
 import { watermarkTile } from '../lib/watermark.js'
 import { overview, readWaveform } from '../lib/waveform.js'
-import { DEFAULT_SPAN, overviewWindow } from '../lib/waveWindow.js'
+import { overviewWindow, readSpan } from '../lib/waveWindow.js'
 import { useCommentsStore } from '../store/comments.js'
 
 /** The drawing being made for the next Comment */
@@ -56,6 +56,8 @@ const props = defineProps({
 	watermark: { type: String, default: null },
 	/** Whether the pointer draws on the picture (story 89) */
 	drawing: { type: Boolean, default: false },
+	/** Where the Comment being written goes, once the field holds it: marked on the Waveform */
+	pending: { type: Object, default: null },
 })
 
 const emit = defineEmits(['comment', 'jump', 'swipe', 'update:mode', 'update:drawing'])
@@ -112,7 +114,7 @@ const waveform = ref(null)
 const peaks = computed(() => waveform.value ? overview(waveform.value, fps.value?.num ? durationFrames.value * fps.value.den / fps.value.num : 0) : [])
 /** Audio with its Waveform plays on a scrolling one; the seconds it shows across the stage */
 const scrolling = computed(() => props.version.audioOnly && waveform.value !== null && durationFrames.value > 0)
-const span = ref(DEFAULT_SPAN)
+const span = ref(readSpan())
 /** The part of the piece on the stage, shown on the bar under it */
 const shownWindow = computed(() => scrolling.value ? overviewWindow(frame.value / fpsValue(fps.value), span.value, durationFrames.value / fpsValue(fps.value)) : null)
 const hover = ref(null)
@@ -220,7 +222,6 @@ watch(() => props.version.id, async (id) => {
 	unplayable.value = false
 	strip.value = null
 	waveform.value = null
-	span.value = DEFAULT_SPAN
 	hover.value = null
 	resetZoom()
 	const [loadedStrip, loadedWaveform] = await Promise.all([loadStrip(), loadWaveform()])
@@ -413,6 +414,28 @@ function onScrubSeeked() {
 
 /** Set while a finger drags along the bar */
 const dragging = ref(false)
+/** Set while a drag holds playback, a finger's on the bar or one on the Waveform */
+let holding = false
+/** Whether it played when the drag began: it goes on when the drag lets go */
+let heldWhilePlaying = false
+
+/** A drag holds playback; a second finger on a drag that holds it already changes nothing */
+function hold() {
+	if (!holding) {
+		holding = true
+		heldWhilePlaying = playing.value
+	}
+	pause()
+}
+
+/** The drag lets go: playback goes on if it played, unless the drag went to the end, where it stays as the natural end does */
+function release() {
+	if (holding && heldWhilePlaying && frame.value < lastFrame.value) {
+		play()
+	}
+	holding = false
+	heldWhilePlaying = false
+}
 
 /**
  * A finger on the bar scrubs as the mouse hovers: the exact Frame shows
@@ -424,7 +447,7 @@ function onDragStart(event) {
 	if (event.pointerType === 'mouse' || !durationFrames.value) {
 		return
 	}
-	pause()
+	hold()
 	dragging.value = true
 	event.currentTarget.setPointerCapture(event.pointerId)
 	onHover(event)
@@ -442,23 +465,6 @@ function onPointerMove(event) {
 	}
 }
 
-/** Whether it played when a drag on the Waveform began: it goes on when the drag lets go */
-let heldByWave = false
-
-/** A drag on the Waveform holds playback */
-function holdForWave() {
-	heldByWave = playing.value
-	pause()
-}
-
-/** The drag lets go: playback goes on if it played */
-function releaseFromWave() {
-	if (heldByWave) {
-		heldByWave = false
-		play()
-	}
-}
-
 /** The finger lifts: the player goes to the Frame it showed */
 function onDragEnd() {
 	if (!dragging.value) {
@@ -468,6 +474,7 @@ function onDragEnd() {
 	if (hover.value) {
 		seekTo(hover.value.frame)
 	}
+	release()
 	leaveScrubber()
 }
 
@@ -756,7 +763,6 @@ function comment() {
  * @param {MouseEvent} event - click on the timeline
  */
 function scrub(event) {
-	pause()
 	seekTo(frameAt(event))
 }
 
@@ -911,9 +917,10 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 				:comments="comments"
 				:clock="clock"
 				:canComment="canComment"
+				:pending="pending"
 				@seek="seekTo"
-				@hold="holdForWave"
-				@release="releaseFromWave"
+				@hold="hold"
+				@release="release"
 				@comment="emit('comment', { inFrame: $event, outFrame: null })"
 				@jump="emit('jump', $event)" />
 			<p v-if="!source || unplayable" class="deliver-player__notice">
@@ -950,12 +957,13 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 				@pointermove="onPointerMove"
 				@pointerup="onDragEnd"
 				@pointercancel="onDragEnd">
+				<!-- The part of the piece on the scrolling Waveform: a band the bar's height, wide enough to see beside the playhead's knob -->
+				<div
+					v-if="shownWindow"
+					class="deliver-player__window"
+					:style="{ left: shownWindow.left + shownWindow.width / 2 + '%', width: `max(24px, ${shownWindow.width}%)` }" />
 				<div class="deliver-player__track">
 					<div class="deliver-player__progress" :style="{ width: progress + '%' }" />
-					<div
-						v-if="shownWindow"
-						class="deliver-player__window"
-						:style="{ left: shownWindow.left + '%', width: shownWindow.width + '%' }" />
 					<div
 						v-if="range"
 						class="deliver-player__range"
@@ -1453,12 +1461,14 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	background: rgba(255, 255, 255, 0.55);
 }
 
-/* The part of the piece the scrolling Waveform shows */
+/* The part of the piece the scrolling Waveform shows, bracketed */
 .deliver-player__window {
 	position: absolute;
-	inset-block: 0;
-	border-inline: 1px solid rgba(255, 255, 255, 0.7);
-	background: rgba(255, 255, 255, 0.2);
+	inset-block: 1px;
+	border: 2px solid rgba(255, 255, 255, 0.75);
+	border-radius: var(--border-radius);
+	background: rgba(255, 255, 255, 0.12);
+	transform: translateX(-50%);
 	pointer-events: none;
 }
 

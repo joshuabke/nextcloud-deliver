@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bars, barSeconds, CIRCLE, circleAt, clampSpan, dragged, isWhole, overviewWindow, secondsAt, stack, STACK_STEP, stepsFor, wheelZoom, windowAt, xAt } from './waveWindow.js'
+import { bars, barSeconds, CIRCLE, circleAt, clampSpan, DEFAULT_SPAN, dragged, isWhole, overviewWindow, pinchSpan, readSpan, secondsAt, stack, STACK_STEP, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan, xAt } from './waveWindow.js'
 
 describe('the window of the scrolling Waveform', () => {
 	it('centres the playhead, the wave left empty before the start and after the end', () => {
@@ -14,10 +14,6 @@ describe('the window of the scrolling Waveform', () => {
 		expect(clampSpan(15, 8)).toBe(8)
 	})
 
-	it('pages a window at a time for reduced motion', () => {
-		expect(windowAt(70, 60, 3600, true)).toEqual({ start: 60, end: 120 })
-	})
-
 	it('zooms no closer than the first step and no wider than the piece', () => {
 		expect(clampSpan(3, 3600)).toBe(15)
 		expect(clampSpan(9000, 3600)).toBe(3600)
@@ -30,10 +26,25 @@ describe('the window of the scrolling Waveform', () => {
 		expect(stepsFor(10)).toEqual([10])
 	})
 
-	it('zooms out for a wheel pulled towards the user, in by as much the other way, a mouse notch at a time', () => {
-		expect(wheelZoom(60, 100, 0)).toBeCloseTo(60 * Math.exp(0.5))
-		expect(wheelZoom(wheelZoom(60, -10, 0), 10, 0)).toBeCloseTo(60)
-		expect(wheelZoom(60, 3, 1)).toBeCloseTo(wheelZoom(60, 48, 0))
+	it('zooms out for a wheel pulled towards the user, in by as much the other way, a mouse notch at a time, within the steps', () => {
+		expect(wheelZoom(60, 100, 0, 3600)).toBeCloseTo(60 * Math.exp(0.5))
+		expect(wheelZoom(wheelZoom(60, -10, 0, 3600), 10, 0, 3600)).toBeCloseTo(60)
+		expect(wheelZoom(60, 3, 1, 3600)).toBeCloseTo(wheelZoom(60, 48, 0, 3600))
+		expect(wheelZoom(16, -100, 0, 3600)).toBe(15)
+		expect(wheelZoom(3500, 100, 0, 3600)).toBe(3600)
+	})
+
+	it('zooms in as two fingers move apart, within the steps', () => {
+		expect(pinchSpan(60, 100, 200, 3600)).toBe(30)
+		expect(pinchSpan(60, 100, 50, 3600)).toBe(120)
+		expect(pinchSpan(60, 100, 1000, 3600)).toBe(15)
+		expect(pinchSpan(60, 100, 1, 100)).toBe(100)
+	})
+
+	it('presses one step at a time, the nearest within half a second', () => {
+		expect(stepAt([15, 60, 60.3], 60)).toBe(60)
+		expect(stepAt([15, 60, 60.3], 60.3)).toBe(60.3)
+		expect(stepAt([15, 60, 300, 3600], 90)).toBe(null)
 	})
 })
 
@@ -48,6 +59,13 @@ describe('a place on the scrolling Waveform', () => {
 	it('moves later as the wave is dragged to the left, the playhead fixed', () => {
 		expect(dragged({ from: 100, dx: -200, x: 0, span: 60, width: 400, duration: 3600 })).toBe(130)
 		expect(dragged({ from: 10, dx: 400, x: 0, span: 60, width: 400, duration: 3600 })).toBe(0)
+	})
+
+	it('moves as a drag for a sideways wheel, in lines as Firefox counts them, within the piece', () => {
+		expect(wheelSeek(100, 100, 0, 60, 400, 3600)).toBe(115)
+		expect(wheelSeek(100, 3, 1, 60, 400, 3600)).toBeCloseTo(107.2)
+		expect(wheelSeek(10, -400, 0, 60, 400, 3600)).toBe(0)
+		expect(wheelSeek(30, 400, 0, 60, 400, 40)).toBe(40)
 	})
 
 	it('follows the pointer over the whole piece', () => {
@@ -106,5 +124,39 @@ describe('the Comments on the scrolling Waveform', () => {
 		expect(circleAt(circles, 92, 0, CIRCLE / 2).id).toBe(1)
 		expect(circleAt(circles, 100, CIRCLE, CIRCLE / 2)).toBe(null)
 		expect(circleAt(circles, 150, 0, CIRCLE / 2)).toBe(null)
+	})
+})
+
+describe('the zoom this browser remembers', () => {
+	const memory = () => {
+		const kept = new Map()
+		return () => ({ getItem: (key) => kept.get(key) ?? null, setItem: (key, value) => kept.set(key, value) })
+	}
+
+	it('is a minute until one is chosen, and where storage throws', () => {
+		expect(readSpan(memory())).toBe(DEFAULT_SPAN)
+		expect(readSpan(() => {
+			throw new Error('closed')
+		})).toBe(DEFAULT_SPAN)
+		expect(() => writeSpan(15, 3600, () => {
+			throw new Error('closed')
+		})).not.toThrow()
+	})
+
+	it('keeps a span, and the whole as the whole of the next piece', () => {
+		const storage = memory()
+		writeSpan(300, 3600, storage)
+		expect(readSpan(storage)).toBe(300)
+		writeSpan(3600, 3600, storage)
+		expect(readSpan(storage)).toBe(Infinity)
+		expect(clampSpan(readSpan(storage), 7200)).toBe(7200)
+	})
+
+	it('takes nothing it did not write', () => {
+		const storage = memory()
+		storage().setItem('deliver.waveformZoom', 'nonsense')
+		expect(readSpan(storage)).toBe(DEFAULT_SPAN)
+		storage().setItem('deliver.waveformZoom', '2')
+		expect(readSpan(storage)).toBe(DEFAULT_SPAN)
 	})
 })

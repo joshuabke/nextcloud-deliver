@@ -18,22 +18,27 @@ export const rateFor = (seconds) => Math.max(1, Math.min(RATE, Math.floor(MAX_PE
 /**
  * Collects the peaks of a file decoded piece by piece: peak i is the loudest
  * sample over all channels from i / rate to (i + 1) / rate seconds, so the
- * pieces may come in any size and run past the expected length.
+ * pieces may come in any size and run past the expected length. A piece
+ * whose time is off (past the most peaks a Waveform has, or no number) is
+ * left out rather than failing the pass it belongs to.
  *
  * @param {number} rate - peaks a second
  * @param {number} seconds - the expected length, for the first allocation
  * @return {{add: (channels: Float32Array[], start: number, sampleRate: number) => void, done: () => {rate: number, peaks: Uint8Array}}} the collector
  */
 export function collectPeaks(rate, seconds) {
-	let levels = new Float32Array(Math.max(1, Math.ceil(seconds * rate)))
+	let levels = new Float32Array(Math.max(1, Math.min(MAX_PEAKS, Math.ceil(seconds * rate) || 1)))
 	let count = 0
 	return {
 		add(channels, start, sampleRate) {
 			const length = channels[0]?.length ?? 0
 			for (let at = 0; at < length; at++) {
 				const peak = Math.max(0, Math.floor((start + at / sampleRate) * rate))
+				if (!(peak < MAX_PEAKS)) {
+					continue
+				}
 				if (peak >= levels.length) {
-					const grown = new Float32Array(Math.max(peak + 1, levels.length * 2))
+					const grown = new Float32Array(Math.min(MAX_PEAKS, Math.max(peak + 1, levels.length * 2)))
 					grown.set(levels)
 					levels = grown
 				}

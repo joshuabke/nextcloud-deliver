@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Deliver\Tests\Unit;
 
 use OCA\Deliver\Service\DerivedMedia;
+use OCA\Deliver\Service\PcmPeaks;
 use PHPUnit\Framework\TestCase;
 
 /** The arithmetic of the derived-media pipeline, without ffmpeg */
@@ -35,16 +36,24 @@ class DerivedMediaTest extends TestCase {
 		self::assertLessThan($named, $guarded, 'before the file takes its name');
 	}
 
-	public function testPeaksAreTheLoudestSampleOfEachShareOfASecond(): void {
-		$pcm = tempnam(sys_get_temp_dir(), 'deliver-pcm-');
-		// Two seconds and a bit at 4 samples a second, 2 peaks a second
-		file_put_contents($pcm, pack('s*', 0, 100, -32767, 5, 16384, -2, 0, 0, 3277));
-		try {
-			self::assertSame([1, 255, 128, 0, 26], array_values(unpack('C*', DerivedMedia::peaks($pcm, 4, 2))), 'a byte each, the last share as long as the sound');
-			self::assertSame([255, 128, 26], array_values(unpack('C*', DerivedMedia::peaks($pcm, 4, 1))), 'four samples a peak at 1 a second');
-		} finally {
-			unlink($pcm);
+	public function testPeaksAreTheLoudestSampleOfEachShareOfASecondWhateverThePieces(): void {
+		// Two seconds and a bit at 4 samples a second, 2 peaks a second, mono
+		$pcm = pack('s*', 0, 100, -32767, 5, 16384, -2, 0, 0, 3277);
+		$peaks = new PcmPeaks(4, 1, 2);
+		foreach (str_split($pcm, 3) as $piece) {
+			$peaks->add($piece);
 		}
+		self::assertSame([1, 255, 128, 0, 26], array_values(unpack('C*', $peaks->peaks())), 'a byte each, the last share as long as the sound');
+		$peaks = new PcmPeaks(4, 1, 1);
+		$peaks->add($pcm);
+		self::assertSame([255, 128, 26], array_values(unpack('C*', $peaks->peaks())), 'four samples a peak at 1 a second');
+	}
+
+	public function testEveryChannelCounts(): void {
+		// Stereo: sound on the right only, then both sides out of phase
+		$peaks = new PcmPeaks(2, 2, 1);
+		$peaks->add(pack('s*', 0, 16384, 0, -100, 8192, -8192, -100, 100));
+		self::assertSame([128, 64], array_values(unpack('C*', $peaks->peaks())));
 	}
 
 	public function testTheRateDropsOnlyPastElevenHours(): void {

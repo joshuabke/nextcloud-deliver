@@ -509,6 +509,18 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertSame([], $this->fromBrowser(), 'ffmpeg makes them');
 	}
 
+	public function testAVideosWaveformBeforeItsProbeCountsItsFrames(): void {
+		$this->make('-f lavfi -i testsrc=size=320x180:rate=25:duration=2 -f lavfi -i sine=duration=2 -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest -f mp4');
+		// The browser's pass is quicker than the background job that reads the file
+		$this->nc->put("{$this->root}/cut.mp4", (string)file_get_contents($this->fixture));
+		$id = $this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'][0]['versions'][0]['id'];
+		$given = $this->nc->ocs('POST', "/versions/$id/waveform", NextcloudClient::handIn(array_fill(0, 100, 60), 50));
+		self::assertSame(200, $given['status'], json_encode($given['data']));
+		$version = $given['data'];
+		self::assertSame(['num' => 25, 'den' => 1], $version['fps'], 'read in the request, so 50 counts Frames, not milliseconds');
+		self::assertCount(100, $this->nc->waveform($version['derived']['waveform']['url'])['peaks']);
+	}
+
 	public function testAMasterLacksItsProxyTooAndASilentVideoNoWaveform(): void {
 		$this->make(self::PRORES);
 		$version = $this->upload('master.mov');
@@ -576,14 +588,16 @@ class WithoutFfmpegTest extends TestCase {
 			'the old shape, peaks from 0 to 1 over the whole length' => ['peaks' => array_fill(0, 50, 0.5), 'durationFrames' => 1000],
 			'no rate' => ['peaks' => base64_encode(pack('C*', ...$second)), 'durationFrames' => 1000],
 			'another rate' => NextcloudClient::handIn(array_fill(0, 2000, 100), 1000, 2000),
-			'peaks for another length' => NextcloudClient::handIn(array_fill(0, 2000, 100), 1000),
+			'more peaks than a Waveform has' => NextcloudClient::handIn(array_fill(0, 2_000_001, 1), 1000, 50),
 			'not base64' => ['peaks' => 'not base64!', 'rate' => 50, 'durationFrames' => 1000],
 			'no peaks' => NextcloudClient::handIn([], 1000),
 			'no duration' => NextcloudClient::handIn($second, 0),
 		] as $case => $body) {
 			self::assertSame(400, $this->nc->ocs('POST', "/versions/$id/waveform", $body)['status'], $case);
 		}
-		self::assertSame(200, $this->nc->ocs('POST', "/versions/$id/waveform", NextcloudClient::handIn([...$second, 100], 1000))['status'], 'a decoder may end a little past the length');
+		self::assertSame(200, $this->nc->ocs('POST', "/versions/$id/waveform", NextcloudClient::handIn(array_fill(0, 2000, 100), 1000))['status'], 'sound past the length is no reason to refuse it');
+		$version = $this->nc->ocs('GET', "/versions/$id")['data']['versions'][0];
+		self::assertCount(50, $this->nc->waveform($version['derived']['waveform']['url'])['peaks'], 'but it is left out: the Waveform is as long as the Version');
 	}
 
 	#[DataProvider('pcm')]

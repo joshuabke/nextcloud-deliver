@@ -71,10 +71,12 @@ class DerivedMedia {
 	 */
 	public const WAVEFORM_RATE = 50;
 	public const WAVEFORM_MAX_PEAKS = 2_000_000;
-	/** The sample rate ffmpeg resamples to for the Waveform: enough for a peak every 20 ms */
-	private const WAVEFORM_PCM_RATE = 8000;
-	/** Waveforms of older Versions queued at a time, in a queue with nothing else waiting */
-	private const WAVEFORMS = 20;
+	/**
+	 * ffmpeg's PCM for the Waveform: 16 kHz, so sound up to 8 kHz counts (a
+	 * hi-hat, a 6 kHz tone), in every channel of the file, as any mix would
+	 * lose sound on one side, two sides out of phase or 3 dB of mono
+	 */
+	private const WAVEFORM_PCM_RATE = 16000;
 	/** Seconds between two progress writes to the job row */
 	private const PROGRESS_INTERVAL = 2;
 
@@ -442,22 +444,35 @@ class DerivedMedia {
 	}
 
 	/**
-	 * Queues a few Waveforms for Versions with sound that have none, such as
-	 * those from before the fixed rate (ADR 0021), only while the queue has
-	 * no other work waiting but Scrub Proxies, so they never hold up an upload.
+	 * The Waveform of one Version with sound that has none, such as one from
+	 * before the fixed rate (ADR 0021), queued only while the queue is empty,
+	 * so it never holds up other work: whoever works the queue takes them
+	 * one by one whenever it has nothing else to do.
 	 *
-	 * @return int how many
+	 * @return ?Job the job, to claim; null when there is other work or none
 	 */
-	public function queueMissingWaveforms(int $limit = self::WAVEFORMS): int {
-		$waiting = $this->jobs->findQueued(1)[0] ?? null;
-		if (!$this->ffmpeg->available() || $waiting !== null && $waiting->getKind() !== Job::KIND_SCRUB) {
-			return 0;
+	public function queueMissingWaveform(): ?Job {
+		if ($this->jobs->findQueued(1) !== [] || !$this->ffmpeg->available()) {
+			return null;
 		}
-		$missing = $this->versions->findWithoutWaveform($limit);
-		foreach ($missing as $version) {
+		$version = $this->versions->findWithoutWaveform(1)[0] ?? null;
+		if ($version === null) {
+			return null;
+		}
+		$this->enqueue($version->getId(), Job::KIND_WAVEFORM);
+		return $this->jobs->findPending($version->getId(), Job::KIND_WAVEFORM);
+	}
+
+	/**
+	 * A Version someone opens gets its missing Waveform queued ahead of those
+	 * the queue makes when idle, so it shows in that visit (the Review view
+	 * asks again while it is queued). Only with ffmpeg: without, the browser
+	 * makes it.
+	 */
+	public function opened(Version $version): void {
+		if ($version->getHasAudio() && $version->getWaveformState() === self::STATE_NONE && $version->getPlayable() !== null && $this->ffmpeg->available()) {
 			$this->enqueue($version->getId(), Job::KIND_WAVEFORM);
 		}
-		return count($missing);
 	}
 
 	/** About one Frame per second in a WebP grid, capped by the admin setting */
@@ -537,21 +552,35 @@ class DerivedMedia {
 		return $this->settings->proxy()['thumbCap'];
 	}
 
-	/** Mono 8 kHz PCM from ffmpeg, on disk rather than in memory, reduced to peaks without another binary */
+	/** PCM from ffmpeg, reduced to peaks as it streams out, without another binary and without holding it */
 	private function runWaveform(Version $version, string $path): void {
-		$pcm = tempnam(sys_get_temp_dir(), 'deliver-') ?: throw new \RuntimeException('No temporary file for the Waveform');
-		$rate = self::waveformRate($this->durationSeconds($version));
-		try {
-			$this->ffmpeg([
-				...Ffmpeg::input($path),
-				'-map', '0:a:0', '-ac', '1', '-ar', (string)self::WAVEFORM_PCM_RATE,
-				'-c:a', 'pcm_s16le', '-f', 's16le', $pcm,
-			]);
-			$peaks = self::peaks($pcm, self::WAVEFORM_PCM_RATE, $rate);
-		} finally {
-			@unlink($pcm);
+		$channels = 0;
+		foreach ($this->probe->streams($this->probe->read($path) ?? []) as $stream) {
+			if (($stream['codec_type'] ?? '') === 'audio') {
+				$channels = (int)($stream['channels'] ?? 0);
+				break;
+			}
 		}
-		$this->put($version, 'waveform', self::waveformJson($rate, $peaks));
+		if ($channels < 1) {
+			throw new \RuntimeException('ffprobe finds no sound to draw');
+		}
+		$rate = self::waveformRate($this->durationSeconds($version));
+		$peaks = new PcmPeaks(self::WAVEFORM_PCM_RATE, $channels, $rate);
+		$bytes = 0;
+		$result = $this->ffmpeg->run($this->ffmpeg->ffmpeg(), [
+			'-nostdin', '-v', 'error',
+			...Ffmpeg::input($path),
+			'-map', '0:a:0', '-ar', (string)self::WAVEFORM_PCM_RATE,
+			'-c:a', 'pcm_s16le', '-f', 's16le', 'pipe:1',
+		], 3600, function (string $pcm) use ($peaks, $channels, &$bytes): void {
+			$peaks->add($pcm);
+			$bytes += strlen($pcm);
+			$this->reached((int)($bytes / (2 * $channels * self::WAVEFORM_PCM_RATE) * 1e6));
+		});
+		if ($result['code'] !== 0 || $bytes === 0) {
+			throw new \RuntimeException($result['stderr'] ?: 'ffmpeg exited with ' . $result['code']);
+		}
+		$this->put($version, 'waveform', self::waveformJson($rate, $peaks->peaks()));
 	}
 
 	/** The peaks a second of a Waveform of this many seconds (ADR 0021) */
@@ -584,32 +613,37 @@ class DerivedMedia {
 	 * @param int $rate peaks a second, as waveformRate() has it for the duration
 	 * @throws InvalidRequestException peaks, rate or duration out of shape
 	 * @throws ProjectConflictException the Version has a Waveform or is getting one
+	 * @return Version as it is now, read where it was a video not read yet
 	 */
-	public function acceptWaveform(Version $version, mixed $peaks, int $rate, int $durationFrames): void {
-		$bytes = is_string($peaks) ? base64_decode($peaks, true) : false;
-		if ($bytes === false || $bytes === '' || $durationFrames < 1) {
-			throw new InvalidRequestException('A Waveform is its peaks, one byte each in base64, over a duration of at least one Frame');
+	public function acceptWaveform(Version $version, mixed $peaks, int $rate, int $durationFrames): Version {
+		// A peak a byte, so the base64 of the most a Waveform has is a third longer
+		$bytes = is_string($peaks) && strlen($peaks) <= 4 * (int)ceil(self::WAVEFORM_MAX_PEAKS / 3) ? base64_decode($peaks, true) : false;
+		if ($bytes === false || $bytes === '' || strlen($bytes) > self::WAVEFORM_MAX_PEAKS || $durationFrames < 1) {
+			throw new InvalidRequestException('A Waveform is 1 to ' . self::WAVEFORM_MAX_PEAKS . ' peaks, one byte each in base64, over a duration of at least one Frame');
 		}
-		// Frames of the Version once read; before, milliseconds, as a delivering tool hands in audio
-		$seconds = $version->getFpsNum() && $version->getFpsDen() ? $durationFrames * $version->getFpsDen() / $version->getFpsNum() : $durationFrames / 1000;
-		$expected = self::waveformRate($seconds);
-		if ($rate !== $expected) {
-			throw new InvalidRequestException('A Waveform of this duration has ' . $expected . ' peaks a second');
-		}
-		// A second either way, for a decoder that ends a little off the duration
-		if (abs(strlen($bytes) - $seconds * $rate) > $rate + 1) {
-			throw new InvalidRequestException('A Waveform of this duration has about ' . (int)ceil($seconds * $rate) . ' peaks');
+		// A video's pass from the browser may be quicker than the background job that reads it (#168)
+		if ($version->getPlayable() === null && str_starts_with((string)$this->fileOf($version)?->getMimeType(), 'video/')) {
+			$version = $this->readNow($version);
 		}
 		// Also before the probe ran (playable is still unknown then), so a delivering tool can hand in its peaks with the upload
 		if (!$version->getHasAudio() && $version->getPlayable() !== null || $version->getWaveformState() !== self::STATE_NONE) {
 			throw new ProjectConflictException('This Version has its Waveform from the server');
 		}
-		$this->put($version, 'waveform', self::waveformJson($rate, $bytes));
+		// Once read, the Version's own length; before, the one handed in, in milliseconds, as a delivering tool hands in audio
+		$seconds = $version->getDurationFrames() !== null && $version->getFpsNum() && $version->getFpsDen()
+			? $version->getDurationFrames() * $version->getFpsDen() / $version->getFpsNum()
+			: $durationFrames / 1000;
+		$expected = self::waveformRate($seconds);
+		if ($rate !== $expected) {
+			throw new InvalidRequestException('A Waveform of this duration has ' . $expected . ' peaks a second');
+		}
+		// Sound that runs on past the length, as a decoder may find, or a video's past its picture, is left out
+		$this->put($version, 'waveform', self::waveformJson($rate, substr($bytes, 0, max(1, (int)ceil($seconds * $rate)))));
 		if ($version->getDurationFrames() === null) {
 			$version->setDurationFrames($durationFrames);
 		}
 		$version->setWaveformState(self::STATE_READY);
-		$this->versions->update($version);
+		return $this->versions->update($version);
 	}
 
 	/** Whether the server lacks ffmpeg, so browsers make Waveforms and Proxies (ADRs 0012, 0019); ffmpeg may have come since the last look */
@@ -893,25 +927,6 @@ class DerivedMedia {
 	}
 
 	/**
-	 * Reads mono 16-bit PCM one peak's share at a time, so only the peaks
-	 * stay in memory, whatever the length.
-	 *
-	 * @param int $sampleRate the PCM's samples a second
-	 * @param int $rate peaks a second
-	 * @return string the loudest sample of each share, a byte each (peakByte)
-	 */
-	public static function peaks(string $pcmFile, int $sampleRate, int $rate): string {
-		$handle = fopen($pcmFile, 'rb') ?: throw new \RuntimeException('The PCM of the Waveform is not readable');
-		$peaks = '';
-		for ($i = 0; ($chunk = fread($handle, 2 * (intdiv(($i + 1) * $sampleRate, $rate) - intdiv($i * $sampleRate, $rate)))) !== false && strlen($chunk) >= 2; $i++) {
-			$samples = unpack('s*', $chunk);
-			$peaks .= self::peakByte(max(max($samples), -min($samples)) / 32767);
-		}
-		fclose($handle);
-		return $peaks;
-	}
-
-	/**
 	 * Whether browsers play the original: H.264/AAC in MP4 and VP8/VP9
 	 * with Opus/Vorbis in WebM, at any size (spec: Media metadata and derived media).
 	 */
@@ -976,12 +991,19 @@ class DerivedMedia {
 		}
 	}
 
-	/** Reads `out_time_us` from ffmpeg's progress output and writes the percentage now and then */
+	/** Reads `out_time_us` from ffmpeg's progress output */
 	private function progressed(string $chunk): void {
-		if ($this->running === null || preg_match_all('/^out_time_us=(\d+)/m', $chunk, $m) === 0) {
+		if (preg_match_all('/^out_time_us=(\d+)/m', $chunk, $m) > 0) {
+			$this->reached((int)end($m[1]));
+		}
+	}
+
+	/** Writes how far the running job has got now and then */
+	private function reached(int $microseconds): void {
+		if ($this->running === null) {
 			return;
 		}
-		$percent = self::percent((int)end($m[1]), $this->running['seconds']);
+		$percent = self::percent($microseconds, $this->running['seconds']);
 		$now = $this->time->getTime();
 		if ($percent > $this->running['percent'] && $now - $this->running['written'] >= self::PROGRESS_INTERVAL) {
 			$this->jobs->setProgress($this->running['job']->getId(), $percent);

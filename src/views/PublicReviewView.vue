@@ -65,7 +65,7 @@ const version = computed(() => context.value?.versions.find((each) => each.id ==
 const assetIndex = computed(() => (newest.value ?? []).findIndex((each) => each.assetId === context.value?.asset?.id))
 const assetCount = computed(() => newest.value?.length ?? 0)
 
-const { player, panel, mode, clock, anchor, pin, hold, release, jump, posted, drawing, draft, draw, range, markRange, clearRange } = useReview({
+const { player, panel, mode, clock, anchor, pinned, pin, hold, release, jump, posted, drawing, draft, draw, range, markRange, clearRange } = useReview({
 	version,
 	projectMode: computed(() => context.value?.project.timecodeMode ?? 'smpte'),
 	projectFps: computed(() => context.value?.project.fps ?? { num: 25, den: 1 }),
@@ -277,6 +277,7 @@ async function claim({ name, email, mail }) {
 				:comments="store.threads"
 				:clock="clock"
 				:canComment="store.canComment === true && store.me?.type !== 'unnamed'"
+				:pending="pinned"
 				:watermark="context.flags.watermark ? watermarkText : null"
 				@comment="pin($event); panelOpen = true"
 				@jump="jump"

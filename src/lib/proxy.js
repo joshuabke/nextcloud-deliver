@@ -660,8 +660,8 @@ export async function handInPass(versionId, making, status, controller) {
 			// The Scrub Proxy first, which has the server read the original where no Proxy did
 			await (made.scrub && whenRead(async () => giveScrub(versionId, await uploadNextTo(url, made.scrub, {}, controller.signal, '.deliver-scrub-'))).catch(() => {}))
 			await (made.thumbs && whenRead(() => giveThumbs(versionId, made.thumbs.image, made.thumbs.every, made.thumbs.count)).catch(() => {}))
-			// Last, once the original is read: before, the server would take its Frames for milliseconds
-			await (made.peaks && giveWaveform(versionId, made.peaks, made.frames).catch(() => {}))
+			// The server reads the original first where its background job has not yet, so it counts Frames, not milliseconds
+			await (made.peaks && whenRead(() => giveWaveform(versionId, made.peaks, made.frames)).catch(() => {}))
 		} finally {
 			await made.done()
 		}

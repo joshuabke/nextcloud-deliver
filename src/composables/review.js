@@ -95,6 +95,8 @@ export function useReview({ version, projectMode, projectFps, refresh }) {
 			sheet.level.value = 1
 		}
 		panel.value?.reveal(comment.id)
+		// A Comment is read standing still
+		player.value?.pause?.()
 		if (player.value?.show) {
 			player.value.show(comment)
 		} else {
@@ -164,5 +166,5 @@ export function useReview({ version, projectMode, projectFps, refresh }) {
 	}, { immediate: true })
 	onBeforeUnmount(() => clearTimeout(recheck))
 
-	return { player, panel, mode, clock, anchor, pin, hold, release, jump, posted, drawing, draft, draw, range, markRange, clearRange }
+	return { player, panel, mode, clock, anchor, pinned, pin, hold, release, jump, posted, drawing, draft, draw, range, markRange, clearRange }
 }

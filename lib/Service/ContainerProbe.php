@@ -301,6 +301,10 @@ class ContainerProbe {
 			$frames = intdiv($length, $block);
 			$rate = DerivedMedia::waveformRate($frames / $sampleRate);
 			$count = (int)ceil($frames * $rate / $sampleRate);
+			// A header whose rate makes more peaks than a Waveform has says nonsense: they would not fit in memory
+			if ($count > DerivedMedia::WAVEFORM_MAX_PEAKS) {
+				return null;
+			}
 			// ponytail: at most 1 GiB in all, so a WAV of many hours reads in a minute; past an hour of 24-bit stereo each share is read only in part and a click can be missed
 			$most = max(1, intdiv(intdiv(1 << 30, max(1, $count)), $block));
 			// Read in pieces of at most 512 KiB, so memory stays the same whatever the header says

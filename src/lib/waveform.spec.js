@@ -28,6 +28,14 @@ describe('a Waveform from decoded audio', () => {
 		expect(Array.from(peaks.done().peaks)).toEqual([0, 0, 0, 0, 128])
 	})
 
+	it('leaves out a piece whose time is off, rather than failing', () => {
+		const peaks = collectPeaks(50, 1)
+		peaks.add([Float32Array.from([0.5])], 1e12, 48000)
+		peaks.add([Float32Array.from([0.5])], NaN, 48000)
+		peaks.add([Float32Array.from([1])], 0, 48000)
+		expect(Array.from(peaks.done().peaks)).toEqual([255])
+	})
+
 	it('caps at full scale and ends with the last sample heard', () => {
 		const peaks = collectPeaks(1, 60)
 		peaks.add([Float32Array.from([1.2, 0.5])], 0, 2)

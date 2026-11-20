@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace OCA\Deliver\Controller;
 
+use OCA\Deliver\Db\ApprovalMapper;
+use OCA\Deliver\Db\CommentMapper;
 use OCA\Deliver\Db\LinkActivityMapper;
 use OCA\Deliver\Db\Reviewer;
 use OCA\Deliver\Db\Version;
@@ -64,6 +66,8 @@ class PublicApiController extends PublicShareController {
 		private IPreview $previews,
 		private ReviewerMail $mail,
 		private ILimiter $limiter,
+		private CommentMapper $commentRows,
+		private ApprovalMapper $approvalRows,
 	) {
 		parent::__construct($appName, $request, $session);
 	}
@@ -75,6 +79,7 @@ class PublicApiController extends PublicShareController {
 		return $this->guard(function () use ($versionId) {
 			$link = $this->link();
 			$version = $this->links->version($link, $versionId);
+			$this->media->opened($version);
 			$project = $this->projects->settingsOf($version);
 			$stack = $link->assets()[$version->getAssetId()] ?? null;
 			// A Member previews the Version read only, never as the Reviewer whose key this browser carries (story 59)
@@ -111,7 +116,11 @@ class PublicApiController extends PublicShareController {
 		return $this->guard(function () {
 			$link = $this->link();
 			$result = [];
-			foreach ($link->assets() as ['asset' => $asset, 'versions' => $versions]) {
+			$stacks = $link->assets();
+			$newestIds = array_map(fn (array $stack) => $stack['versions'][0]->getId(), $stacks);
+			$commentCounts = $this->commentRows->countByVersions($newestIds);
+			$approvalCounts = $this->approvalRows->countByVersions($newestIds);
+			foreach ($stacks as ['asset' => $asset, 'versions' => $versions]) {
 				$newest = $versions[0];
 				$download = $link->downloadable($newest);
 				$original = $this->mediaUrl($newest, 'original');
@@ -128,6 +137,11 @@ class PublicApiController extends PublicShareController {
 					'count' => count($versions),
 					'mimeType' => $link->originalFile($newest)?->getMimetype(),
 					'dueDate' => $asset->getDueDate(),
+					// The list on the landing page shows the runtime, the Comments and the decision of the newest Version
+					'durationFrames' => $newest->getDurationFrames(),
+					'fps' => ['num' => $newest->getFpsNum(), 'den' => $newest->getFpsDen()],
+					'comments' => $commentCounts[$newest->getId()] ?? 0,
+					'approvals' => $approvalCounts[$newest->getId()],
 					// Scrubbed through on hover, and a frame of it where Nextcloud renders no still (no ffmpeg), also on links without downloads (#169)
 					'scrubUrl' => $newest->getScrubState() === DerivedMedia::STATE_READY ? $this->mediaUrl($newest, 'scrub') : null,
 					'downloadUrl' => $download ? $original . '?download=1' : null,
