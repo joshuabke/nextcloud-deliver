@@ -125,9 +125,56 @@ class DerivedMediaTest extends TestCase {
 		self::assertSame(200, $strip['status']);
 		self::assertStringStartsWith('RIFF', $strip['body'], 'a WebP image');
 
-		$waveform = json_decode($this->nc->request('GET', $version['derived']['waveform']['url'])['body'], true);
-		self::assertNotEmpty($waveform['peaks']);
-		self::assertSame([], array_filter($waveform['peaks'], fn ($peak) => $peak < 0 || $peak > 1), 'every peak lies in 0..1');
+		$waveform = $this->nc->waveform($version['derived']['waveform']['url']);
+		$seconds = $version['durationFrames'] * $version['fps']['den'] / $version['fps']['num'];
+		self::assertSame(50, $waveform['rate'], 'peaks at a fixed rate, whatever the length');
+		self::assertEqualsWithDelta($seconds * 50, count($waveform['peaks']), 2, 'each peak 20 ms of the sound');
+		self::assertGreaterThan(0, max($waveform['peaks']), 'the sound is heard');
+	}
+
+	public function testAWaveformFromBeforeTheFixedRateIsMadeAgainOnceNothingElseWaits(): void {
+		$mp3 = sys_get_temp_dir() . '/deliver-take-' . bin2hex(random_bytes(4)) . '.mp3';
+		[$code, $output] = $this->shell('ffmpeg -v error -y -f lavfi -i sine=duration=3 -c:a libmp3lame ' . escapeshellarg($mp3));
+		self::assertSame(0, $code, $output);
+		$this->nc->put("{$this->root}/old.mp3", (string)file_get_contents($mp3));
+		$this->drainQueue();
+		$old = $this->idOf('old.mp3');
+		self::assertSame('ready', $this->version($old)['derived']['waveform']['state']);
+
+		$this->inNextcloud('(new \\OCA\\Deliver\\Migration\\Version1021Date20261120000000(\\OCP\\Server::get(\\OCP\\IDBConnection::class)))->postSchemaChange(new \\OC\\Migration\\NullOutput(), fn () => null, []);');
+		self::assertSame(['none', null], array_values($this->version($old)['derived']['waveform']), 'the Waveform from before counts as missing');
+
+		$this->nc->put("{$this->root}/new.mp3", (string)file_get_contents($mp3));
+		@unlink($mp3);
+		$hourly = '\\OCP\\Server::get(\\OCA\\Deliver\\BackgroundJob\\ScanProjects::class)->start(\\OCP\\Server::get(\\OCP\\BackgroundJob\\IJobList::class));';
+		$this->inNextcloud($hourly);
+		self::assertSame('none', $this->version($old)['derived']['waveform']['state'], 'it waits while an upload has work queued');
+
+		$this->drainQueue();
+		$this->inNextcloud($hourly);
+		self::assertSame('queued', $this->version($old)['derived']['waveform']['state']);
+		$this->drainQueue();
+		$version = $this->version($old);
+		self::assertSame('ready', $version['derived']['waveform']['state']);
+		$waveform = $this->nc->waveform($version['derived']['waveform']['url']);
+		self::assertSame(50, $waveform['rate']);
+		self::assertEqualsWithDelta(150, count($waveform['peaks']), 3, 'three seconds at 50 a second');
+	}
+
+	private function idOf(string $name): int {
+		foreach ($this->nc->ocs('GET', "/projects/{$this->projectId}")['data']['assets'] as $asset) {
+			if ($asset['versions'][0]['name'] === $name) {
+				return $asset['versions'][0]['id'];
+			}
+		}
+		self::fail("No Asset $name");
+	}
+
+	/** Runs PHP inside this Nextcloud, for what no API does */
+	private function inNextcloud(string $code): string {
+		[$status, $output] = $this->shell('php -r ' . escapeshellarg('require "/var/www/html/lib/base.php"; ' . $code));
+		self::assertSame(0, $status, $output);
+		return $output;
 	}
 
 	public function testRegeneratingDeletesTheDerivedMediaAndMakesItAgain(): void {

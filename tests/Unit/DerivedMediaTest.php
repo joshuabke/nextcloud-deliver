@@ -35,13 +35,21 @@ class DerivedMediaTest extends TestCase {
 		self::assertLessThan($named, $guarded, 'before the file takes its name');
 	}
 
-	public function testPeaksAreTheLoudestSampleOfEachBucket(): void {
+	public function testPeaksAreTheLoudestSampleOfEachShareOfASecond(): void {
 		$pcm = tempnam(sys_get_temp_dir(), 'deliver-pcm-');
-		file_put_contents($pcm, pack('s*', 0, 100, -32767, 5, 16384, -2, 0, 0));
+		// Two seconds and a bit at 4 samples a second, 2 peaks a second
+		file_put_contents($pcm, pack('s*', 0, 100, -32767, 5, 16384, -2, 0, 0, 3277));
 		try {
-			self::assertSame([1.0, 0.5], DerivedMedia::peaks($pcm, 2), 'eight samples in two buckets of four');
+			self::assertSame([1, 255, 128, 0, 26], array_values(unpack('C*', DerivedMedia::peaks($pcm, 4, 2))), 'a byte each, the last share as long as the sound');
+			self::assertSame([255, 128, 26], array_values(unpack('C*', DerivedMedia::peaks($pcm, 4, 1))), 'four samples a peak at 1 a second');
 		} finally {
 			unlink($pcm);
 		}
+	}
+
+	public function testTheRateDropsOnlyPastElevenHours(): void {
+		self::assertSame([50, 50, 50], [DerivedMedia::waveformRate(0.2), DerivedMedia::waveformRate(10 * 3600), DerivedMedia::waveformRate(40000)]);
+		self::assertSame(23, DerivedMedia::waveformRate(24 * 3600), 'as src/lib/waveform.js rateFor has it');
+		self::assertSame(1, DerivedMedia::waveformRate(1e9));
 	}
 }

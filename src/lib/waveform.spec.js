@@ -1,35 +1,69 @@
 import { describe, expect, it } from 'vitest'
-import { addPeaks, peaksOf, roundPeaks, uploaded } from './waveform.js'
+import { collectPeaks, MAX_PEAKS, overview, RATE, rateFor, readWaveform, toBase64, uploaded } from './waveform.js'
 
-describe('a Waveform from decoded audio', () => {
-	it('keeps the loudest sample of each bucket over all channels', () => {
-		const left = Float32Array.from([0.1, -0.2, 0.3, 0, 0, 0])
-		const right = Float32Array.from([0, 0, 0, 0.05, -0.9, 0.4])
-		expect(peaksOf([left, right], 3)).toEqual([0.2, 0.3, 0.9])
+describe('the rate of a Waveform', () => {
+	it('is 50 peaks a second for anything up to 11 hours', () => {
+		expect([rateFor(0.4), rateFor(3600), rateFor(10 * 3600), rateFor(MAX_PEAKS / RATE)]).toEqual([50, 50, 50, 50])
 	})
 
-	it('caps at full scale and rounds as the server does', () => {
-		expect(peaksOf([Float32Array.from([1.2, 0.12345])], 2)).toEqual([1, 0.123])
-	})
-
-	it('makes no more buckets than there are samples', () => {
-		expect(peaksOf([Float32Array.from([0.5, 0.25])], 2000)).toEqual([0.5, 0.25])
+	it('drops past that so it stays within the most peaks a Waveform has', () => {
+		expect(rateFor(24 * 3600)).toBe(23)
+		expect(rateFor(24 * 3600) * 24 * 3600).toBeLessThanOrEqual(MAX_PEAKS)
+		expect(rateFor(1e9)).toBe(1)
 	})
 })
 
-describe('a Waveform decoded piece by piece', () => {
-	it('puts each sample into the bucket of its time, whatever the pieces', () => {
-		// Two seconds at 4 samples a second into 4 buckets, in two pieces of one second each
-		const peaks = new Float32Array(4)
-		addPeaks(peaks, [Float32Array.from([0.1, -0.2, 0.3, 0])], 0, 4, 2)
-		addPeaks(peaks, [Float32Array.from([0, -0.9, 0.4, 0.05])], 1, 4, 2)
-		expect(roundPeaks(peaks)).toEqual([0.2, 0.3, 0.9, 0.4])
+describe('a Waveform from decoded audio', () => {
+	it('puts each sample into the peak of its time, over all channels, whatever the pieces', () => {
+		// Two seconds at 4 samples a second, 2 peaks a second, in two pieces of one second each
+		const peaks = collectPeaks(2, 2)
+		peaks.add([Float32Array.from([0.1, -0.2, 0.3, 0]), Float32Array.from([0, 0, 0, 0])], 0, 4)
+		peaks.add([Float32Array.from([0, 0, 0.4, 0.05]), Float32Array.from([0, -0.8, 0, 0])], 1, 4)
+		expect(peaks.done()).toEqual({ rate: 2, peaks: Uint8Array.from([51, 77, 204, 102]) })
 	})
 
-	it('keeps samples past the expected end in the last bucket', () => {
-		const peaks = new Float32Array(2)
-		addPeaks(peaks, [Float32Array.from([0.5])], 3, 1, 2)
-		expect(roundPeaks(peaks)).toEqual([0, 0.5])
+	it('runs on past the expected length, as the decoder knows it better than the container', () => {
+		const peaks = collectPeaks(1, 2)
+		peaks.add([Float32Array.from([0.5])], 4.5, 1)
+		expect(Array.from(peaks.done().peaks)).toEqual([0, 0, 0, 0, 128])
+	})
+
+	it('caps at full scale and ends with the last sample heard', () => {
+		const peaks = collectPeaks(1, 60)
+		peaks.add([Float32Array.from([1.2, 0.5])], 0, 2)
+		expect(Array.from(peaks.done().peaks)).toEqual([255])
+	})
+})
+
+describe('a Waveform on its way', () => {
+	it('goes to the server and back in base64, a byte a peak', () => {
+		const peaks = Uint8Array.from({ length: 100000 }, (_, at) => at % 256)
+		const sent = toBase64(peaks)
+		expect(sent).toBe(Buffer.from(peaks).toString('base64'))
+		expect(readWaveform({ rate: 50, peaks: sent })).toEqual({ rate: 50, peaks })
+	})
+})
+
+describe('a Waveform drawn whole', () => {
+	const waveform = (values) => ({ rate: 50, peaks: Uint8Array.from(values) })
+
+	it('keeps the loudest peak of each bucket, from 0 to 1', () => {
+		// 2 seconds, 100 peaks, into 4 buckets of 25
+		const values = Array.from({ length: 100 }, (_, at) => (at === 30 ? 255 : at % 25 === 0 ? 51 : 0))
+		expect(overview(waveform(values), 2, 4)).toEqual([0.2, 1, 0.2, 0.2])
+	})
+
+	it('draws no more buckets than there are peaks, each with one', () => {
+		expect(overview(waveform([51, 102, 255]), 0.06, 2000)).toEqual([0.2, 0.4, 1])
+		expect(overview(waveform(Array(151).fill(255)), 3.01, 2000).every((peak) => peak === 1)).toBe(true)
+	})
+
+	it('lays the peaks along the length shown, silent where they end before it', () => {
+		expect(overview(waveform(Array(50).fill(255)), 2, 4)).toEqual([1, 1, 0, 0])
+	})
+
+	it('takes the length of the peaks where the Version has none yet', () => {
+		expect(overview(waveform(Array(100).fill(255)), 0, 4)).toEqual([1, 1, 1, 1])
 	})
 })
 

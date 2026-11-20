@@ -105,10 +105,11 @@ class WithoutFfmpegTest extends TestCase {
 
 		// The PCM is right there, so the server draws the Waveform itself
 		self::assertSame('ready', $version['derived']['waveform']['state']);
-		$peaks = json_decode($this->nc->request('GET', $version['derived']['waveform']['url'])['body'], true)['peaks'];
-		self::assertCount(2000, $peaks);
-		self::assertEqualsWithDelta(0.125, max($peaks), 0.01, 'the sine is an eighth of full scale');
-		self::assertSame(409, $this->nc->ocs('POST', "/versions/{$version['id']}/waveform", ['peaks' => [0.5], 'durationFrames' => 4000])['status'], 'a browser does not overwrite it');
+		$waveform = $this->nc->waveform($version['derived']['waveform']['url']);
+		self::assertSame(50, $waveform['rate']);
+		self::assertCount(200, $waveform['peaks'], '50 peaks a second for 4 seconds');
+		self::assertEqualsWithDelta(32, max($waveform['peaks']), 1, 'the sine is an eighth of full scale');
+		self::assertSame(409, $this->nc->ocs('POST', "/versions/{$version['id']}/waveform", NextcloudClient::handIn(array_fill(0, 200, 128), 4000))['status'], 'a browser does not overwrite it');
 	}
 
 	/** @return array<string, array{string, string, ?int}> */
@@ -138,13 +139,14 @@ class WithoutFfmpegTest extends TestCase {
 		// The browser decodes it and hands in what the server cannot work out
 		self::assertSame('none', $version['derived']['waveform']['state']);
 		self::assertSame($duration, $version['durationFrames']);
-		$given = $this->nc->ocs('POST', "/versions/{$version['id']}/waveform", ['peaks' => [0.1, 0.5, 0.25], 'durationFrames' => 2000]);
+		$peaks = array_map(static fn (int $at) => $at % 256, range(0, 99));
+		$given = $this->nc->ocs('POST', "/versions/{$version['id']}/waveform", NextcloudClient::handIn($peaks, 2000));
 		self::assertSame(200, $given['status'], json_encode($given['data']));
 		$version = $this->nc->ocs('GET', "/versions/{$version['id']}")['data']['versions'][0];
 		self::assertSame('ready', $version['derived']['waveform']['state']);
 		self::assertSame(2000, $version['durationFrames']);
-		self::assertSame([0.1, 0.5, 0.25], json_decode($this->nc->request('GET', $version['derived']['waveform']['url'])['body'], true)['peaks']);
-		self::assertSame(409, $this->nc->ocs('POST', "/versions/{$version['id']}/waveform", ['peaks' => [0.2], 'durationFrames' => 2000])['status'], 'once is enough');
+		self::assertSame(['rate' => 50, 'peaks' => $peaks], $this->nc->waveform($version['derived']['waveform']['url']));
+		self::assertSame(409, $this->nc->ocs('POST', "/versions/{$version['id']}/waveform", NextcloudClient::handIn($peaks, 2000))['status'], 'once is enough');
 	}
 
 	/** @return array{0: int, 1: string} file id and path of a Proxy made here as the browser makes it, uploaded next to the Version's file under a name without a media extension */
@@ -493,7 +495,7 @@ class WithoutFfmpegTest extends TestCase {
 		$version = $this->upload('cut.mp4');
 		self::assertSame(['thumbs', 'waveform', 'scrub'], $this->fromBrowser(), 'it plays as it is, so no Proxy');
 
-		self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/waveform", ['peaks' => [0.1, 0.5], 'durationFrames' => 50])['status']);
+		self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/waveform", NextcloudClient::handIn(array_fill(0, 100, 50), 50))['status'], 'two seconds in Frames at 25');
 		self::assertSame(200, $this->nc->ocs('POST', "/versions/{$version['id']}/thumbs", ['image' => $this->image('320x90'), 'every' => 1, 'count' => 2])['status']);
 		self::assertSame(['scrub'], $this->fromBrowser());
 		$scrub = $this->proxyFrom('-f lavfi -i testsrc=size=320x180:rate=25:duration=2 -c:v libx264 -pix_fmt yuv420p -g 25 -b:v 250k')[0];
@@ -569,14 +571,19 @@ class WithoutFfmpegTest extends TestCase {
 		$this->make('-f lavfi -i sine=duration=1 -c:a libmp3lame -f mp3');
 		$id = $this->upload('take.mp3')['id'];
 
+		$second = array_fill(0, 50, 100);
 		foreach ([
-			'louder than full scale' => ['peaks' => [1.5], 'durationFrames' => 1000],
-			'more peaks than a Waveform has' => ['peaks' => array_fill(0, 2001, 0.1), 'durationFrames' => 1000],
-			'no peaks' => ['peaks' => [], 'durationFrames' => 1000],
-			'no duration' => ['peaks' => [0.1], 'durationFrames' => 0],
+			'the old shape, peaks from 0 to 1 over the whole length' => ['peaks' => array_fill(0, 50, 0.5), 'durationFrames' => 1000],
+			'no rate' => ['peaks' => base64_encode(pack('C*', ...$second)), 'durationFrames' => 1000],
+			'another rate' => NextcloudClient::handIn(array_fill(0, 2000, 100), 1000, 2000),
+			'peaks for another length' => NextcloudClient::handIn(array_fill(0, 2000, 100), 1000),
+			'not base64' => ['peaks' => 'not base64!', 'rate' => 50, 'durationFrames' => 1000],
+			'no peaks' => NextcloudClient::handIn([], 1000),
+			'no duration' => NextcloudClient::handIn($second, 0),
 		] as $case => $body) {
 			self::assertSame(400, $this->nc->ocs('POST', "/versions/$id/waveform", $body)['status'], $case);
 		}
+		self::assertSame(200, $this->nc->ocs('POST', "/versions/$id/waveform", NextcloudClient::handIn([...$second, 100], 1000))['status'], 'a decoder may end a little past the length');
 	}
 
 	#[DataProvider('pcm')]
@@ -584,10 +591,12 @@ class WithoutFfmpegTest extends TestCase {
 		$this->make("-f lavfi -i sine=duration=1 -ar 48000 -ac 2 -c:a $codec -f wav");
 		$version = $this->upload('mix.wav');
 
-		$peaks = json_decode($this->nc->request('GET', $version['derived']['waveform']['url'])['body'], true)['peaks'];
-		// Spread over two channels, the sine at an eighth of full scale comes to 0.088
-		self::assertEqualsWithDelta(0.088, max($peaks), 0.01);
-		self::assertEqualsWithDelta(0.088, $peaks[1000], 0.01, 'every bucket of a steady sine peaks alike');
+		$waveform = $this->nc->waveform($version['derived']['waveform']['url']);
+		self::assertSame(50, $waveform['rate']);
+		self::assertCount(50, $waveform['peaks'], 'one second at 50 a second');
+		// Spread over two channels, the sine at an eighth of full scale comes to 0.088 of 255
+		self::assertEqualsWithDelta(22.5, max($waveform['peaks']), 1.5);
+		self::assertEqualsWithDelta(22.5, $waveform['peaks'][25], 1.5, 'every 20 ms of a steady 440 Hz sine peak alike');
 		self::assertSame($playable, $version['playable']);
 	}
 

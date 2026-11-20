@@ -693,9 +693,9 @@ class ProjectService {
 	}
 
 	/** What a Member's browser decoded where the server has no ffmpeg (ADR 0003) */
-	public function giveWaveform(string $uid, int $versionId, array $peaks, int $durationFrames): array {
+	public function giveWaveform(string $uid, int $versionId, mixed $peaks, int $rate, int $durationFrames): array {
 		[$version] = $this->reachVersion($uid, $versionId);
-		$this->media->acceptWaveform($version, $peaks, $durationFrames);
+		$this->media->acceptWaveform($version, $peaks, $rate, $durationFrames);
 		return $this->versionPayload($version, $uid);
 	}
 

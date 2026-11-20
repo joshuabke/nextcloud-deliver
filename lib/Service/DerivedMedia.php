@@ -64,7 +64,17 @@ class DerivedMedia {
 	private ?bool $withoutFfmpegNow = null;
 	/** The Proxy's AAC, which counts towards the Proxy bitrate threshold with the picture */
 	private const AUDIO_KBPS = 160;
-	private const WAVEFORM_BUCKETS = 2000;
+	/**
+	 * A Waveform's peaks a second (ADR 0021): 50, so 15 seconds still draw a
+	 * wave across a wide screen, fewer only where a file is so long that it
+	 * would go past WAVEFORM_MAX_PEAKS (past 11 hours)
+	 */
+	public const WAVEFORM_RATE = 50;
+	public const WAVEFORM_MAX_PEAKS = 2_000_000;
+	/** The sample rate ffmpeg resamples to for the Waveform: enough for a peak every 20 ms */
+	private const WAVEFORM_PCM_RATE = 8000;
+	/** Waveforms of older Versions queued at a time, in a queue with nothing else waiting */
+	private const WAVEFORMS = 20;
 	/** Seconds between two progress writes to the job row */
 	private const PROGRESS_INTERVAL = 2;
 
@@ -237,9 +247,9 @@ class DerivedMedia {
 		// Read without ffprobe: there is no ffmpeg either, so nothing to queue that could only fail.
 		// A WAV's Waveform is in its PCM; other audio gets one from the browser (acceptWaveform).
 		if ($probed['fallback'] ?? false) {
-			$peaks = $version->getHasAudio() ? $this->container->wavPeaks($path, self::WAVEFORM_BUCKETS) : null;
-			if ($peaks !== null) {
-				$this->put($version, 'waveform', json_encode(['peaks' => $peaks], JSON_THROW_ON_ERROR));
+			$waveform = $version->getHasAudio() ? $this->container->wavPeaks($path) : null;
+			if ($waveform !== null) {
+				$this->put($version, 'waveform', self::waveformJson($waveform[0], $waveform[1]));
 				$this->mark($version->getId(), Job::KIND_WAVEFORM, self::STATE_READY);
 			}
 			// Without ffmpeg nothing queues the Proxy: a browser has to make it (ADR 0019)
@@ -431,6 +441,25 @@ class DerivedMedia {
 		return count($missing);
 	}
 
+	/**
+	 * Queues a few Waveforms for Versions with sound that have none, such as
+	 * those from before the fixed rate (ADR 0021), only while the queue has
+	 * no other work waiting but Scrub Proxies, so they never hold up an upload.
+	 *
+	 * @return int how many
+	 */
+	public function queueMissingWaveforms(int $limit = self::WAVEFORMS): int {
+		$waiting = $this->jobs->findQueued(1)[0] ?? null;
+		if (!$this->ffmpeg->available() || $waiting !== null && $waiting->getKind() !== Job::KIND_SCRUB) {
+			return 0;
+		}
+		$missing = $this->versions->findWithoutWaveform($limit);
+		foreach ($missing as $version) {
+			$this->enqueue($version->getId(), Job::KIND_WAVEFORM);
+		}
+		return count($missing);
+	}
+
 	/** About one Frame per second in a WebP grid, capped by the admin setting */
 	private function runThumbs(Version $version, string $path): void {
 		$cap = $this->thumbCap();
@@ -508,20 +537,39 @@ class DerivedMedia {
 		return $this->settings->proxy()['thumbCap'];
 	}
 
-	/** Mono 8 kHz PCM from ffmpeg, reduced to peaks without another binary */
+	/** Mono 8 kHz PCM from ffmpeg, on disk rather than in memory, reduced to peaks without another binary */
 	private function runWaveform(Version $version, string $path): void {
 		$pcm = tempnam(sys_get_temp_dir(), 'deliver-') ?: throw new \RuntimeException('No temporary file for the Waveform');
+		$rate = self::waveformRate($this->durationSeconds($version));
 		try {
 			$this->ffmpeg([
 				...Ffmpeg::input($path),
-				'-map', '0:a:0', '-ac', '1', '-ar', '8000',
+				'-map', '0:a:0', '-ac', '1', '-ar', (string)self::WAVEFORM_PCM_RATE,
 				'-c:a', 'pcm_s16le', '-f', 's16le', $pcm,
 			]);
-			$peaks = self::peaks($pcm, self::WAVEFORM_BUCKETS);
+			$peaks = self::peaks($pcm, self::WAVEFORM_PCM_RATE, $rate);
 		} finally {
 			@unlink($pcm);
 		}
-		$this->put($version, 'waveform', json_encode(['peaks' => $peaks], JSON_THROW_ON_ERROR));
+		$this->put($version, 'waveform', self::waveformJson($rate, $peaks));
+	}
+
+	/** The peaks a second of a Waveform of this many seconds (ADR 0021) */
+	public static function waveformRate(float $seconds): int {
+		return max(1, min(self::WAVEFORM_RATE, intdiv(self::WAVEFORM_MAX_PEAKS, max(1, (int)ceil($seconds)))));
+	}
+
+	/** One peak from 0 to 1 as the byte the Waveform stores, 255 for full scale */
+	public static function peakByte(float $peak): string {
+		return chr((int)round(max(0, min(1, $peak)) * 255));
+	}
+
+	/**
+	 * The stored Waveform: peak i is the loudest sample from i / rate to
+	 * (i + 1) / rate seconds into the file, one byte each, in base64 (ADR 0021)
+	 */
+	private static function waveformJson(int $rate, string $peaks): string {
+		return json_encode(['rate' => $rate, 'peaks' => base64_encode($peaks)], JSON_THROW_ON_ERROR);
 	}
 
 	/**
@@ -532,24 +580,31 @@ class DerivedMedia {
 	 * makes later (ffmpeg's, a WAV's PCM) replaces theirs. The duration counts
 	 * Frames of the Version, for audio milliseconds also before the probe.
 	 *
-	 * @param list<mixed> $peaks
-	 * @throws InvalidRequestException peaks or duration out of shape
+	 * @param mixed $peaks one byte a peak in base64, as the Waveform stores them
+	 * @param int $rate peaks a second, as waveformRate() has it for the duration
+	 * @throws InvalidRequestException peaks, rate or duration out of shape
 	 * @throws ProjectConflictException the Version has a Waveform or is getting one
 	 */
-	public function acceptWaveform(Version $version, array $peaks, int $durationFrames): void {
-		if ($peaks === [] || count($peaks) > self::WAVEFORM_BUCKETS || $durationFrames < 1) {
-			throw new InvalidRequestException('A Waveform is 1 to ' . self::WAVEFORM_BUCKETS . ' peaks over a duration of at least one Frame');
+	public function acceptWaveform(Version $version, mixed $peaks, int $rate, int $durationFrames): void {
+		$bytes = is_string($peaks) ? base64_decode($peaks, true) : false;
+		if ($bytes === false || $bytes === '' || $durationFrames < 1) {
+			throw new InvalidRequestException('A Waveform is its peaks, one byte each in base64, over a duration of at least one Frame');
 		}
-		foreach ($peaks as $peak) {
-			if (!is_int($peak) && !is_float($peak) || $peak < 0 || $peak > 1) {
-				throw new InvalidRequestException('Peaks run from 0 to 1');
-			}
+		// Frames of the Version once read; before, milliseconds, as a delivering tool hands in audio
+		$seconds = $version->getFpsNum() && $version->getFpsDen() ? $durationFrames * $version->getFpsDen() / $version->getFpsNum() : $durationFrames / 1000;
+		$expected = self::waveformRate($seconds);
+		if ($rate !== $expected) {
+			throw new InvalidRequestException('A Waveform of this duration has ' . $expected . ' peaks a second');
+		}
+		// A second either way, for a decoder that ends a little off the duration
+		if (abs(strlen($bytes) - $seconds * $rate) > $rate + 1) {
+			throw new InvalidRequestException('A Waveform of this duration has about ' . (int)ceil($seconds * $rate) . ' peaks');
 		}
 		// Also before the probe ran (playable is still unknown then), so a delivering tool can hand in its peaks with the upload
 		if (!$version->getHasAudio() && $version->getPlayable() !== null || $version->getWaveformState() !== self::STATE_NONE) {
 			throw new ProjectConflictException('This Version has its Waveform from the server');
 		}
-		$this->put($version, 'waveform', json_encode(['peaks' => array_map(static fn ($peak) => round((float)$peak, 3), $peaks)], JSON_THROW_ON_ERROR));
+		$this->put($version, 'waveform', self::waveformJson($rate, $bytes));
 		if ($version->getDurationFrames() === null) {
 			$version->setDurationFrames($durationFrames);
 		}
@@ -838,19 +893,19 @@ class DerivedMedia {
 	}
 
 	/**
-	 * Reads the PCM in chunks, one per bucket, so an hour of audio does not
-	 * have to fit into memory.
+	 * Reads mono 16-bit PCM one peak's share at a time, so only the peaks
+	 * stay in memory, whatever the length.
 	 *
-	 * @return list<float> the loudest sample of each bucket, 0 to 1
+	 * @param int $sampleRate the PCM's samples a second
+	 * @param int $rate peaks a second
+	 * @return string the loudest sample of each share, a byte each (peakByte)
 	 */
-	public static function peaks(string $pcmFile, int $buckets): array {
-		$samples = intdiv((int)filesize($pcmFile), 2);
-		$perBucket = max(1, (int)ceil($samples / $buckets));
-		$handle = fopen($pcmFile, 'rb');
-		$peaks = [];
-		while (($chunk = fread($handle, $perBucket * 2)) !== false && strlen($chunk) >= 2) {
-			$loudest = max(array_map('abs', unpack('s*', $chunk)));
-			$peaks[] = round(min(1, $loudest / 32767), 3);
+	public static function peaks(string $pcmFile, int $sampleRate, int $rate): string {
+		$handle = fopen($pcmFile, 'rb') ?: throw new \RuntimeException('The PCM of the Waveform is not readable');
+		$peaks = '';
+		for ($i = 0; ($chunk = fread($handle, 2 * (intdiv(($i + 1) * $sampleRate, $rate) - intdiv($i * $sampleRate, $rate)))) !== false && strlen($chunk) >= 2; $i++) {
+			$samples = unpack('s*', $chunk);
+			$peaks .= self::peakByte(max(max($samples), -min($samples)) / 32767);
 		}
 		fclose($handle);
 		return $peaks;

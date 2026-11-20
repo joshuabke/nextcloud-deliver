@@ -6,7 +6,7 @@ import { generateOcsUrl, generateRemoteUrl, generateUrl } from '@nextcloud/route
 import { t } from './lib/l10n.js'
 import { baseLanguage } from './lib/language.js'
 import { fileIdAt } from './lib/upload.js'
-import { decodeWaveform } from './lib/waveform.js'
+import { decodeWaveform, toBase64 } from './lib/waveform.js'
 
 /** Set on the public review page; Members leave it null and use the OCS API */
 let publicBase = null
@@ -127,7 +127,15 @@ export function attachmentUrl(id) {
 
 export const resolveComment = (id, resolved) => axios.put(url(`/comments/${id}/resolved`), { resolved }).then(data)
 export const decideVersion = (versionId, status) => axios.put(url(`/versions/${versionId}/approval`), { status }).then(data)
-export const giveWaveform = (versionId, peaks, durationFrames) => axios.post(url(`/versions/${versionId}/waveform`), { peaks, durationFrames }).then(data)
+/**
+ * Hands in a Waveform this browser decoded (ADR 0021)
+ *
+ * @param {number} versionId - the Version
+ * @param {{rate: number, peaks: Uint8Array}} waveform - its peaks a second and the peaks
+ * @param {number} durationFrames - its length in Frames of the Version, milliseconds before the probe ran
+ * @return {Promise<object>} the server's answer
+ */
+export const giveWaveform = (versionId, { rate, peaks }, durationFrames) => axios.post(url(`/versions/${versionId}/waveform`), { peaks: toBase64(peaks), rate, durationFrames }).then(data)
 /**
  * Hands in the Thumbnail Strip the browser made with a Proxy (ADR 0019)
  *
@@ -155,7 +163,7 @@ let decoding = Promise.resolve()
  *
  * @param {Blob} file - an audio file
  * @param {(percent: number) => void} onProgress - how far it is
- * @return {Promise<{peaks: number[], seconds: number}>} its Waveform
+ * @return {Promise<{rate: number, peaks: Uint8Array, seconds: number}>} its Waveform
  */
 export function decodeInTurn(file, onProgress) {
 	const turn = decoding.then(() => decodeWaveform(file, onProgress))
@@ -165,10 +173,10 @@ export function decodeInTurn(file, onProgress) {
 
 /**
  * @param {number} versionId - an audio Version
- * @param {{peaks: number[], seconds: number}} decoded - its Waveform; audio counts in milliseconds (ADR 0007), also before the probe ran
+ * @param {{rate: number, peaks: Uint8Array, seconds: number}} decoded - its Waveform; audio counts in milliseconds (ADR 0007), also before the probe ran
  * @return {Promise<object>} the server's answer
  */
-export const giveAudioWaveform = (versionId, { peaks, seconds }) => giveWaveform(versionId, peaks, Math.max(1, Math.round(seconds * 1000)))
+export const giveAudioWaveform = (versionId, decoded) => giveWaveform(versionId, decoded, Math.max(1, Math.round(decoded.seconds * 1000)))
 
 /**
  * Where the server has no ffmpeg, the browser that uploaded an audio file

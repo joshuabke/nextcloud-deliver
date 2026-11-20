@@ -254,12 +254,13 @@ class ContainerProbe {
 	}
 
 	/**
-	 * A Waveform straight from a WAV's PCM: the loudest sample of each bucket
-	 * over all channels, as ffmpeg's Waveform has it.
+	 * A Waveform straight from a WAV's PCM: the loudest sample of each share
+	 * over all channels, as ffmpeg's Waveform has it, at the rate of its
+	 * length (ADR 0021). Read one share at a time, so only the peaks stay in memory.
 	 *
-	 * @return list<float>|null 0 to 1, or null for anything but integer or float PCM
+	 * @return array{0: int, 1: string}|null the rate and the peaks, a byte each (DerivedMedia::peakByte), or null for anything but integer or float PCM
 	 */
-	public function wavPeaks(string $path, int $buckets): ?array {
+	public function wavPeaks(string $path): ?array {
 		$file = @fopen($path, 'rb');
 		if ($file === false) {
 			return null;
@@ -274,8 +275,11 @@ class ContainerProbe {
 			if (!isset($chunks['fmt '], $chunks['data'])) {
 				return null;
 			}
-			$format = $this->formatTag($chunks['fmt '][0]);
-			$bits = $this->u16le($chunks['fmt '][0] + 14);
+			$fmt = $chunks['fmt '][0];
+			$format = $this->formatTag($fmt);
+			$sampleRate = $this->u32le($fmt + 4);
+			$block = $this->u16le($fmt + 12);
+			$bits = $this->u16le($fmt + 14);
 			// unpack code and full scale per sample format; 24 bits are widened to 32 below
 			[$code, $scale] = match ("$format/$bits") {
 				'1/8' => ['C*', 128],
@@ -285,25 +289,27 @@ class ContainerProbe {
 				'3/64' => ['e*', 1],
 				default => [null, 0],
 			};
-			if ($code === null) {
+			if ($code === null || $sampleRate < 1 || $block < intdiv($bits, 8)) {
 				return null;
 			}
-			$width = intdiv($bits, 8);
 			[$start, $length] = $chunks['data'];
-			$perBucket = max($width, (int)ceil($length / $buckets / $width) * $width);
-			$most = intdiv(512 * 1024, $width) * $width;
-			$peaks = [];
-			for ($at = 0; $at < $length; $at += $perBucket) {
-				// ponytail: at most 512 KiB of each bucket, so a WAV of hours reads in seconds; a click past it can be missed
-				$chunk = $this->at($start + $at, min($perBucket, $length - $at, $most));
+			$frames = intdiv($length, $block);
+			$rate = DerivedMedia::waveformRate($frames / $sampleRate);
+			$count = (int)ceil($frames * $rate / $sampleRate);
+			// ponytail: at most 1 GiB in all, so a WAV of many hours reads in a minute; past an hour of 24-bit stereo each share is read only in part and a click can be missed
+			$most = max($block, intdiv(intdiv(1 << 30, max(1, $count)), $block) * $block);
+			$peaks = '';
+			for ($i = 0; $i < $count; $i++) {
+				$from = intdiv($i * $sampleRate, $rate);
+				$chunk = $this->at($start + $from * $block, min(min(intdiv(($i + 1) * $sampleRate, $rate), $frames) - $from, intdiv($most, $block)) * $block);
 				if ($bits === 24) {
 					$chunk = (string)preg_replace('/(...)/s', "\0$1", $chunk);
 				}
 				$samples = unpack($code, $chunk) ?: [0];
 				$loudest = $bits === 8 ? max(max($samples) - 128, 128 - min($samples)) : max(abs(max($samples)), abs(min($samples)));
-				$peaks[] = round(min(1, $loudest / $scale), 3);
+				$peaks .= DerivedMedia::peakByte($loudest / $scale);
 			}
-			return $peaks;
+			return [$rate, $peaks];
 		} finally {
 			fclose($file);
 		}
