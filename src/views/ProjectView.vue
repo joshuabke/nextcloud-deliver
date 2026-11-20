@@ -11,8 +11,8 @@ import notUpIcon from '@mdi/svg/svg/eye-off-outline.svg?raw'
 import addIcon from '@mdi/svg/svg/eye-plus-outline.svg?raw'
 import filesIcon from '@mdi/svg/svg/folder-eye-outline.svg?raw'
 import moveIcon from '@mdi/svg/svg/folder-move-outline.svg?raw'
+import flatIcon from '@mdi/svg/svg/folder-off-outline.svg?raw'
 import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
-import flatIcon from '@mdi/svg/svg/format-list-bulleted.svg?raw'
 import stackIcon from '@mdi/svg/svg/layers-outline.svg?raw'
 import newVersionIcon from '@mdi/svg/svg/layers-plus.svg?raw'
 import searchIcon from '@mdi/svg/svg/magnify.svg?raw'
@@ -174,6 +174,8 @@ const query = useQuery('q', null, '')
 const layout = useQuery('view', ['folders', 'flat'], 'folders')
 /** Cards or compact rows, remembered in this browser for this Project; not the folders/flat layout above */
 const look = useLayout(() => `project-${props.id}`)
+/** Without folders the view without them is the same view, so its button would do nothing */
+const hasFolders = computed(() => (project.value?.assets ?? []).some((asset) => asset.path !== ''))
 const inView = computed(() => (project.value?.assets ?? []).filter((asset) => inFolder(asset, folder.value)))
 const filters = computed(() => FILTERS.map((id) => ({
 	id,
@@ -832,6 +834,7 @@ function dropped(event) {
 						:title="selected.length ? t('deliver', 'Clear the selection') : t('deliver', 'Select all')"
 						@change="selected = selected.length ? [] : selectable.map((asset) => asset.id)">
 					<NcButton
+						v-if="hasFolders || layout === 'flat'"
 						variant="tertiary"
 						:pressed="layout === 'flat'"
 						:aria-label="t('deliver', 'Show every Asset without folders')"
