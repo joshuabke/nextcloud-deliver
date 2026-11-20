@@ -1759,6 +1759,12 @@ test.describe('Audio review', () => {
 	})
 })
 
+/**
+ * @param {import('@playwright/test').Locator} videos - Compare's two media elements
+ * @return {Promise<boolean[]>} whether each side is heard: by its gain where both play into the AudioContext (A7), by muting until then
+ */
+const heard = (videos) => videos.evaluateAll((all) => all.map((video) => video.deliverGain && !video.muted ? video.deliverGain.gain.value > 0.5 : !video.muted))
+
 test.describe('Comparing sound', () => {
 	let browser
 	let context
@@ -1820,43 +1826,100 @@ test.describe('Comparing sound', () => {
 		const canvas = page.locator('.deliver-compare__lanes canvas')
 		await expect(canvas).toBeVisible()
 		await expect(page.locator('.deliver-wave__lane')).toHaveText(['V1', 'V2'])
-		const muted = () => videos.evaluateAll((all) => all.map((video) => video.muted))
 		const side = page.getByRole('radio', { name: /^V2/ })
-		expect(await muted()).toEqual([false, true])
+		expect(await heard(videos)).toEqual([true, false])
 
 		await page.getByRole('button', { name: 'Play (Space)' }).click()
 		await expect.poll(() => videos.first().evaluate((video) => video.currentTime)).toBeGreaterThan(0.5)
+		// Both play unmuted into one AudioContext, the gains decide
+		expect(await videos.evaluateAll((all) => all.map((video) => !video.muted && !!video.deliverGain))).toEqual([true, true])
+		// The heard side's sound comes through the graph: a media element from another origin would give silence
+		const level = await videos.first().evaluate((video) => new Promise((resolve) => {
+			const analyser = video.deliverGain.context.createAnalyser()
+			video.deliverGain.connect(analyser)
+			setTimeout(() => {
+				const data = new Float32Array(analyser.fftSize)
+				analyser.getFloatTimeDomainData(data)
+				resolve(Math.max(...data.map(Math.abs)))
+			}, 300)
+		}))
+		expect(level).toBeGreaterThan(0.05)
 		await page.keyboard.press('2')
-		expect(await muted()).toEqual([true, false])
+		await expect.poll(() => heard(videos)).toEqual([false, true])
 		await expect(side).toHaveAttribute('aria-checked', 'true')
-		// Both play on, in step
-		const state = await videos.evaluateAll((all) => all.map((video) => ({ paused: video.paused, time: video.currentTime })))
-		expect(state.map((each) => each.paused)).toEqual([false, false])
-		expect(Math.abs(state[0].time - state[1].time)).toBeLessThan(0.1)
+		expect(await videos.evaluateAll((all) => all.map((video) => video.paused))).toEqual([false, false])
 		await page.keyboard.press('1')
-		expect(await muted()).toEqual([false, true])
+		await expect.poll(() => heard(videos)).toEqual([true, false])
 
 		// A click on a wave seeks and keeps playing; the player then has the focus, and Tab switches
 		const box = await canvas.boundingBox()
 		await canvas.click({ position: { x: box.width * 0.6, y: box.height * 0.6 } })
 		expect(await videos.first().evaluate((video) => video.paused)).toBe(false)
 		await page.keyboard.press('Tab')
-		expect(await muted()).toEqual([true, false])
+		await expect.poll(() => heard(videos)).toEqual([false, true])
 		await page.keyboard.press('Tab')
-		expect(await muted()).toEqual([false, true])
+		await expect.poll(() => heard(videos)).toEqual([true, false])
 		// Moving through the page by keyboard, Tab moves the focus and leaves the sound alone
 		await page.keyboard.press('Shift+Tab')
 		await page.keyboard.press('Tab')
 		await page.keyboard.press('Tab')
-		expect(await muted()).toEqual([false, true])
+		expect(await heard(videos)).toEqual([true, false])
 		expect(await page.evaluate(() => document.activeElement.classList.contains('deliver-compare'))).toBe(false)
 
 		// A lane's name plays its side
 		await page.locator('.deliver-wave__lane').nth(1).click()
-		expect(await muted()).toEqual([true, false])
+		await expect.poll(() => heard(videos)).toEqual([false, true])
 		await expect(side).toHaveAttribute('aria-checked', 'true')
 		expect(await videos.evaluateAll((all) => all.map((video) => video.paused))).toEqual([false, false])
 		await page.getByRole('button', { name: 'Pause (Space)' }).click()
+	})
+
+	test('switching ten times while both play seeks neither side, the heard sound runs on in real time, and the sides stay within milliseconds', async () => {
+		await page.goto(`/apps/deliver/compare/${mix[1].id}/${mix[0].id}`)
+		const videos = page.locator('.deliver-compare video')
+		await expect(videos.first()).toHaveJSProperty('readyState', 4)
+		await page.getByRole('button', { name: 'Play (Space)' }).click()
+		await page.waitForTimeout(1500)
+		// On every animation frame: both times, whose sound is heard, and every seek; a switch every 400 ms
+		const run = await page.evaluate(() => new Promise((resolve) => {
+			const [a, b] = document.querySelectorAll('.deliver-compare video')
+			const halves = document.querySelectorAll('.deliver-compare__sound')
+			let seeks = 0
+			a.addEventListener('seeking', () => seeks++)
+			b.addEventListener('seeking', () => seeks++)
+			const samples = []
+			const start = performance.now()
+			let switches = 0
+			const tick = () => {
+				const now = performance.now()
+				const side = halves[0].getAttribute('aria-checked') === 'true' ? 'a' : 'b'
+				samples.push({ now, a: a.currentTime, b: b.currentTime, side })
+				if (now - start > (switches + 1) * 400 && switches < 10) {
+					switches++
+					halves[switches % 2].click()
+				}
+				if (now - start < 4600) {
+					requestAnimationFrame(tick)
+				} else {
+					resolve({ seeks, samples, playing: !a.paused && !b.paused })
+				}
+			}
+			requestAnimationFrame(tick)
+		}))
+		await page.getByRole('button', { name: 'Pause (Space)' }).click()
+		expect(run.playing).toBe(true)
+		expect(run.seeks).toBe(0)
+		expect(new Set(run.samples.map((sample) => sample.side)).size).toBe(2)
+		const position = (sample) => sample.side === 'a' ? sample.a : sample.b
+		for (const [at, sample] of run.samples.entries()) {
+			// Without an offset the sides stand on the same second
+			expect(Math.abs(sample.b - sample.a)).toBeLessThan(0.01)
+			if (at > 0) {
+				const before = run.samples[at - 1]
+				// The heard sound goes on with the clock across every switch; a reading of a media element's time is off by a few ms
+				expect(Math.abs((position(sample) - position(before)) - (sample.now - before.now) / 1000)).toBeLessThan(0.015)
+			}
+		}
 	})
 
 	test('a looped Range alternating A and B plays A, then B, then A, switching at each wrap', async () => {
@@ -1883,7 +1946,8 @@ test.describe('Comparing sound', () => {
 			let last = Infinity
 			const tick = () => {
 				const time = a.currentTime
-				const heard = a.muted ? (b.muted ? 'none' : 'b') : (b.muted ? 'a' : 'both')
+				const gain = (video) => video.deliverGain && !video.muted ? video.deliverGain.gain.value > 0.5 : !video.muted
+				const heard = gain(a) ? (gain(b) ? 'both' : 'a') : (gain(b) ? 'b' : 'none')
 				if (time < last - 0.3) {
 					found.push({ from: time, to: time, heard: new Set() })
 				}
@@ -1910,8 +1974,8 @@ test.describe('Comparing sound', () => {
 		}
 		await page.getByRole('button', { name: 'Pause (Space)' }).click()
 		// The switch tells whose pass it is
-		const heard = (await videos.first().evaluate((video) => video.muted)) ? /^V2/ : /^V1/
-		await expect(page.getByRole('radio', { name: heard })).toHaveAttribute('aria-checked', 'true')
+		const now = (await heard(videos))[0] ? /^V1/ : /^V2/
+		await expect(page.getByRole('radio', { name: now })).toHaveAttribute('aria-checked', 'true')
 	})
 
 	test('a video Compare shows both Waveforms under the pictures when asked, and the pictures stay', async () => {
@@ -1921,7 +1985,7 @@ test.describe('Comparing sound', () => {
 		await expect(page.locator('.deliver-compare__lanes')).toHaveCount(0)
 		// The A/B switch replaces the small sound button of the bar
 		await page.getByRole('radio', { name: /^V2/ }).click()
-		expect(await videos.evaluateAll((all) => all.map((video) => video.muted))).toEqual([true, false])
+		await expect.poll(() => heard(videos)).toEqual([false, true])
 
 		await page.getByRole('button', { name: 'Waveforms' }).click()
 		await expect(page.locator('.deliver-compare__lanes canvas')).toBeVisible()

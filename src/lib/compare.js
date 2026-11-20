@@ -28,21 +28,79 @@ export function frameOnA(frameB, fpsA, fpsB, offset) {
 	return Math.max(0, Math.round((frameB - offset) * (fpsA.num * fpsB.den) / (fpsA.den * fpsB.num)))
 }
 
-/** Never pulled back for less than this, in seconds: audio counts in milliseconds, and every seek is a gap in its sound */
-export const DRIFT_FLOOR = 0.06
+/** How far the side not heard may be off, on average, before it is brought back, in seconds: below what a switch lets one hear */
+export const SYNC_TOLERANCE = 0.008
+/** The least time between two corrections, in seconds, so one settles before the next is judged */
+export const SETTLE = 0.5
 
 /**
- * While both play, side B drifts; it is pulled back once it is more than a
- * Frame and a half off, which a viewer does not notice but a seek fixes, and
- * at least DRIFT_FLOOR (a Frame and a half at 25 fps).
+ * The heard side leads and is never corrected; the other follows it (A7).
+ * Where the heard side has run out, or the other has no sound at the place,
+ * A leads as before.
  *
- * @param {number} actual - B's playback position, in seconds
- * @param {number} expected - where B should be, in seconds
- * @param {{num: number, den: number}} fps - B's frame rate
- * @return {boolean} whether to seek B
+ * @param {'a'|'b'} heard - whose sound plays
+ * @param {{time: number, duration: number, ended: boolean}} a - side A's element
+ * @param {{time: number, duration: number, ended: boolean}} b - side B's element
+ * @param {number} shift - how far B is ahead, in seconds, as laneShift gives it
+ * @return {?{side: 'a'|'b', target: number}} the side to correct and where it belongs, in its own seconds; null where none can be
  */
-export function drifted(actual, expected, fps) {
-	return Math.abs(actual - expected) > Math.max(DRIFT_FLOOR, 1.5 * fps.den / fps.num)
+export function follower(heard, a, b, shift) {
+	const within = (time, duration) => time >= 0 && time < duration
+	if (heard === 'b' && !b.ended && within(b.time - shift, a.duration)) {
+		return { side: 'a', target: b.time - shift }
+	}
+	return within(a.time + shift, b.duration) ? { side: 'b', target: a.time + shift } : null
+}
+
+/**
+ * The following side's offset, read on every animation frame, averaged:
+ * a single reading of a media element's time is off by some milliseconds.
+ *
+ * @param {?number} average - the average so far, null after a seek or a switch
+ * @param {number} error - how far the following side is ahead of where it belongs now, in seconds
+ * @return {number} the average with it
+ */
+export const averageError = (average, error) => average === null ? error : average * 0.8 + error * 0.2
+
+/**
+ * Both sides play on the one output clock (A7), so they keep in step; only
+ * a hiccup of the machine puts one out. The side not heard is then sought
+ * back, which nobody hears and which lands it exactly. Its speed is never
+ * changed: Chrome moves a media element's time by some 20 ms on every change
+ * of its playback rate.
+ *
+ * @param {number} average - the following side's offset, as averageError keeps it
+ * @param {number} since - seconds since the last correction, the last seek or the last switch
+ * @param {number} tolerance - as toleranceFor gives it
+ * @return {boolean} whether to seek it
+ */
+export const outOfStep = (average, since, tolerance) => Math.abs(average) > tolerance && since >= SETTLE
+
+/**
+ * A video lands a seek on one of its Frames, so it is held to a little more
+ * than half a Frame (40 ms Frames: 24 ms; main held it to a Frame and a half),
+ * audio to SYNC_TOLERANCE
+ *
+ * @param {{audioOnly: ?boolean, fps: {num: number, den: number}}} version - the following side's Version
+ * @return {number} how far it may be off on average, in seconds
+ */
+export function toleranceFor(version) {
+	return version.audioOnly ? SYNC_TOLERANCE : Math.max(SYNC_TOLERANCE, 0.6 * version.fps.den / version.fps.num)
+}
+
+/**
+ * An equal-power crossfade, from where a gain stands to where it goes, so a
+ * switch half done can turn back from there
+ *
+ * @param {number} from - the gain now, 0 to 1
+ * @param {number} to - the gain wanted, 0 or 1
+ * @param {number} [points] - how many values
+ * @return {Float32Array} the gain's values over the fade
+ */
+export function fadeCurve(from, to, points = 16) {
+	const start = Math.asin(Math.min(1, Math.max(0, from)))
+	const end = Math.asin(to)
+	return Float32Array.from({ length: points }, (_, at) => Math.sin(start + (end - start) * at / (points - 1)))
 }
 
 /**
@@ -108,15 +166,23 @@ function decibels(locale) {
  *
  * @param {?{integrated: ?number, peak: ?number, truePeak: boolean}} loudness - as its Waveform carries it, if measured
  * @param {string} locale - the user's language
- * @return {?string} "−16.3 LUFS · −1.0 dBTP", the peak in dBFS where it is no true peak; null where nothing was measured
+ * @return {string[]} "−16.3 LUFS" and "−1.0 dBTP", the peak in dBFS where it is no true peak; each only where it was measured
  */
-export function loudnessText(loudness, locale) {
+export function loudnessParts(loudness, locale) {
 	const format = decibels(locale)
-	const parts = [
+	return [
 		typeof loudness?.integrated === 'number' ? `${format(loudness.integrated)} LUFS` : null,
 		typeof loudness?.peak === 'number' ? `${format(loudness.peak)} ${loudness.truePeak ? 'dBTP' : 'dBFS'}` : null,
 	].filter(Boolean)
-	return parts.length ? parts.join(' · ') : null
+}
+
+/**
+ * @param {?object} loudness - as loudnessParts takes it
+ * @param {string} locale - the user's language
+ * @return {?string} "−16.3 LUFS · −1.0 dBTP"; null where nothing was measured
+ */
+export function loudnessText(loudness, locale) {
+	return loudnessParts(loudness, locale).join(' · ') || null
 }
 
 /**

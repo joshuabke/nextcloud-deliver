@@ -1,7 +1,7 @@
 <script setup>
 import backIcon from '@mdi/svg/svg/arrow-left.svg?raw'
 import swapIcon from '@mdi/svg/svg/swap-horizontal.svg?raw'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
@@ -14,9 +14,10 @@ import SegmentedControl from '../components/SegmentedControl.vue'
 import VersionPicker from '../components/VersionPicker.vue'
 import { errorMessage, getVersion, listComments } from '../api.js'
 import { usePanelOpen } from '../composables/panel.js'
+import { DERIVED_RECHECK } from '../composables/review.js'
 import { frameOnA } from '../lib/compare.js'
 import { t } from '../lib/l10n.js'
-import { isStill } from '../lib/media.js'
+import { derivedPending, isStill } from '../lib/media.js'
 import { formatAt } from '../lib/timecode.js'
 
 const props = defineProps({
@@ -73,6 +74,21 @@ watch(() => [props.a, props.b], async ([a, b]) => {
 		error.value = errorMessage(e)
 	}
 }, { immediate: true })
+
+let recheck = null
+// While either side's derived media is being made, the pair asks again, so a Waveform that becomes ready shows
+watch(() => [versionA.value?.derived, versionB.value?.derived], () => {
+	clearTimeout(recheck)
+	if (derivedPending(versionA.value) || derivedPending(versionB.value)) {
+		const a = props.a
+		recheck = setTimeout(() => getVersion(a).then((fresh) => {
+			if (props.a === a) {
+				context.value = fresh
+			}
+		}).catch(() => {}), DERIVED_RECHECK)
+	}
+})
+onBeforeUnmount(() => clearTimeout(recheck))
 
 /**
  * @param {number} a - the leading Version

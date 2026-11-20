@@ -4,7 +4,7 @@ import { useCommentsStore } from '../store/comments.js'
 import { sheet } from './panel.js'
 
 /** How long to wait before asking again while derived media is being made */
-const DERIVED_RECHECK = 10000
+export const DERIVED_RECHECK = 10000
 
 /**
  * What the Member and the public Review view share: where a new Comment lands,

@@ -583,7 +583,7 @@ onBeforeUnmount(() => {
 /** Follows the media element, and sends a looped Range back to its in Frame */
 function onTimeUpdate() {
 	frame.value = timeToFrame(video.value.currentTime, fps.value)
-	const wrap = wrapFrom(frame.value)
+	const wrap = wrapFrom(frame.value, fpsValue(fps.value))
 	if (wrap !== null) {
 		seekTo(wrap)
 	}

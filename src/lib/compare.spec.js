@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compareSource, drifted, frameOnA, frameOnB, laneShift, loudnessGap, loudnessText, nextPass, switchKey } from './compare.js'
+import { averageError, compareSource, fadeCurve, follower, frameOnA, frameOnB, laneShift, loudnessGap, loudnessParts, loudnessText, nextPass, outOfStep, SETTLE, switchKey, SYNC_TOLERANCE, toleranceFor } from './compare.js'
 
 const PAL = { num: 25, den: 1 }
 const FILM = { num: 24000, den: 1001 }
@@ -18,12 +18,49 @@ describe('compare', () => {
 		expect(frameOnA(96, PAL, FILM, 0)).toBe(100)
 	})
 
-	it('pulls B back only when it is more than a Frame and a half off', () => {
-		expect(drifted(1.05, 1.0, PAL)).toBe(false)
-		expect(drifted(1.07, 1.0, PAL)).toBe(true)
-		// Audio counts a Frame a millisecond; it is not sought, a gap in its sound, for a few of them
-		expect(drifted(1.05, 1.0, { num: 1000, den: 1 })).toBe(false)
-		expect(drifted(1.07, 1.0, { num: 1000, den: 1 })).toBe(true)
+	it('lets the heard side lead and corrects only the other, A leading where the heard side has nothing there', () => {
+		const side = (time, duration = 10, ended = false) => ({ time, duration, ended })
+		expect(follower('a', side(3), side(5), 2)).toEqual({ side: 'b', target: 5 })
+		expect(follower('b', side(3), side(5), 2)).toEqual({ side: 'a', target: 3 })
+		// B has run out: A leads, and B, out of its length, is left alone
+		expect(follower('b', side(9), side(10, 10, true), 2)).toBeNull()
+		// B heard before A's start: A leads, B follows
+		expect(follower('b', side(0.5), side(1), 2)).toEqual({ side: 'b', target: 2.5 })
+		expect(follower('a', side(9), side(10, 10), 2)).toBeNull()
+	})
+
+	it('brings the side not heard back only when it is out of step on average, and not again before the last has settled', () => {
+		let average = null
+		// Readings off by a few milliseconds either way average out
+		for (const error of [0.006, -0.004, 0.009, -0.002, 0.005, 0.001]) {
+			average = averageError(average, error)
+		}
+		expect(outOfStep(average, 1, SYNC_TOLERANCE)).toBe(false)
+		for (let at = 0; at < 10; at++) {
+			average = averageError(average, 0.02)
+		}
+		expect(outOfStep(average, 1, SYNC_TOLERANCE)).toBe(true)
+		expect(outOfStep(average, SETTLE / 2, SYNC_TOLERANCE)).toBe(false)
+		expect(outOfStep(-0.01, 1, SYNC_TOLERANCE)).toBe(true)
+		// A video lands on its Frames: held within a little more than half of one, tighter than the Frame and a half before
+		expect(toleranceFor({ audioOnly: false, fps: PAL })).toBeCloseTo(0.024, 6)
+		expect(toleranceFor({ audioOnly: false, fps: { num: 120, den: 1 } })).toBe(SYNC_TOLERANCE)
+		expect(toleranceFor({ audioOnly: true, fps: { num: 1000, den: 1 } })).toBe(SYNC_TOLERANCE)
+		expect(outOfStep(-0.0187, 1, toleranceFor({ audioOnly: false, fps: PAL }))).toBe(false)
+	})
+
+	it('crossfades at equal power, from wherever the gain stands', () => {
+		const up = fadeCurve(0, 1, 5)
+		const down = fadeCurve(1, 0, 5)
+		expect(up[0]).toBe(0)
+		expect(up[4]).toBeCloseTo(1, 6)
+		expect(down[4]).toBeCloseTo(0, 6)
+		for (let at = 0; at < 5; at++) {
+			expect(up[at] ** 2 + down[at] ** 2).toBeCloseTo(1, 6)
+		}
+		const back = fadeCurve(up[2], 0, 3)
+		expect(back[0]).toBeCloseTo(up[2], 6)
+		expect(back[2]).toBeCloseTo(0, 6)
 	})
 
 	it('plays the Proxy where there is one', () => {
@@ -71,6 +108,8 @@ describe('compare', () => {
 		expect(loudnessText({ integrated: null, peak: null, truePeak: true }, 'en')).toBeNull()
 		expect(loudnessText(null, 'en')).toBeNull()
 		expect(loudnessText(undefined, 'en')).toBeNull()
+		expect(loudnessParts({ integrated: -16.3, peak: -1, truePeak: true }, 'en')).toEqual(['−16.3 LUFS', '−1.0 dBTP'])
+		expect(loudnessParts({ integrated: null, peak: -1, truePeak: false }, 'en')).toEqual(['−1.0 dBFS'])
 	})
 
 	it('tells how far apart the two sides are in LU, only where both were measured', () => {

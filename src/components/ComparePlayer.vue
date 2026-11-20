@@ -20,7 +20,8 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import WaveformStage from './WaveformStage.vue'
 import { useRange } from '../composables/range.js'
-import { compareSource, drifted, frameOnA, frameOnB, laneShift, loudnessGap, loudnessText, nextPass, switchKey } from '../lib/compare.js'
+import { useSoundMix } from '../composables/soundMix.js'
+import { averageError, compareSource, follower, frameOnA, frameOnB, laneShift, loudnessGap, loudnessParts, nextPass, outOfStep, switchKey, toleranceFor } from '../lib/compare.js'
 import { actionFor, isTyping } from '../lib/hotkeys.js'
 import { t } from '../lib/l10n.js'
 import { isStill } from '../lib/media.js'
@@ -60,6 +61,8 @@ const playing = ref(false)
 /** Where the wipe divides, from 0 to 100 */
 const wipe = ref(50)
 const { outPoint, loop, range, loopsWhole, markIn, markOut, clearRange, wrapFrom } = useRange(frame)
+/** Both sides into one AudioContext, the one heard at a gain of 1 (A7); muting stands in until it runs */
+const { mixing, start: startMix, hear } = useSoundMix()
 /** Each pass of the loop plays the other side (A2c); off until asked for, every time */
 const alternate = ref(false)
 /** Each side's Waveform, once loaded, with its loudness where it was measured */
@@ -97,7 +100,7 @@ const sides = computed(() => [props.a, props.b].map((version, index) => ({
 	key: String(index + 1),
 	label: t('deliver', 'V{number}', { number: version.number }),
 	name: version.name,
-	loudness: loudnessText(waveforms.value[index === 0 ? 'a' : 'b']?.loudness, locale),
+	loudness: loudnessParts(waveforms.value[index === 0 ? 'a' : 'b']?.loudness, locale),
 })))
 const gap = computed(() => loudnessGap(waveforms.value.a?.loudness, waveforms.value.b?.loudness, locale))
 /** The part of the piece on the lanes, on the bar */
@@ -117,6 +120,7 @@ function expectedB() {
  * @param {number} target - a Frame of side A
  */
 function seekTo(target) {
+	rejudge()
 	const clamped = Math.max(0, durationFrames.value ? Math.min(target, lastFrame.value) : target)
 	frame.value = clamped
 	if (videoA.value) {
@@ -127,8 +131,43 @@ function seekTo(target) {
 	}
 }
 
+/**
+ * @return {HTMLMediaElement[]} both sides' media elements, A first
+ */
+const elements = () => [videoA.value, videoB.value]
+/**
+ * @return {number} the index of the side heard
+ */
+const heardIndex = () => audio.value === 'a' ? 0 : 1
+
+/**
+ * The switch, the keys and the lanes' names: only the gains change, nothing is sought
+ *
+ * @param {'a'|'b'} side - whose sound to hear
+ */
+function listen(side) {
+	startMix(elements(), side === 'a' ? 0 : 1)
+	audio.value = side
+}
+
+/** The following side's offset on average, and when it was last put back, a seek or a switch: judged afresh from then */
+let average = null
+let corrected = 0
+
+/** After a seek or a switch the follower is judged afresh */
+function rejudge() {
+	average = null
+	corrected = performance.now()
+}
+
+watch(audio, () => {
+	hear(elements(), heardIndex())
+	rejudge()
+})
+
 /** Both sides start together from where they stand */
 function play() {
+	startMix(elements(), heardIndex())
 	seekTo(frame.value)
 	playing.value = true
 	Promise.all([videoA.value?.play(), videoB.value?.play()]).catch(() => pause())
@@ -162,11 +201,30 @@ function seekPlaying(target) {
 	}
 }
 
-/** A leads; B is pulled back whenever it drifted */
+/** The timeline counts on A's clock */
 function onTimeUpdate() {
 	frame.value = timeToFrame(videoA.value.currentTime, props.a.fps)
-	if (playing.value && videoB.value && drifted(videoB.value.currentTime, expectedB(), props.b.fps)) {
-		videoB.value.currentTime = expectedB()
+}
+
+/**
+ * The heard side leads and is never touched; the other follows it, sought
+ * back where nobody hears it once it is out of step on average (A7)
+ */
+function keepInStep() {
+	const [a, b] = elements()
+	if (!a || !b) {
+		return
+	}
+	const state = (element) => ({ time: element.currentTime, duration: element.duration || 0, ended: element.ended })
+	const plan = follower(audio.value, state(a), state(b), laneShift(offset.value, props.b.fps))
+	if (plan === null) {
+		return
+	}
+	const element = plan.side === 'a' ? a : b
+	average = averageError(average, element.currentTime - plan.target)
+	if (outOfStep(average, (performance.now() - corrected) / 1000, toleranceFor(plan.side === 'a' ? props.a : props.b))) {
+		element.currentTime = plan.target
+		rejudge()
 	}
 }
 
@@ -198,22 +256,27 @@ function onEnded() {
 
 let loopRequest = 0
 
-/** A looped Range goes round on the animation frame it played past its end, not on the next timeupdate, a quarter second late */
-function followLoop() {
+/**
+ * On every animation frame while playing: a looped Range goes round on the frame it played past its end,
+ * not on the next timeupdate, a quarter second late; otherwise the sides are kept in step
+ */
+function follow() {
 	loopRequest = 0
 	if (!playing.value || !videoA.value) {
 		return
 	}
-	const target = wrapFrom(timeToFrame(videoA.value.currentTime, props.a.fps))
+	const target = wrapFrom(timeToFrame(videoA.value.currentTime, props.a.fps), fpsValue(props.a.fps))
 	if (target !== null) {
 		wrap(target)
+	} else {
+		keepInStep()
 	}
-	loopRequest = requestAnimationFrame(followLoop)
+	loopRequest = requestAnimationFrame(follow)
 }
 
 watch(playing, (now) => {
 	if (now && !loopRequest) {
-		loopRequest = requestAnimationFrame(followLoop)
+		loopRequest = requestAnimationFrame(follow)
 	}
 })
 // Alternating is a way of looping
@@ -313,7 +376,7 @@ function onKey(event) {
 	const pick = sounding.value ? switchKey(event, root.value) : null
 	if (pick !== null) {
 		event.preventDefault()
-		audio.value = pick === 'toggle' ? nextPass(audio.value, true) : pick
+		listen(pick === 'toggle' ? nextPass(audio.value, true) : pick)
 		return
 	}
 	const action = actionFor(event)
@@ -349,6 +412,17 @@ watch(() => [props.a.id, props.b.id], async ([a, b]) => {
 		waveforms.value = { a: waveA, b: waveB }
 	}
 }, { immediate: true })
+// A Waveform that becomes ready while the pair is open shows on its lane without opening it again
+watch(() => [props.a.derived?.waveform?.state, props.b.derived?.waveform?.state], async () => {
+	const ids = [props.a.id, props.b.id]
+	const missing = [['a', props.a], ['b', props.b]].filter(([side, version]) => waveforms.value[side] === null && version.derived?.waveform?.state === 'ready')
+	const loaded = await Promise.all(missing.map(([, version]) => fetchWaveform(version)))
+	if (props.a.id === ids[0] && props.b.id === ids[1]) {
+		missing.forEach(([side], index) => {
+			waveforms.value = { ...waveforms.value, [side]: waveforms.value[side] ?? loaded[index] }
+		})
+	}
+})
 
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => {
@@ -377,7 +451,7 @@ onBeforeUnmount(() => {
 					v-else-if="sourceA"
 					ref="videoA"
 					:src="sourceA"
-					:muted="audio !== 'a'"
+					:muted="!mixing && audio !== 'a'"
 					playsinline
 					preload="auto"
 					@loadedmetadata="onLoaded"
@@ -391,7 +465,7 @@ onBeforeUnmount(() => {
 					v-else-if="sourceB"
 					ref="videoB"
 					:src="sourceB"
-					:muted="audio !== 'b'"
+					:muted="!mixing && audio !== 'b'"
 					playsinline
 					preload="auto"
 					@loadedmetadata="seekTo(frame)" />
@@ -416,7 +490,7 @@ onBeforeUnmount(() => {
 				@seek="seekPlaying"
 				@hold="hold"
 				@release="release"
-				@pick="audio = $event === 0 ? 'a' : 'b'" />
+				@pick="listen($event === 0 ? 'a' : 'b')" />
 		</div>
 
 		<div v-if="!stillA" class="deliver-compare__timeline" @click="scrub">
@@ -457,15 +531,16 @@ onBeforeUnmount(() => {
 					:class="{ 'deliver-compare__sound--on': audio === side.id }"
 					:aria-checked="audio === side.id ? 'true' : 'false'"
 					:title="t('deliver', 'Listen to {version} ({key})', { version: side.label, key: side.key })"
-					@click="audio = side.id">
+					@click="listen(side.id)">
 					<NcIconSvgWrapper :svg="audio === side.id ? volumeIcon : mutedIcon" :size="20" />
-					<span class="deliver-compare__sound-text">
-						<span class="deliver-compare__sound-name">
-							<strong>{{ side.label }}</strong>
-							<!-- A phone has room for the numbers or the file's name -->
-							<template v-if="!isMobile || !side.loudness">{{ side.name }}</template>
-						</span>
-						<span v-if="side.loudness" class="deliver-compare__loudness">{{ side.loudness }}</span>
+					<span v-if="isMobile && side.loudness.length" class="deliver-compare__sound-text">
+						<!-- A phone has room for the numbers, not the file's name: the integrated loudness beside the Version, the peak below -->
+						<span class="deliver-compare__sound-name"><strong>{{ side.label }}</strong> {{ side.loudness[0] }}</span>
+						<span v-if="side.loudness[1]" class="deliver-compare__loudness">{{ side.loudness[1] }}</span>
+					</span>
+					<span v-else class="deliver-compare__sound-text">
+						<span class="deliver-compare__sound-name"><strong>{{ side.label }}</strong> {{ side.name }}</span>
+						<span v-if="side.loudness.length" class="deliver-compare__loudness">{{ side.loudness.join(' · ') }}</span>
 					</span>
 					<kbd v-if="!isMobile" class="deliver-compare__key">{{ side.key }}</kbd>
 				</button>
