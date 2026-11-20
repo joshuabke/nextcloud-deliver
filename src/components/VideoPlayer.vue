@@ -31,6 +31,7 @@ import PersonAvatar from './PersonAvatar.vue'
 import WaveformStage from './WaveformStage.vue'
 import { useFullscreen } from '../composables/fullscreen.js'
 import { useGestures } from '../composables/gestures.js'
+import { useRange } from '../composables/range.js'
 import { languageName, toWebVtt } from '../lib/captions.js'
 import { COLORS, drawingsAt } from '../lib/drawing.js'
 import { DOUBLE_TAP_MS } from '../lib/gestures.js'
@@ -82,9 +83,7 @@ const durationFrames = ref(0)
 const playing = ref(false)
 /** Playback rate; negative while J walks backwards */
 const speed = ref(1)
-const inPoint = ref(null)
-const outPoint = ref(null)
-const loop = ref(false)
+const { outPoint, loop, range, loopsWhole, markIn, markOut, clearRange, wrapFrom } = useRange(frame)
 /** Set when the browser could not play the source */
 const unplayable = ref(false)
 /** Steps backwards while J is held, because media elements refuse a negative rate */
@@ -151,7 +150,6 @@ const shownDrawings = computed(() => playing.value || props.drawing
 
 const position = computed(() => formatAt(frame.value, props.clock))
 const duration = computed(() => formatAt(durationFrames.value, props.clock))
-const range = computed(() => inPoint.value === null ? null : { inFrame: inPoint.value, outFrame: outPoint.value })
 const progress = computed(() => durationFrames.value ? (frame.value / durationFrames.value) * 100 : 0)
 
 defineExpose({ seekTo, frame, pause, range, markIn, markOut, clearRange })
@@ -221,9 +219,7 @@ watch(() => props.version.id, async (id) => {
 	frame.value = 0
 	// The server knows the length already; the media element confirms it once it loads
 	durationFrames.value = props.version.durationFrames ?? 0
-	inPoint.value = null
-	outPoint.value = null
-	loop.value = false
+	clearRange()
 	unplayable.value = false
 	strip.value = null
 	waveform.value = null
@@ -602,8 +598,9 @@ onBeforeUnmount(() => {
 /** Follows the media element, and sends a looped Range back to its in Frame */
 function onTimeUpdate() {
 	frame.value = timeToFrame(video.value.currentTime, fps.value)
-	if (loop.value && outPoint.value !== null && frame.value > outPoint.value) {
-		seekTo(inPoint.value ?? 0)
+	const wrap = wrapFrom(frame.value)
+	if (wrap !== null) {
+		seekTo(wrap)
 	}
 }
 
@@ -751,27 +748,6 @@ function onKey(event) {
 	actions[action]()
 }
 
-/** I, or the Range button: the Range starts here */
-function markIn() {
-	inPoint.value = frame.value
-	if (outPoint.value !== null && outPoint.value < frame.value) {
-		outPoint.value = null
-	}
-}
-
-/** O, or the Range button again: the Range ends here */
-function markOut() {
-	outPoint.value = Math.max(frame.value, inPoint.value ?? 0)
-	inPoint.value ??= frame.value
-}
-
-/** Escape, or the Range's ✕ */
-function clearRange() {
-	inPoint.value = null
-	outPoint.value = null
-	loop.value = false
-}
-
 /** C, or the Comment button: the Range if one is set, else the current Frame; audio plays on, the Comment at the Frame of the key press */
 function comment() {
 	if (props.version.audioOnly) {
@@ -863,8 +839,6 @@ function pickSource(wanted) {
 	}
 }
 
-/** Loops the Range when one is set, else the whole Version */
-const loopsWhole = computed(() => loop.value && outPoint.value === null)
 const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') : t('deliver', 'Loop the Range'))
 </script>
 
