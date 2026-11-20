@@ -834,6 +834,14 @@ test.describe('Review view', () => {
 		await expect.poll(paused).toBe(false)
 		expect(await video.evaluate((element) => element.currentTime)).toBeGreaterThan(2)
 
+		// A second finger lands during the drag: both lift, and it still goes on
+		await touch('touchStart', bar.x + bar.width * 0.2)
+		await touch('touchMove', bar.x + bar.width * 0.4)
+		await expect.poll(paused).toBe(true)
+		await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: bar.x + bar.width * 0.4, y, id: 0 }, { x: bar.x + bar.width * 0.7, y, id: 1 }] })
+		await touch('touchEnd')
+		await expect.poll(paused).toBe(false)
+
 		// Paused: stays paused
 		await touchPage.getByRole('button', { name: 'Pause', exact: true }).tap()
 		await touch('touchStart', bar.x + bar.width * 0.2)
@@ -844,19 +852,21 @@ test.describe('Review view', () => {
 		await phone.close()
 	})
 
-	test('a click on the Compare timeline keeps playing', async ({ playwright }) => {
+	test('a click on the Compare timeline starts a side that had run out again', async ({ playwright }) => {
+		// The Compare test left a second Version on the Asset
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
-		expect((await api.fetch(`/remote.php/dav/files/${USER}/${folder}/clip_v2.webm`, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBeLessThan(300)
 		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
 		await api.dispose()
-		const stack = project.ocs.data.assets[0].versions
+		const stack = project.ocs.data.assets.find((each) => each.versions.length >= 2).versions
 		await page.goto(`/apps/deliver/compare/${stack[1].id}/${stack[0].id}`)
 		const videos = page.locator('.deliver-compare video')
 		await expect(videos.first()).toHaveJSProperty('readyState', 4)
+		// B runs 50 Frames (2 s) ahead of A, so it is out of picture before A is
+		await page.locator('.deliver-compare__offset').fill('50')
 		await page.getByRole('button', { name: /^Play \(/ }).click()
-		await expect.poll(() => videos.first().evaluate((element) => element.paused)).toBe(false)
+		await expect.poll(() => videos.nth(1).evaluate((element) => element.ended), { timeout: 10_000 }).toBe(true)
 		const bar = await page.locator('.deliver-compare__timeline').boundingBox()
-		await page.mouse.click(bar.x + bar.width * 0.5, bar.y + bar.height / 2)
+		await page.mouse.click(bar.x + bar.width * 0.1, bar.y + bar.height / 2)
 		await page.waitForTimeout(300)
 		expect(await videos.first().evaluate((element) => element.paused)).toBe(false)
 		expect(await videos.nth(1).evaluate((element) => element.paused)).toBe(false)
