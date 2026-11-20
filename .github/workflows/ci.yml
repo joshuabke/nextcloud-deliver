@@ -1,8 +1,10 @@
 name: CI
 
-# Text alone needs no build and no test run
+# Text alone needs no build and no test run. A draft pull request runs nothing:
+# it is marked ready once its review approves, and that is its run
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths-ignore: ['**.md', 'docs/**', 'LICENSE']
   push:
     branches: [main]
@@ -17,6 +19,7 @@ concurrency:
 
 jobs:
   frontend:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -30,6 +33,7 @@ jobs:
       - run: npm run build
 
   php:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -48,6 +52,7 @@ jobs:
   # in three shards and the browser tests in a job of their own, each against
   # an instance of its own.
   integration:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: integration (${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
     strategy:
@@ -73,6 +78,7 @@ jobs:
         run: $COMPOSE exec -T nextcloud tail -n 100 data/nextcloud.log || true
 
   browser:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     # A browser that never answers fails here, not after six hours
     timeout-minutes: 20
