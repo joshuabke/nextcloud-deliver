@@ -2,7 +2,7 @@ import { chromium, expect, test } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { CLIP, CLIP_SCRUB, DNXHR, HAND_PROXY, MIX } from './fixtures.js'
+import { CLIP, CLIP_SCRUB, DNXHR, HAND_PROXY, LONG, MIX } from './fixtures.js'
 
 const URL = process.env.DELIVER_TEST_URL ?? 'http://localhost:8080'
 const ADMIN = process.env.DELIVER_TEST_USER ?? 'admin'
@@ -791,6 +791,67 @@ test.describe('Review view', () => {
 		expect(await video.evaluate((element) => element.paused)).toBe(false)
 		expect(await video.evaluate((element) => element.currentTime)).toBeGreaterThan(1.9)
 		await expect(page.getByRole('button', { name: /^Pause \(/ })).toBeVisible()
+	})
+})
+
+test.describe('Skipping ten seconds', () => {
+	let browser
+	let context
+	let page
+	let folder
+	let projectId
+	let versionId
+
+	test.beforeAll(async ({ playwright }) => {
+		await testUser(playwright)
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		folder = 'deliver-e2e-' + randomBytes(4).toString('hex')
+		const dav = `/remote.php/dav/files/${USER}/${folder}`
+		expect((await api.fetch(dav, { method: 'MKCOL' })).status()).toBe(201)
+		expect((await api.fetch(`${dav}/long.webm`, { method: 'PUT', data: readFileSync(LONG) })).status()).toBe(201)
+		const created = await api.post('/ocs/v2.php/apps/deliver/api/v1/projects?format=json', { data: { folderId: await fileId(api, dav), autoIntake: true } })
+		projectId = (await created.json()).ocs.data.id
+		const project = await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)
+		versionId = (await project.json()).ocs.data.assets[0].versions[0].id
+		await api.dispose()
+		browser = await chromium.connectOverCDP(CDP)
+		context = await browser.newContext({ baseURL: BROWSER_URL })
+		page = await context.newPage()
+		await login(page)
+	})
+
+	test.afterAll(async ({ playwright }) => {
+		await context?.close()
+		await browser?.close()
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		await api.delete(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)
+		await api.fetch(`/remote.php/dav/files/${USER}/${folder}`, { method: 'DELETE' })
+		await api.dispose()
+	})
+
+	test('the buttons and Shift+arrows jump ten seconds and keep the playback state', async () => {
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		const video = page.locator('video.deliver-player__video')
+		await expect(video).toHaveJSProperty('readyState', 4)
+		const time = () => video.evaluate((element) => element.currentTime)
+
+		await page.getByRole('button', { name: /^Forward 10 seconds/ }).click()
+		await expect.poll(time).toBeCloseTo(10, 0)
+		expect(await video.evaluate((element) => element.paused)).toBe(true)
+		await page.getByRole('button', { name: /^Back 10 seconds/ }).click()
+		await expect.poll(time).toBeCloseTo(0, 0)
+
+		await page.getByRole('button', { name: /^Play \(/ }).click()
+		await expect.poll(time).toBeGreaterThan(0.1)
+		await page.locator('.deliver-review__title').click()
+		await page.keyboard.press('Shift+ArrowRight')
+		await page.waitForTimeout(300)
+		expect(await time()).toBeGreaterThan(10)
+		expect(await video.evaluate((element) => element.paused)).toBe(false)
+		await page.keyboard.press('Shift+ArrowLeft')
+		await page.waitForTimeout(300)
+		expect(await time()).toBeLessThan(2)
+		expect(await video.evaluate((element) => element.paused)).toBe(false)
 	})
 })
 

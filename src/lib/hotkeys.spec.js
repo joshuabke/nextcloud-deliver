@@ -15,6 +15,11 @@ describe('hotkeys', () => {
 		expect(actionFor(key({ key: 'c' }))).toBe('comment')
 	})
 
+	it('skips with Shift and the arrows', () => {
+		expect(actionFor(key({ key: 'ArrowRight', shiftKey: true }))).toBe('skipForward')
+		expect(actionFor(key({ key: 'ArrowLeft', shiftKey: true }))).toBe('skipBack')
+	})
+
 	it('keeps out of the way while someone types', () => {
 		expect(actionFor(key({ key: 'c', target: { tagName: 'TEXTAREA' } }))).toBeNull()
 		expect(actionFor(key({ key: 'c', target: { tagName: 'DIV', isContentEditable: true } }))).toBeNull()
