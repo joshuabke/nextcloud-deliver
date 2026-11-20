@@ -16,6 +16,7 @@ import DueDate from './DueDate.vue'
 import MediaStill from './MediaStill.vue'
 import { useLongPress } from '../composables/longpress.js'
 import { n, t } from '../lib/l10n.js'
+import { decisionOf } from '../lib/listView.js'
 import { isStill } from '../lib/media.js'
 import { runtime } from '../lib/timecode.js'
 import { proxyLine } from '../lib/uploadStatus.js'
@@ -36,6 +37,8 @@ const props = defineProps({
 	locked: { type: Boolean, default: false },
 	/** Whether my Review Links leave it out: Files does not let me share its file (ADR 0010) */
 	offLinks: { type: Boolean, default: false },
+	/** One compact row instead of a card; the same actions, the facts beside the name */
+	list: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['stack', 'menu', 'versions', 'select', 'pick'])
@@ -76,11 +79,8 @@ const unseen = computed(() => props.asset.versions.reduce((sum, version) => sum 
 const audio = computed(() => newest.value.mimeType?.startsWith('audio/'))
 /** Requested changes outweigh approvals: the newest Version is not through while anyone wants changes (story 88) */
 const decision = computed(() => {
-	const { approved = 0, changes = 0 } = newest.value.approvals
-	if (changes > 0) {
-		return { kind: 'changes', icon: changesIcon, text: n('deliver', '%n requests changes', '%n request changes', changes) }
-	}
-	return approved > 0 ? { kind: 'approved', icon: approvedIcon, text: n('deliver', 'Approved by %n', 'Approved by %n', approved) } : null
+	const found = decisionOf(newest.value.approvals)
+	return found && { ...found, icon: found.kind === 'changes' ? changesIcon : approvedIcon }
 })
 /** Bottom right of the still, unless a status takes the place (story 130) */
 const length = computed(() => isStill(newest.value) ? null : runtime(newest.value.durationFrames, newest.value.fps))
@@ -113,7 +113,7 @@ const status = computed(() => {
 <template>
 	<li
 		class="deliver-card deliver-card__menu-host"
-		:class="{ 'deliver-card--selecting': manages && (selecting || isMobile), 'deliver-card--selected': selected }"
+		:class="{ 'deliver-card--row': list, 'deliver-card--selecting': manages && (selecting || isMobile), 'deliver-card--selected': selected }"
 		v-on="press">
 		<a
 			class="deliver-card__link"
@@ -127,35 +127,59 @@ const status = computed(() => {
 					:fileId="newest.fileId"
 					:scrubUrl="newest.scrubUrl"
 					fit="contain" />
-				<span class="deliver-card__version">{{ t('deliver', 'V{number}', { number: newest.number }) }}</span>
+				<span v-if="!list" class="deliver-card__version">{{ t('deliver', 'V{number}', { number: newest.number }) }}</span>
 				<span
-					v-if="unseen"
+					v-if="unseen && !list"
 					class="deliver-card__comments deliver-card__comments--unseen"
 					:title="n('deliver', '%n Unseen Comment', '%n Unseen Comments', unseen)">
 					<NcIconSvgWrapper :svg="commentIcon" :size="14" inline />
 					{{ unseen }}
 				</span>
-				<span v-else-if="newest.comments" class="deliver-card__comments">
+				<span v-else-if="newest.comments && !list" class="deliver-card__comments">
 					<NcIconSvgWrapper :svg="commentIcon" :size="14" inline />
 					{{ newest.comments }}
 				</span>
 				<span
-					v-if="decision"
+					v-if="decision && !list"
 					class="deliver-card__decision"
 					:class="`deliver-card__decision--${decision.kind}`"
 					:title="decision.text">
 					<NcIconSvgWrapper :svg="decision.icon" :size="14" inline />
 				</span>
-				<span v-if="status" class="deliver-card__status" :class="`deliver-card__status--${status.kind}`">{{ status.text }}</span>
-				<span v-else-if="length" class="deliver-card__status">{{ length }}</span>
+				<template v-if="!list">
+					<span v-if="status" class="deliver-card__status" :class="`deliver-card__status--${status.kind}`">{{ status.text }}</span>
+					<span v-else-if="length" class="deliver-card__status">{{ length }}</span>
+				</template>
 			</div>
 			<div class="deliver-card__name" :title="newest.name">
 				{{ asset.name }}
 			</div>
-			<div class="deliver-card__meta">
+			<!-- What the badges on the still say, in the row's own line -->
+			<div v-if="list" class="deliver-card__facts">
+				<span class="deliver-card__fact deliver-card__fact--bold">{{ t('deliver', 'V{number}', { number: newest.number }) }}</span>
+				<span v-if="status" class="deliver-card__fact" :class="`deliver-card__fact--${status.kind}`">{{ status.text }}</span>
+				<span v-else-if="length" class="deliver-card__fact">{{ length }}</span>
+				<span
+					v-if="decision"
+					class="deliver-card__fact"
+					:class="`deliver-card__fact--${decision.kind}`"
+					:title="decision.text">
+					<NcIconSvgWrapper :svg="decision.icon" :size="14" inline />
+				</span>
+				<span
+					v-if="unseen || newest.comments"
+					class="deliver-card__fact"
+					:class="{ 'deliver-card__fact--unseen': unseen }"
+					:title="unseen ? n('deliver', '%n Unseen Comment', '%n Unseen Comments', unseen) : undefined">
+					<NcIconSvgWrapper :svg="commentIcon" :size="14" inline />
+					{{ unseen || newest.comments }}
+				</span>
+				<DueDate v-if="asset.dueDate" :modelValue="asset.dueDate" />
+			</div>
+			<div v-if="!list" class="deliver-card__meta">
 				<template v-if="newest.deliveredBy">{{ newest.deliveredBy.name }} · </template><NcDateTime :timestamp="newest.createdAt * 1000" />
 			</div>
-			<DueDate v-if="asset.dueDate" class="deliver-card__due" :modelValue="asset.dueDate" />
+			<DueDate v-if="asset.dueDate && !list" class="deliver-card__due" :modelValue="asset.dueDate" />
 		</a>
 		<!-- Outside the link, so ticking it does not open the Asset -->
 		<input
@@ -323,5 +347,47 @@ const status = computed(() => {
 .deliver-card--selected {
 	outline: 2px solid var(--color-primary-element);
 	border-radius: var(--border-radius-large);
+}
+
+.deliver-card__fact {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	color: var(--color-text-maxcontrast);
+	font-size: 13px;
+	white-space: nowrap;
+}
+
+.deliver-card__fact--bold {
+	color: var(--color-main-text);
+	font-weight: bold;
+}
+
+.deliver-card__fact--unseen {
+	color: var(--color-primary-element);
+	font-weight: bold;
+}
+
+.deliver-card__fact--warning {
+	color: var(--color-warning-text);
+	font-weight: bold;
+}
+
+.deliver-card__fact--approved {
+	color: #2e7d32;
+}
+
+.deliver-card__fact--changes {
+	color: #c77800;
+}
+
+/* The checkbox gets a column of its own left of the still instead of lying over it */
+.deliver-card--row .deliver-card__select {
+	top: 50%;
+	transform: translateY(-50%);
+}
+
+.deliver-card--row:has(.deliver-card__select) .deliver-card__link {
+	padding-inline-start: 40px;
 }
 </style>
