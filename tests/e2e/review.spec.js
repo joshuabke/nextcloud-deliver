@@ -2,7 +2,7 @@ import { chromium, expect, test } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { CLIP, CLIP_SCRUB, DNXHR, HAND_PROXY, LONG_MIX, MIX } from './fixtures.js'
+import { CLIP, CLIP_SCRUB, DNXHR, HAND_PROXY, LONG, LONG_MIX, MIX } from './fixtures.js'
 
 const URL = process.env.DELIVER_TEST_URL ?? 'http://localhost:8080'
 const ADMIN = process.env.DELIVER_TEST_USER ?? 'admin'
@@ -889,6 +889,27 @@ test.describe('Review view', () => {
 		expect(await videos.nth(1).evaluate((element) => element.paused)).toBe(false)
 	})
 
+	test('Shift+arrows skip ten seconds in Compare, both sides together', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
+		await api.dispose()
+		const stack = project.ocs.data.assets.find((each) => each.versions.length >= 2).versions
+		await page.goto(`/apps/deliver/compare/${stack[1].id}/${stack[0].id}`)
+		const videos = page.locator('.deliver-compare video')
+		await expect(videos.first()).toHaveJSProperty('readyState', 4)
+		await page.locator('.deliver-compare__offset').fill('0')
+		const bar = await page.locator('.deliver-compare__timeline').boundingBox()
+		await page.mouse.click(bar.x + bar.width * 0.5, bar.y + bar.height / 2)
+		await page.locator('.deliver-layout__bar h2').click()
+		// Ten seconds are more than the 4 s clip: they land on its last Frame, and back on the first
+		await page.keyboard.press('Shift+ArrowRight')
+		await expect(page.locator('.deliver-compare__timecode')).toContainText('00:00:03:24')
+		await page.keyboard.press('Shift+ArrowLeft')
+		await expect(page.locator('.deliver-compare__timecode')).toContainText('00:00:00:00')
+		const times = await videos.evaluateAll((all) => all.map((video) => video.currentTime))
+		expect(times[1]).toBeCloseTo(times[0], 3)
+	})
+
 	test('a Review Link remembers the list for itself', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		// The landing page opens only where a link shows several Assets
@@ -1078,6 +1099,69 @@ test.describe('Audio review', () => {
 		await page.reload()
 		await expect(page.getByRole('button', { name: 'Whole', exact: true })).toHaveAttribute('aria-pressed', 'true')
 		await page.getByRole('button', { name: '1 min' }).click()
+	})
+})
+
+test.describe('Skipping ten seconds', () => {
+	let browser
+	let context
+	let page
+	let folder
+	let projectId
+	let versionId
+
+	test.beforeAll(async ({ playwright }) => {
+		await testUser(playwright)
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		folder = 'deliver-e2e-' + randomBytes(4).toString('hex')
+		const dav = `/remote.php/dav/files/${USER}/${folder}`
+		expect((await api.fetch(dav, { method: 'MKCOL' })).status()).toBe(201)
+		expect((await api.fetch(`${dav}/long.webm`, { method: 'PUT', data: readFileSync(LONG) })).status()).toBe(201)
+		const created = await api.post('/ocs/v2.php/apps/deliver/api/v1/projects?format=json', { data: { folderId: await fileId(api, dav), autoIntake: true } })
+		projectId = (await created.json()).ocs.data.id
+		const project = await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)
+		versionId = (await project.json()).ocs.data.assets[0].versions[0].id
+		await api.dispose()
+		browser = await chromium.connectOverCDP(CDP)
+		context = await browser.newContext({ baseURL: BROWSER_URL })
+		page = await context.newPage()
+		await login(page)
+	})
+
+	test.afterAll(async ({ playwright }) => {
+		await context?.close()
+		await browser?.close()
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		await api.delete(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)
+		await api.fetch(`/remote.php/dav/files/${USER}/${folder}`, { method: 'DELETE' })
+		await api.dispose()
+	})
+
+	test('the buttons and Shift+arrows jump ten seconds and keep the playback state', async () => {
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		const video = page.locator('video.deliver-player__video')
+		await expect(video).toHaveJSProperty('readyState', 4)
+		const time = () => video.evaluate((element) => element.currentTime)
+
+		await page.getByRole('button', { name: /^Forward 10 seconds/ }).click()
+		await expect.poll(time).toBeCloseTo(10, 0)
+		expect(await video.evaluate((element) => element.paused)).toBe(true)
+		await page.getByRole('button', { name: /^Back 10 seconds/ }).click()
+		await expect.poll(time).toBeCloseTo(0, 0)
+
+		await page.getByRole('button', { name: /^Play \(/ }).click()
+		await expect.poll(time).toBeGreaterThan(0.1)
+		await page.locator('.deliver-review__title').click()
+		const beforeForward = await time()
+		await page.keyboard.press('Shift+ArrowRight')
+		await page.waitForTimeout(300)
+		expect(await time()).toBeGreaterThan(beforeForward + 9.5)
+		expect(await video.evaluate((element) => element.paused)).toBe(false)
+		const beforeBack = await time()
+		await page.keyboard.press('Shift+ArrowLeft')
+		await page.waitForTimeout(300)
+		expect(await time()).toBeLessThan(beforeBack - 9)
+		expect(await video.evaluate((element) => element.paused)).toBe(false)
 	})
 })
 

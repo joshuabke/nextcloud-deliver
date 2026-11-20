@@ -330,10 +330,16 @@ body.deliver-review footer {
 	display: none;
 }
 
-/* Halfway: a 16:9 picture at full width with its timeline and controls (102 px on a phone), the list below */
+/* Halfway: a 16:9 picture at full width with its timeline and controls (102 px on a phone; 136.5 px where the time goes on a row of its own, as in VideoPlayer), the list below */
 .deliver-layout--upright.deliver-layout--middle .deliver-layout__main {
 	flex: none;
 	height: calc(56.25vw + 102px);
+}
+
+@media (max-width: 440px) {
+	.deliver-layout--upright.deliver-layout--middle .deliver-layout__main {
+		height: calc(56.25vw + 136.5px);
+	}
 }
 
 /* Pulled up: of the player only its timeline and controls stay, the picture plays on unseen */
