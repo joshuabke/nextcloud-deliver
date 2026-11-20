@@ -2,10 +2,9 @@
 import { usernameToColor } from '@nextcloud/vue/functions/usernameToColor'
 import { computed } from 'vue'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
-import { initials } from '../lib/initials.js'
+import { avatarSeed, initials } from '../lib/initials.js'
 
-// Whoever wrote or decided something. A Reviewer's colour follows who they
-// are, not their name: two Reviewers called Kim look apart, as on Frame.io.
+// Whoever wrote or decided something, in the colour of avatarSeed
 const props = defineProps({
 	/** { type: user | reviewer | deleted, id, name } */
 	author: { type: Object, required: true },
@@ -15,7 +14,7 @@ const props = defineProps({
 })
 
 const rgb = computed(() => {
-	const { r, g, b } = usernameToColor(props.author.type === 'reviewer' ? `deliver-reviewer-${props.author.id}` : props.author.name)
+	const { r, g, b } = usernameToColor(avatarSeed(props.author))
 	return `${r}, ${g}, ${b}`
 })
 </script>

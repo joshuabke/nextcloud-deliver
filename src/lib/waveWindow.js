@@ -240,3 +240,88 @@ export function overviewWindow(seconds, span, duration) {
 	const to = Math.min(duration, end)
 	return { left: from / duration * 100, width: Math.max(0, to - from) / duration * 100 }
 }
+
+/** A Comment's circle on the wave, across, in px (story 181) */
+export const CIRCLE = 24
+/** How far a circle in a stack sits from the one under it, in px */
+export const STACK_STEP = 7
+/** The most circles one place stacks; more there become one circle with their count */
+export const STACK_MAX = 3
+
+/**
+ * The Comments' circles at this zoom. Comments within a circle's width of
+ * the first of them share a place: up to three each sit at their Frame,
+ * moved a little right of the one before where they would cover it, the later
+ * on top; more become one circle with their count at the place.
+ *
+ * @param {Array<{id: number, inFrame: number}>} comments - the top-level Comments
+ * @param {number} perFrame - px per Frame at this zoom
+ * @return {Array<{comment: object, x: number}|{cluster: object[], x: number}>} in drawing order, x in px from the start of the piece
+ */
+export function stack(comments, perFrame) {
+	const places = []
+	for (const comment of [...comments].sort((a, b) => a.inFrame - b.inFrame || a.id - b.id)) {
+		const at = comment.inFrame * perFrame
+		const place = places.at(-1)
+		if (place && at - place.x < CIRCLE) {
+			place.comments.push(comment)
+		} else {
+			places.push({ x: at, comments: [comment] })
+		}
+	}
+	return places.flatMap((place) => {
+		if (place.comments.length > STACK_MAX) {
+			return [{ cluster: place.comments, x: place.x }]
+		}
+		let before = -Infinity
+		return place.comments.map((comment) => {
+			before = Math.max(comment.inFrame * perFrame, before + STACK_STEP)
+			return { comment, x: before }
+		})
+	})
+}
+
+/**
+ * @param {Array<{x: number}>} circles - as stack gives them
+ * @param {number} x - the pointer, in px from the start of the piece
+ * @param {number} dy - the pointer's distance from the circles' centre line, in px
+ * @param {number} reach - how far from a centre still hits it; a finger's is wider than a mouse's
+ * @return {object|null} the circle whose centre is nearest, within reach; of two as near, the one on top
+ */
+export function circleAt(circles, x, dy, reach) {
+	let nearest = null
+	let distance = reach
+	for (const circle of circles) {
+		const away = Math.hypot(circle.x - x, dy)
+		if (away <= distance) {
+			nearest = circle
+			distance = away
+		}
+	}
+	return nearest
+}
+
+/**
+ * The zoom that parts the Comments of a count circle: the widest that
+ * shows them all with a margin and draws each as its own circle, not below
+ * the first step.
+ *
+ * @param {Array<{id: number, inFrame: number}>} cluster - the Comments, in Frame order
+ * @param {number} perSecond - Frames a second
+ * @param {number} width - the stage's width, in px
+ * @param {number} duration - the length of the piece
+ * @return {number|null} the span; null where even the first step leaves them a count
+ */
+export function spreadSpan(cluster, perSecond, width, duration) {
+	const extent = (cluster.at(-1).inFrame - cluster[0].inFrame) / perSecond
+	let span = clampSpan(extent * 1.5, duration)
+	for (;;) {
+		if (stack(cluster, width / span / perSecond).every((circle) => circle.comment)) {
+			return span
+		}
+		if (span <= Math.min(STEPS[0], duration)) {
+			return null
+		}
+		span = clampSpan(span * 0.8, duration)
+	}
+}

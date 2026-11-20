@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bars, barSeconds, clampSpan, DEFAULT_SPAN, dragged, isWhole, overviewWindow, pinchSpan, readSpan, secondsAt, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan, xAt } from './waveWindow.js'
+import { bars, barSeconds, CIRCLE, circleAt, clampSpan, DEFAULT_SPAN, dragged, isWhole, overviewWindow, pinchSpan, readSpan, secondsAt, spreadSpan, stack, STACK_STEP, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan, xAt } from './waveWindow.js'
 
 describe('the window of the scrolling Waveform', () => {
 	it('centres the playhead, the wave left empty before the start and after the end', () => {
@@ -100,6 +100,59 @@ describe('the window on the overview bar', () => {
 		expect(overviewWindow(0, 60, 3600).left).toBe(0)
 		expect(overviewWindow(0, 60, 3600).width).toBeCloseTo(30 / 36)
 		expect(overviewWindow(5, 60, 40)).toEqual({ left: 0, width: 100 })
+	})
+})
+
+describe('the Comments on the scrolling Waveform', () => {
+	const comment = (id, inFrame) => ({ id, inFrame })
+	const xs = (circles) => circles.map((circle) => circle.comment ? [circle.comment.id, circle.x] : [circle.cluster.map((each) => each.id), circle.x])
+
+	it('sit at their Frames, up to three close ones a little to the right of the one before', () => {
+		// 0.1 px a Frame: Frame 1000 at 100 px
+		const circles = stack([comment(3, 1100), comment(1, 1000), comment(2, 5000), comment(4, 1150)], 0.1)
+		expect(xs(circles)).toEqual([[1, 100], [3, 110], [4, 117], [2, 500]])
+	})
+
+	it('become one count circle at their place where more than three share it, and stay at their Frames after it', () => {
+		const circles = stack(Array.from({ length: 8 }, (_, at) => comment(at, at * 5)), 1)
+		expect(xs(circles)).toEqual([[[0, 1, 2, 3, 4], 0], [5, 25], [6, 32], [7, 39]])
+	})
+
+	it('never run on in a chain: 59 Comments over an hour on a phone each stay near their own Frame', () => {
+		const many = Array.from({ length: 59 }, (_, at) => comment(at, Math.round(at * at * 1000)))
+		const perFrame = 390 / 3600000
+		for (const circle of stack(many, perFrame)) {
+			const own = (circle.comment ?? circle.cluster[0]).inFrame * perFrame
+			expect(circle.x - own).toBeLessThanOrEqual(2 * STACK_STEP)
+		}
+	})
+
+	it('hit the circle whose centre is nearest, by mouse and by finger', () => {
+		// Four in 1.5 s at 15 s across a 390 px phone: 26 px a second
+		const three = stack([comment(1, 0), comment(2, 400), comment(3, 1000)], 0.026)
+		expect(xs(three)).toEqual([[1, 0], [2, 10.4], [3, 26]])
+		expect(circleAt(three, 0, 0, CIRCLE).comment.id).toBe(1)
+		expect(circleAt(three, 11, 4, CIRCLE).comment.id).toBe(2)
+		expect(circleAt(three, 24, 0, CIRCLE).comment.id).toBe(3)
+		expect(circleAt(three, 0, 0, CIRCLE / 2).comment.id).toBe(1)
+		expect(circleAt(three, 60, 0, CIRCLE)).toBe(null)
+		expect(circleAt(three, 0, CIRCLE + 1, CIRCLE)).toBe(null)
+	})
+
+	it('of two circles as near, hit the one on top', () => {
+		const circles = [{ comment: comment(1, 0), x: 10 }, { comment: comment(2, 0), x: 10 }]
+		expect(circleAt(circles, 10, 0, CIRCLE / 2).comment.id).toBe(2)
+	})
+
+	it('part a count circle\'s Comments at the widest zoom that draws each of them, or say they cannot be parted', () => {
+		// Five a second apart, in Frames of a millisecond, on 390 px: parted at 15 s (26 px a second)
+		const spread = Array.from({ length: 5 }, (_, at) => comment(at, 600000 + at * 1000))
+		expect(spreadSpan(spread, 1000, 390, 3600)).toBe(15)
+		expect(stack(spread, 390 / 15 / 1000).every((circle) => circle.comment)).toBe(true)
+		// Three seconds apart they fit with a margin of half their extent
+		expect(spreadSpan(Array.from({ length: 5 }, (_, at) => comment(at, 600000 + at * 3000)), 1000, 390, 3600)).toBe(18)
+		// Five within 0.4 s stay a count even at 15 s
+		expect(spreadSpan(Array.from({ length: 5 }, (_, at) => comment(at, 600000 + at * 100)), 1000, 390, 3600)).toBe(null)
 	})
 })
 

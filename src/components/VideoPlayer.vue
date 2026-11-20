@@ -59,9 +59,11 @@ const props = defineProps({
 	watermark: { type: String, default: null },
 	/** Whether the pointer draws on the picture (story 89) */
 	drawing: { type: Boolean, default: false },
+	/** Where the Comment being written goes, once the field holds it: marked on the Waveform */
+	pending: { type: Object, default: null },
 })
 
-const emit = defineEmits(['comment', 'jump', 'swipe', 'update:mode', 'update:drawing'])
+const emit = defineEmits(['comment', 'jump', 'swipe', 'seeked', 'update:mode', 'update:drawing'])
 
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2]
 
@@ -615,6 +617,7 @@ function seekTo(target) {
 		video.value.currentTime = frameToTime(clamped, fps.value)
 	}
 	frame.value = clamped
+	emit('seeked')
 }
 
 /**
@@ -657,8 +660,14 @@ function pause() {
  * @param {number} direction - -1 back, 1 forward
  */
 function skip(direction) {
-	const now = video.value ? timeToFrame(video.value.currentTime, fps.value) : frame.value
-	seekTo(now + skipFrames(direction * SKIP_SECONDS, fpsValue(fps.value)))
+	seekTo(frameNow() + skipFrames(direction * SKIP_SECONDS, fpsValue(fps.value)))
+}
+
+/**
+ * @return {number} the Frame playing right now: timeupdate comes only a few times a second
+ */
+function frameNow() {
+	return video.value ? timeToFrame(video.value.currentTime, fps.value) : frame.value
 }
 
 /** Space and K */
@@ -761,8 +770,12 @@ function clearRange() {
 	loop.value = false
 }
 
-/** C, or the Comment button: the Range if one is set, else the current Frame */
+/** C, or the Comment button: the Range if one is set, else the current Frame; audio plays on, the Comment at the Frame of the key press */
 function comment() {
+	if (props.version.audioOnly) {
+		emit('comment', range.value ?? { inFrame: frameNow(), outFrame: null })
+		return
+	}
 	pause()
 	emit('comment', range.value ?? { inFrame: frame.value, outFrame: null })
 }
@@ -922,9 +935,15 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 				:frame="frame"
 				:media="video"
 				:playing="playing"
+				:comments="comments"
+				:clock="clock"
+				:canComment="canComment"
+				:pending="pending"
 				@seek="seekTo"
 				@hold="hold"
-				@release="release" />
+				@release="release"
+				@comment="emit('comment', { inFrame: $event, outFrame: null })"
+				@jump="emit('jump', $event)" />
 			<p v-if="!source || unplayable" class="deliver-player__notice">
 				<template v-if="!proxyPending">
 					{{ unplayableReason }}

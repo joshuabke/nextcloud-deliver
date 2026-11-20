@@ -35,6 +35,8 @@ const props = defineProps({
 	number: { type: Number, default: null },
 	/** The thread last clicked or jumped to: lifted out, its React button showing without a hover */
 	selected: { type: Boolean, default: false },
+	/** The Reply field shows without asking, as in the card on the Waveform */
+	replyOpen: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['jump'])
@@ -47,7 +49,13 @@ const editing = ref(false)
 const draft = ref('')
 const replying = ref(false)
 const showReplies = ref(true)
-const reply = ref('')
+/** Kept in the store, so a Reply half written survives the card on the Waveform closing */
+const reply = computed({
+	get: () => store.replies[props.comment.id] ?? '',
+	set: (text) => {
+		store.replies[props.comment.id] = text
+	},
+})
 const { busy, error, run } = useBusy()
 
 const mine = computed(() => store.mine(props.comment))
@@ -248,14 +256,14 @@ function saveReply() {
 				{{ error }}
 			</p>
 
-			<div v-if="replying" class="deliver-comment__reply-form">
+			<div v-if="replying || (replyOpen && canReply)" class="deliver-comment__reply-form">
 				<textarea
 					v-model="reply"
 					class="deliver-comment__input"
 					rows="2"
 					:placeholder="t('deliver', 'Write a Reply')" />
 				<div class="deliver-comment__buttons">
-					<NcButton variant="tertiary" @click="replying = false">
+					<NcButton v-if="!replyOpen" variant="tertiary" @click="replying = false">
 						{{ t('deliver', 'Cancel') }}
 					</NcButton>
 					<NcButton variant="primary" :disabled="busy || !reply.trim()" @click="saveReply">
@@ -263,9 +271,9 @@ function saveReply() {
 					</NcButton>
 				</div>
 			</div>
-			<div v-else-if="canReply || canReact" class="deliver-comment__footer">
+			<div v-if="!replying && ((canReply && !replyOpen) || canReact)" class="deliver-comment__footer">
 				<button
-					v-if="canReply"
+					v-if="canReply && !replyOpen"
 					type="button"
 					class="deliver-comment__link"
 					@click="replying = true">
