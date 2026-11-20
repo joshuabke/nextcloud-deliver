@@ -96,6 +96,23 @@ test.describe('Review view', () => {
 		await expect(page).toHaveURL(new RegExp(`/projects/${projectId}$`))
 	})
 
+	test('the list is remembered for the Project, and a card keeps its actions as a row', async () => {
+		await page.goto(`/apps/deliver/projects/${projectId}`)
+		await expect(page.locator('.deliver-card')).not.toHaveClass(/deliver-card--row/)
+		await page.getByRole('button', { name: 'Show the Assets as a list' }).click()
+		await expect(page.locator('.deliver-card').first()).toHaveClass(/deliver-card--row/)
+		await expect(page.locator('.deliver-card__facts').first()).toContainText('V1')
+		await page.reload()
+		await expect(page.locator('.deliver-card').first()).toHaveClass(/deliver-card--row/)
+		await expect(page.getByRole('button', { name: 'Show the Assets as a list' })).toHaveAttribute('aria-pressed', 'true')
+		// The menu is still there, as a row
+		await page.getByRole('button', { name: /^Actions for / }).first().click()
+		await expect(page.getByRole('menuitem', { name: 'Rename…' })).toBeVisible()
+		await page.keyboard.press('Escape')
+		await page.getByRole('button', { name: 'Show the Assets as a list' }).click()
+		await expect(page.locator('.deliver-card').first()).not.toHaveClass(/deliver-card--row/)
+	})
+
 	test('uploads into the Project, then filters and finds its Assets', async () => {
 		await page.goto(`/apps/deliver/projects/${projectId}`)
 		// The upload button opens the Uploads dialog (story 133)
@@ -771,6 +788,47 @@ test.describe('Review view', () => {
 		const bar = await page.locator('.deliver-player__timeline').boundingBox()
 		await page.mouse.move(bar.x + bar.width / 2, bar.y + bar.height / 2)
 		await expect(page.locator('.deliver-player__hover canvas')).toBeVisible()
+	})
+
+	test('a Review Link remembers the list for itself', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		// The landing page opens only where a link shows several Assets
+		const dav = `/remote.php/dav/files/${USER}/${folder}`
+		const count = async () => (await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()).ocs.data.assets.length
+		const before = await count()
+		expect((await api.fetch(`${dav}/linklist.webm`, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(201)
+		await expect.poll(count).toBe(before + 1)
+		const make = async () => (await (await api.post(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`)).json()).ocs.data.token
+		const [one, other] = [await make(), await make()]
+		await api.dispose()
+
+		const visitor = await browser.newContext({ baseURL: BROWSER_URL })
+		const reviewer = await visitor.newPage()
+		await reviewer.goto(`/apps/deliver/s/${one}`)
+		await expect(reviewer.locator('.deliver-landing__card').first()).toBeVisible()
+		await expect(reviewer.locator('.deliver-landing__grid--list')).toHaveCount(0)
+		// An Asset is picked for the ZIP in cards and in rows
+		const pick = reviewer.locator('.deliver-landing__pick:not(:disabled)').first()
+		await pick.check()
+		await expect(reviewer.getByRole('link', { name: 'Download selection' })).toBeVisible()
+		await pick.uncheck()
+		await expect(reviewer.getByRole('link', { name: 'Download selection' })).toHaveCount(0)
+		await reviewer.getByRole('button', { name: 'Show the Assets as a list' }).click()
+		await pick.check()
+		await expect(reviewer.getByRole('link', { name: 'Download selection' })).toBeVisible()
+		await pick.uncheck()
+		await expect(reviewer.locator('.deliver-landing__grid--list')).toHaveCount(1)
+		await expect(reviewer.locator('.deliver-landing__facts').first()).toContainText('V1')
+		await reviewer.reload()
+		await expect(reviewer.locator('.deliver-landing__grid--list')).toHaveCount(1)
+		// Another link of the same Project is still cards
+		await reviewer.goto(`/apps/deliver/s/${other}`)
+		await expect(reviewer.locator('.deliver-landing__card').first()).toBeVisible()
+		await expect(reviewer.locator('.deliver-landing__grid--list')).toHaveCount(0)
+		await visitor.close()
+		const cleanup = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth })
+		await cleanup.fetch(`${dav}/linklist.webm`, { method: 'DELETE' })
+		await cleanup.dispose()
 	})
 })
 
