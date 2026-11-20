@@ -39,6 +39,9 @@ class ContainerProbe {
 	/** A tag larger than this is not read: a time reference takes a few dozen bytes, even in UTF-16 */
 	private const TAG_MAX = 4096;
 
+	/** Above any PCM a recorder writes (768 kHz) */
+	private const MAX_SAMPLE_RATE = 768000;
+
 	/** @var resource */
 	private $file;
 
@@ -277,6 +280,7 @@ class ContainerProbe {
 			}
 			$fmt = $chunks['fmt '][0];
 			$format = $this->formatTag($fmt);
+			$channels = $this->u16le($fmt + 2);
 			$sampleRate = $this->u32le($fmt + 4);
 			$block = $this->u16le($fmt + 12);
 			$bits = $this->u16le($fmt + 14);
@@ -289,7 +293,8 @@ class ContainerProbe {
 				'3/64' => ['e*', 1],
 				default => [null, 0],
 			};
-			if ($code === null || $sampleRate < 1 || $block < intdiv($bits, 8)) {
+			// A header that says nonsense would size the reads below
+			if ($code === null || $channels < 1 || $sampleRate < 1 || $sampleRate > self::MAX_SAMPLE_RATE || $block !== $channels * intdiv($bits, 8)) {
 				return null;
 			}
 			[$start, $length] = $chunks['data'];
@@ -297,16 +302,22 @@ class ContainerProbe {
 			$rate = DerivedMedia::waveformRate($frames / $sampleRate);
 			$count = (int)ceil($frames * $rate / $sampleRate);
 			// ponytail: at most 1 GiB in all, so a WAV of many hours reads in a minute; past an hour of 24-bit stereo each share is read only in part and a click can be missed
-			$most = max($block, intdiv(intdiv(1 << 30, max(1, $count)), $block) * $block);
+			$most = max(1, intdiv(intdiv(1 << 30, max(1, $count)), $block));
+			// Read in pieces of at most 512 KiB, so memory stays the same whatever the header says
+			$piece = max(1, intdiv(512 * 1024, $block));
 			$peaks = '';
 			for ($i = 0; $i < $count; $i++) {
 				$from = intdiv($i * $sampleRate, $rate);
-				$chunk = $this->at($start + $from * $block, min(min(intdiv(($i + 1) * $sampleRate, $rate), $frames) - $from, intdiv($most, $block)) * $block);
-				if ($bits === 24) {
-					$chunk = (string)preg_replace('/(...)/s', "\0$1", $chunk);
+				$to = $from + min(min(intdiv(($i + 1) * $sampleRate, $rate), $frames) - $from, $most);
+				$loudest = 0;
+				for ($at = $from; $at < $to; $at += $piece) {
+					$chunk = $this->at($start + $at * $block, min($piece, $to - $at) * $block);
+					if ($bits === 24) {
+						$chunk = (string)preg_replace('/(...)/s', "\0$1", $chunk);
+					}
+					$samples = unpack($code, $chunk) ?: [0];
+					$loudest = max($loudest, $bits === 8 ? max(max($samples) - 128, 128 - min($samples)) : max(abs(max($samples)), abs(min($samples))));
 				}
-				$samples = unpack($code, $chunk) ?: [0];
-				$loudest = $bits === 8 ? max(max($samples) - 128, 128 - min($samples)) : max(abs(max($samples)), abs(min($samples)));
 				$peaks .= DerivedMedia::peakByte($loudest / $scale);
 			}
 			return [$rate, $peaks];
