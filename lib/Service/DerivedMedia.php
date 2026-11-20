@@ -80,10 +80,12 @@ class DerivedMedia {
 	/**
 	 * Audio up to this long and this large, at no more bytes a second than
 	 * 192 kHz 32-bit stereo PCM, is read and gets its Waveform in the request
-	 * that takes it in: ffmpeg needs about 3 seconds an hour of MP3, while the
-	 * queue may wait for the next cron run and for Proxies before it
+	 * that takes it in: ffmpeg needs about 25 seconds an hour of MP3 with the
+	 * loudness (A5), so a quarter of an hour stays within the request's 15
+	 * seconds, while the queue may wait for the next cron run and for
+	 * Proxies before it
 	 */
-	private const AUDIO_NOW_SECONDS = 1800;
+	private const AUDIO_NOW_SECONDS = 900;
 	private const AUDIO_NOW_BYTES = 256 * 1024 * 1024;
 	private const AUDIO_NOW_BYTES_PER_SECOND = 192000 * 4 * 2;
 	/** How long ffmpeg may take for a Waveform in a request before the queue takes it over */
@@ -162,7 +164,7 @@ class DerivedMedia {
 	 * a sync client, Deliver's upload, delivering again; never a folder taken
 	 * in at once) is read and gets its Waveform in that request, so it is
 	 * there when the upload is (ADR 0022). Only a file on local storage,
-	 * unencrypted, of 1 byte to 256 MB, at most 30 minutes long and at no more
+	 * unencrypted, of 1 byte to 256 MB, at most 15 minutes long and at no more
 	 * bytes a second than 192 kHz 32-bit stereo PCM, each step in a few
 	 * seconds and no further than its header says, and no more requests at
 	 * once than `max_jobs`; anything else, and whatever runs out of time,
@@ -686,12 +688,14 @@ class DerivedMedia {
 		$bytes = 0;
 		// In a request no further than the header says, and a little: sound that runs on is the queue's
 		$bound = $this->inRequest ? $this->durationSeconds($version) + 5 : null;
+		// One decode for both: the PCM of the peaks, and the loudness measured at the original rate over every channel (A5); its summary is at the info level
 		$result = $this->ffmpeg->run($this->ffmpeg->ffmpeg(), [
-			'-nostdin', '-v', 'error',
-			...Ffmpeg::input($path),
-			'-map', '0:a:0', '-ar', (string)self::WAVEFORM_PCM_RATE,
+			'-nostdin', '-nostats', '-hide_banner', '-v', 'info',
 			...($bound === null ? [] : ['-t', (string)$bound]),
-			'-c:a', 'pcm_s16le', '-f', 's16le', 'pipe:1',
+			...Ffmpeg::input($path),
+			'-filter_complex', '[0:a:0]asplit=2[pcm][meter];[meter]ebur128=peak=true:framelog=quiet[measured]',
+			'-map', '[pcm]', '-ar', (string)self::WAVEFORM_PCM_RATE, '-c:a', 'pcm_s16le', '-f', 's16le', 'pipe:1',
+			'-map', '[measured]', '-f', 'null', '-',
 		], $this->inRequest ? self::AUDIO_NOW_TIMEOUT : 3600, function (string $pcm) use ($peaks, $channels, &$bytes): bool {
 			$bytes += strlen($pcm);
 			$this->reached((int)($bytes / (2 * $channels * self::WAVEFORM_PCM_RATE) * 1e6));
@@ -704,7 +708,50 @@ class DerivedMedia {
 		if ($result['code'] !== 0) {
 			throw new \RuntimeException($result['stderr'] ?: 'ffmpeg exited with ' . $result['code']);
 		}
-		$this->put($version, 'waveform', self::waveformJson($rate, $peaks->peaks()));
+		// Stopped at the most peaks a Waveform has, ffmpeg printed no summary: no numbers rather than those of a part
+		$this->put($version, 'waveform', self::waveformJson($rate, $peaks->peaks(), self::loudnessOf($result['stderr'])));
+	}
+
+	/**
+	 * The loudness a browser or a delivering tool hands in with a Waveform:
+	 * optional, else integrated LUFS from −70 to +10 and a peak from −200 to
+	 * +30 dB, each a number or null, and whether the peak is a true peak
+	 *
+	 * @return ?array{integrated: ?float, peak: ?float, truePeak: bool}
+	 * @throws InvalidRequestException out of shape
+	 */
+	private static function handedLoudness(mixed $loudness): ?array {
+		if ($loudness === null) {
+			return null;
+		}
+		$within = static fn (mixed $value, float $low, float $high): bool => $value === null || (is_int($value) || is_float($value)) && is_finite((float)$value) && $value >= $low && $value <= $high;
+		if (!is_array($loudness) || !$within($loudness['integrated'] ?? null, -70, 10) || !$within($loudness['peak'] ?? null, -200, 30) || !is_bool($loudness['truePeak'] ?? null)) {
+			throw new InvalidRequestException('Loudness is {integrated: LUFS from -70 to 10 or null, peak: dB from -200 to 30 or null, truePeak: true or false}');
+		}
+		$round = static fn (mixed $value): ?float => $value === null ? null : round((float)$value, 1);
+		return ['integrated' => $round($loudness['integrated'] ?? null), 'peak' => $round($loudness['peak'] ?? null), 'truePeak' => $loudness['truePeak']];
+	}
+
+	/**
+	 * The integrated loudness and true peak from the summary ffmpeg's ebur128
+	 * prints at its end (A5)
+	 *
+	 * @return ?array{integrated: ?float, peak: ?float, truePeak: bool} null without a summary; integrated null below the absolute gate (silence), peak null without a sample
+	 */
+	public static function loudnessOf(string $stderr): ?array {
+		$number = '(-?inf|nan|-?\d+(?:[.,]\d+)?)';
+		if (preg_match('/Integrated loudness:\s*I:\s*' . $number . '\s*LUFS/', $stderr, $integrated) !== 1
+			|| preg_match('/True peak:\s*Peak:\s*' . $number . '\s*dBFS/', $stderr, $peak) !== 1) {
+			return null;
+		}
+		$value = static fn (string $text): ?float => is_numeric($text = str_replace(',', '.', $text)) ? round((float)$text, 1) : null;
+		$lufs = $value($integrated[1]);
+		return [
+			// ebur128 says −70.0 where every block lies below the absolute gate
+			'integrated' => $lufs === null || $lufs <= -70 ? null : $lufs,
+			'peak' => $value($peak[1]),
+			'truePeak' => true,
+		];
 	}
 
 	/** The peaks a second of a Waveform of this many seconds (ADR 0021) */
@@ -721,8 +768,8 @@ class DerivedMedia {
 	 * The stored Waveform: peak i is the loudest sample from i / rate to
 	 * (i + 1) / rate seconds into the file, one byte each, in base64 (ADR 0021)
 	 */
-	private static function waveformJson(int $rate, string $peaks): string {
-		return json_encode(['rate' => $rate, 'peaks' => base64_encode($peaks)], JSON_THROW_ON_ERROR);
+	private static function waveformJson(int $rate, string $peaks, ?array $loudness = null): string {
+		return json_encode(['rate' => $rate, 'peaks' => base64_encode($peaks)] + ($loudness === null ? [] : ['loudness' => $loudness]), JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION);
 	}
 
 	/**
@@ -735,11 +782,13 @@ class DerivedMedia {
 	 *
 	 * @param mixed $peaks one byte a peak in base64, as the Waveform stores them
 	 * @param int $rate peaks a second, as waveformRate() has it for the duration
-	 * @throws InvalidRequestException peaks, rate or duration out of shape
+	 * @param mixed $loudness optional, as loudnessOf() has it (A5)
+	 * @throws InvalidRequestException peaks, rate, duration or loudness out of shape
 	 * @throws ProjectConflictException the Version has a Waveform or is getting one
 	 * @return Version as it is now, read where it was a video not read yet
 	 */
-	public function acceptWaveform(Version $version, mixed $peaks, int $rate, int $durationFrames): Version {
+	public function acceptWaveform(Version $version, mixed $peaks, int $rate, int $durationFrames, mixed $loudness = null): Version {
+		$loudness = self::handedLoudness($loudness);
 		// A peak a byte, so the base64 of the most a Waveform has is a third longer
 		$bytes = is_string($peaks) && strlen($peaks) <= 4 * (int)ceil(self::WAVEFORM_MAX_PEAKS / 3) ? base64_decode($peaks, true) : false;
 		if ($bytes === false || $bytes === '' || strlen($bytes) > self::WAVEFORM_MAX_PEAKS || $durationFrames < 1) {
@@ -761,7 +810,7 @@ class DerivedMedia {
 			throw new InvalidRequestException('A Waveform of this duration has ' . $expected . ' peaks a second');
 		}
 		// Sound that runs on past the length, as a decoder may find, or a video's past its picture, is left out
-		$this->put($version, 'waveform', self::waveformJson($rate, substr($bytes, 0, max(1, (int)ceil($seconds * $rate)))));
+		$this->put($version, 'waveform', self::waveformJson($rate, substr($bytes, 0, max(1, (int)ceil($seconds * $rate))), $loudness));
 		if ($version->getDurationFrames() === null) {
 			$version->setDurationFrames($durationFrames);
 		}

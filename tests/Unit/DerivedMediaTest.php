@@ -71,6 +71,15 @@ class DerivedMediaTest extends TestCase {
 		self::assertSame([128, 64], array_values(unpack('C*', $peaks->peaks())));
 	}
 
+	public function testLoudnessIsReadFromTheSummaryOfEbur128(): void {
+		// As ffmpeg 7.1 prints it at the info level
+		$summary = "[Parsed_ebur128_1 @ 0x7cf0] Summary:\n\n  Integrated loudness:\n    I:         -23.0 LUFS\n    Threshold: -33.0 LUFS\n\n  Loudness range:\n    LRA:         0.0 LU\n\n  True peak:\n    Peak:      -22.9 dBFS\n";
+		self::assertSame(['integrated' => -23.0, 'peak' => -22.9, 'truePeak' => true], DerivedMedia::loudnessOf("Input #0, wav\n" . $summary . "[out#0] size=1250KiB"));
+		self::assertSame(['integrated' => null, 'peak' => null, 'truePeak' => true], DerivedMedia::loudnessOf(str_replace(['-23.0 LUFS', '-22.9 dBFS'], ['-70.0 LUFS', '-inf dBFS'], $summary)), 'silence: below the absolute gate, no peak');
+		self::assertSame(-23.0, DerivedMedia::loudnessOf(str_replace('-23.0 LUFS', '-23,0 LUFS', $summary))['integrated'], 'whatever the locale writes');
+		self::assertNull(DerivedMedia::loudnessOf("Input #0, wav\n[out#0] size=1250KiB"), 'stopped before its end: no numbers rather than those of a part');
+	}
+
 	public function testTheRateDropsOnlyPastElevenHours(): void {
 		self::assertSame([50, 50, 50], [DerivedMedia::waveformRate(0.2), DerivedMedia::waveformRate(10 * 3600), DerivedMedia::waveformRate(40000)]);
 		self::assertSame(23, DerivedMedia::waveformRate(24 * 3600), 'as src/lib/waveform.js rateFor has it');

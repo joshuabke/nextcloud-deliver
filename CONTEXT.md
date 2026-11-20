@@ -182,6 +182,10 @@ _Avoid_: preview video, hover video, thumbnail video
 Precomputed audio peaks of a Version at a fixed rate (50 a second, ADR 0021), drawn under the timeline; the primary visual for audio-only Assets.
 _Avoid_: Peaks, audio graph
 
+**Loudness**:
+The integrated loudness (LUFS, ITU-R BS.1770 / EBU R 128) and the peak (true peak in dBTP, or sample peak in dBFS where a browser measured it) of a Version's sound, measured with its Waveform and stored with it. Shown, never applied to playback.
+_Avoid_: Volume, level, LUFS value
+
 **Processing**:
 The time in which a Version's derived media is being made. The original plays meanwhile; a failed part can be made again.
 _Avoid_: Transcoding, rendering, conversion
@@ -220,6 +224,7 @@ The German translation (`l10n/de` with "du", `l10n/de_DE` with "Sie") uses these
 | Proxy, Thumbnail Strip, Waveform | Proxy, Vorschauleiste, Wellenform |
 | Proxy bitrate threshold | Proxy-Bitratengrenze |
 | Scrub Proxy | Scrub-Proxy |
+| Loudness | Lautheit |
 | Processing | Verarbeitung (on cards „Wird verarbeitet“) |
 | Missing | Fehlt |
 | Locked | Gesperrt |

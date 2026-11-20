@@ -131,11 +131,11 @@ export const decideVersion = (versionId, status) => axios.put(url(`/versions/${v
  * Hands in a Waveform this browser decoded (ADR 0021)
  *
  * @param {number} versionId - the Version
- * @param {{rate: number, peaks: Uint8Array}} waveform - its peaks a second and the peaks
+ * @param {{rate: number, peaks: Uint8Array, loudness?: ?object}} waveform - its peaks a second, the peaks and, where measured, its loudness (A5)
  * @param {number} durationFrames - its length in Frames of the Version, milliseconds before the probe ran
  * @return {Promise<object>} the server's answer
  */
-export const giveWaveform = (versionId, { rate, peaks }, durationFrames) => axios.post(url(`/versions/${versionId}/waveform`), { peaks: toBase64(peaks), rate, durationFrames }).then(data)
+export const giveWaveform = (versionId, { rate, peaks, loudness }, durationFrames) => axios.post(url(`/versions/${versionId}/waveform`), { peaks: toBase64(peaks), rate, durationFrames, ...(loudness ? { loudness } : {}) }).then(data)
 /**
  * Hands in the Thumbnail Strip the browser made with a Proxy (ADR 0019)
  *
