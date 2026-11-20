@@ -1059,6 +1059,55 @@ test.describe('Audio review', () => {
 		await page.getByRole('button', { name: 'Pause (Space)' }).click()
 	})
 
+	test('the bars keep their heights and move by whole pixels from one moment to another, on a stage of an odd width too', async () => {
+		// An odd number of pixels across, where a playhead and window rounded apart trembled
+		await page.setViewportSize({ width: 1281, height: 800 })
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		const canvas = page.locator('.deliver-wave canvas')
+		await expect(canvas).toBeVisible()
+		const audio = page.locator('video.deliver-player__video')
+		await expect(audio).toHaveJSProperty('readyState', 4)
+		await page.getByRole('button', { name: '1 min' }).click()
+		// The coverage of each device-pixel column right of the playhead, where every bar is drawn alike
+		const columns = async (seconds) => {
+			// Once the audio stands there, and the stage has drawn it
+			await audio.evaluate((element, at) => new Promise((resolve) => {
+				element.addEventListener('seeked', () => requestAnimationFrame(() => requestAnimationFrame(resolve)), { once: true })
+				element.currentTime = at
+			}), seconds)
+			return canvas.evaluate((element) => {
+				const ratio = element.width / element.clientWidth
+				const top = Math.round(40 * ratio)
+				const bottom = element.height - Math.round(40 * ratio)
+				const data = element.getContext('2d').getImageData(0, top, element.width, bottom - top).data
+				return Array.from({ length: element.width }, (_, x) => {
+					let sum = 0
+					for (let y = 0; y < bottom - top; y++) {
+						sum += data[(y * element.width + x) * 4 + 3]
+					}
+					return sum
+				})
+			})
+		}
+		const before = await columns(100)
+		const after = await columns(103.3)
+		const width = before.length
+		// 3.3 s at a minute across is 5.5 % of the stage; the best whole shift explains every column exactly
+		let best = { shift: 0, difference: Infinity }
+		for (let shift = 0; shift <= width / 10; shift++) {
+			let difference = 0
+			for (let x = Math.round(width * 0.6) + shift; x < width - 2; x++) {
+				difference += Math.abs(before[x] - after[x - shift])
+			}
+			if (difference < best.difference) {
+				best = { shift, difference }
+			}
+		}
+		expect(best.difference).toBe(0)
+		expect(Math.abs(best.shift - width * 3.3 / 60)).toBeLessThanOrEqual(1)
+		await page.setViewportSize({ width: 1280, height: 720 })
+	})
+
 	test('a drag on the wave holds playback and lets it go on, but not past the end; Ctrl and the wheel zoom within the steps, remembered', async () => {
 		await page.goto(`/apps/deliver/versions/${versionId}`)
 		const canvas = page.locator('.deliver-wave canvas')
