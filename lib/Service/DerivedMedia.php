@@ -104,6 +104,9 @@ class DerivedMedia {
 	 * queue's. Per PHP process, which is one request.
 	 */
 	private static bool $requestRead = false;
+	/** Integrated loudness in LUFS and peak in dB that are shown at all, from ffmpeg or handed in (A5) */
+	private const LOUDNESS_RANGE = [-70.0, 9.9];
+	private const PEAK_RANGE = [-200.0, 30.0];
 	/** Set while the queue makes a Waveform because it had nothing else to do: such a Waveform gets no loudness (A5) */
 	private bool $idle = false;
 	/** Set while a request makes a Waveform itself: ffmpeg then has a short time and reads no further than the length its header says */
@@ -739,7 +742,8 @@ class DerivedMedia {
 		}
 		// No numbers is no failure of anything a Member or the admin can act on: the Waveform shows none
 		if ($loudness === null || !is_array($waveform)) {
-			$this->logger->info('Deliver measured no loudness for Version {version}', ['version' => $version->getId(), 'stderr' => $this->ffmpeg->tail($result['stderr'])]);
+			// A warning, so a cause that meets every file (an ffmpeg without ebur128, a summary worded otherwise) shows in the log; no failed job, as nothing can be done about one file
+			$this->logger->warning('Deliver measured no loudness for Version {version}: {stderr}', ['version' => $version->getId(), 'stderr' => $this->ffmpeg->tail($result['stderr'])]);
 			return;
 		}
 		// ebur128 says 0.0 dBFS for a track without a sample, which has no peak
@@ -751,7 +755,7 @@ class DerivedMedia {
 
 	/**
 	 * The loudness a browser or a delivering tool hands in with a Waveform:
-	 * optional, else integrated LUFS from −70 to +10 and a peak from −200 to
+	 * optional, else integrated LUFS from −70 to +9.9 and a peak from −200 to
 	 * +30 dB, each a number or null, and whether the peak is a true peak
 	 *
 	 * @return ?array{integrated: ?float, peak: ?float, truePeak: bool}
@@ -762,8 +766,8 @@ class DerivedMedia {
 			return null;
 		}
 		$within = static fn (mixed $value, float $low, float $high): bool => $value === null || (is_int($value) || is_float($value)) && is_finite((float)$value) && $value >= $low && $value <= $high;
-		if (!is_array($loudness) || !$within($loudness['integrated'] ?? null, -70, 10) || !$within($loudness['peak'] ?? null, -200, 30) || !is_bool($loudness['truePeak'] ?? null)) {
-			throw new InvalidRequestException('Loudness is {integrated: LUFS from -70 to 10 or null, peak: dB from -200 to 30 or null, truePeak: true or false}');
+		if (!is_array($loudness) || !$within($loudness['integrated'] ?? null, ...self::LOUDNESS_RANGE) || !$within($loudness['peak'] ?? null, ...self::PEAK_RANGE) || !is_bool($loudness['truePeak'] ?? null)) {
+			throw new InvalidRequestException('Loudness is {integrated: LUFS from -70 to 9.9 or null, peak: dB from -200 to 30 or null, truePeak: true or false}');
 		}
 		$round = static fn (mixed $value): ?float => $value === null ? null : round((float)$value, 1);
 		return ['integrated' => $round($loudness['integrated'] ?? null), 'peak' => $round($loudness['peak'] ?? null), 'truePeak' => $loudness['truePeak']];
@@ -786,10 +790,11 @@ class DerivedMedia {
 		}
 		$value = static fn (string $text): ?float => is_numeric($text = str_replace(',', '.', $text)) ? round((float)$text, 1) : null;
 		$lufs = $value($integrated[1]);
+		$dB = $value($peak[1]);
+		// The ranges a hand-in is held to: a broken file can make ffmpeg print numbers nobody should be shown; ebur128 says −70.0 where every block lies below the absolute gate
 		return [
-			// ebur128 says −70.0 where every block lies below the absolute gate
-			'integrated' => $lufs === null || $lufs <= -70 ? null : $lufs,
-			'peak' => $value($peak[1]),
+			'integrated' => $lufs === null || $lufs <= self::LOUDNESS_RANGE[0] || $lufs > self::LOUDNESS_RANGE[1] ? null : $lufs,
+			'peak' => $dB === null || $dB < self::PEAK_RANGE[0] || $dB > self::PEAK_RANGE[1] ? null : $dB,
 			'truePeak' => true,
 		];
 	}
