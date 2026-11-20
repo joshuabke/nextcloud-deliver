@@ -659,8 +659,14 @@ function pause() {
  * @param {number} direction - -1 back, 1 forward
  */
 function skip(direction) {
-	const now = video.value ? timeToFrame(video.value.currentTime, fps.value) : frame.value
-	seekTo(now + skipFrames(direction * SKIP_SECONDS, fpsValue(fps.value)))
+	seekTo(frameNow() + skipFrames(direction * SKIP_SECONDS, fpsValue(fps.value)))
+}
+
+/**
+ * @return {number} the Frame playing right now: timeupdate comes only a few times a second
+ */
+function frameNow() {
+	return video.value ? timeToFrame(video.value.currentTime, fps.value) : frame.value
 }
 
 /** Space and K */
@@ -766,8 +772,7 @@ function clearRange() {
 /** C, or the Comment button: the Range if one is set, else the current Frame; audio plays on, the Comment at the Frame of the key press */
 function comment() {
 	if (props.version.audioOnly) {
-		const now = video.value ? timeToFrame(video.value.currentTime, fps.value) : frame.value
-		emit('comment', range.value ?? { inFrame: now, outFrame: null })
+		emit('comment', range.value ?? { inFrame: frameNow(), outFrame: null })
 		return
 	}
 	pause()
