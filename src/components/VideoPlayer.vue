@@ -36,7 +36,7 @@ import { DOUBLE_TAP_MS } from '../lib/gestures.js'
 import { actionFor } from '../lib/hotkeys.js'
 import { t } from '../lib/l10n.js'
 import { hoverSource } from '../lib/media.js'
-import { skipFrames } from '../lib/skip.js'
+import { SKIP_SECONDS, skipFrames } from '../lib/skip.js'
 import { formatAt, fpsValue, frameToTime, modesFor, stepOf, timeToFrame } from '../lib/timecode.js'
 import { watermarkTile } from '../lib/watermark.js'
 import { useCommentsStore } from '../store/comments.js'
@@ -179,7 +179,7 @@ const { zoom, touched, reset: resetZoom, listeners: gestures } = useGestures({
 		if (side === 0) {
 			return
 		}
-		seekTo(frame.value + side * Math.round(JUMP_SECONDS * fpsValue(fps.value)))
+		seekTo(frame.value + skipFrames(side * JUMP_SECONDS, fpsValue(fps.value)))
 		showFlash(side < 0 ? t('deliver', '−{seconds} s', { seconds: JUMP_SECONDS }) : t('deliver', '+{seconds} s', { seconds: JUMP_SECONDS }), side)
 	},
 	holdStart: () => {
@@ -635,7 +635,7 @@ function pause() {
  */
 function skip(direction) {
 	const now = video.value ? timeToFrame(video.value.currentTime, fps.value) : frame.value
-	seekTo(now + skipFrames(direction, fpsValue(fps.value)))
+	seekTo(now + skipFrames(direction * SKIP_SECONDS, fpsValue(fps.value)))
 }
 
 /** Space and K */
@@ -1029,8 +1029,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 				<NcButton
 					variant="tertiary"
 					:disabled="!source"
-					:aria-label="t('deliver', 'Back 10 seconds (Shift+←)')"
-					:title="t('deliver', 'Back 10 seconds (Shift+←)')"
+					:aria-label="t('deliver', 'Back 10 seconds')"
 					@click="skip(-1)">
 					<template #icon>
 						<NcIconSvgWrapper :svg="skipBackIcon" />
@@ -1048,8 +1047,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 				<NcButton
 					variant="tertiary"
 					:disabled="!source"
-					:aria-label="t('deliver', 'Forward 10 seconds (Shift+→)')"
-					:title="t('deliver', 'Forward 10 seconds (Shift+→)')"
+					:aria-label="t('deliver', 'Forward 10 seconds')"
 					@click="skip(1)">
 					<template #icon>
 						<NcIconSvgWrapper :svg="skipForwardIcon" />
@@ -1650,20 +1648,27 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	padding: var(--default-grid-baseline) calc(2 * var(--default-grid-baseline));
 }
 
-/* Five transport buttons and the time do not fit one row at 390 px: the time goes under them */
-.deliver-player--mobile .deliver-player__controls {
-	grid-template-columns: minmax(0, 1fr) auto;
+/* Whatever one side needs it gets; the time sits in the middle where there is room */
+.deliver-player__controls {
+	grid-template-columns: minmax(max-content, 1fr) auto minmax(0, 1fr);
 }
 
-.deliver-player--mobile .deliver-player__group--center {
-	grid-column: 1 / -1;
-	grid-row: 2;
-	justify-content: center;
-}
+/* Where five transport buttons and the time do not fit one row, the time goes under them */
+@media (max-width: 460px) {
+	.deliver-player--mobile .deliver-player__controls {
+		grid-template-columns: minmax(0, 1fr) auto;
+	}
 
-.deliver-player--mobile .deliver-player__group--end {
-	grid-column: 2;
-	grid-row: 1;
+	.deliver-player--mobile .deliver-player__group--center {
+		grid-column: 1 / -1;
+		grid-row: 2;
+		justify-content: center;
+	}
+
+	.deliver-player--mobile .deliver-player__group--end {
+		grid-column: 2;
+		grid-row: 1;
+	}
 }
 
 .deliver-player__group {

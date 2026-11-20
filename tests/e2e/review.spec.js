@@ -889,6 +889,27 @@ test.describe('Review view', () => {
 		expect(await videos.nth(1).evaluate((element) => element.paused)).toBe(false)
 	})
 
+	test('Shift+arrows skip ten seconds in Compare, both sides together', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
+		await api.dispose()
+		const stack = project.ocs.data.assets.find((each) => each.versions.length >= 2).versions
+		await page.goto(`/apps/deliver/compare/${stack[1].id}/${stack[0].id}`)
+		const videos = page.locator('.deliver-compare video')
+		await expect(videos.first()).toHaveJSProperty('readyState', 4)
+		await page.locator('.deliver-compare__offset').fill('0')
+		const bar = await page.locator('.deliver-compare__timeline').boundingBox()
+		await page.mouse.click(bar.x + bar.width * 0.5, bar.y + bar.height / 2)
+		await page.locator('.deliver-layout__bar h2').click()
+		// Ten seconds are more than the 4 s clip: they land on its last Frame, and back on the first
+		await page.keyboard.press('Shift+ArrowRight')
+		await expect(page.locator('.deliver-compare__timecode')).toContainText('00:00:03:24')
+		await page.keyboard.press('Shift+ArrowLeft')
+		await expect(page.locator('.deliver-compare__timecode')).toContainText('00:00:00:00')
+		const times = await videos.evaluateAll((all) => all.map((video) => video.currentTime))
+		expect(times[1]).toBeCloseTo(times[0], 3)
+	})
+
 	test('a Review Link remembers the list for itself', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		// The landing page opens only where a link shows several Assets
@@ -981,13 +1002,15 @@ test.describe('Skipping ten seconds', () => {
 		await page.getByRole('button', { name: /^Play \(/ }).click()
 		await expect.poll(time).toBeGreaterThan(0.1)
 		await page.locator('.deliver-review__title').click()
+		const beforeForward = await time()
 		await page.keyboard.press('Shift+ArrowRight')
 		await page.waitForTimeout(300)
-		expect(await time()).toBeGreaterThan(10)
+		expect(await time()).toBeGreaterThan(beforeForward + 9.5)
 		expect(await video.evaluate((element) => element.paused)).toBe(false)
+		const beforeBack = await time()
 		await page.keyboard.press('Shift+ArrowLeft')
 		await page.waitForTimeout(300)
-		expect(await time()).toBeLessThan(2)
+		expect(await time()).toBeLessThan(beforeBack - 9)
 		expect(await video.evaluate((element) => element.paused)).toBe(false)
 	})
 })
