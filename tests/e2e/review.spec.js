@@ -1054,7 +1054,9 @@ test.describe('Audio review', () => {
 		await page.getByRole('button', { name: 'Pause (Space)' }).click()
 	})
 
-	test('the bars keep their heights and move by whole pixels from one moment to another', async () => {
+	test('the bars keep their heights and move by whole pixels from one moment to another, on a stage of an odd width too', async () => {
+		// An odd number of pixels across, where a playhead and window rounded apart trembled
+		await page.setViewportSize({ width: 1281, height: 800 })
 		await page.goto(`/apps/deliver/versions/${versionId}`)
 		const canvas = page.locator('.deliver-wave canvas')
 		await expect(canvas).toBeVisible()
@@ -1063,10 +1065,11 @@ test.describe('Audio review', () => {
 		await page.getByRole('button', { name: '1 min' }).click()
 		// The coverage of each device-pixel column right of the playhead, where every bar is drawn alike
 		const columns = async (seconds) => {
-			await audio.evaluate((element, at) => {
+			// Once the audio stands there, and the stage has drawn it
+			await audio.evaluate((element, at) => new Promise((resolve) => {
+				element.addEventListener('seeked', () => requestAnimationFrame(() => requestAnimationFrame(resolve)), { once: true })
 				element.currentTime = at
-			}, seconds)
-			await page.waitForTimeout(400)
+			}), seconds)
 			return canvas.evaluate((element) => {
 				const ratio = element.width / element.clientWidth
 				const top = Math.round(40 * ratio)
@@ -1097,6 +1100,7 @@ test.describe('Audio review', () => {
 		}
 		expect(best.difference).toBe(0)
 		expect(Math.abs(best.shift - width * 3.3 / 60)).toBeLessThanOrEqual(1)
+		await page.setViewportSize({ width: 1280, height: 720 })
 	})
 
 	test('a drag on the wave holds playback and lets it go on, but not past the end; Ctrl and the wheel zoom within the steps, remembered', async () => {

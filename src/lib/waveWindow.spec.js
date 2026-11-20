@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { barGrid, bars, barsShown, CIRCLE, circleAt, clampSpan, DEFAULT_SPAN, dragged, isWhole, overviewWindow, pinchSpan, pixelOffset, readSpan, secondsAt, spreadSpan, stack, STACK_STEP, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan, xAt } from './waveWindow.js'
+import { barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, clampSpan, DEFAULT_SPAN, dragged, isWhole, MOTION_PER_PITCH, overviewWindow, pinchSpan, pixelPlace, readSpan, secondsAt, spreadSpan, stack, STACK_STEP, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan, xAt } from './waveWindow.js'
 
 describe('the window of the scrolling Waveform', () => {
 	it('centres the playhead, the wave left empty before the start and after the end', () => {
@@ -88,18 +88,59 @@ describe('the bars of the scrolling Waveform', () => {
 	})
 
 	it('are about three CSS px apart on whole device pixels, at every pixel ratio and zoom', () => {
-		for (const ratio of [1, 1.5, 2, 3]) {
-			for (const across of [15, 60, 300, 3600]) {
-				const pixels = Math.round(390 * ratio)
+		for (const ratio of [1, 1.25, 1.5, 2, 2.625, 3]) {
+			for (const across of [60, 300, 3600]) {
+				const pixels = Math.floor(390 * ratio)
 				const grid = barGrid(across, pixels, ratio)
 				expect(Number.isInteger(grid.pitch) && Number.isInteger(grid.width)).toBe(true)
 				expect(grid.pitch - grid.width).toBeGreaterThanOrEqual(1)
-				expect(grid.pitch / ratio).toBeCloseTo(3, 0)
+				expect(grid.pitch / ratio).toBeGreaterThan(2)
+				expect(grid.pitch / ratio).toBeLessThan(4)
 				// A bar's seconds are its pitch at this zoom
 				expect(grid.seconds / across * pixels).toBeCloseTo(grid.pitch)
 			}
 		}
 		expect(barGrid(60, 1170, 3)).toEqual({ pitch: 9, width: 6, seconds: 60 * 9 / 1170 })
+		expect([barGrid(60, 487, 1.25), barGrid(60, 1023, 2.625)].map(({ pitch, width }) => [pitch, width])).toEqual([[4, 3], [8, 5]])
+	})
+
+	it('grow apart, bar and gap alike, where the wave would move more than a quarter of a pitch a frame', () => {
+		const perFrame = (across, pixels, rate) => pixels / across * rate / 60
+		// The cases recorded on #227: 15 s on a 1480 px stage, 15 s at 2× on 840 px, 15 s on 840 px
+		for (const [across, pixels, ratio, rate] of [[15, 1480, 1, 1], [15, 840, 1, 2], [15, 840, 1, 1], [15, 840, 1, 4], [15, 1170, 3, 1], [60, 3840, 2, 4]]) {
+			const grid = barGrid(across, pixels, ratio, rate)
+			expect(perFrame(across, pixels, rate) / grid.pitch).toBeLessThanOrEqual(MOTION_PER_PITCH)
+			expect(grid.width / grid.pitch).toBeCloseTo(2 / 3, 1)
+		}
+		expect(barGrid(15, 1480, 1, 1).pitch).toBe(12)
+		expect(barGrid(60, 840, 1, 1).pitch).toBe(3)
+		// Standing over the whole piece, it keeps the base pitch
+		expect(barGrid(3600, 840, 1, 0).pitch).toBe(3)
+	})
+
+	it('stand the playhead on one pixel and take the window from it, at odd and even widths alike', () => {
+		for (const pixels of [840, 841, 1125, 1170, 1179]) {
+			const heads = new Set()
+			for (let at = 600; at < 602; at += 0.0167) {
+				const { head, offset } = pixelPlace(at, 60, pixels, false)
+				heads.add(head)
+				expect(offset + head).toBe(Math.round(at / 60 * pixels))
+			}
+			expect([...heads]).toEqual([Math.floor(pixels / 2)])
+		}
+		expect(pixelPlace(1800, 3600, 841, true)).toEqual({ head: 421, offset: 0 })
+	})
+
+	it('size the canvas to whole device pixels, never resampled', () => {
+		expect(canvasPixels(840, 657, 2, { width: 1680, height: 1314 })).toEqual({ width: 1680, height: 1314, ratio: 2, css: null })
+		// An emulated ratio, where the browser counts CSS pixels: the ratio decides
+		expect(canvasPixels(840, 657, 2, { width: 840, height: 657 })).toEqual({ width: 1680, height: 1314, ratio: 2, css: null })
+		// 1283 px at 1.25 is 1603.75 device pixels: 1603, and the CSS box cut to them
+		const cut = canvasPixels(1283, 800, 1.25, null)
+		expect([cut.width, cut.height]).toEqual([1603, 1000])
+		expect(cut.css.width * 1.25).toBeCloseTo(1603)
+		expect(canvasPixels(412, 300, 2.625, null).width).toBe(1081)
+		expect(canvasPixels(1280, 800, 1.5, null).css).toBe(null)
 	})
 
 	it('stay the same bars with the same heights wherever the window starts, moved by whole device pixels', () => {
@@ -109,14 +150,14 @@ describe('the bars of the scrolling Waveform', () => {
 		const grid = barGrid(across, pixels, 3)
 		const levels = bars(waveform, grid.seconds)
 		const drawn = (start) => {
-			const offset = pixelOffset(start, across, pixels)
+			const { offset } = pixelPlace(start, across, pixels, false)
 			const { first, last } = barsShown(offset, grid.pitch, pixels, levels.length)
 			return new Map(Array.from({ length: last - first + 1 }, (_, at) => [first + at, { x: (first + at) * grid.pitch - offset, level: levels[first + at] }]))
 		}
 		for (const [from, to] of [[600, 600.0173], [600, 601.3], [1234.567, 1240.001]]) {
 			const before = drawn(from)
 			const after = drawn(to)
-			const shift = pixelOffset(to, across, pixels) - pixelOffset(from, across, pixels)
+			const shift = pixelPlace(to, across, pixels, false).offset - pixelPlace(from, across, pixels, false).offset
 			let common = 0
 			for (const [bar, { x, level }] of before) {
 				if (after.has(bar)) {
@@ -132,7 +173,7 @@ describe('the bars of the scrolling Waveform', () => {
 
 	it('keep an hour at 50 peaks a second to a few thousand values per zoom', () => {
 		const hour = { rate: 50, peaks: new Uint8Array(180000) }
-		expect(bars(hour, barGrid(15, 1200, 1).seconds).length).toBe(96000)
+		expect(bars(hour, barGrid(60, 1200, 1).seconds).length).toBe(24000)
 	})
 })
 
