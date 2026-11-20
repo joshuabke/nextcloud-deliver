@@ -81,7 +81,7 @@
 .deliver-card--row .deliver-card__link,
 .deliver-card--row .deliver-card__select,
 .deliver-card--row .deliver-card__more {
-	grid-area: 1 / 1;
+	grid-area: 1 / 1 / 2 / 2;
 }
 
 .deliver-card--row .deliver-card__link {

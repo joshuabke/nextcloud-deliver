@@ -195,7 +195,8 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 							<span class="deliver-landing__count">{{ n('deliver', '%n Asset', '%n Assets', sub.count) }}</span>
 						</button>
 						<input
-							v-if="link.downloadAll && downloadsIn(sub.path)"
+							v-if="link.downloadAll"
+							:disabled="!downloadsIn(sub.path)"
 							type="checkbox"
 							class="deliver-landing__pick"
 							:class="{ 'deliver-landing__pick--shown': picked > 0 }"
@@ -221,7 +222,8 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 							</span>
 						</button>
 						<input
-							v-if="link.downloadAll && asset.downloadUrl"
+							v-if="link.downloadAll"
+							:disabled="!asset.downloadUrl"
 							type="checkbox"
 							class="deliver-landing__pick"
 							:class="{ 'deliver-landing__pick--shown': picked > 0 }"
@@ -461,6 +463,10 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 .deliver-landing__card:hover .deliver-landing__pick,
 .deliver-landing__pick:focus-visible,
 .deliver-landing__pick:checked,
+.deliver-landing__pick:disabled {
+	visibility: hidden;
+}
+
 .deliver-landing__pick--shown {
 	opacity: 1;
 }

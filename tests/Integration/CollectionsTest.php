@@ -126,14 +126,18 @@ class CollectionsTest extends TestCase {
 	public function testALinkListsTheCommentsAndDecisionOfTheNewestVersion(): void {
 		$project = $this->owner->ocs('POST', '/projects', ['name' => 'Acme spot'])['data']['id'];
 		$cut = $this->enable('clients/acme/cut.mp4', $project);
+		// Two Comments and an approval on the first Version, written before it has a newer one (a Stack takes review data on its newest Version only)
+		foreach ([['POST', 'comments', ['inFrame' => 1, 'body' => 'first']], ['POST', 'comments', ['inFrame' => 2, 'body' => 'second']], ['PUT', 'approval', ['status' => 'approved']]] as [$verb, $what, $data]) {
+			$done = $this->owner->ocs($verb, "/versions/{$cut['versionId']}/$what", $data);
+			self::assertContains($done['status'], [200, 201], json_encode($done['data']));
+		}
 		$this->owner->put('clients/acme/cut_v2.mp4', 'not really a video');
 		$final = $this->owner->ocs('POST', '/assets', ['fileId' => $this->owner->fileId('clients/acme/cut_v2.mp4'), 'assetId' => $cut['assetId']])['data'];
-		// Two Comments and an approval on the first Version, one Comment and a request for changes on the newest
-		$this->owner->ocs('POST', "/versions/{$cut['versionId']}/comments", ['inFrame' => 1, 'body' => 'first']);
-		$this->owner->ocs('POST', "/versions/{$cut['versionId']}/comments", ['inFrame' => 2, 'body' => 'second']);
-		$this->owner->ocs('PUT', "/versions/{$cut['versionId']}/approval", ['status' => 'approved']);
-		$this->owner->ocs('POST', "/versions/{$final['versionId']}/comments", ['inFrame' => 1, 'body' => 'final']);
-		$this->owner->ocs('PUT', "/versions/{$final['versionId']}/approval", ['status' => 'changes']);
+		// One Comment and a request for changes on the newest
+		foreach ([['POST', 'comments', ['inFrame' => 1, 'body' => 'final']], ['PUT', 'approval', ['status' => 'changes']]] as [$verb, $what, $data]) {
+			$done = $this->owner->ocs($verb, "/versions/{$final['versionId']}/$what", $data);
+			self::assertContains($done['status'], [200, 201], json_encode($done['data']));
+		}
 
 		$link = $this->owner->ocs('POST', "/projects/$project/links")['data'];
 		$visitor = new PublicClient(getenv('DELIVER_TEST_URL') ?: 'http://localhost', $link['token']);
