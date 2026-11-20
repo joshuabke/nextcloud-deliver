@@ -94,7 +94,16 @@ class DerivedMedia {
 	private const IDLE_WAVEFORMS_AFTER = 'idle_waveforms_after';
 	/** App config: the Version below which the idle look goes on, past one whose file was not there */
 	private const IDLE_WAVEFORMS_BELOW = 'idle_waveforms_below';
+	/** Versions the idle look steps past at most, before it leaves the rest to the next run */
+	private const IDLE_LOOK = 20;
 	private const IDLE_PAUSE = 3600;
+	/**
+	 * Whether this request has read an audio file already: a request may bring
+	 * many (a sync client's bulk upload, an app unpacking an archive), and
+	 * reads only the first, so it stays within its seconds; the rest is the
+	 * queue's. Per PHP process, which is one request.
+	 */
+	private static bool $requestRead = false;
 	/** Set while a request makes a Waveform itself: ffmpeg then has a short time and reads no further than the length its header says */
 	private bool $inRequest = false;
 	/** Seconds between two progress writes to the job row */
@@ -181,6 +190,10 @@ class DerivedMedia {
 			|| $this->jobs->countRunningInRequests() >= max(1, $this->config->getValueInt(Application::APP_ID, 'max_jobs', 1))) {
 			return;
 		}
+		if (self::$requestRead) {
+			return;
+		}
+		self::$requestRead = true;
 		$versionId = $version->getId();
 		foreach ([Job::KIND_PROBE, Job::KIND_WAVEFORM] as $kind) {
 			$job = $this->jobs->findPending($versionId, $kind);
@@ -531,30 +544,27 @@ class DerivedMedia {
 		if ($this->time->getTime() < $this->config->getValueInt(Application::APP_ID, self::IDLE_WAVEFORMS_AFTER) || $this->jobs->findQueued(1) !== [] || !$this->ffmpeg->available()) {
 			return null;
 		}
-		// The look goes on below a Version whose file was not there, so one such file holds up no other
+		// A file that is not there fails no Version (its storage may be offline, and every other would fail the same): the look steps past it, at most this many a time, and goes on below it next time
 		$below = $this->config->getValueInt(Application::APP_ID, self::IDLE_WAVEFORMS_BELOW);
-		$version = $this->versions->findWithoutWaveform(1, $below ?: null)[0] ?? null;
-		if ($version === null) {
-			// Past the oldest: from the newest again next time, also those whose file was not there
-			if ($below !== 0) {
-				$this->config->deleteKey(Application::APP_ID, self::IDLE_WAVEFORMS_BELOW);
+		$missing = $this->versions->findWithoutWaveform(self::IDLE_LOOK, $below ?: null);
+		foreach ($missing as $version) {
+			$file = $this->fileOf($version);
+			try {
+				$there = $file !== null && $file->getStorage()->file_exists($file->getInternalPath());
+			} catch (\Throwable) {
+				$there = false;
 			}
-			return null;
-		}
-		// A file that cannot be read at all fails no Version: its storage may be offline, and every other would fail the same
-		$file = $this->fileOf($version);
-		try {
-			$there = $file !== null && $file->getStorage()->file_exists($file->getInternalPath());
-		} catch (\Throwable) {
-			$there = false;
-		}
-		if (!$there) {
+			if ($there) {
+				$this->enqueue($version->getId(), Job::KIND_WAVEFORM);
+				return $this->jobs->findPending($version->getId(), Job::KIND_WAVEFORM);
+			}
 			$this->config->setValueInt(Application::APP_ID, self::IDLE_WAVEFORMS_BELOW, $version->getId());
-			$this->pauseIdleWaveforms();
-			return null;
 		}
-		$this->enqueue($version->getId(), Job::KIND_WAVEFORM);
-		return $this->jobs->findPending($version->getId(), Job::KIND_WAVEFORM);
+		// Past the oldest: from the newest again next time, also those whose file was not there
+		if (count($missing) < self::IDLE_LOOK && $this->config->hasKey(Application::APP_ID, self::IDLE_WAVEFORMS_BELOW)) {
+			$this->config->deleteKey(Application::APP_ID, self::IDLE_WAVEFORMS_BELOW);
+		}
+		return null;
 	}
 
 	/**
@@ -662,7 +672,7 @@ class DerivedMedia {
 	/** PCM from ffmpeg, reduced to peaks as it streams out, without another binary and without holding it */
 	private function runWaveform(Version $version, string $path): void {
 		$channels = 0;
-		foreach ($this->probe->streams($this->probe->read($path) ?? []) as $stream) {
+		foreach ($this->probe->streams($this->probe->read($path, $this->inRequest ? self::AUDIO_NOW_TIMEOUT : 120) ?? []) as $stream) {
 			if (($stream['codec_type'] ?? '') === 'audio') {
 				$channels = (int)($stream['channels'] ?? 0);
 				break;

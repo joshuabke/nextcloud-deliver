@@ -262,13 +262,8 @@ class DerivedMediaTest extends TestCase {
 		// The newest goes first; its file is gone from the disk behind Nextcloud's back, as on storage that went offline
 		rename($disk, "$disk.away");
 		$this->drainQueue();
-		self::assertSame(['none', 'none'], [$this->waveformState($second), $this->waveformState($first)], 'nothing is failed for a file that is not there, and the rest waits');
-		self::assertGreaterThan(time(), (int)$this->inNextcloud('echo \\OCP\\Server::get(\\OCP\\IAppConfig::class)->getValueInt("deliver", "idle_waveforms_after");'), 'for an hour, across cron runs');
-
-		// An hour on, the look goes on past it instead of stopping at it again
-		$this->shell('php /var/www/html/occ config:app:delete deliver idle_waveforms_after');
-		$this->drainQueue();
-		self::assertSame(['none', 'ready'], [$this->waveformState($second), $this->waveformState($first)], 'the next one is made');
+		self::assertSame(['none', 'ready'], [$this->waveformState($second), $this->waveformState($first)], 'nothing is failed for a file that is not there, and the look steps past it at once');
+		self::assertSame(0, (int)$this->inNextcloud('echo \\OCP\\Server::get(\\OCP\\IAppConfig::class)->getValueInt("deliver", "idle_waveforms_after");'), 'no pause for it');
 
 		// Back, but no sound in it any more: a failure of its own, which pauses the rest as well
 		rename("$disk.away", $disk);
@@ -282,6 +277,26 @@ class DerivedMediaTest extends TestCase {
 	private function resumeIdle(): void {
 		$this->shell('php /var/www/html/occ config:app:delete deliver idle_waveforms_after');
 		$this->shell('php /var/www/html/occ config:app:delete deliver idle_waveforms_below');
+	}
+
+	public function testAnUploadOfManyFilesInOneRequestReadsOnlyItsFirst(): void {
+		// A sync client's bulk upload: several new files in one request
+		$boundary = 'deliver' . bin2hex(random_bytes(6));
+		$body = '';
+		foreach (['one.mp3', 'two.mp3', 'three.mp3'] as $name) {
+			$mp3 = $this->mp3($name, 2);
+			$content = (string)file_get_contents($mp3);
+			@unlink($mp3);
+			$body .= "--$boundary\r\nX-File-Path: /{$this->root}/$name\r\nX-File-MD5: " . md5($content) . "\r\nX-File-Mtime: " . time() . "\r\nContent-Length: " . strlen($content) . "\r\n\r\n$content\r\n";
+		}
+		$started = microtime(true);
+		$sent = $this->nc->request('POST', '/remote.php/dav/bulk', "$body--$boundary--\r\n", ["Content-Type: multipart/related; boundary=$boundary"]);
+		self::assertSame(200, $sent['status'], $sent['body']);
+		self::assertLessThan(30, microtime(true) - $started);
+		$states = array_map(fn (string $name) => $this->waveformState($this->idOf($name)), ['one.mp3', 'two.mp3', 'three.mp3']);
+		self::assertSame(['ready', 'none', 'none'], $states, 'the request reads the first and leaves the rest to the queue');
+		$this->drainQueue();
+		self::assertSame(['ready', 'ready', 'ready'], array_map(fn (string $name) => $this->waveformState($this->idOf($name)), ['one.mp3', 'two.mp3', 'three.mp3']));
 	}
 
 	public function testAFolderTakenInAtOnceLeavesItsAudioToTheQueue(): void {
