@@ -49,18 +49,16 @@ describe('compare', () => {
 		expect(outOfStep(-0.0187, 1, toleranceFor({ audioOnly: false, fps: PAL }))).toBe(false)
 	})
 
-	it('crossfades at equal power, from wherever the gain stands', () => {
+	it('crossfades linearly, the two gains summing to 1 throughout, from wherever the gain stands', () => {
 		const up = fadeCurve(0, 1, 5)
 		const down = fadeCurve(1, 0, 5)
-		expect(up[0]).toBe(0)
-		expect(up[4]).toBeCloseTo(1, 6)
-		expect(down[4]).toBeCloseTo(0, 6)
+		expect(Array.from(up)).toEqual([0, 0.25, 0.5, 0.75, 1])
 		for (let at = 0; at < 5; at++) {
-			expect(up[at] ** 2 + down[at] ** 2).toBeCloseTo(1, 6)
+			expect(up[at] + down[at]).toBeCloseTo(1, 6)
 		}
-		const back = fadeCurve(up[2], 0, 3)
-		expect(back[0]).toBeCloseTo(up[2], 6)
-		expect(back[2]).toBeCloseTo(0, 6)
+		// Turned back halfway, both curves still meet at 1
+		expect(Array.from(fadeCurve(up[2], 0, 3))).toEqual([0.5, 0.25, 0])
+		expect(Array.from(fadeCurve(down[2], 1, 3))).toEqual([0.5, 0.75, 1])
 	})
 
 	it('plays the Proxy where there is one', () => {

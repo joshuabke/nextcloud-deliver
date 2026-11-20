@@ -76,10 +76,14 @@ export const averageError = (average, error) => average === null ? error : avera
  */
 export const outOfStep = (average, since, tolerance) => Math.abs(average) > tolerance && since >= SETTLE
 
+/** Without the AudioContext the muted side's clock runs some 40 ms ahead of the heard one's: it is left that much */
+export const FALLBACK_TOLERANCE = 0.1
+
 /**
- * A video lands a seek on one of its Frames, so it is held to a little more
- * than half a Frame (40 ms Frames: 24 ms; main held it to a Frame and a half),
- * audio to SYNC_TOLERANCE
+ * A playing video element comes back from a seek late by a varying amount
+ * (−13 to +5 ms measured), so a video is held to a little more than half a
+ * Frame (40 ms Frames: 24 ms; main held it to a Frame and a half), audio to
+ * SYNC_TOLERANCE
  *
  * @param {{audioOnly: ?boolean, fps: {num: number, den: number}}} version - the following side's Version
  * @return {number} how far it may be off on average, in seconds
@@ -89,8 +93,10 @@ export function toleranceFor(version) {
 }
 
 /**
- * An equal-power crossfade, from where a gain stands to where it goes, so a
- * switch half done can turn back from there
+ * A linear crossfade, from where a gain stands to where it goes, so a switch
+ * half done can turn back from there. The two gains sum to 1 throughout:
+ * two Versions of one mix are nearly the same signal, which an equal-power
+ * fade would raise by up to 3 dB in the middle.
  *
  * @param {number} from - the gain now, 0 to 1
  * @param {number} to - the gain wanted, 0 or 1
@@ -98,9 +104,8 @@ export function toleranceFor(version) {
  * @return {Float32Array} the gain's values over the fade
  */
 export function fadeCurve(from, to, points = 16) {
-	const start = Math.asin(Math.min(1, Math.max(0, from)))
-	const end = Math.asin(to)
-	return Float32Array.from({ length: points }, (_, at) => Math.sin(start + (end - start) * at / (points - 1)))
+	const start = Math.min(1, Math.max(0, from))
+	return Float32Array.from({ length: points }, (_, at) => start + (to - start) * at / (points - 1))
 }
 
 /**

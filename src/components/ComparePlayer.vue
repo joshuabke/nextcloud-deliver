@@ -21,7 +21,7 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import WaveformStage from './WaveformStage.vue'
 import { useRange } from '../composables/range.js'
 import { useSoundMix } from '../composables/soundMix.js'
-import { averageError, compareSource, follower, frameOnA, frameOnB, laneShift, loudnessGap, loudnessParts, nextPass, outOfStep, switchKey, toleranceFor } from '../lib/compare.js'
+import { averageError, compareSource, FALLBACK_TOLERANCE, follower, frameOnA, frameOnB, laneShift, loudnessGap, loudnessParts, nextPass, outOfStep, switchKey, toleranceFor } from '../lib/compare.js'
 import { actionFor, isTyping } from '../lib/hotkeys.js'
 import { t } from '../lib/l10n.js'
 import { isStill } from '../lib/media.js'
@@ -62,7 +62,7 @@ const playing = ref(false)
 const wipe = ref(50)
 const { outPoint, loop, range, loopsWhole, markIn, markOut, clearRange, wrapFrom } = useRange(frame)
 /** Both sides into one AudioContext, the one heard at a gain of 1 (A7); muting stands in until it runs */
-const { mixing, start: startMix, hear } = useSoundMix()
+const { mixing, start: startMix, hear } = useSoundMix(restart)
 /** Each pass of the loop plays the other side (A2c); off until asked for, every time */
 const alternate = ref(false)
 /** Each side's Waveform, once loaded, with its loudness where it was measured */
@@ -150,6 +150,18 @@ function listen(side) {
 	audio.value = side
 }
 
+/**
+ * The sides that start as they join the AudioContext, on the first Play of a page, stand some 20 ms apart
+ * (measured; every later start is in step): a moment in, they are sought together once more, as a click on the bar does
+ */
+function restart() {
+	setTimeout(() => {
+		if (playing.value && videoA.value) {
+			seekPlaying(timeToFrame(videoA.value.currentTime, props.a.fps))
+		}
+	}, 250)
+}
+
 /** The following side's offset on average, and when it was last put back, a seek or a switch: judged afresh from then */
 let average = null
 let corrected = 0
@@ -222,7 +234,7 @@ function keepInStep() {
 	}
 	const element = plan.side === 'a' ? a : b
 	average = averageError(average, element.currentTime - plan.target)
-	if (outOfStep(average, (performance.now() - corrected) / 1000, toleranceFor(plan.side === 'a' ? props.a : props.b))) {
+	if (outOfStep(average, (performance.now() - corrected) / 1000, mixing.value ? toleranceFor(plan.side === 'a' ? props.a : props.b) : FALLBACK_TOLERANCE)) {
 		element.currentTime = plan.target
 		rejudge()
 	}

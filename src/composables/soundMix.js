@@ -1,13 +1,13 @@
 import { onBeforeUnmount, ref } from 'vue'
 import { fadeCurve } from '../lib/compare.js'
 
-/** The crossfade of a switch, in seconds */
+/** The crossfade of a switch, linear, in seconds */
 const FADE = 0.008
 
 /**
  * Compare's two sides into one AudioContext (A7): both media elements play
  * unmuted, each through a gain of 0 or 1, so both run on the one output
- * clock and a switch is a crossfade of a few milliseconds, with nothing
+ * clock and a switch is a linear crossfade of a few milliseconds, with nothing
  * sought or restarted. The gains are only ever 0 or 1 on the way between:
  * no level is applied to either side (A1).
  *
@@ -15,9 +15,10 @@ const FADE = 0.008
  * first one; until it runs, or where there is no Web Audio, the sides fall
  * back to muting the one not heard.
  *
+ * @param {() => void} joined - called once the gains have taken over, on the first gesture: the sides start apart from there
  * @return {{mixing: import('vue').Ref<boolean>, start: (elements: HTMLMediaElement[], heard: number) => void, hear: (elements: HTMLMediaElement[], heard: number) => void}} whether the gains decide, and what starts and switches them
  */
-export function useSoundMix() {
+export function useSoundMix(joined) {
 	const mixing = ref(false)
 	let context = null
 	/** Each element's gain; an element joins a context once and for good */
@@ -58,13 +59,17 @@ export function useSoundMix() {
 			return
 		}
 		if (context.state === 'running') {
-			connect(elements, heard)
+			if (!mixing.value) {
+				connect(elements, heard)
+				joined()
+			}
 			return
 		}
 		// Within the gesture; until it runs, muting stands in
 		context.resume().then(() => {
-			if (context?.state === 'running') {
+			if (context?.state === 'running' && !mixing.value) {
 				connect(elements, heard)
+				joined()
 			}
 		}).catch(() => {})
 	}

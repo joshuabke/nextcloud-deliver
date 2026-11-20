@@ -1922,6 +1922,34 @@ test.describe('Comparing sound', () => {
 		}
 	})
 
+	test('on a page\'s first Play the sides are in step from the first second on, video and audio alike', async () => {
+		for (const pair of [cut, mix]) {
+			// A page of its own: the AudioContext is made by this Play
+			const fresh = await context.newPage()
+			await fresh.goto(`/apps/deliver/compare/${pair[1].id}/${pair[0].id}`)
+			const videos = fresh.locator('.deliver-compare video')
+			await expect(videos.first()).toHaveJSProperty('readyState', 4)
+			await fresh.getByRole('button', { name: 'Play (Space)' }).click()
+			await fresh.waitForTimeout(1000)
+			const apart = await fresh.evaluate(() => new Promise((resolve) => {
+				const [a, b] = document.querySelectorAll('.deliver-compare video')
+				const found = []
+				const start = performance.now()
+				const tick = () => {
+					found.push(Math.abs(b.currentTime - a.currentTime))
+					if (performance.now() - start < 1500) {
+						requestAnimationFrame(tick)
+					} else {
+						resolve(Math.max(...found))
+					}
+				}
+				requestAnimationFrame(tick)
+			}))
+			expect(apart).toBeLessThan(0.005)
+			await fresh.close()
+		}
+	})
+
 	test('a looped Range alternating A and B plays A, then B, then A, switching at each wrap', async () => {
 		await page.goto(`/apps/deliver/compare/${mix[1].id}/${mix[0].id}`)
 		const videos = page.locator('.deliver-compare video')
