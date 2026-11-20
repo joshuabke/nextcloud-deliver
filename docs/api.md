@@ -88,7 +88,7 @@ Reviewers never touch OCS. Their surface hangs off the token of a Review Link, n
 | GET | `/apps/deliver/s/{token}` | The review page: a link with one Asset opens it, with more a grid of them under the link's description |
 | GET | `/apps/deliver/s/{token}/versions/{versionId}` | The review page on one Version |
 | GET | `/apps/deliver/s/{token}/api/context` | Project settings, Asset and Version Stack behind the link |
-| GET | `/apps/deliver/s/{token}/api/assets` | What the link shows, for the grid, with `scrubUrl` where the Scrub Proxy is ready, also on a link without downloads |
+| GET | `/apps/deliver/s/{token}/api/assets` | What the link shows, for the grid, with `scrubUrl` where the Scrub Proxy is ready, also on a link without downloads, and with the newest Version's `durationFrames`, `fps`, `comments` and `approvals` for the list |
 | GET | `/apps/deliver/s/{token}/preview?fileId=&x=&y=` | The still of a file behind the link |
 | GET | `/apps/deliver/s/{token}/download` `?assetIds=1,2` | The newest Version of every Asset the link shows, or of those given, as one ZIP, where the link allows downloads |
 | GET | `/apps/deliver/s/{token}/media/{versionId}/{kind}` | Derived media, Captions (`captions-{language}`), or `original` where downloads are allowed or no Proxy is made; `?download=1` downloads it where both the link and the Member's own access allow downloads, and notes that in the link's activity |
