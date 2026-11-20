@@ -41,7 +41,7 @@ Deliver becomes a proper Nextcloud app, rebuilt from scratch, in which media fil
 
 ### Playback
 
-21. As a Member or Reviewer, I want to play a Version in the browser with frame stepping (arrow keys and `,` `.`), J/K/L shuttle, space, loop of a Range and playback speed, so that I can inspect any frame.
+21. As a Member or Reviewer, I want to play a Version in the browser with frame stepping (arrow keys and `,` `.`), J/K/L shuttle, space, loop of a Range and playback speed, and to click or drag on the timeline without stopping playback, so that I can inspect any frame.
 22. As a Member or Reviewer, I want the current position shown as SMPTE timecode or frame counter according to the Project setting, and audio-only Versions as `m:ss.mmm`, with a session-local toggle between them, so that I can read it the way I think.
 23. As a Member or Reviewer, I want a marker strip on the timeline showing every Comment and Range, and to jump to one by clicking it, so that I can navigate feedback visually.
 24. As a Member or Reviewer, I want hover thumbnails on the timeline and a waveform under it, so that I can find a moment quickly, especially in audio-only material.
@@ -424,3 +424,4 @@ CI runs php-cs-fixer, psalm, PHPUnit (unit and integration), Vitest and Playwrig
 - Comment sort default is by Frame with a newest-first switch; the Unseen badge exists precisely because Frame order hides recency.
 - Timecode display mode is a Project setting for video; audio-only Versions and the Take comparison show `m:ss.mmm`. The player offers a session-local override between them that does not persist.
 - Reviewer identity is permanent by design: a Personal Link is the credential. Members are told this when they create one so they hand it to one person only.
+- Seeking keeps the playback state: a click on the timeline (and on an audio Waveform, in Compare too) jumps and goes on playing if it played, and a finger dragging along the bar holds playback and resumes on lifting if it played. Frame steps, the arrow keys and a click on a Comment's marker still pause.

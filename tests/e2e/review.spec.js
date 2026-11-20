@@ -772,6 +772,26 @@ test.describe('Review view', () => {
 		await page.mouse.move(bar.x + bar.width / 2, bar.y + bar.height / 2)
 		await expect(page.locator('.deliver-player__hover canvas')).toBeVisible()
 	})
+
+	test('a click on the timeline keeps playing if it played, and stays paused if it did not', async () => {
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		const video = page.locator('video.deliver-player__video')
+		await expect(video).toHaveJSProperty('readyState', 4)
+		const bar = await page.locator('.deliver-player__timeline').boundingBox()
+		const clickAt = (share) => page.mouse.click(bar.x + bar.width * share, bar.y + bar.height / 2)
+
+		await clickAt(0.1)
+		await page.waitForTimeout(300)
+		expect(await video.evaluate((element) => element.paused)).toBe(true)
+
+		await page.getByRole('button', { name: /^Play/ }).click()
+		await expect.poll(() => video.evaluate((element) => element.currentTime)).toBeGreaterThan(0.1)
+		await clickAt(0.5)
+		await page.waitForTimeout(300)
+		expect(await video.evaluate((element) => element.paused)).toBe(false)
+		expect(await video.evaluate((element) => element.currentTime)).toBeGreaterThan(1.9)
+		await expect(page.getByRole('button', { name: /^Pause/ })).toBeVisible()
+	})
 })
 
 test.describe('Uploads without ffmpeg', () => {

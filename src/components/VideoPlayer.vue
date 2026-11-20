@@ -402,6 +402,8 @@ function onScrubSeeked() {
 
 /** Set while a finger drags along the bar */
 const dragging = ref(false)
+/** Whether it played when the finger came down: it goes on when the finger lifts */
+let heldWhilePlaying = false
 
 /**
  * A finger on the bar scrubs as the mouse hovers: the exact Frame shows
@@ -413,6 +415,7 @@ function onDragStart(event) {
 	if (event.pointerType === 'mouse' || !durationFrames.value) {
 		return
 	}
+	heldWhilePlaying = playing.value
 	pause()
 	dragging.value = true
 	event.currentTarget.setPointerCapture(event.pointerId)
@@ -439,6 +442,10 @@ function onDragEnd() {
 	dragging.value = false
 	if (hover.value) {
 		seekTo(hover.value.frame)
+	}
+	if (heldWhilePlaying) {
+		heldWhilePlaying = false
+		play()
 	}
 	leaveScrubber()
 }
@@ -723,7 +730,6 @@ function comment() {
  * @param {MouseEvent} event - click on the timeline
  */
 function scrub(event) {
-	pause()
 	seekTo(frameAt(event))
 }
 
