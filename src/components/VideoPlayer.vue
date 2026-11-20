@@ -741,8 +741,13 @@ function clearRange() {
 	loop.value = false
 }
 
-/** C, or the Comment button: the Range if one is set, else the current Frame */
+/** C, or the Comment button: the Range if one is set, else the current Frame; audio plays on, the Comment at the Frame of the key press */
 function comment() {
+	if (props.version.audioOnly) {
+		const now = video.value ? timeToFrame(video.value.currentTime, fps.value) : frame.value
+		emit('comment', range.value ?? { inFrame: now, outFrame: null })
+		return
+	}
 	pause()
 	emit('comment', range.value ?? { inFrame: frame.value, outFrame: null })
 }
@@ -903,9 +908,14 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 				:frame="frame"
 				:media="video"
 				:playing="playing"
+				:comments="comments"
+				:clock="clock"
+				:canComment="canComment"
 				@seek="seekTo"
 				@hold="holdForWave"
-				@release="releaseFromWave" />
+				@release="releaseFromWave"
+				@comment="emit('comment', { inFrame: $event, outFrame: null })"
+				@jump="emit('jump', $event)" />
 			<p v-if="!source || unplayable" class="deliver-player__notice">
 				<template v-if="!proxyPending">
 					{{ unplayableReason }}

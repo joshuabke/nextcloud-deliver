@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bars, barSeconds, clampSpan, dragged, isWhole, overviewWindow, secondsAt, stepsFor, wheelZoom, windowAt, xAt } from './waveWindow.js'
+import { bars, barSeconds, CIRCLE, circleAt, clampSpan, dragged, isWhole, overviewWindow, secondsAt, stack, STACK_STEP, stepsFor, wheelZoom, windowAt, xAt } from './waveWindow.js'
 
 describe('the window of the scrolling Waveform', () => {
 	it('centres the playhead, the wave left empty before the start and after the end', () => {
@@ -82,5 +82,29 @@ describe('the window on the overview bar', () => {
 		expect(overviewWindow(0, 60, 3600).left).toBe(0)
 		expect(overviewWindow(0, 60, 3600).width).toBeCloseTo(30 / 36)
 		expect(overviewWindow(5, 60, 40)).toEqual({ left: 0, width: 100 })
+	})
+})
+
+describe('the Comments on the scrolling Waveform', () => {
+	const comment = (id, inFrame) => ({ id, inFrame })
+
+	it('sit at their Frames, close ones stacked a little to the right of the one before', () => {
+		// 0.1 px a Frame: Frame 1000 at 100 px
+		const circles = stack([comment(3, 1100), comment(1, 1000), comment(2, 5000), comment(4, 1000)], 0.1)
+		expect(circles.map((circle) => [circle.comment.id, circle.x])).toEqual([[1, 100], [4, 100 + STACK_STEP], [3, 100 + 2 * STACK_STEP], [2, 500]])
+	})
+
+	it('stack no further than the circles overlap', () => {
+		const circles = stack(Array.from({ length: 8 }, (_, at) => comment(at, at * 10)), 1)
+		// A Comment as far from the drawn circle before it as a circle is wide stands at its own Frame again
+		expect(circles.map((circle) => circle.x)).toEqual([0, 7, 14, 21, 28, 35, 60, 67])
+	})
+
+	it('hit the topmost circle under the pointer, and none beside them', () => {
+		const circles = stack([comment(1, 100), comment(2, 100)], 1)
+		expect(circleAt(circles, 100, 0, CIRCLE / 2).id).toBe(2)
+		expect(circleAt(circles, 92, 0, CIRCLE / 2).id).toBe(1)
+		expect(circleAt(circles, 100, CIRCLE, CIRCLE / 2)).toBe(null)
+		expect(circleAt(circles, 150, 0, CIRCLE / 2)).toBe(null)
 	})
 })

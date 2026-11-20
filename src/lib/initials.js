@@ -13,3 +13,14 @@ export function initials(name) {
 	const last = kept.lastIndexOf(' ')
 	return (kept[0] + (last === -1 ? '' : kept[last + 1])).toUpperCase()
 }
+
+/**
+ * What an avatar's colour comes from. A Reviewer's follows who they are,
+ * not their name: two Reviewers called Kim look apart, as on Frame.io.
+ *
+ * @param {{type: string, id: string|number, name: string}} author - whoever wrote or decided something
+ * @return {string} the name to hand to usernameToColor, as NcAvatar does for an account
+ */
+export function avatarSeed(author) {
+	return author.type === 'reviewer' ? `deliver-reviewer-${author.id}` : author.name
+}

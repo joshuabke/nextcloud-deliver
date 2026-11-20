@@ -165,8 +165,6 @@ watch(() => store.versionId, () => {
 })
 
 const list = ref(null)
-/** The thread last clicked or revealed from its marker, lifted out as Frame.io does */
-const selected = ref(null)
 
 /**
  * Brings a Comment into view and marks it for a moment, for a tap on its marker
@@ -178,7 +176,7 @@ function reveal(id) {
 	if (!item) {
 		return
 	}
-	selected.value = id
+	store.selected = id
 	item.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
 	item.classList.add('deliver-comment--revealed')
 	setTimeout(() => item.classList.remove('deliver-comment--revealed'), 1200)
@@ -365,8 +363,8 @@ function claim() {
 				:comment="thread"
 				:clock="clock"
 				:number="store.numbers.get(thread.id)"
-				:selected="selected === thread.id"
-				@click="selected = thread.id"
+				:selected="store.selected === thread.id"
+				@click="store.selected = thread.id"
 				@jump="emit('jump', $event)" />
 		</ul>
 		<p v-else class="deliver-comments__empty">

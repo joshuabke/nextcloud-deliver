@@ -105,10 +105,13 @@ export function useReview({ version, projectMode, projectFps, refresh }) {
 	/**
 	 * Typing started: the picture stops, as with C, and the Comment belongs to
 	 * the Frame on screen now, not to wherever the player is when it is sent.
+	 * Audio plays on while it is commented on (story 181).
 	 */
 	function hold() {
 		if (pinned.value === null) {
-			player.value?.pause()
+			if (!audio.value) {
+				player.value?.pause()
+			}
 			pinned.value = anchor.value
 			pinnedByTyping = true
 		}

@@ -671,7 +671,9 @@ OC.L10N.register(
 		"{seconds} s": "{seconds} s",
 		"{minutes} min": "{minutes} min",
 		"Whole": "Alles",
-		"Zoom the Waveform": "Wellenform zoomen"
+		"Zoom the Waveform": "Wellenform zoomen",
+		"Go to": "Hinspringen",
+		"Comment #{number}": "Kommentar #{number}"
 	},
 	undefined
 );

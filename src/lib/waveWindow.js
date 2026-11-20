@@ -160,3 +160,43 @@ export function overviewWindow(seconds, span, duration, paged = false) {
 	const to = Math.min(duration, end)
 	return { left: from / duration * 100, width: Math.max(0, to - from) / duration * 100 }
 }
+
+/** A Comment's circle on the wave, across, in px (story 181) */
+export const CIRCLE = 24
+/** How far a circle in a stack sits from the one under it, in px */
+export const STACK_STEP = 7
+
+/**
+ * The Comments' circles at this zoom: each at its Frame, the ones too close
+ * to the one before stacked a little to the right of it, the later on top.
+ *
+ * @param {Array<{id: number, inFrame: number}>} comments - the top-level Comments
+ * @param {number} perFrame - px per Frame at this zoom
+ * @return {Array<{comment: object, x: number}>} in drawing order, x in px from the start of the piece
+ */
+export function stack(comments, perFrame) {
+	let before = -Infinity
+	return [...comments]
+		.sort((a, b) => a.inFrame - b.inFrame || a.id - b.id)
+		.map((comment) => {
+			const at = comment.inFrame * perFrame
+			before = at - before < CIRCLE ? before + STACK_STEP : at
+			return { comment, x: before }
+		})
+}
+
+/**
+ * @param {Array<{comment: object, x: number}>} circles - as stack gives them
+ * @param {number} x - the pointer, in px from the start of the piece
+ * @param {number} dy - the pointer's distance from the circles' centre line, in px
+ * @param {number} reach - how far from a centre still hits it; a finger's is wider than a mouse's
+ * @return {object|null} the Comment of the topmost circle there
+ */
+export function circleAt(circles, x, dy, reach) {
+	for (let at = circles.length - 1; at >= 0; at--) {
+		if (Math.hypot(circles[at].x - x, dy) <= reach) {
+			return circles[at].comment
+		}
+	}
+	return null
+}

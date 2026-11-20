@@ -40,6 +40,8 @@ export const useCommentsStore = defineStore('comments', {
 		 * the person clears the badges, so a badge does not vanish while it is read.
 		 */
 		seenUntil: 0,
+		/** The thread last clicked, revealed or opened on the Waveform, lifted out in the list and ringed on the Waveform, as Frame.io does */
+		selected: null,
 		/** Who approved or requested changes: [{ author, status, updatedAt }] */
 		approvals: [],
 		/** What one person may attach on this Version in all, in bytes, as the server says (story 92) */
@@ -91,6 +93,7 @@ export const useCommentsStore = defineStore('comments', {
 			this.versionId = versionId
 			this.comments = []
 			this.approvals = []
+			this.selected = null
 			await this.reload()
 			if (this.versionId !== versionId) {
 				// Another Version was opened while this one loaded

@@ -67,6 +67,8 @@ A Review Link shows only the files whoever made it may share in Files. A file sh
 - An audio Version plays on its Waveform, zoomed to one minute, the wave scrolling under the playhead in the middle. Drag the wave sideways to go through time; a click or a tap goes to that place. Neither stops playback: a drag holds it and lets it go on where you let go.
 - Zoom with the buttons on the stage (15 s, 1 min, 5 min, Whole), with two fingers on a phone or tablet, or with Ctrl and the mouse wheel (a trackpad's pinch). The bar under the stage shows the whole piece and, lighter, the part on the stage.
 - With reduced motion switched on in your system, the wave turns a page at a time instead of scrolling.
+- Comments sit under the wave as circles with their authors' initials; close ones stack, resolved ones are paler, and a Range tints the wave from its start to its end. Click a circle to read the Comment with its Replies, answer it right there, or go to it.
+- Double-click the wave, or rest a finger on it, to comment on that place. C comments where the audio is when you press it, and the audio plays on while you write.
 
 ## Captions
 
