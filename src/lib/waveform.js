@@ -3,59 +3,103 @@
  * file once and hands the peaks to the server, for everyone after it.
  */
 
-/** As many peaks as ffmpeg's Waveform has */
-export const BUCKETS = 2000
+/** Peaks a second, as the server has them (ADR 0021); fewer only where a file would go past MAX_PEAKS */
+export const RATE = 50
+export const MAX_PEAKS = 2_000_000
+/** How many peaks the timeline draws of a whole Version, at most */
+export const OVERVIEW = 2000
 
 /**
- * @param {Float32Array[]} channels - decoded samples, one array per channel
- * @param {number} buckets - how many peaks at most
- * @return {number[]} the loudest sample of each bucket, 0 to 1, to three places
+ * @param {number} seconds - the length of the file
+ * @return {number} its Waveform's peaks a second, as DerivedMedia::waveformRate has it
  */
-export function peaksOf(channels, buckets) {
-	const length = channels[0]?.length ?? 0
-	const perBucket = Math.max(1, Math.ceil(length / buckets))
-	const peaks = []
-	for (let start = 0; start < length; start += perBucket) {
-		let loudest = 0
-		for (const samples of channels) {
-			for (let at = start; at < Math.min(length, start + perBucket); at++) {
-				loudest = Math.max(loudest, Math.abs(samples[at]))
-			}
-		}
-		peaks.push(Math.round(Math.min(1, loudest) * 1000) / 1000)
-	}
-	return peaks
-}
+export const rateFor = (seconds) => Math.max(1, Math.min(RATE, Math.floor(MAX_PEAKS / Math.max(1, Math.ceil(seconds)))))
 
 /**
- * Adds decoded samples to the peaks of a file decoded piece by piece; each
- * bucket is an equal share of the duration.
+ * Collects the peaks of a file decoded piece by piece: peak i is the loudest
+ * sample over all channels from i / rate to (i + 1) / rate seconds, so the
+ * pieces may come in any size and run past the expected length. A piece
+ * whose time is off (past the most peaks a Waveform has, or no number) is
+ * left out rather than failing the pass it belongs to.
  *
- * @param {Float32Array} peaks - the loudest sample so far of each bucket, changed in place
- * @param {Float32Array[]} channels - one piece of decoded samples, one array per channel
- * @param {number} start - where the piece starts, in seconds
- * @param {number} sampleRate - samples per second
- * @param {number} seconds - the duration of the whole file
+ * @param {number} rate - peaks a second
+ * @param {number} seconds - the expected length, for the first allocation
+ * @return {{add: (channels: Float32Array[], start: number, sampleRate: number) => void, done: () => {rate: number, peaks: Uint8Array}}} the collector
  */
-export function addPeaks(peaks, channels, start, sampleRate, seconds) {
-	const perSecond = peaks.length / seconds
-	const length = channels[0]?.length ?? 0
-	for (let at = 0; at < length; at++) {
-		const bucket = Math.min(peaks.length - 1, Math.max(0, Math.floor((start + at / sampleRate) * perSecond)))
-		for (const samples of channels) {
-			const level = Math.abs(samples[at])
-			if (level > peaks[bucket]) {
-				peaks[bucket] = level
+export function collectPeaks(rate, seconds) {
+	let levels = new Float32Array(Math.max(1, Math.min(MAX_PEAKS, Math.ceil(seconds * rate) || 1)))
+	let count = 0
+	return {
+		add(channels, start, sampleRate) {
+			const length = channels[0]?.length ?? 0
+			for (let at = 0; at < length; at++) {
+				const peak = Math.max(0, Math.floor((start + at / sampleRate) * rate))
+				if (!(peak < MAX_PEAKS)) {
+					continue
+				}
+				if (peak >= levels.length) {
+					const grown = new Float32Array(Math.min(MAX_PEAKS, Math.max(peak + 1, levels.length * 2)))
+					grown.set(levels)
+					levels = grown
+				}
+				count = Math.max(count, peak + 1)
+				for (const samples of channels) {
+					const level = Math.abs(samples[at])
+					if (level > levels[peak]) {
+						levels[peak] = level
+					}
+				}
 			}
-		}
+		},
+		// One byte a peak, 255 for full scale, as the server stores them
+		done: () => ({ rate, peaks: Uint8Array.from(levels.subarray(0, count), (level) => Math.round(Math.min(1, level) * 255)) }),
 	}
 }
 
 /**
- * @param {Float32Array} peaks - as addPeaks fills them
- * @return {number[]} the same, capped at full scale and rounded as the server does
+ * @param {Uint8Array} bytes - peaks as the server stores them
+ * @return {string} the same in base64, as the server takes them
  */
-export const roundPeaks = (peaks) => Array.from(peaks, (peak) => Math.round(Math.min(1, peak) * 1000) / 1000)
+export function toBase64(bytes) {
+	let binary = ''
+	for (let at = 0; at < bytes.length; at += 0x8000) {
+		binary += String.fromCharCode(...bytes.subarray(at, at + 0x8000))
+	}
+	return btoa(binary)
+}
+
+/**
+ * @param {{rate: number, peaks: string}} json - the Waveform as the server serves it
+ * @return {{rate: number, peaks: Uint8Array}} its peaks, a byte each
+ */
+export function readWaveform(json) {
+	const binary = atob(json.peaks)
+	return { rate: json.rate, peaks: Uint8Array.from(binary, (char) => char.charCodeAt(0)) }
+}
+
+/**
+ * The Waveform of a whole Version in a few buckets, for a timeline that
+ * shows all of it: each bucket the loudest of its peaks, and never more
+ * buckets than there are peaks.
+ *
+ * @param {{rate: number, peaks: Uint8Array}} waveform - as readWaveform gives it
+ * @param {number} seconds - the length the timeline shows; 0 for that of the peaks
+ * @param {number} buckets - how many at most
+ * @return {number[]} 0 to 1 each, the first at the start
+ */
+export function overview({ rate, peaks }, seconds, buckets = OVERVIEW) {
+	const total = seconds > 0 ? seconds : peaks.length / rate
+	const count = Math.max(1, Math.min(buckets, Math.ceil(total * rate)))
+	const per = total * rate / count
+	return Array.from({ length: count }, (_, bucket) => {
+		const from = Math.floor(bucket * per)
+		let loudest = 0
+		for (let at = from; at < Math.min(peaks.length, Math.max(from + 1, Math.floor((bucket + 1) * per))); at++) {
+			loudest = Math.max(loudest, peaks[at])
+		}
+		return loudest / 255
+	})
+}
 
 /**
  * Decodes a file for its Waveform. Mediabunny reads it piece by piece and
@@ -64,7 +108,7 @@ export const roundPeaks = (peaks) => Array.from(peaks, (peak) => Math.round(Math
  *
  * @param {string|Blob} source - the file's URL, read with range requests, or the file itself, as the browser that uploads it holds it
  * @param {(percent: number) => void} onProgress - gets how far it has got
- * @return {Promise<{peaks: number[], seconds: number}>} the Waveform and the duration
+ * @return {Promise<{rate: number, peaks: Uint8Array, seconds: number}>} the Waveform and the duration
  */
 export async function decodeWaveform(source, onProgress = () => {}) {
 	try {
@@ -93,7 +137,7 @@ export function channelsOf(sample) {
 /**
  * @param {string|Blob} source - as decodeWaveform takes it
  * @param {(percent: number) => void} onProgress - gets how far it has got
- * @return {Promise<{peaks: number[], seconds: number}|null>} the Waveform; null where WebCodecs cannot decode the file
+ * @return {Promise<{rate: number, peaks: Uint8Array, seconds: number}|null>} the Waveform; null where WebCodecs cannot decode the file
  */
 async function streamWaveform(source, onProgress) {
 	if (typeof AudioDecoder === 'undefined') {
@@ -111,11 +155,11 @@ async function streamWaveform(source, onProgress) {
 		if (!(seconds > 0)) {
 			return null
 		}
-		const peaks = new Float32Array(BUCKETS)
+		const peaks = collectPeaks(rateFor(seconds), seconds)
 		let end = 0
 		for await (const sample of new AudioSampleSink(track).samples()) {
 			try {
-				addPeaks(peaks, channelsOf(sample), sample.timestamp, sample.sampleRate, seconds)
+				peaks.add(channelsOf(sample), sample.timestamp, sample.sampleRate)
 				end = Math.max(end, sample.timestamp + sample.duration)
 				onProgress(Math.min(99, Math.floor(end / seconds * 100)))
 			} finally {
@@ -123,7 +167,7 @@ async function streamWaveform(source, onProgress) {
 			}
 		}
 		// The duration the decoder reached is exact; the one from the container may be rounded
-		return { peaks: roundPeaks(peaks), seconds: end || seconds }
+		return { ...peaks.done(), seconds: end || seconds }
 	} finally {
 		input.dispose()
 	}
@@ -134,7 +178,7 @@ async function streamWaveform(source, onProgress) {
  * an hour of audio in a few hundred megabytes.
  *
  * @param {string|Blob} source - as decodeWaveform takes it
- * @return {Promise<{peaks: number[], seconds: number}>} the Waveform and the duration
+ * @return {Promise<{rate: number, peaks: Uint8Array, seconds: number}>} the Waveform and the duration
  */
 async function decodeWhole(source) {
 	const body = typeof source === 'string' ? await fetch(source) : source
@@ -142,8 +186,9 @@ async function decodeWhole(source) {
 		throw new Error(`HTTP ${body.status}`)
 	}
 	const audio = await new OfflineAudioContext(1, 1, 8000).decodeAudioData(await body.arrayBuffer())
-	const channels = Array.from({ length: audio.numberOfChannels }, (_, index) => audio.getChannelData(index))
-	return { peaks: peaksOf(channels, BUCKETS), seconds: audio.duration }
+	const peaks = collectPeaks(rateFor(audio.duration), audio.duration)
+	peaks.add(Array.from({ length: audio.numberOfChannels }, (_, index) => audio.getChannelData(index)), 0, audio.sampleRate)
+	return { ...peaks.done(), seconds: audio.duration }
 }
 
 /** UploadStatus.FINISHED of @nextcloud/upload 1.x */

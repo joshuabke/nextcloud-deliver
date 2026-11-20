@@ -36,6 +36,7 @@ import { t } from '../lib/l10n.js'
 import { hoverSource } from '../lib/media.js'
 import { formatAt, fpsValue, frameToTime, modesFor, stepOf, timeToFrame } from '../lib/timecode.js'
 import { watermarkTile } from '../lib/watermark.js'
+import { overview, readWaveform } from '../lib/waveform.js'
 import { useCommentsStore } from '../store/comments.js'
 
 /** The drawing being made for the next Comment */
@@ -103,8 +104,10 @@ const lastFrame = computed(() => Math.max(0, durationFrames.value - 1))
 
 /** The Thumbnail Strip, once its index is loaded */
 const strip = ref(null)
+/** The Waveform at its own rate, once loaded */
+const waveform = ref(null)
 /** The Waveform, one value per slice of the timeline */
-const peaks = ref([])
+const peaks = computed(() => waveform.value ? overview(waveform.value, fps.value?.num ? durationFrames.value * fps.value.den / fps.value.num : 0) : [])
 const hover = ref(null)
 const scrubber = ref(null)
 /** The Comment whose card shows over the bar, and where */
@@ -209,23 +212,23 @@ watch(() => props.version.id, async (id) => {
 	loop.value = false
 	unplayable.value = false
 	strip.value = null
-	peaks.value = []
+	waveform.value = null
 	hover.value = null
 	resetZoom()
-	const [loadedStrip, loadedPeaks] = await Promise.all([loadStrip(), loadWaveform()])
+	const [loadedStrip, loadedWaveform] = await Promise.all([loadStrip(), loadWaveform()])
 	// A later Version may have been opened in the meantime
 	if (props.version.id === id) {
 		strip.value = loadedStrip
-		peaks.value = loadedPeaks
+		waveform.value = loadedWaveform
 	}
 }, { immediate: true })
 
 // Derived media that becomes ready while the Version is open shows without opening it again
 watch(() => props.version.derived?.waveform?.state, async (state) => {
 	const id = props.version.id
-	const loaded = state === 'ready' && peaks.value.length === 0 ? await loadWaveform() : null
+	const loaded = state === 'ready' && waveform.value === null ? await loadWaveform() : null
 	if (loaded !== null && props.version.id === id) {
-		peaks.value = loaded
+		waveform.value = loaded
 	}
 })
 watch(() => props.version.derived?.thumbs?.state, async (state) => {
@@ -300,17 +303,17 @@ async function loadStrip() {
 }
 
 /**
- * @return {Promise<number[]>} the Waveform, or nothing when there is none
+ * @return {Promise<?{rate: number, peaks: Uint8Array}>} the Waveform, or null when there is none
  */
 async function loadWaveform() {
-	const waveform = props.version.derived?.waveform
-	if (waveform?.state !== 'ready') {
-		return []
+	const derived = props.version.derived?.waveform
+	if (derived?.state !== 'ready') {
+		return null
 	}
 	try {
-		return (await (await fetch(waveform.url)).json()).peaks ?? []
+		return readWaveform(await (await fetch(derived.url)).json())
 	} catch {
-		return []
+		return null
 	}
 }
 

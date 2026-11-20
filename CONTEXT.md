@@ -179,7 +179,7 @@ A tiny rendition of a video Version only for hover previews on the timeline and 
 _Avoid_: preview video, hover video, thumbnail video
 
 **Waveform**:
-Precomputed audio peaks of a Version, drawn under the timeline; the primary visual for audio-only Assets.
+Precomputed audio peaks of a Version at a fixed rate (50 a second, ADR 0021), drawn under the timeline; the primary visual for audio-only Assets.
 _Avoid_: Peaks, audio graph
 
 **Processing**:

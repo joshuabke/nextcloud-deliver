@@ -186,19 +186,21 @@ class StartInTheFileTest extends TestCase {
 		$id = $this->upload($ffmpeg);
 		$asset = "/files/{$this->nc->fileId("{$this->root}/take.mp3")}/asset";
 		self::assertSame(!$ffmpeg, $this->nc->ocs('GET', $asset)['data']['waveformFromBrowser'], 'the uploading browser decodes it only where the server cannot');
-		$given = $this->nc->ocs('POST', "/versions/$id/waveform", ['peaks' => [0.1, 0.5, 1], 'durationFrames' => 2000]);
+		$peaks = array_fill(0, 100, 26);
+		$given = $this->nc->ocs('POST', "/versions/$id/waveform", NextcloudClient::handIn($peaks, 2000));
 		self::assertSame(200, $given['status'], json_encode($given['data']));
-		self::assertSame(409, $this->nc->ocs('POST', "/versions/$id/waveform", ['peaks' => [0.2], 'durationFrames' => 2000])['status'], 'once is enough');
+		self::assertSame(409, $this->nc->ocs('POST', "/versions/$id/waveform", NextcloudClient::handIn($peaks, 2000))['status'], 'once is enough');
 		self::assertFalse($this->nc->ocs('GET', $asset)['data']['waveformFromBrowser'], 'once is enough');
 
 		$version = $this->processed($id);
 		self::assertSame(['num' => 1000, 'den' => 1], $version['fps']);
 		self::assertSame('ready', $version['derived']['waveform']['state']);
-		$peaks = json_decode($this->nc->request('GET', $version['derived']['waveform']['url'])['body'], true)['peaks'];
+		$waveform = $this->nc->waveform($version['derived']['waveform']['url']);
 		if ($ffmpeg) {
-			self::assertCount(2000, $peaks, 'the server makes its own, which replaces the one handed in');
+			self::assertNotSame($peaks, $waveform['peaks'], 'the server makes its own, which replaces the one handed in');
+			self::assertEqualsWithDelta(100, count($waveform['peaks']), 2, 'at 50 a second');
 		} else {
-			self::assertSame([0.1, 0.5, 1], $peaks);
+			self::assertSame(['rate' => 50, 'peaks' => $peaks], $waveform);
 			self::assertSame(2000, $version['durationFrames'], 'milliseconds, as audio counts');
 		}
 	}

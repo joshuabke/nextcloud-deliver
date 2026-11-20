@@ -19,6 +19,11 @@ class JobRunner {
 	/** A job running this long has lost its worker; ffmpeg itself gives up after an hour */
 	private const STALE_AFTER = 2 * 3600;
 
+	/** Until when no Waveform is made while idle: one that failed may have failed for a cause no Version has (storage offline), which would fail them all */
+	private int $idlePausedUntil = 0;
+	/** How long that lasts in a worker; a cron run ends long before */
+	private const IDLE_PAUSE = 3600;
+
 	public function __construct(
 		private JobMapper $jobs,
 		private DerivedMedia $media,
@@ -47,6 +52,15 @@ class JobRunner {
 				$this->media->process($job);
 				return true;
 			}
+		}
+		// Nothing else to do: a Waveform a Version lacks, such as one from before the fixed rate (ADR 0021)
+		$job = $now < $this->idlePausedUntil ? null : $this->media->queueMissingWaveform();
+		if ($job !== null && $this->jobs->claim($job, $worker, $now)) {
+			$this->media->process($job);
+			if ($this->jobs->find($job->getId())?->getState() === Job::STATE_FAILED) {
+				$this->idlePausedUntil = $now + self::IDLE_PAUSE;
+			}
+			return true;
 		}
 		return false;
 	}

@@ -95,7 +95,7 @@ class WrittenAgainTest extends TestCase {
 		self::assertSame(['louder here'], array_column($this->nc->ocs('GET', "/versions/$mix/comments")['data']['comments'], 'body'), 'the Comments stay');
 
 		// The delivering tool hands in its peaks right after the upload, and delivers again before the probe ran
-		$handIn = fn () => $this->nc->ocs('POST', "/versions/$mix/waveform", ['peaks' => [0.1, 0.5, 1], 'durationFrames' => 3000]);
+		$handIn = fn () => $this->nc->ocs('POST', "/versions/$mix/waveform", NextcloudClient::handIn(array_fill(0, 150, 26), 3000));
 		self::assertSame(200, $handIn()['status']);
 		$this->write('mix.wav', '-f lavfi -i sine=frequency=660:duration=2 -f wav');
 		$again = $this->version($mix);

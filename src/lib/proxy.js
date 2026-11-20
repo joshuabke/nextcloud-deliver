@@ -12,7 +12,7 @@ import { AUDIO_BITRATE, fits, lowerTarget, needsProxy, plays, proxyBytes, proxyS
 import { unsupported } from './unsupported.js'
 import { browserEnv, uploadFile } from './upload.js'
 import { advance } from './uploadStatus.js'
-import { addPeaks, BUCKETS, channelsOf, roundPeaks } from './waveform.js'
+import { channelsOf, collectPeaks, rateFor } from './waveform.js'
 
 /** Deliver's folder in the browser's private file system */
 const FOLDER = 'deliver-proxies'
@@ -265,7 +265,7 @@ async function scrubber(size, frames, seconds) {
  * @param {() => void} hooks.onWithoutProxy - the pass goes on without the Proxy it was to make, before it decodes anything
  * @param {AbortSignal} signal - stops it
  * @param {number} [target] - the picture's bitrate in bit/s, for the second go after the first came out above the threshold
- * @return {Promise<{file: ?File, error: ?Error, again: boolean, scrub: ?File, done: () => Promise<void>, frames: number, seconds: number, bitrate: number, thumbs: ?{image: Blob, every: number, count: number}, peaks: ?number[]}>}
+ * @return {Promise<{file: ?File, error: ?Error, again: boolean, scrub: ?File, done: () => Promise<void>, frames: number, seconds: number, bitrate: number, thumbs: ?{image: Blob, every: number, count: number}, peaks: ?{rate: number, peaks: Uint8Array}}>}
  *   the Proxy and the Scrub Proxy (null where not made), why the Proxy was left out, whether it is to be made once more at
  *   a lower bitrate, what deletes them once handed in, the Frames of the original, its Thumbnail Strip (WebP, JPEG where
  *   the browser encodes no WebP) and its Waveform (null without sound)
@@ -313,7 +313,7 @@ async function convert(source, { maxHeight, maxBitrate, thumbCap }, want, { onPr
 		if (want.scrub && free > proxyBytes(seconds, SCRUB_BITRATE)) {
 			scrub = await scrubber(scrubSize({ width: video.displayWidth, height: video.displayHeight }), frames, seconds).catch(() => null)
 		}
-		const peaks = new Float32Array(BUCKETS)
+		const peaks = collectPeaks(rateFor(seconds), seconds)
 		let heard = false
 		let first = null
 		signal.throwIfAborted()
@@ -342,7 +342,7 @@ async function convert(source, { maxHeight, maxBitrate, thumbCap }, want, { onPr
 		/** @param {object} sample - sound, which goes into the Waveform */
 		const hear = (sample) => {
 			if (want.waveform) {
-				addPeaks(peaks, channelsOf(sample), sample.timestamp, sample.sampleRate, seconds)
+				peaks.add(channelsOf(sample), sample.timestamp, sample.sampleRate)
 				heard = true
 			}
 		}
@@ -455,7 +455,7 @@ async function convert(source, { maxHeight, maxBitrate, thumbCap }, want, { onPr
 			seconds,
 			bitrate,
 			thumbs: image?.type === stripType ? { image, every: grid.every, count: grid.count } : null,
-			peaks: heard ? roundPeaks(peaks) : null,
+			peaks: heard ? peaks.done() : null,
 		}
 	} catch (error) {
 		await scrub?.drop()
@@ -659,10 +659,9 @@ export async function handInPass(versionId, making, status, controller) {
 			// Whatever became of the Proxy: the server refuses them where it has its own, or makes them.
 			// The Scrub Proxy first, which has the server read the original where no Proxy did
 			await (made.scrub && whenRead(async () => giveScrub(versionId, await uploadNextTo(url, made.scrub, {}, controller.signal, '.deliver-scrub-'))).catch(() => {}))
-			await Promise.all([
-				made.thumbs && whenRead(() => giveThumbs(versionId, made.thumbs.image, made.thumbs.every, made.thumbs.count)).catch(() => {}),
-				made.peaks && giveWaveform(versionId, made.peaks, made.frames).catch(() => {}),
-			])
+			await (made.thumbs && whenRead(() => giveThumbs(versionId, made.thumbs.image, made.thumbs.every, made.thumbs.count)).catch(() => {}))
+			// The server reads the original first where its background job has not yet, so it counts Frames, not milliseconds
+			await (made.peaks && whenRead(() => giveWaveform(versionId, made.peaks, made.frames)).catch(() => {}))
 		} finally {
 			await made.done()
 		}

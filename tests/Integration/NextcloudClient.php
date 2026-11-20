@@ -150,6 +150,27 @@ class NextcloudClient {
 		return $this->request('GET', $this->dav($path))['body'];
 	}
 
+	/**
+	 * A Version's Waveform as it is served (ADR 0021)
+	 *
+	 * @return array{rate: int, peaks: list<int>} its peaks a second and the peaks, 0 to 255
+	 */
+	public function waveform(string $url): array {
+		$json = json_decode($this->request('GET', $url)['body'], true);
+		return ['rate' => $json['rate'], 'peaks' => array_values(unpack('C*', base64_decode($json['peaks'], true)) ?: [])];
+	}
+
+	/**
+	 * The body of a Waveform's hand-in (ADR 0021)
+	 *
+	 * @param list<int> $peaks 0 to 255 each
+	 * @param int $durationFrames its length in Frames of the Version, milliseconds before the probe
+	 * @return array<string, mixed>
+	 */
+	public static function handIn(array $peaks, int $durationFrames, int $rate = 50): array {
+		return ['peaks' => base64_encode(pack('C*', ...$peaks)), 'rate' => $rate, 'durationFrames' => $durationFrames];
+	}
+
 	/** Who holds the lock on a file, by display name; null when nobody does */
 	public function lockedBy(string $path): ?string {
 		$response = $this->request(

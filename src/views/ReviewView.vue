@@ -117,8 +117,8 @@ watch(version, async (each) => {
 	}
 	decoded.add(each.id)
 	try {
-		const { peaks, seconds } = await decodeWaveform(each.url)
-		await giveWaveform(each.id, peaks, Math.max(1, Math.round(seconds * fpsValue(each.fps))))
+		const decoded = await decodeWaveform(each.url)
+		await giveWaveform(each.id, decoded, Math.max(1, Math.round(decoded.seconds * fpsValue(each.fps))))
 		await reload()
 	} catch {
 		// The player plays without a Waveform; the next visit tries again
