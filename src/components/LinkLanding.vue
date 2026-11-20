@@ -463,12 +463,13 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 .deliver-landing__card:hover .deliver-landing__pick,
 .deliver-landing__pick:focus-visible,
 .deliver-landing__pick:checked,
-.deliver-landing__pick:disabled {
-	visibility: hidden;
-}
-
 .deliver-landing__pick--shown {
 	opacity: 1;
+}
+
+/* Kept so the stills line up, but nothing to pick */
+.deliver-landing__pick:disabled {
+	visibility: hidden;
 }
 
 @media (hover: none) {
