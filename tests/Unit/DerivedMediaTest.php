@@ -49,6 +49,21 @@ class DerivedMediaTest extends TestCase {
 		self::assertSame([255, 128, 26], array_values(unpack('C*', $peaks->peaks())), 'four samples a peak at 1 a second');
 	}
 
+	public function testPcmPastTheMostPeaksIsLeftOutAndStopsIt(): void {
+		// One sample a peak: the cap's worth in pieces, then as much again
+		$before = memory_get_usage();
+		$peaks = new PcmPeaks(1, 1, 1);
+		$piece = str_repeat(pack('s', 16384), 100_000);
+		$wanted = true;
+		for ($i = 0; $i < 2 * DerivedMedia::WAVEFORM_MAX_PEAKS / 100_000 && $wanted; $i++) {
+			$wanted = $peaks->add($piece);
+		}
+		self::assertFalse($wanted, 'it tells the caller to stop');
+		self::assertFalse($peaks->add($piece));
+		self::assertSame(DerivedMedia::WAVEFORM_MAX_PEAKS, strlen($peaks->peaks()), 'cut at the most a Waveform has');
+		self::assertLessThan(DerivedMedia::WAVEFORM_MAX_PEAKS + 1024 * 1024, memory_get_usage() - $before, 'the peaks and a piece, no PCM piling up');
+	}
+
 	public function testEveryChannelCounts(): void {
 		// Stereo: sound on the right only, then both sides out of phase
 		$peaks = new PcmPeaks(2, 2, 1);

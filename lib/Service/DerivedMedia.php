@@ -572,10 +572,10 @@ class DerivedMedia {
 			...Ffmpeg::input($path),
 			'-map', '0:a:0', '-ar', (string)self::WAVEFORM_PCM_RATE,
 			'-c:a', 'pcm_s16le', '-f', 's16le', 'pipe:1',
-		], 3600, function (string $pcm) use ($peaks, $channels, &$bytes): void {
-			$peaks->add($pcm);
+		], 3600, function (string $pcm) use ($peaks, $channels, &$bytes): bool {
 			$bytes += strlen($pcm);
 			$this->reached((int)($bytes / (2 * $channels * self::WAVEFORM_PCM_RATE) * 1e6));
+			return $peaks->add($pcm);
 		});
 		if ($result['code'] !== 0 || $bytes === 0) {
 			throw new \RuntimeException($result['stderr'] ?: 'ffmpeg exited with ' . $result['code']);
