@@ -18,6 +18,8 @@ use OCP\IAppConfig;
 class JobRunner {
 	/** A job running this long has lost its worker; ffmpeg itself gives up after an hour */
 	private const STALE_AFTER = 2 * 3600;
+	/** A job a request claimed has lost its request after this long: the probe gives up after two minutes, a Waveform in a request after seconds */
+	private const REQUEST_STALE_AFTER = 5 * 60;
 
 	public function __construct(
 		private JobMapper $jobs,
@@ -31,6 +33,7 @@ class JobRunner {
 	public function runNext(string $worker): bool {
 		$now = $this->time->getTime();
 		$this->jobs->requeueStale($now - self::STALE_AFTER);
+		$this->jobs->requeueStaleRequests($now - self::REQUEST_STALE_AFTER);
 		// ponytail: count, then claim; two workers can overshoot the cap by one at the same instant
 		$cap = max(1, $this->config->getValueInt(Application::APP_ID, 'max_jobs', 1));
 		$running = $this->jobs->countRunningOnServer();

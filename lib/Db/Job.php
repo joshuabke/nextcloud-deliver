@@ -39,6 +39,8 @@ class Job extends Entity {
 	public const KIND_WAVEFORM = 'waveform';
 	public const KIND_SCRUB = 'scrub';
 
+	/** Who works on a job a request runs itself, to read an original or make a Waveform right away */
+	public const REQUEST = 'request';
 	/** Who works on a Proxy that the uploading browser makes (ADR 0019) */
 	public const BROWSER = 'browser';
 

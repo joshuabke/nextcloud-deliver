@@ -78,11 +78,20 @@ class DerivedMedia {
 	 */
 	private const WAVEFORM_PCM_RATE = 16000;
 	/**
-	 * Audio up to this long is read and gets its Waveform in the request that
-	 * takes it in: ffmpeg needs about 3 seconds an hour, while the queue may
-	 * wait for the next cron run and for Proxies before it
+	 * Audio up to this long and this large, at no more bytes a second than
+	 * 192 kHz 32-bit stereo PCM, is read and gets its Waveform in the request
+	 * that takes it in: ffmpeg needs about 3 seconds an hour of MP3, while the
+	 * queue may wait for the next cron run and for Proxies before it
 	 */
-	private const AUDIO_NOW_SECONDS = 3600;
+	private const AUDIO_NOW_SECONDS = 1800;
+	private const AUDIO_NOW_BYTES = 256 * 1024 * 1024;
+	private const AUDIO_NOW_BYTES_PER_SECOND = 192000 * 4 * 2;
+	/** How long ffmpeg may take for a Waveform in a request before the queue takes it over */
+	private const AUDIO_NOW_TIMEOUT = 15;
+	/** The exception code of a Waveform a request leaves to the queue */
+	private const TO_QUEUE = 124;
+	/** Set while a request makes a Waveform itself: ffmpeg then has a short time and reads no further than the length its header says */
+	private bool $inRequest = false;
 	/** Seconds between two progress writes to the job row */
 	private const PROGRESS_INTERVAL = 2;
 
@@ -138,25 +147,36 @@ class DerivedMedia {
 	/**
 	 * With ffmpeg, an audio file is read and gets its Waveform in the request
 	 * that takes it in (Files, a sync client, Deliver's upload, Auto Intake,
-	 * delivering again), so it is there when the upload is. The jobs are
-	 * claimed as by any worker, as readNow() does: should the request die,
-	 * they are queued again. Longer audio waits in the queue for its Waveform,
-	 * which comes before other work there.
+	 * delivering again), so it is there when the upload is. Only what is
+	 * short and small, and no more of it than its header says, in a few
+	 * seconds at most, and no more requests at once than `max_jobs`;
+	 * anything else, and whatever runs out of time, goes on in the queue,
+	 * where Waveforms come before other work. The jobs are claimed as by any
+	 * worker: should the request die, they are queued again (JobRunner).
 	 */
 	private function readAudioNow(int $versionId): void {
 		$version = $this->versions->find($versionId);
 		$file = $version === null ? null : $this->fileOf($version);
-		if ($file === null || !str_starts_with($file->getMimeType(), 'audio/') || !$this->ffmpeg->available()) {
+		$bytes = $file?->getSize() ?? 0;
+		if ($file === null || !str_starts_with($file->getMimeType(), 'audio/') || $bytes > self::AUDIO_NOW_BYTES || !$this->ffmpeg->available()
+			// ponytail: count, then claim; two requests can overshoot by one at the same instant, as in JobRunner
+			|| $this->jobs->countRunningInRequests() >= max(1, $this->config->getValueInt(Application::APP_ID, 'max_jobs', 1))) {
 			return;
 		}
 		foreach ([Job::KIND_PROBE, Job::KIND_WAVEFORM] as $kind) {
 			$job = $this->jobs->findPending($versionId, $kind);
 			$version = $this->versions->find($versionId);
-			if ($job === null || $version === null || $kind === Job::KIND_WAVEFORM && $this->durationSeconds($version, INF) > self::AUDIO_NOW_SECONDS
-				|| !$this->jobs->claim($job, 'request', $this->time->getTime())) {
+			$seconds = $version === null ? INF : $this->durationSeconds($version, INF);
+			if ($job === null || $kind === Job::KIND_WAVEFORM && ($seconds > self::AUDIO_NOW_SECONDS || $bytes > max(1, $seconds) * self::AUDIO_NOW_BYTES_PER_SECOND)
+				|| !$this->jobs->claim($job, Job::REQUEST, $this->time->getTime())) {
 				return;
 			}
-			$this->process($job);
+			$this->inRequest = $kind === Job::KIND_WAVEFORM;
+			try {
+				$this->process($job);
+			} finally {
+				$this->inRequest = false;
+			}
 		}
 	}
 
@@ -236,6 +256,13 @@ class DerivedMedia {
 			$this->jobs->delete($job);
 		} catch (\Throwable $e) {
 			if ($this->withdrawn($job)) {
+				return;
+			}
+			if ($this->inRequest && $e->getCode() === self::TO_QUEUE) {
+				$job->setState(Job::STATE_QUEUED);
+				$job->setClaimedBy(null);
+				$this->jobs->update($job);
+				$this->mark($version->getId(), $job->getKind(), self::STATE_QUEUED);
 				return;
 			}
 			$error = $this->ffmpeg->tail($e->getMessage());
@@ -599,16 +626,22 @@ class DerivedMedia {
 		$rate = self::waveformRate($this->durationSeconds($version));
 		$peaks = new PcmPeaks(self::WAVEFORM_PCM_RATE, $channels, $rate);
 		$bytes = 0;
+		// In a request no further than the header says, and a little: sound that runs on is the queue's
+		$bound = $this->inRequest ? $this->durationSeconds($version) + 5 : null;
 		$result = $this->ffmpeg->run($this->ffmpeg->ffmpeg(), [
 			'-nostdin', '-v', 'error',
 			...Ffmpeg::input($path),
 			'-map', '0:a:0', '-ar', (string)self::WAVEFORM_PCM_RATE,
+			...($bound === null ? [] : ['-t', (string)$bound]),
 			'-c:a', 'pcm_s16le', '-f', 's16le', 'pipe:1',
-		], 3600, function (string $pcm) use ($peaks, $channels, &$bytes): void {
+		], $this->inRequest ? self::AUDIO_NOW_TIMEOUT : 3600, function (string $pcm) use ($peaks, $channels, &$bytes): void {
 			$peaks->add($pcm);
 			$bytes += strlen($pcm);
 			$this->reached((int)($bytes / (2 * $channels * self::WAVEFORM_PCM_RATE) * 1e6));
 		});
+		if ($bound !== null && ($result['code'] === 124 || $bytes >= ($bound - 1) * 2 * $channels * self::WAVEFORM_PCM_RATE)) {
+			throw new \RuntimeException('Left to the queue: more than a request may take', self::TO_QUEUE);
+		}
 		if ($result['code'] !== 0 || $bytes === 0) {
 			throw new \RuntimeException($result['stderr'] ?: 'ffmpeg exited with ' . $result['code']);
 		}
@@ -877,7 +910,7 @@ class DerivedMedia {
 		}
 		$job = $this->jobs->findPending($version->getId(), Job::KIND_PROBE);
 		// Claimed as by any worker: should the request die, the probe is queued again like theirs
-		if ($job !== null && $this->jobs->claim($job, 'request', $this->time->getTime())) {
+		if ($job !== null && $this->jobs->claim($job, Job::REQUEST, $this->time->getTime())) {
 			$this->process($job);
 		}
 		$version = $this->versions->find($version->getId()) ?? throw new \RuntimeException('The Version is gone');

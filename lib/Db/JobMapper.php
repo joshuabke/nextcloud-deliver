@@ -96,6 +96,31 @@ class JobMapper extends Mapper {
 			->executeStatement();
 	}
 
+	/** Puts back jobs a request claimed and did not finish, as a request that died leaves them: none takes that long */
+	public function requeueStaleRequests(int $startedBefore): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('state', $qb->createNamedParameter(Job::STATE_QUEUED))
+			->set('claimed_by', $qb->createNamedParameter(null))
+			->where($qb->expr()->eq('state', $qb->createNamedParameter(Job::STATE_RUNNING)))
+			->andWhere($qb->expr()->eq('claimed_by', $qb->createNamedParameter(Job::REQUEST)))
+			->andWhere($qb->expr()->lt('started_at', $qb->createNamedParameter($startedBefore, IQueryBuilder::PARAM_INT)))
+			->executeStatement();
+	}
+
+	/** How many jobs requests run themselves right now */
+	public function countRunningInRequests(): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->count('*', 'amount'))
+			->from($this->getTableName())
+			->where($qb->expr()->eq('state', $qb->createNamedParameter(Job::STATE_RUNNING)))
+			->andWhere($qb->expr()->eq('claimed_by', $qb->createNamedParameter(Job::REQUEST)));
+		$result = $qb->executeQuery();
+		$amount = (int)$result->fetchOne();
+		$result->closeCursor();
+		return $amount;
+	}
+
 	/**
 	 * How many jobs the server runs right now, without the Proxies browsers make
 	 *
