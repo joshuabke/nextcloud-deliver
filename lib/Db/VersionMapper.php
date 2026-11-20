@@ -108,8 +108,8 @@ class VersionMapper extends Mapper {
 		return $this->findEntities($qb);
 	}
 
-	/** @return Version[] Versions with sound that were read but have no Waveform, the newest first, without those of Deleted Projects */
-	public function findWithoutWaveform(int $limit): array {
+	/** @return Version[] Versions with sound that were read but have no Waveform, the newest first (below an id, where given), without those of Deleted Projects */
+	public function findWithoutWaveform(int $limit, ?int $below = null): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('v.*')->from($this->getTableName(), 'v')
 			->leftJoin('v', 'deliver_projects', 'p', $qb->expr()->eq('p.id', 'v.project_id'))
@@ -120,6 +120,9 @@ class VersionMapper extends Mapper {
 			->andWhere($qb->expr()->isNull('p.deleted_at'))
 			->orderBy('v.id', 'DESC')
 			->setMaxResults($limit);
+		if ($below !== null) {
+			$qb->andWhere($qb->expr()->lt('v.id', $qb->createNamedParameter($below, IQueryBuilder::PARAM_INT)));
+		}
 		return $this->findEntities($qb);
 	}
 

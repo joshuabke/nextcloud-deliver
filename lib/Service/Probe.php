@@ -27,14 +27,18 @@ class Probe {
 	 * @return array<string, mixed>|null the metadata, or null when neither
 	 *                                   could read the file
 	 */
-	public function read(string $path): ?array {
+	public function read(string $path, int $timeout = 120): ?array {
 		$result = $this->ffmpeg->run($this->ffmpeg->ffprobe(), [
 			'-v', 'error',
 			'-print_format', 'json',
 			'-show_format',
 			'-show_streams',
 			...Ffmpeg::input($path),
-		], 120);
+		], $timeout);
+		// Out of time is no answer, and no reason to read it as if there were no ffmpeg
+		if ($result['code'] === 124) {
+			throw new \RuntimeException('ffprobe took longer than ' . $timeout . ' seconds', 124);
+		}
 		if ($result['code'] !== 0) {
 			$read = $this->container->read($path);
 			return $read === null ? null : $read + ['fallback' => true];
@@ -51,8 +55,8 @@ class Probe {
 	 *
 	 * @return array<string, mixed>|null the raw ffprobe answer, or null when it could not read the file
 	 */
-	public function apply(Version $version, string $path): ?array {
-		$probed = $this->read($path);
+	public function apply(Version $version, string $path, int $timeout = 120): ?array {
+		$probed = $this->read($path, $timeout);
 		if ($probed === null) {
 			return null;
 		}

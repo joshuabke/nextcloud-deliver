@@ -187,7 +187,13 @@ class DerivedMediaTest extends TestCase {
 		self::assertSame('probe', trim($order));
 		$this->inNextcloud('$jobs = \\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class); $job = $jobs->findQueued(1)[0]; $jobs->claim($job, "test", time()); \\OCP\\Server::get(\\OCA\\Deliver\\Service\\DerivedMedia::class)->process($job);');
 		$order = $this->inNextcloud('foreach (\\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->findQueued(10) as $job) { echo $job->getKind(), " "; }');
-		self::assertSame('waveform proxy thumbs scrub', trim($order), 'the Waveform takes seconds, so it goes before the Proxy');
+		self::assertSame('proxy thumbs waveform scrub', trim($order), 'a video\'s Waveform reads the whole master, so it keeps its place after the Proxy');
+		// Audio too long for its request: its Waveform goes before the video's Proxy
+		$long = $this->mp3('long.mp3', 1860);
+		$this->nc->put("{$this->root}/long.mp3", (string)file_get_contents($long));
+		@unlink($long);
+		$order = $this->inNextcloud('foreach (\\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->findQueued(10) as $job) { echo $job->getKind(), " "; }');
+		self::assertSame('waveform proxy thumbs waveform scrub', trim($order), 'audio\'s Waveform takes seconds, so it goes first');
 	}
 
 	/** A sine of so many seconds, as MP3 or FLAC by the name's extension */
@@ -259,9 +265,15 @@ class DerivedMediaTest extends TestCase {
 		self::assertSame(['none', 'none'], [$this->waveformState($second), $this->waveformState($first)], 'nothing is failed for a file that is not there, and the rest waits');
 		self::assertGreaterThan(time(), (int)$this->inNextcloud('echo \\OCP\\Server::get(\\OCP\\IAppConfig::class)->getValueInt("deliver", "idle_waveforms_after");'), 'for an hour, across cron runs');
 
+		// An hour on, the look goes on past it instead of stopping at it again
+		$this->shell('php /var/www/html/occ config:app:delete deliver idle_waveforms_after');
+		$this->drainQueue();
+		self::assertSame(['none', 'ready'], [$this->waveformState($second), $this->waveformState($first)], 'the next one is made');
+
 		// Back, but no sound in it any more: a failure of its own, which pauses the rest as well
 		rename("$disk.away", $disk);
 		file_put_contents($disk, str_repeat("\0", 4096));
+		$this->inNextcloud('$q = \\OCP\\Server::get(\\OCP\\IDBConnection::class)->getQueryBuilder(); $q->update("deliver_versions")->set("waveform_state", $q->createNamedParameter("none"))->where($q->expr()->eq("id", $q->createNamedParameter(' . $first . ')))->executeStatement();');
 		$this->resumeIdle();
 		$this->drainQueue();
 		self::assertSame(['failed', 'none'], [$this->waveformState($second), $this->waveformState($first)], 'one failure stops the idle work');
@@ -269,6 +281,43 @@ class DerivedMediaTest extends TestCase {
 
 	private function resumeIdle(): void {
 		$this->shell('php /var/www/html/occ config:app:delete deliver idle_waveforms_after');
+		$this->shell('php /var/www/html/occ config:app:delete deliver idle_waveforms_below');
+	}
+
+	public function testAFolderTakenInAtOnceLeavesItsAudioToTheQueue(): void {
+		$folder = $this->root . '-stems';
+		$this->nc->mkdir($folder);
+		try {
+			foreach (['bass.mp3', 'drums.mp3', 'vox.mp3'] as $name) {
+				$mp3 = $this->mp3($name, 2);
+				$this->nc->put("$folder/$name", (string)file_get_contents($mp3));
+				@unlink($mp3);
+			}
+			$created = $this->nc->ocs('POST', '/projects', ['folderId' => $this->nc->fileId($folder), 'autoIntake' => true]);
+			self::assertSame(201, $created['status'], json_encode($created['data']));
+			$assets = $this->nc->ocs('GET', "/projects/{$created['data']['id']}")['data']['assets'];
+			self::assertCount(3, $assets);
+			foreach ($assets as $asset) {
+				self::assertSame('none', $this->waveformState($asset['versions'][0]['id']), 'not read in the request that made the Project');
+			}
+		} finally {
+			if (isset($created['data']['id'])) {
+				$this->nc->deleteProject($created['data']['id']);
+			}
+			$this->nc->delete($folder);
+		}
+	}
+
+	public function testAFileMadeEmptyAndWrittenAfterIsReadWhenItsContentComes(): void {
+		// As Finder and Windows put a file over WebDAV: empty first, then its content
+		self::assertSame(201, $this->nc->davStatus('PUT', "{$this->root}/late.mp3", ''));
+		$late = $this->idOf('late.mp3');
+		self::assertSame('none', $this->waveformState($late));
+		self::assertNull($this->version($late)['derived']['error'], 'no failed read of nothing');
+		$mp3 = $this->mp3('late.mp3', 2);
+		$this->nc->put("{$this->root}/late.mp3", (string)file_get_contents($mp3));
+		@unlink($mp3);
+		self::assertSame('ready', $this->waveformState($late), 'read and drawn in the request that brought the content');
 	}
 
 	public function testATrackWithoutASampleHasAnEmptyWaveform(): void {

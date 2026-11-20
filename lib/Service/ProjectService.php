@@ -363,7 +363,7 @@ class ProjectService {
 		if ($assetId !== null) {
 			$asset = $this->assets->find($assetId) ?? throw new NotFoundException('Asset not found');
 			$this->assertSameKind($uid, $this->writableAsset($uid, $asset), $file);
-			$this->stacks->intakeOnto($asset, $file, $uid);
+			$this->media->readAudioNow($this->stacks->intakeOnto($asset, $file, $uid));
 			return $this->assetForFile($uid, $fileId);
 		}
 		$project = match (true) {
@@ -379,7 +379,7 @@ class ProjectService {
 		if ($project !== null && $projectId === null && !$project->isDeleted() && $this->versions->findByFile($file->getId()) === null) {
 			$this->editable($uid, $project->getId());
 		}
-		$this->stacks->intake($project, $file, $uid, !$newAsset);
+		$this->media->readAudioNow($this->stacks->intake($project, $file, $uid, !$newAsset));
 		return $this->assetForFile($uid, $fileId);
 	}
 

@@ -15,7 +15,7 @@ class JobMapper extends Mapper {
 
 	/**
 	 * @param ?string $kind only jobs of this kind
-	 * @return Job[] probes first, then Waveforms, which take seconds and make a fresh upload of audio reviewable, then the rest, the oldest first, then Scrub Proxies, the newest Version's first; a Deleted Project's waits until it is restored (ADR 0015)
+	 * @return Job[] probes first, then the Waveforms of audio, which take seconds and make a fresh upload of audio reviewable, then the rest, the oldest first, then Scrub Proxies, the newest Version's first; a Deleted Project's waits until it is restored (ADR 0015)
 	 */
 	public function findQueued(int $limit, ?string $kind = null): array {
 		$qb = $this->db->getQueryBuilder();
@@ -24,7 +24,8 @@ class JobMapper extends Mapper {
 			->leftJoin('v', 'deliver_projects', 'p', $qb->expr()->eq('p.id', 'v.project_id'))
 			->where($qb->expr()->eq('j.state', $qb->createNamedParameter(Job::STATE_QUEUED)))
 			->andWhere($qb->expr()->isNull('p.deleted_at'))
-			->orderBy($qb->createFunction('CASE j.kind WHEN ' . $qb->expr()->literal(Job::KIND_PROBE) . ' THEN 0 WHEN ' . $qb->expr()->literal(Job::KIND_WAVEFORM) . ' THEN 1 WHEN ' . $qb->expr()->literal(Job::KIND_SCRUB) . ' THEN 3 ELSE 2 END'))
+			// The Waveform of audio before the rest; a video's reads the whole master, so it keeps its place
+			->orderBy($qb->createFunction('CASE WHEN j.kind = ' . $qb->expr()->literal(Job::KIND_PROBE) . ' THEN 0 WHEN j.kind = ' . $qb->expr()->literal(Job::KIND_WAVEFORM) . ' AND v.has_video = ' . $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL) . ' THEN 1 WHEN j.kind = ' . $qb->expr()->literal(Job::KIND_SCRUB) . ' THEN 3 ELSE 2 END'))
 			// A fresh upload's before the batch of older Versions (DerivedMedia::queueMissingScrubs)
 			->addOrderBy($qb->createFunction('CASE WHEN j.kind = ' . $qb->expr()->literal(Job::KIND_SCRUB) . ' THEN j.version_id ELSE 0 END'), 'DESC')
 			->addOrderBy('j.id')

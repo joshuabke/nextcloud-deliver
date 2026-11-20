@@ -48,5 +48,6 @@ describe('a Version the server is still at', () => {
 		expect(derivedPending({ playable: true, derived: none })).toBe(false)
 		expect(derivedPending({ playable: null, derived: { ...none, error: 'Without ffmpeg, Deliver cannot read this format' } })).toBe(false)
 		expect(derivedPending(null)).toBe(false)
+		expect(derivedPending({ playable: null, state: 'missing', derived: none })).toBe(false)
 	})
 })

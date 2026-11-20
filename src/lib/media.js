@@ -61,13 +61,14 @@ export const hoverSource = (scrub, fallback, broken = false) => (broken ? null :
 /**
  * Whether the server is still at a Version, so a view showing it asks again:
  * while its derived media is queued or made, and before its file is read,
- * when nothing but the probe is queued and every state still says none
+ * when nothing but the probe is queued and every state still says none;
+ * not for a Version whose file went missing before it was read
  *
  * @param {?object} version - as the API gives it
  * @return {boolean} whether to ask again
  */
 export function derivedPending(version) {
 	return !!version
-		&& ((version.playable === null && !version.derived?.error)
+		&& ((version.playable === null && !version.derived?.error && version.state !== 'missing')
 			|| ['proxy', 'thumbs', 'waveform'].some((kind) => ['queued', 'running'].includes(version.derived?.[kind]?.state)))
 }
