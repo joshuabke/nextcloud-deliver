@@ -26,6 +26,7 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DrawingLayer from './DrawingLayer.vue'
 import DrawToolbar from './DrawToolbar.vue'
 import PersonAvatar from './PersonAvatar.vue'
+import WaveformStage from './WaveformStage.vue'
 import { useFullscreen } from '../composables/fullscreen.js'
 import { useGestures } from '../composables/gestures.js'
 import { languageName, toWebVtt } from '../lib/captions.js'
@@ -37,6 +38,7 @@ import { hoverSource } from '../lib/media.js'
 import { formatAt, fpsValue, frameToTime, modesFor, stepOf, timeToFrame } from '../lib/timecode.js'
 import { watermarkTile } from '../lib/watermark.js'
 import { overview, readWaveform } from '../lib/waveform.js'
+import { DEFAULT_SPAN, overviewWindow } from '../lib/waveWindow.js'
 import { useCommentsStore } from '../store/comments.js'
 
 /** The drawing being made for the next Comment */
@@ -108,6 +110,11 @@ const strip = ref(null)
 const waveform = ref(null)
 /** The Waveform, one value per slice of the timeline */
 const peaks = computed(() => waveform.value ? overview(waveform.value, fps.value?.num ? durationFrames.value * fps.value.den / fps.value.num : 0) : [])
+/** Audio with its Waveform plays on a scrolling one; the seconds it shows across the stage */
+const scrolling = computed(() => props.version.audioOnly && waveform.value !== null && durationFrames.value > 0)
+const span = ref(DEFAULT_SPAN)
+/** The part of the piece on the stage, shown on the bar under it */
+const shownWindow = computed(() => scrolling.value ? overviewWindow(frame.value / fpsValue(fps.value), span.value, durationFrames.value / fpsValue(fps.value)) : null)
 const hover = ref(null)
 const scrubber = ref(null)
 /** The Comment whose card shows over the bar, and where */
@@ -213,6 +220,7 @@ watch(() => props.version.id, async (id) => {
 	unplayable.value = false
 	strip.value = null
 	waveform.value = null
+	span.value = DEFAULT_SPAN
 	hover.value = null
 	resetZoom()
 	const [loadedStrip, loadedWaveform] = await Promise.all([loadStrip(), loadWaveform()])
@@ -431,6 +439,23 @@ function onDragStart(event) {
 function onPointerMove(event) {
 	if (event.pointerType === 'mouse' || dragging.value) {
 		onHover(event)
+	}
+}
+
+/** Whether it played when a drag on the Waveform began: it goes on when the drag lets go */
+let heldByWave = false
+
+/** A drag on the Waveform holds playback */
+function holdForWave() {
+	heldByWave = playing.value
+	pause()
+}
+
+/** The drag lets go: playback goes on if it played */
+function releaseFromWave() {
+	if (heldByWave) {
+		heldByWave = false
+		play()
 	}
 }
 
@@ -814,7 +839,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 		ref="root"
 		class="deliver-player"
 		:class="{ 'deliver-player--fullscreen': fullscreen, 'deliver-player--filling': filling, 'deliver-player--mobile': isMobile }">
-		<div class="deliver-player__stage" v-on="gestures">
+		<div class="deliver-player__stage" :class="{ 'deliver-player__stage--sound': scrolling }" v-on="gestures">
 			<!-- Two fingers zoom the picture and its drawings together -->
 			<div
 				class="deliver-player__zoom"
@@ -868,23 +893,19 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 				v-model:color="color"
 				v-model:draft="draft"
 				@done="emit('update:drawing', false)" />
-			<!-- Audio has no picture, so its Waveform takes the stage -->
-			<div v-if="version.audioOnly && peaks.length" class="deliver-player__sound" @click="scrub">
-				<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-					<defs>
-						<clipPath :id="`deliver-played-${version.id}`">
-							<rect
-								x="0"
-								y="0"
-								:width="progress"
-								height="100" />
-						</clipPath>
-					</defs>
-					<polygon class="deliver-player__sound-all" :points="waveformPoints" />
-					<polygon class="deliver-player__sound-played" :points="waveformPoints" :clip-path="`url(#deliver-played-${version.id})`" />
-				</svg>
-				<div class="deliver-player__sound-head" :style="{ left: progress + '%' }" />
-			</div>
+			<!-- Audio has no picture, so its Waveform takes the stage, zoomed and scrolling under the playhead -->
+			<WaveformStage
+				v-if="scrolling"
+				v-model:span="span"
+				:waveform="waveform"
+				:fps="fps"
+				:durationFrames="durationFrames"
+				:frame="frame"
+				:media="video"
+				:playing="playing"
+				@seek="seekTo"
+				@hold="holdForWave"
+				@release="releaseFromWave" />
 			<p v-if="!source || unplayable" class="deliver-player__notice">
 				<template v-if="!proxyPending">
 					{{ unplayableReason }}
@@ -921,6 +942,10 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 				@pointercancel="onDragEnd">
 				<div class="deliver-player__track">
 					<div class="deliver-player__progress" :style="{ width: progress + '%' }" />
+					<div
+						v-if="shownWindow"
+						class="deliver-player__window"
+						:style="{ left: shownWindow.left + '%', width: shownWindow.width + '%' }" />
 					<div
 						v-if="range"
 						class="deliver-player__range"
@@ -1262,6 +1287,11 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	touch-action: none;
 }
 
+/* The scrolling Waveform leaves the page its upright scrolling */
+.deliver-player__stage--sound {
+	touch-action: pan-y;
+}
+
 /* What a double tap or a hold did, for a moment */
 .deliver-player__flash {
 	position: absolute;
@@ -1302,34 +1332,6 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	height: 100%;
 	object-fit: contain;
 	cursor: pointer;
-}
-
-.deliver-player__sound {
-	position: absolute;
-	inset: 15% calc(4 * var(--default-grid-baseline));
-	cursor: pointer;
-}
-
-.deliver-player__sound svg {
-	width: 100%;
-	height: 100%;
-}
-
-.deliver-player__sound-all {
-	fill: rgba(255, 255, 255, 0.25);
-}
-
-.deliver-player__sound-played {
-	fill: var(--color-primary-element);
-}
-
-.deliver-player__sound-head {
-	position: absolute;
-	inset-block: 0;
-	width: 2px;
-	margin-inline-start: -1px;
-	background: #fff;
-	pointer-events: none;
 }
 
 /* Over the picture and the drawings, under the tools; the pointer goes through */
@@ -1439,6 +1441,15 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 
 .deliver-player__range {
 	background: rgba(255, 255, 255, 0.55);
+}
+
+/* The part of the piece the scrolling Waveform shows */
+.deliver-player__window {
+	position: absolute;
+	inset-block: 0;
+	border-inline: 1px solid rgba(255, 255, 255, 0.7);
+	background: rgba(255, 255, 255, 0.2);
+	pointer-events: none;
 }
 
 .deliver-player__span {

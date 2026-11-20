@@ -667,7 +667,11 @@ OC.L10N.register(
 		"Make missing derived media from a file on this computer": "Fehlende abgeleitete Medien aus einer Datei auf diesem Computer erzeugen",
 		"This file is not the original of this Version: its size or date differs.": "Diese Datei ist nicht das Original dieser Version: Größe oder Datum weichen ab.",
 		"All files": "Alle Dateien",
-		"Show every Asset without folders": "Alle Assets ohne Ordner zeigen"
+		"Show every Asset without folders": "Alle Assets ohne Ordner zeigen",
+		"{seconds} s": "{seconds} s",
+		"{minutes} min": "{minutes} min",
+		"Whole": "Alles",
+		"Zoom the Waveform": "Wellenform zoomen"
 	},
 	undefined
 );

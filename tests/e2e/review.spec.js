@@ -2,7 +2,7 @@ import { chromium, expect, test } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { CLIP, CLIP_SCRUB, DNXHR, HAND_PROXY, MIX } from './fixtures.js'
+import { CLIP, CLIP_SCRUB, DNXHR, HAND_PROXY, LONG_MIX, MIX } from './fixtures.js'
 
 const URL = process.env.DELIVER_TEST_URL ?? 'http://localhost:8080'
 const ADMIN = process.env.DELIVER_TEST_USER ?? 'admin'
@@ -771,6 +771,93 @@ test.describe('Review view', () => {
 		const bar = await page.locator('.deliver-player__timeline').boundingBox()
 		await page.mouse.move(bar.x + bar.width / 2, bar.y + bar.height / 2)
 		await expect(page.locator('.deliver-player__hover canvas')).toBeVisible()
+	})
+})
+
+test.describe('Audio review', () => {
+	let browser
+	let context
+	let page
+	let folder
+	let versionId
+	let projectId
+
+	test.beforeAll(async ({ playwright }) => {
+		await testUser(playwright)
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		folder = 'deliver-e2e-' + randomBytes(4).toString('hex')
+		const dav = `/remote.php/dav/files/${USER}/${folder}`
+		expect((await api.fetch(dav, { method: 'MKCOL' })).status()).toBe(201)
+		expect((await api.fetch(`${dav}/long-mix.webm`, { method: 'PUT', data: readFileSync(LONG_MIX) })).status()).toBe(201)
+		const created = await api.post('/ocs/v2.php/apps/deliver/api/v1/projects?format=json', {
+			data: { folderId: await fileId(api, dav), autoIntake: true },
+		})
+		projectId = (await created.json()).ocs.data.id
+		const project = await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)
+		versionId = (await project.json()).ocs.data.assets[0].versions[0].id
+		await api.dispose()
+		// ffmpeg reads the mix and makes its Waveform
+		execFileSync('docker', ['compose', 'exec', '-T', '-u', 'www-data', 'nextcloud', 'php', 'occ', 'deliver:worker', '--once'], { stdio: 'inherit' })
+
+		browser = await chromium.connectOverCDP(CDP)
+		context = await browser.newContext({ baseURL: BROWSER_URL })
+		page = await context.newPage()
+		await login(page)
+	})
+
+	test.afterAll(async ({ playwright }) => {
+		await context?.close()
+		await browser?.close()
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		await api.delete(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)
+		await api.fetch(`/remote.php/dav/files/${USER}/${folder}`, { method: 'DELETE' })
+		await api.dispose()
+	})
+
+	test('a long audio Version opens zoomed, scrolls under its centred playhead and seeks without stopping', async () => {
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		const canvas = page.locator('.deliver-wave canvas')
+		await expect(canvas).toBeVisible()
+		const audio = page.locator('video.deliver-player__video')
+		await expect(audio).toHaveJSProperty('readyState', 4)
+		const time = () => audio.evaluate((element) => element.currentTime)
+		// The playhead is the white line down the middle of the stage
+		const centre = () => canvas.evaluate((element) => {
+			const pixel = element.getContext('2d').getImageData(Math.round(element.width / 2) - 1, element.height - 2, 1, 1).data
+			return pixel[0] + pixel[1] + pixel[2]
+		})
+
+		// One minute of the six on the stage; on the bar under it the half after the start
+		await expect(page.getByRole('button', { name: '1 min' })).toHaveAttribute('aria-pressed', 'true')
+		await expect(page.getByRole('button', { name: '5 min' })).toBeVisible()
+		const shown = page.locator('.deliver-player__window')
+		const width = async () => parseFloat(await shown.evaluate((element) => element.style.width))
+		expect(await width()).toBeCloseTo(30 / 360 * 100, 0)
+		expect(await centre()).toBe(765)
+
+		// Playing, the wave moves under the playhead, which stays in the middle
+		const still = await canvas.evaluate((element) => element.toDataURL())
+		await page.getByRole('button', { name: 'Play (Space)' }).click()
+		await expect.poll(time).toBeGreaterThan(1)
+		expect(await canvas.evaluate((element) => element.toDataURL())).not.toBe(still)
+		expect(await centre()).toBe(765)
+		await expect.poll(width).toBeGreaterThan(30 / 360 * 100 + 0.1)
+
+		// A click a quarter of the stage to the right goes 15 seconds on and keeps playing
+		const box = await canvas.boundingBox()
+		const before = await time()
+		await canvas.click({ position: { x: box.width * 0.75, y: box.height / 2 } })
+		expect(await time() - before).toBeGreaterThan(14)
+		expect(await time() - before).toBeLessThan(17)
+		expect(await audio.evaluate((element) => element.paused)).toBe(false)
+
+		// A zoom step narrows the window, and the whole shows all of it
+		await page.getByRole('button', { name: '15 s' }).click()
+		await expect(page.getByRole('button', { name: '15 s' })).toHaveAttribute('aria-pressed', 'true')
+		expect(await width()).toBeCloseTo(15 / 360 * 100, 0)
+		await page.getByRole('button', { name: 'Whole' }).click()
+		expect(await width()).toBe(100)
+		await page.getByRole('button', { name: 'Pause (Space)' }).click()
 	})
 })
 
