@@ -430,3 +430,16 @@ export function glided(glide, time, target) {
 	const progress = (time - glide.at) / GLIDE_MS
 	return progress >= 1 ? null : glide.from + (target - glide.from) * easeOut(progress)
 }
+
+/**
+ * Another seek while a glide runs: the glide keeps its clock and heads for
+ * the new place (it reads the playhead on every frame), so seeks in quick
+ * succession, a held key, never hold the wave still nor leave it more than a
+ * glide behind; it still starts at most a window from where it is heading.
+ *
+ * @param {{from: number, at: number}} glide - the glide under way
+ * @param {number} to - the seconds sought now
+ * @param {number} across - the seconds across the stage
+ * @return {{from: number, at: number}} the glide, going on
+ */
+export const retarget = (glide, to, across) => ({ ...glide, from: glideStart(glide.from, to, across) })

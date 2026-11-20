@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, clampSpan, DEFAULT_SPAN, dragged, easeOut, GLIDE_MS, glided, glideStart, isWhole, MOTION_PER_PITCH, overviewWindow, pinchSpan, pixelPlace, readSpan, secondsAt, spreadSpan, stack, STACK_STEP, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan, xAt } from './waveWindow.js'
+import { barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, clampSpan, DEFAULT_SPAN, dragged, easeOut, GLIDE_MS, glided, glideStart, isWhole, MOTION_PER_PITCH, overviewWindow, pinchSpan, pixelPlace, readSpan, retarget, secondsAt, spreadSpan, stack, STACK_STEP, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan, xAt } from './waveWindow.js'
 
 describe('the window of the scrolling Waveform', () => {
 	it('centres the playhead, the wave left empty before the start and after the end', () => {
@@ -299,6 +299,16 @@ describe('the glide to a new place (N13)', () => {
 		const glide = { from: 100, at: 0 }
 		const near = glided(glide, GLIDE_MS - 1, 115 + (GLIDE_MS - 1) / 1000)
 		expect(Math.abs(near - (115 + (GLIDE_MS - 1) / 1000))).toBeLessThan(0.001)
+	})
+
+	it('keeps its clock when another seek comes while it runs, heading for the new place', () => {
+		const glide = { from: 100, at: 0 }
+		const again = retarget(glide, 125, 60)
+		expect(again.at).toBe(0)
+		expect(glided(again, GLIDE_MS / 2, 125)).toBeGreaterThan(glided(glide, GLIDE_MS / 2, 115))
+		expect(glided(again, GLIDE_MS, 125)).toBe(null)
+		// Held long, it never starts further than a window behind
+		expect(retarget(glide, 400, 60).from).toBe(340)
 	})
 
 	it('starts at most a window from a far target', () => {
