@@ -35,6 +35,7 @@ class DerivedMediaTest extends TestCase {
 	}
 
 	protected function tearDown(): void {
+		$this->resumeIdle();
 		$this->nc->ocs('PUT', '/admin/settings', ['hwEncoder' => 'none', 'hwDevice' => '', 'extraArgs' => '', 'maxHeight' => 1080, 'maxBitrate' => 20]);
 		$this->nc->deleteProject($this->projectId);
 		$this->nc->delete($this->root);
@@ -239,7 +240,7 @@ class DerivedMediaTest extends TestCase {
 		self::assertLessThanOrEqual(60, (int)$this->inNextcloud('echo \\OCP\\Server::get(\\OCA\\Deliver\\BackgroundJob\\ProcessDerivedMedia::class)->getInterval();'));
 	}
 
-	public function testAFailedWaveformWhileIdleStopsTheRestForThatRun(): void {
+	public function testAWaveformWhileIdleThatFailsOrCannotBeReadPausesTheRest(): void {
 		foreach (['first.mp3', 'second.mp3'] as $name) {
 			$mp3 = $this->mp3($name, 2);
 			$this->nc->put("{$this->root}/$name", (string)file_get_contents($mp3));
@@ -250,11 +251,24 @@ class DerivedMediaTest extends TestCase {
 		foreach ([$first, $second] as $id) {
 			$this->inNextcloud('$q = \\OCP\\Server::get(\\OCP\\IDBConnection::class)->getQueryBuilder(); $q->update("deliver_versions")->set("waveform_state", $q->createNamedParameter("none"))->where($q->expr()->eq("id", $q->createNamedParameter(' . $id . ')))->executeStatement();');
 		}
-		// The newest goes first, and its file is gone from the disk behind Nextcloud's back, as on storage that went offline
-		[$code, $output] = $this->shell('rm ' . escapeshellarg("/var/www/html/data/admin/files/{$this->root}/second.mp3"));
-		self::assertSame(0, $code, $output);
+		$disk = "/var/www/html/data/admin/files/{$this->root}/second.mp3";
+
+		// The newest goes first; its file is gone from the disk behind Nextcloud's back, as on storage that went offline
+		rename($disk, "$disk.away");
 		$this->drainQueue();
-		self::assertSame(['failed', 'none'], [$this->waveformState($second), $this->waveformState($first)], 'one failure stops the idle work of the run');
+		self::assertSame(['none', 'none'], [$this->waveformState($second), $this->waveformState($first)], 'nothing is failed for a file that is not there, and the rest waits');
+		self::assertGreaterThan(time(), (int)$this->inNextcloud('echo \\OCP\\Server::get(\\OCP\\IAppConfig::class)->getValueInt("deliver", "idle_waveforms_after");'), 'for an hour, across cron runs');
+
+		// Back, but no sound in it any more: a failure of its own, which pauses the rest as well
+		rename("$disk.away", $disk);
+		file_put_contents($disk, str_repeat("\0", 4096));
+		$this->resumeIdle();
+		$this->drainQueue();
+		self::assertSame(['failed', 'none'], [$this->waveformState($second), $this->waveformState($first)], 'one failure stops the idle work');
+	}
+
+	private function resumeIdle(): void {
+		$this->shell('php /var/www/html/occ config:app:delete deliver idle_waveforms_after');
 	}
 
 	public function testATrackWithoutASampleHasAnEmptyWaveform(): void {

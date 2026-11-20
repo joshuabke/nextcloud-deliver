@@ -90,6 +90,9 @@ class DerivedMedia {
 	private const AUDIO_NOW_TIMEOUT = 15;
 	/** The exception code of a Waveform a request leaves to the queue */
 	private const TO_QUEUE = 124;
+	/** App config: the time from which Waveforms are made while idle again (pauseIdleWaveforms) */
+	private const IDLE_WAVEFORMS_AFTER = 'idle_waveforms_after';
+	private const IDLE_PAUSE = 3600;
 	/** Set while a request makes a Waveform itself: ffmpeg then has a short time and reads no further than the length its header says */
 	private bool $inRequest = false;
 	/** Seconds between two progress writes to the job row */
@@ -509,15 +512,36 @@ class DerivedMedia {
 	 * @return ?Job the job, to claim; null when there is other work or none
 	 */
 	public function queueMissingWaveform(): ?Job {
-		if ($this->jobs->findQueued(1) !== [] || !$this->ffmpeg->available()) {
+		if ($this->time->getTime() < $this->config->getValueInt(Application::APP_ID, self::IDLE_WAVEFORMS_AFTER) || $this->jobs->findQueued(1) !== [] || !$this->ffmpeg->available()) {
 			return null;
 		}
 		$version = $this->versions->findWithoutWaveform(1)[0] ?? null;
 		if ($version === null) {
 			return null;
 		}
+		// A file that cannot be read at all fails no Version: its storage may be offline, and every other would fail the same
+		$file = $this->fileOf($version);
+		try {
+			$there = $file !== null && $file->getStorage()->file_exists($file->getInternalPath());
+		} catch (\Throwable) {
+			$there = false;
+		}
+		if (!$there) {
+			$this->pauseIdleWaveforms();
+			return null;
+		}
 		$this->enqueue($version->getId(), Job::KIND_WAVEFORM);
 		return $this->jobs->findPending($version->getId(), Job::KIND_WAVEFORM);
+	}
+
+	/**
+	 * No Waveform is made while idle for an hour, across cron runs and
+	 * workers: one that failed, or a file that is not there, may have a cause
+	 * no Version has (storage offline), which would otherwise fail one old
+	 * Version every cron run.
+	 */
+	public function pauseIdleWaveforms(): void {
+		$this->config->setValueInt(Application::APP_ID, self::IDLE_WAVEFORMS_AFTER, $this->time->getTime() + self::IDLE_PAUSE);
 	}
 
 	/**

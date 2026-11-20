@@ -109,7 +109,7 @@ class Ffmpeg {
 			$take();
 			$stderr .= stream_get_contents($pipes[2]);
 			$status = proc_get_status($process);
-			if ($enough) {
+			if ($enough && $status['running']) {
 				// Stopped, not left waiting on a full pipe until the timeout
 				proc_terminate($process, 9);
 				$code = 0;

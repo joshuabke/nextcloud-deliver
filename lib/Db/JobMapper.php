@@ -151,9 +151,10 @@ class JobMapper extends Mapper {
 		return $amount;
 	}
 
+	/** Jobs the queue's workers run: not a browser's Proxy, nor a request's own work, which has a limit of its own and a lapse of minutes (requeueStaleRequests) */
 	private function onServer(IQueryBuilder $qb): string {
 		// Every running row has a claimed_by (claim(), DerivedMedia::proxyProgress)
-		return $qb->expr()->neq('claimed_by', $qb->createNamedParameter(Job::BROWSER));
+		return $qb->expr()->notIn('claimed_by', $qb->createNamedParameter([Job::BROWSER, Job::REQUEST], IQueryBuilder::PARAM_STR_ARRAY));
 	}
 
 	/** @return Job[] failed jobs, the latest first; all of them without a limit */

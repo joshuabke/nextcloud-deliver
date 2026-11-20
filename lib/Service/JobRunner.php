@@ -21,16 +21,6 @@ class JobRunner {
 	/** A job a request claimed has lost its request after this long: the probe gives up after two minutes, a Waveform in a request after seconds */
 	private const REQUEST_STALE_AFTER = 5 * 60;
 
-	/** Until when no Waveform is made while idle: one that failed may have failed for a cause no Version has (storage offline), which would fail them all */
-	private int $idlePausedUntil = 0;
-	/** How long that lasts in a worker; a cron run ends long before */
-	private const IDLE_PAUSE = 3600;
-
-	/** Until when no Waveform is made while idle: one that failed may have failed for a cause no Version has (storage offline), which would fail them all */
-	private int $idlePausedUntil = 0;
-	/** How long that lasts in a worker; a cron run ends long before */
-	private const IDLE_PAUSE = 3600;
-
 	public function __construct(
 		private JobMapper $jobs,
 		private DerivedMedia $media,
@@ -62,11 +52,11 @@ class JobRunner {
 			}
 		}
 		// Nothing else to do: a Waveform a Version lacks, such as one from before the fixed rate (ADR 0021)
-		$job = $now < $this->idlePausedUntil ? null : $this->media->queueMissingWaveform();
+		$job = $this->media->queueMissingWaveform();
 		if ($job !== null && $this->jobs->claim($job, $worker, $now)) {
 			$this->media->process($job);
 			if ($this->jobs->find($job->getId())?->getState() === Job::STATE_FAILED) {
-				$this->idlePausedUntil = $now + self::IDLE_PAUSE;
+				$this->media->pauseIdleWaveforms();
 			}
 			return true;
 		}
