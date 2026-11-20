@@ -152,6 +152,15 @@ describe('the zoom this browser remembers', () => {
 		expect(clampSpan(readSpan(storage), 7200)).toBe(7200)
 	})
 
+	it('keeps the whole only where it was a choice, on a piece longer than a minute', () => {
+		const storage = memory()
+		writeSpan(300, 3600, storage)
+		writeSpan(20, 20, storage)
+		expect(readSpan(storage)).toBe(300)
+		writeSpan(90, 90, storage)
+		expect(readSpan(storage)).toBe(Infinity)
+	})
+
 	it('takes nothing it did not write', () => {
 		const storage = memory()
 		storage().setItem('deliver.waveformZoom', 'nonsense')

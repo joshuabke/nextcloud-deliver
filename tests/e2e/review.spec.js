@@ -1026,8 +1026,6 @@ test.describe('Audio review', () => {
 		const state = () => audio.evaluate((element) => ({ time: element.currentTime, paused: element.paused }))
 		const shown = page.locator('.deliver-player__window')
 		const width = async () => parseFloat(await shown.evaluate((element) => element.style.width.match(/[\d.]+%/)[0]))
-		// The last test left it on the whole, and this browser remembers that
-		await expect(page.getByRole('button', { name: 'Whole', exact: true })).toHaveAttribute('aria-pressed', 'true')
 		await page.getByRole('button', { name: '1 min' }).click()
 
 		// A quarter of the stage dragged to the left is 15 seconds on; playback holds meanwhile and goes on

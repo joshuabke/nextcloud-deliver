@@ -67,7 +67,7 @@ A Review Link shows only the files whoever made it may share in Files. A file sh
 - An audio Version plays on its Waveform, at first zoomed to one minute, the wave scrolling under the playhead in the middle. Drag the wave sideways to go through time; a click or a tap goes to that place. Neither stops playback: a drag holds it and lets it go on where you let go, except at the very end, where it stays.
 - Zoom with the buttons at the top of the stage (15 s, 1 min, 5 min, Whole), with two fingers on a phone or tablet, or with Ctrl and the mouse wheel (a trackpad's pinch). The bar under the stage shows the whole piece and, in a bracket, the part on the stage.
 - Deliver remembers your zoom in this browser for the next audio Version.
-- On a phone the wave takes your fingers: a swipe goes through time, not to the next Asset, and tapping, double-tapping and holding work as described above rather than as on a video. The next Asset is in the ⋯ menu.
+- On a phone the wave takes your fingers: a swipe goes through time, not to the next Asset, a tap goes to that place instead of into fullscreen, and resting a finger comments (see below) instead of playing faster; a double tap does not jump. The next Asset is in the ⋯ menu.
 - Comments sit under the wave as circles with their authors' initials; close ones stack, resolved ones are paler, and a Range tints the wave from its start to its end. Click a circle to read the Comment with its Replies, answer it right there, or go to it.
 - Double-click the wave, or rest a finger on it, to comment on that place. C comments where the audio is when you press it, and the audio plays on while you write.
 

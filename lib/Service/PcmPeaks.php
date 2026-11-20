@@ -20,20 +20,30 @@ final class PcmPeaks {
 	) {
 	}
 
-	public function add(string $pcm): void {
+	/** @return bool false once the Waveform has the most peaks it may have: more sound than its header said is left out, and the caller stops */
+	public function add(string $pcm): bool {
+		if ($this->full()) {
+			$this->pending = '';
+			return false;
+		}
 		$this->pending .= $pcm;
 		$offset = 0;
-		// Past the most a Waveform has, more sound than its header said is left out
-		while (strlen($this->peaks) < DerivedMedia::WAVEFORM_MAX_PEAKS && strlen($this->pending) - $offset >= ($share = $this->share())) {
+		while (!$this->full() && strlen($this->pending) - $offset >= ($share = $this->share())) {
 			$this->peaks .= self::loudest(substr($this->pending, $offset, $share));
 			$offset += $share;
 		}
-		$this->pending = substr($this->pending, $offset);
+		// Less than a share stays, or nothing once full
+		$this->pending = $this->full() ? '' : substr($this->pending, $offset);
+		return !$this->full();
+	}
+
+	private function full(): bool {
+		return strlen($this->peaks) >= DerivedMedia::WAVEFORM_MAX_PEAKS;
 	}
 
 	/** @return string the peaks, the last share as long as the sound */
 	public function peaks(): string {
-		return strlen($this->pending) >= 2 && strlen($this->peaks) < DerivedMedia::WAVEFORM_MAX_PEAKS ? $this->peaks . self::loudest($this->pending) : $this->peaks;
+		return strlen($this->pending) >= 2 ? $this->peaks . self::loudest($this->pending) : $this->peaks;
 	}
 
 	/** The bytes of the next peak's share: whole samples of every channel, with no drift for a rate that does not divide the sample rate */

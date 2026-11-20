@@ -167,13 +167,20 @@ export function readSpan(storage = () => globalThis.localStorage) {
 }
 
 /**
+ * The whole counts as a choice only on a piece longer than the window it opens with;
+ * on a shorter one it is all there is, and the zoom kept stays.
+ *
  * @param {number} span - the span chosen
  * @param {number} duration - the length of the piece it was chosen on: the whole stays the whole on another
  * @param {() => Storage} [storage] - as for readSpan
  */
 export function writeSpan(span, duration, storage = () => globalThis.localStorage) {
+	const whole = isWhole(span, duration)
+	if (whole && duration <= DEFAULT_SPAN) {
+		return
+	}
 	try {
-		storage().setItem(SPAN_KEY, isWhole(span, duration) ? 'whole' : String(span))
+		storage().setItem(SPAN_KEY, whole ? 'whole' : String(span))
 	} catch {
 		// The zoom then lasts until the page is left
 	}
