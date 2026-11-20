@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { channelWeights, loudnessMeter } from './loudness.js'
+import { channelWeights, loudnessMeter, withinRanges } from './loudness.js'
 
 const RATE = 48000
 
@@ -110,6 +110,15 @@ describe('a broken decode', () => {
 		// A full-scale square wave is loud, but no nonsense
 		const square = Float32Array.from({ length: RATE * 5 }, (_, at) => (Math.floor(at / 24) % 2 === 0 ? 1 : -1))
 		expect(measure([square, square])).toMatchObject({ peak: 0, truePeak: false })
+	})
+
+	it('keeps the ends of the server\'s ranges and nothing past them', () => {
+		expect(withinRanges({ integrated: 15.0, peak: 12.0 })).toBe(true)
+		expect(withinRanges({ integrated: -70.0, peak: -200.0 })).toBe(true)
+		expect(withinRanges({ integrated: null, peak: null })).toBe(true)
+		expect(withinRanges({ integrated: 15.1, peak: 0 })).toBe(false)
+		expect(withinRanges({ integrated: -23, peak: 12.1 })).toBe(false)
+		expect(withinRanges({ integrated: -23, peak: -200.1 })).toBe(false)
 	})
 })
 

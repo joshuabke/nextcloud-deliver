@@ -14,6 +14,14 @@ export const MOST_LOUDNESS = 15
 export const PEAK_RANGE = [-200, 12]
 
 /**
+ * @param {{integrated: ?number, peak: ?number}} measured - a measurement
+ * @return {boolean} whether the server takes its numbers
+ */
+export function withinRanges({ integrated, peak }) {
+	return !(integrated > MOST_LOUDNESS) && (peak === null || (peak >= PEAK_RANGE[0] && peak <= PEAK_RANGE[1]))
+}
+
+/**
  * The two biquads of the K-weighting for this sample rate: a high shelf for
  * the head, then a high pass (the RLB curve), as libebur128 derives them
  * from BS.1770's 48 kHz coefficients.
@@ -168,8 +176,7 @@ export function loudnessMeter() {
 				truePeak: false,
 			}
 			// One number past the server's ranges means a broken decode: the Waveform goes in without loudness rather than not at all
-			const absurd = measured.integrated > MOST_LOUDNESS || (measured.peak !== null && (measured.peak < PEAK_RANGE[0] || measured.peak > PEAK_RANGE[1]))
-			return absurd ? null : measured
+			return withinRanges(measured) ? measured : null
 		},
 	}
 }
