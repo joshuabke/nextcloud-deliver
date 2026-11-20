@@ -144,8 +144,10 @@ class DerivedMediaTest extends TestCase {
 		$this->inNextcloud('(new \\OCA\\Deliver\\Migration\\Version1021Date20261120000000(\\OCP\\Server::get(\\OCP\\IDBConnection::class)))->postSchemaChange(new \\OC\\Migration\\NullOutput(), fn () => null, []);');
 		self::assertSame(['none', null], array_values($this->version($old)['derived']['waveform']), 'the Waveform from before counts as missing');
 
-		$this->nc->put("{$this->root}/new.mp3", (string)file_get_contents($mp3));
 		@unlink($mp3);
+		// Audio is read in the request that takes it in, a video waits in the queue
+		$this->makeFixture();
+		$this->nc->put("{$this->root}/master.mov", (string)file_get_contents($this->fixture));
 		$hourly = '\\OCP\\Server::get(\\OCA\\Deliver\\BackgroundJob\\ScanProjects::class)->start(\\OCP\\Server::get(\\OCP\\BackgroundJob\\IJobList::class));';
 		$this->inNextcloud($hourly);
 		self::assertSame('none', $this->version($old)['derived']['waveform']['state'], 'it waits while an upload has work queued');
@@ -159,6 +161,30 @@ class DerivedMediaTest extends TestCase {
 		$waveform = $this->nc->waveform($version['derived']['waveform']['url']);
 		self::assertSame(50, $waveform['rate']);
 		self::assertEqualsWithDelta(150, count($waveform['peaks']), 3, 'three seconds at 50 a second');
+	}
+
+	public function testAudioHasItsWaveformWhenItsUploadIsDone(): void {
+		$mp3 = sys_get_temp_dir() . '/deliver-take-' . bin2hex(random_bytes(4)) . '.mp3';
+		[$code, $output] = $this->shell('ffmpeg -v error -y -f lavfi -i sine=duration=4 -c:a libmp3lame ' . escapeshellarg($mp3));
+		self::assertSame(0, $code, $output);
+		$this->makeFixture();
+		// A video first, whose Proxy, Thumbnail Strip and Scrub Proxy would be ahead in the queue
+		$this->nc->put("{$this->root}/master.mov", (string)file_get_contents($this->fixture));
+		$this->nc->put("{$this->root}/take.mp3", (string)file_get_contents($mp3));
+		@unlink($mp3);
+
+		// No worker, no cron: what is there came with the upload
+		$take = $this->version($this->idOf('take.mp3'));
+		self::assertTrue($take['audioOnly']);
+		self::assertSame([4000, 'ready'], [$take['durationFrames'], $take['derived']['waveform']['state']], 'read and drawn in the request that took it in');
+		self::assertCount(200, $this->nc->waveform($take['derived']['waveform']['url'])['peaks']);
+		self::assertNull($this->version($this->idOf('master.mov'))['playable'], 'a video waits for the queue');
+
+		$order = $this->inNextcloud('foreach (\\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->findQueued(10) as $job) { echo $job->getKind(), " "; }');
+		self::assertSame('probe', trim($order));
+		$this->inNextcloud('$jobs = \\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class); $job = $jobs->findQueued(1)[0]; $jobs->claim($job, "test", time()); \\OCP\\Server::get(\\OCA\\Deliver\\Service\\DerivedMedia::class)->process($job);');
+		$order = $this->inNextcloud('foreach (\\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->findQueued(10) as $job) { echo $job->getKind(), " "; }');
+		self::assertSame('waveform proxy thumbs scrub', trim($order), 'the Waveform takes seconds, so it goes before the Proxy');
 	}
 
 	private function idOf(string $name): int {

@@ -73,6 +73,12 @@ class DerivedMedia {
 	public const WAVEFORM_MAX_PEAKS = 2_000_000;
 	/** The sample rate ffmpeg resamples to for the Waveform: enough for a peak every 20 ms */
 	private const WAVEFORM_PCM_RATE = 8000;
+	/**
+	 * Audio up to this long is read and gets its Waveform in the request that
+	 * takes it in: ffmpeg needs about 3 seconds an hour, while the queue may
+	 * wait for the next cron run and for Proxies before it
+	 */
+	private const AUDIO_NOW_SECONDS = 3600;
 	/** Waveforms of older Versions queued at a time, in a queue with nothing else waiting */
 	private const WAVEFORMS = 20;
 	/** Seconds between two progress writes to the job row */
@@ -121,9 +127,35 @@ class DerivedMedia {
 		return count($failed);
 	}
 
-	/** Queues the probe, which then queues whatever else the Version needs */
+	/** Queues the probe, which then queues whatever else the Version needs; audio is read right away */
 	public function queue(int $versionId): void {
 		$this->enqueue($versionId, Job::KIND_PROBE);
+		$this->readAudioNow($versionId);
+	}
+
+	/**
+	 * With ffmpeg, an audio file is read and gets its Waveform in the request
+	 * that takes it in (Files, a sync client, Deliver's upload, Auto Intake,
+	 * delivering again), so it is there when the upload is. The jobs are
+	 * claimed as by any worker, as readNow() does: should the request die,
+	 * they are queued again. Longer audio waits in the queue for its Waveform,
+	 * which comes before other work there.
+	 */
+	private function readAudioNow(int $versionId): void {
+		$version = $this->versions->find($versionId);
+		$file = $version === null ? null : $this->fileOf($version);
+		if ($file === null || !str_starts_with($file->getMimeType(), 'audio/') || !$this->ffmpeg->available()) {
+			return;
+		}
+		foreach ([Job::KIND_PROBE, Job::KIND_WAVEFORM] as $kind) {
+			$job = $this->jobs->findPending($versionId, $kind);
+			$version = $this->versions->find($versionId);
+			if ($job === null || $version === null || $kind === Job::KIND_WAVEFORM && $this->durationSeconds($version, INF) > self::AUDIO_NOW_SECONDS
+				|| !$this->jobs->claim($job, 'request', $this->time->getTime())) {
+				return;
+			}
+			$this->process($job);
+		}
 	}
 
 	/** Deletes the derived media of a Version and queues it again */
