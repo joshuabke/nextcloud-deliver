@@ -207,3 +207,19 @@ export function uploaded(upload, kind) {
 	const fileId = parseInt(upload.response?.headers?.['oc-fileid'], 10)
 	return upload.status === FINISHED && upload.file?.type?.startsWith(kind + '/') && fileId > 0 ? fileId : null
 }
+
+/**
+ * @param {object} version - a Version as the API describes it
+ * @return {Promise<?{rate: number, peaks: Uint8Array}>} its Waveform, or null while it has none ready or it cannot be read
+ */
+export async function fetchWaveform(version) {
+	const derived = version.derived?.waveform
+	if (derived?.state !== 'ready') {
+		return null
+	}
+	try {
+		return readWaveform(await (await fetch(derived.url)).json())
+	} catch {
+		return null
+	}
+}

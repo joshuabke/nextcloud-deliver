@@ -1,26 +1,42 @@
 <script setup>
+import alternateIcon from '@mdi/svg/svg/ab-testing.svg?raw'
+import closeIcon from '@mdi/svg/svg/close.svg?raw'
+import moreIcon from '@mdi/svg/svg/dots-horizontal.svg?raw'
 import pauseIcon from '@mdi/svg/svg/pause.svg?raw'
 import playIcon from '@mdi/svg/svg/play.svg?raw'
+import rangeIcon from '@mdi/svg/svg/ray-start-end.svg?raw'
+import loopIcon from '@mdi/svg/svg/repeat.svg?raw'
 import backIcon from '@mdi/svg/svg/step-backward.svg?raw'
 import forwardIcon from '@mdi/svg/svg/step-forward.svg?raw'
+import volumeIcon from '@mdi/svg/svg/volume-high.svg?raw'
+import mutedIcon from '@mdi/svg/svg/volume-off.svg?raw'
+import wavesIcon from '@mdi/svg/svg/waveform.svg?raw'
+import { getLanguage } from '@nextcloud/l10n'
+import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
-import { compareSource, drifted, frameOnA, frameOnB } from '../lib/compare.js'
-import { actionFor } from '../lib/hotkeys.js'
+import WaveformStage from './WaveformStage.vue'
+import { useRange } from '../composables/range.js'
+import { compareSource, drifted, frameOnA, frameOnB, laneShift, loudnessGap, loudnessText, nextPass, switchKey } from '../lib/compare.js'
+import { actionFor, isTyping } from '../lib/hotkeys.js'
 import { t } from '../lib/l10n.js'
 import { isStill } from '../lib/media.js'
 import { SKIP_SECONDS, skipFrames } from '../lib/skip.js'
 import { formatAt, fpsValue, frameToTime, timeToFrame } from '../lib/timecode.js'
+import { fetchWaveform } from '../lib/waveform.js'
+import { overviewWindow, readSpan } from '../lib/waveWindow.js'
 
 /** Frames B is ahead of A */
 const offset = defineModel('offset', { type: Number, default: 0 })
+/** Whose sound plays: a or b */
+const audio = defineModel('audio', { type: String, default: 'a' })
 
 const props = defineProps({
 	/** side by side, or wipe */
 	mode: { type: String, default: 'side' },
-	/** Whose sound plays: a or b */
-	audio: { type: String, default: 'a' },
 	/** The leading side */
 	a: { type: Object, required: true },
 	/** The side that follows, shifted by the offset */
@@ -32,6 +48,9 @@ const props = defineProps({
 	commentsB: { type: Array, default: () => [] },
 })
 
+const isMobile = useIsMobile()
+const locale = getLanguage()
+const root = ref(null)
 const videoA = ref(null)
 const videoB = ref(null)
 const stage = ref(null)
@@ -40,10 +59,24 @@ const durationFrames = ref(0)
 const playing = ref(false)
 /** Where the wipe divides, from 0 to 100 */
 const wipe = ref(50)
+const { outPoint, loop, range, loopsWhole, markIn, markOut, clearRange, wrapFrom } = useRange(frame)
+/** Each pass of the loop plays the other side (A2c); off until asked for, every time */
+const alternate = ref(false)
+/** Each side's Waveform, once loaded, with its loudness where it was measured */
+const waveforms = ref({ a: null, b: null })
+/** The seconds across the lanes: the Review view's zoom, remembered alike */
+const span = ref(readSpan())
+/** Video shows the lanes under the pictures only when asked to (A4) */
+const showLanes = ref(false)
 
 /** Stills show as pictures; with a still on side A there is no time to play (story 95) */
 const stillA = computed(() => isStill(props.a))
 const stillB = computed(() => isStill(props.b))
+/** Two pieces of audio: the lanes are the whole view, no picture area (A4) */
+const audioView = computed(() => props.a.audioOnly === true && props.b.audioOnly === true)
+/** Both sides have time and sound to switch between */
+const sounding = computed(() => !stillA.value && !stillB.value)
+const lanesShown = computed(() => sounding.value && (audioView.value || showLanes.value))
 const sourceA = computed(() => compareSource(props.a))
 const sourceB = computed(() => compareSource(props.b))
 const progress = computed(() => durationFrames.value ? (frame.value / durationFrames.value) * 100 : 0)
@@ -53,6 +86,25 @@ const markers = computed(() => [
 	...props.commentsA.map((comment) => ({ side: 'a', comment, at: comment.inFrame })),
 	...props.commentsB.map((comment) => ({ side: 'b', comment, at: frameOnA(comment.inFrame, props.a.fps, props.b.fps, offset.value) })),
 ])
+/** One above the other on A's clock, B's wave ahead by the offset */
+const lanes = computed(() => [
+	{ waveform: waveforms.value.a, shift: 0, audible: audio.value === 'a', label: t('deliver', 'V{number}', { number: props.a.number }) },
+	{ waveform: waveforms.value.b, shift: laneShift(offset.value, props.b.fps), audible: audio.value === 'b', label: t('deliver', 'V{number}', { number: props.b.number }) },
+])
+/** The two halves of the A/B switch, with their loudness, shown and never applied (A1) */
+const sides = computed(() => [props.a, props.b].map((version, index) => ({
+	id: index === 0 ? 'a' : 'b',
+	key: String(index + 1),
+	label: t('deliver', 'V{number}', { number: version.number }),
+	name: version.name,
+	loudness: loudnessText(waveforms.value[index === 0 ? 'a' : 'b']?.loudness, locale),
+})))
+const gap = computed(() => loudnessGap(waveforms.value.a?.loudness, waveforms.value.b?.loudness, locale))
+/** The part of the piece on the lanes, on the bar */
+const shownWindow = computed(() => lanesShown.value && durationFrames.value
+	? overviewWindow(frame.value / fpsValue(props.a.fps), span.value, durationFrames.value / fpsValue(props.a.fps))
+	: null)
+const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') : t('deliver', 'Loop the Range'))
 
 defineExpose({ seekTo })
 
@@ -98,6 +150,18 @@ function step(by) {
 	seekTo(frame.value + by)
 }
 
+/**
+ * A seek that keeps the playback state (N2): a side that had run out starts again from the new Frame
+ *
+ * @param {number} target - a Frame of side A
+ */
+function seekPlaying(target) {
+	seekTo(target)
+	if (playing.value) {
+		play()
+	}
+}
+
 /** A leads; B is pulled back whenever it drifted */
 function onTimeUpdate() {
 	frame.value = timeToFrame(videoA.value.currentTime, props.a.fps)
@@ -113,15 +177,92 @@ function onLoaded() {
 }
 
 /**
+ * The next pass of the loop, at its start; alternating, with the other side's sound, switched with the jump
+ *
+ * @param {number} target - where the pass starts
+ */
+function wrap(target) {
+	audio.value = nextPass(audio.value, alternate.value)
+	frame.value = target
+	play()
+}
+
+/** A plays out: a loop over the whole goes round again, otherwise both stop */
+function onEnded() {
+	if (loopsWhole.value) {
+		wrap(0)
+	} else {
+		pause()
+	}
+}
+
+let loopRequest = 0
+
+/** A looped Range goes round on the animation frame it played past its end, not on the next timeupdate, a quarter second late */
+function followLoop() {
+	loopRequest = 0
+	if (!playing.value || !videoA.value) {
+		return
+	}
+	const target = wrapFrom(timeToFrame(videoA.value.currentTime, props.a.fps))
+	if (target !== null) {
+		wrap(target)
+	}
+	loopRequest = requestAnimationFrame(followLoop)
+}
+
+watch(playing, (now) => {
+	if (now && !loopRequest) {
+		loopRequest = requestAnimationFrame(followLoop)
+	}
+})
+// Alternating is a way of looping
+watch(loop, (now) => {
+	if (!now) {
+		alternate.value = false
+	}
+})
+
+/** Alternate A/B: turning it on loops as well */
+function toggleAlternate() {
+	alternate.value = !alternate.value
+	if (alternate.value) {
+		loop.value = true
+	}
+}
+
+/** The Range button, as the Comment field's: the Range starts here, and ends here the next time */
+function markRange() {
+	if (range.value === null) {
+		markIn()
+	} else {
+		markOut()
+	}
+}
+
+/**
  * @param {MouseEvent} event - a click on the timeline
  */
 function scrub(event) {
 	const box = event.currentTarget.getBoundingClientRect()
-	seekTo(Math.floor(Math.min(1, Math.max(0, (event.clientX - box.left) / box.width)) * durationFrames.value))
-	// A side that had run out stands paused: playing again starts both from the new Frame
-	if (playing.value) {
+	seekPlaying(Math.floor(Math.min(1, Math.max(0, (event.clientX - box.left) / box.width)) * durationFrames.value))
+}
+
+/** Whether it played when a drag on the lanes took hold of it */
+let held = null
+
+/** A drag on the lanes holds playback */
+function hold() {
+	held ??= playing.value
+	pause()
+}
+
+/** and lets it go on where it ends, unless that is the end */
+function release() {
+	if (held && frame.value < lastFrame.value) {
 		play()
 	}
+	held = null
 }
 
 /**
@@ -148,18 +289,33 @@ function startWipe(event) {
  * @param {number} direction - -1 back, 1 forward
  */
 function skipBy(direction) {
-	seekTo(frame.value + skipFrames(direction * SKIP_SECONDS, fpsValue(props.a.fps)))
-	if (playing.value) {
-		play()
+	seekPlaying(frame.value + skipFrames(direction * SKIP_SECONDS, fpsValue(props.a.fps)))
+}
+
+/**
+ * A click or a tap in the player gives it the focus, for Tab to switch the sound; a field keeps its own
+ *
+ * @param {MouseEvent} event - a button goes down in the player
+ */
+function takeFocus(event) {
+	if (!isTyping(event.target)) {
+		event.preventDefault()
+		root.value.focus({ preventScroll: true })
 	}
 }
 
 /**
- * Space and the arrows, as in the Review view
+ * 1, 2 and Tab switch the sound; Space, the arrows, I, O and Escape as in the Review view
  *
  * @param {KeyboardEvent} event - the keystroke
  */
 function onKey(event) {
+	const pick = sounding.value ? switchKey(event, root.value) : null
+	if (pick !== null) {
+		event.preventDefault()
+		audio.value = pick === 'toggle' ? nextPass(audio.value, true) : pick
+		return
+	}
 	const action = actionFor(event)
 	const actions = {
 		playPause: () => (playing.value ? pause() : play()),
@@ -167,8 +323,11 @@ function onKey(event) {
 		stepBack: () => step(-1),
 		skipForward: () => skipBy(1),
 		skipBack: () => skipBy(-1),
+		markIn,
+		markOut,
+		clearRange,
 	}
-	if (actions[action]) {
+	if (actions[action] && !stillA.value) {
 		event.preventDefault()
 		actions[action]()
 	}
@@ -179,17 +338,35 @@ watch(offset, () => {
 		videoB.value.currentTime = expectedB()
 	}
 })
-watch(() => [props.a.id, props.b.id], () => {
+watch(() => [props.a.id, props.b.id], async ([a, b]) => {
 	playing.value = false
-})
+	clearRange()
+	// The server knows A's length already; its media element confirms it once it loads
+	durationFrames.value = props.a.durationFrames ?? 0
+	waveforms.value = { a: null, b: null }
+	const [waveA, waveB] = await Promise.all([fetchWaveform(props.a), fetchWaveform(props.b)])
+	if (props.a.id === a && props.b.id === b) {
+		waveforms.value = { a: waveA, b: waveB }
+	}
+}, { immediate: true })
 
 onMounted(() => window.addEventListener('keydown', onKey))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+onBeforeUnmount(() => {
+	window.removeEventListener('keydown', onKey)
+	cancelAnimationFrame(loopRequest)
+})
 </script>
 
 <template>
-	<div class="deliver-compare">
+	<!-- The player takes the focus from a click or a tap, never from Tab, so Tab switches the sound only after one (A4) -->
+	<div
+		ref="root"
+		class="deliver-compare"
+		:class="{ 'deliver-compare--audio': audioView, 'deliver-compare--lanes': lanesShown, 'deliver-compare--mobile': isMobile }"
+		tabindex="-1"
+		@mousedown="takeFocus">
 		<div
+			v-show="!audioView"
 			ref="stage"
 			class="deliver-compare__stage"
 			:class="`deliver-compare__stage--${mode}`"
@@ -205,7 +382,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 					preload="auto"
 					@loadedmetadata="onLoaded"
 					@timeupdate="onTimeUpdate"
-					@ended="pause" />
+					@ended="onEnded" />
 				<span class="deliver-compare__label">{{ t('deliver', 'V{number}', { number: a.number }) }}</span>
 			</div>
 			<div class="deliver-compare__side deliver-compare__side--b" :style="mode === 'wipe' ? { clipPath: `inset(0 0 0 ${wipe}%)` } : null">
@@ -223,9 +400,36 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 			<div v-if="mode === 'wipe'" class="deliver-compare__handle" :style="{ left: wipe + '%' }" />
 		</div>
 
+		<!-- Both Waveforms under one playhead, B's moved by the offset; a click on a wave seeks, on a lane's name it switches the sound -->
+		<div v-if="lanesShown" class="deliver-compare__lanes">
+			<WaveformStage
+				v-if="durationFrames > 0"
+				v-model:span="span"
+				:lanes="lanes"
+				:marked="range"
+				:fps="a.fps"
+				:durationFrames="durationFrames"
+				:frame="frame"
+				:media="videoA"
+				:playing="playing"
+				:clock="clock"
+				@seek="seekPlaying"
+				@hold="hold"
+				@release="release"
+				@pick="audio = $event === 0 ? 'a' : 'b'" />
+		</div>
+
 		<div v-if="!stillA" class="deliver-compare__timeline" @click="scrub">
+			<div
+				v-if="shownWindow"
+				class="deliver-compare__window"
+				:style="{ left: shownWindow.left + '%', width: shownWindow.width + '%' }" />
 			<div class="deliver-compare__track">
 				<div class="deliver-compare__progress" :style="{ width: progress + '%' }" />
+				<div
+					v-if="range && durationFrames"
+					class="deliver-compare__range"
+					:style="{ left: (range.inFrame / durationFrames) * 100 + '%', width: (((range.outFrame ?? range.inFrame) - range.inFrame + 1) / durationFrames) * 100 + '%' }" />
 			</div>
 			<button
 				v-for="marker in markers"
@@ -236,6 +440,36 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 				:style="{ left: (durationFrames ? (marker.at / durationFrames) * 100 : 0) + '%' }"
 				:title="marker.comment.author.name + ': ' + marker.comment.body"
 				@click.stop="pause(); seekTo(marker.at)" />
+		</div>
+
+		<!-- Whose sound plays: the main control of comparing sound (A2a), with each side's loudness -->
+		<div
+			v-if="sounding"
+			class="deliver-compare__sounds"
+			role="radiogroup"
+			:aria-label="t('deliver', 'Sound')">
+			<template v-for="(side, index) in sides" :key="side.id">
+				<span v-if="index === 1 && gap" class="deliver-compare__gap">{{ gap }}</span>
+				<button
+					type="button"
+					role="radio"
+					class="deliver-compare__sound"
+					:class="{ 'deliver-compare__sound--on': audio === side.id }"
+					:aria-checked="audio === side.id ? 'true' : 'false'"
+					:title="t('deliver', 'Listen to {version} ({key})', { version: side.label, key: side.key })"
+					@click="audio = side.id">
+					<NcIconSvgWrapper :svg="audio === side.id ? volumeIcon : mutedIcon" :size="20" />
+					<span class="deliver-compare__sound-text">
+						<span class="deliver-compare__sound-name">
+							<strong>{{ side.label }}</strong>
+							<!-- A phone has room for the numbers or the file's name -->
+							<template v-if="!isMobile || !side.loudness">{{ side.name }}</template>
+						</span>
+						<span v-if="side.loudness" class="deliver-compare__loudness">{{ side.loudness }}</span>
+					</span>
+					<kbd v-if="!isMobile" class="deliver-compare__key">{{ side.key }}</kbd>
+				</button>
+			</template>
 		</div>
 
 		<div v-if="!stillA" class="deliver-compare__controls">
@@ -249,31 +483,123 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 						<NcIconSvgWrapper :svg="playing ? pauseIcon : playIcon" />
 					</template>
 				</NcButton>
-				<NcButton
-					variant="tertiary"
-					:aria-label="t('deliver', 'One Frame back (←)')"
-					:title="t('deliver', 'One Frame back (←)')"
-					@click="step(-1)">
-					<template #icon>
-						<NcIconSvgWrapper :svg="backIcon" />
-					</template>
-				</NcButton>
-				<NcButton
-					variant="tertiary"
-					:aria-label="t('deliver', 'One Frame forward (→)')"
-					:title="t('deliver', 'One Frame forward (→)')"
-					@click="step(1)">
-					<template #icon>
-						<NcIconSvgWrapper :svg="forwardIcon" />
-					</template>
-				</NcButton>
+				<template v-if="isMobile">
+					<NcActions variant="tertiary" :aria-label="t('deliver', 'Playback settings')">
+						<template #icon>
+							<NcIconSvgWrapper :svg="moreIcon" />
+						</template>
+						<NcActionButton closeAfterClick @click="markRange">
+							<template #icon>
+								<NcIconSvgWrapper :svg="rangeIcon" />
+							</template>
+							{{ range === null ? t('deliver', 'Start a Range here') : t('deliver', 'End the Range here') }}
+						</NcActionButton>
+						<NcActionButton v-if="range !== null" closeAfterClick @click="clearRange">
+							<template #icon>
+								<NcIconSvgWrapper :svg="closeIcon" />
+							</template>
+							{{ t('deliver', 'Clear the Range') }}
+						</NcActionButton>
+						<NcActionButton :modelValue="loop" type="checkbox" @click="loop = !loop">
+							{{ loopLabel }}
+						</NcActionButton>
+						<NcActionButton
+							v-if="sounding"
+							:modelValue="alternate"
+							type="checkbox"
+							@click="toggleAlternate">
+							{{ t('deliver', 'Alternate A/B') }}
+						</NcActionButton>
+						<NcActionButton
+							v-if="sounding && !audioView"
+							:modelValue="showLanes"
+							type="checkbox"
+							@click="showLanes = !showLanes">
+							{{ t('deliver', 'Waveforms') }}
+						</NcActionButton>
+					</NcActions>
+				</template>
+				<template v-else>
+					<NcButton
+						variant="tertiary"
+						:aria-label="t('deliver', 'One Frame back (←)')"
+						:title="t('deliver', 'One Frame back (←)')"
+						@click="step(-1)">
+						<template #icon>
+							<NcIconSvgWrapper :svg="backIcon" />
+						</template>
+					</NcButton>
+					<NcButton
+						variant="tertiary"
+						:aria-label="t('deliver', 'One Frame forward (→)')"
+						:title="t('deliver', 'One Frame forward (→)')"
+						@click="step(1)">
+						<template #icon>
+							<NcIconSvgWrapper :svg="forwardIcon" />
+						</template>
+					</NcButton>
+					<NcButton
+						variant="tertiary"
+						:pressed="range !== null"
+						:aria-label="range === null ? t('deliver', 'Start a Range here') : t('deliver', 'End the Range here')"
+						:title="range === null ? t('deliver', 'Start a Range here, then go to its end (I and O)') : t('deliver', 'End the Range here')"
+						@click="markRange">
+						<template #icon>
+							<NcIconSvgWrapper :svg="rangeIcon" />
+						</template>
+					</NcButton>
+					<div v-if="range" class="deliver-compare__chip">
+						<span>{{ formatAt(range.inFrame, clock) }} – {{ range.outFrame === null ? '…' : formatAt(range.outFrame, clock) }}</span>
+						<button
+							type="button"
+							:aria-label="t('deliver', 'Clear the Range (Esc)')"
+							:title="t('deliver', 'Clear the Range (Esc)')"
+							@click="clearRange">
+							<NcIconSvgWrapper :svg="closeIcon" :size="16" inline />
+						</button>
+					</div>
+					<NcButton
+						variant="tertiary"
+						:pressed="loop"
+						:aria-label="loopLabel"
+						:title="loopLabel"
+						@click="loop = !loop">
+						<template #icon>
+							<NcIconSvgWrapper :svg="loopIcon" />
+						</template>
+					</NcButton>
+					<NcButton
+						v-if="sounding"
+						variant="tertiary"
+						:pressed="alternate"
+						:aria-label="t('deliver', 'Alternate A/B')"
+						:title="t('deliver', 'Alternate A/B: every pass of the loop plays the other side')"
+						@click="toggleAlternate">
+						<template #icon>
+							<NcIconSvgWrapper :svg="alternateIcon" />
+						</template>
+					</NcButton>
+				</template>
 			</div>
 			<div class="deliver-compare__timecode">
 				{{ formatAt(frame, clock) }}
 			</div>
 			<div class="deliver-compare__group deliver-compare__group--end">
-				<span class="deliver-compare__offset-label">{{ t('deliver', 'Offset of V{number}', { number: b.number }) }}</span>
 				<NcButton
+					v-if="sounding && !audioView && !isMobile"
+					variant="tertiary"
+					:pressed="showLanes"
+					:aria-label="t('deliver', 'Waveforms')"
+					:title="t('deliver', 'Waveforms under the pictures')"
+					@click="showLanes = !showLanes">
+					<template #icon>
+						<NcIconSvgWrapper :svg="wavesIcon" />
+					</template>
+				</NcButton>
+				<span v-if="!isMobile" class="deliver-compare__offset-label">{{ t('deliver', 'Offset of V{number}', { number: b.number }) }}</span>
+				<!-- A phone types the offset: the buttons would squeeze the time display -->
+				<NcButton
+					v-if="!isMobile"
 					variant="tertiary"
 					:aria-label="t('deliver', 'One Frame earlier')"
 					:title="t('deliver', 'One Frame earlier')"
@@ -287,6 +613,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 					step="1"
 					:aria-label="t('deliver', 'Offset in Frames')">
 				<NcButton
+					v-if="!isMobile"
 					variant="tertiary"
 					:aria-label="t('deliver', 'One Frame later')"
 					:title="t('deliver', 'One Frame later')"
@@ -303,6 +630,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 	display: flex;
 	flex-direction: column;
 	height: 100%;
+	/* It takes the focus from a pointer only, for Tab to switch the sound: no ring, the controls keep theirs */
+	outline: none;
 }
 
 .deliver-compare__stage {
@@ -448,5 +777,179 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 	width: 5em;
 	margin: 0;
 	text-align: center;
+}
+
+/* With the lanes under them the pictures give up room first */
+.deliver-compare--lanes .deliver-compare__stage {
+	min-height: 96px;
+}
+
+/* Two lanes of 64 px under the zoom buttons; on a phone 40 px each, so pictures, lanes and transport fit sideways too */
+.deliver-compare__lanes {
+	position: relative;
+	flex: none;
+	height: 184px;
+	background: #000;
+	border-top: 2px solid var(--color-main-background);
+}
+
+.deliver-compare--mobile .deliver-compare__lanes {
+	height: 136px;
+}
+
+/* Two pieces of audio: the lanes are the stage */
+.deliver-compare--audio .deliver-compare__lanes,
+.deliver-compare--audio.deliver-compare--mobile .deliver-compare__lanes {
+	flex: 1;
+	height: auto;
+	min-height: 136px;
+	border-top: none;
+}
+
+.deliver-compare__window {
+	position: absolute;
+	inset-block: 0;
+	min-width: 2px;
+	border-inline: 1px solid rgba(255, 255, 255, 0.35);
+	background: rgba(255, 255, 255, 0.08);
+	pointer-events: none;
+}
+
+.deliver-compare__range {
+	position: absolute;
+	top: 0;
+	height: 100%;
+	min-width: 2px;
+	background: rgba(255, 255, 255, 0.5);
+}
+
+/* The A/B switch: two halves a thumb can hit, the one heard filled in the primary colour; the resets keep Nextcloud's button style away */
+.deliver-compare__sounds {
+	display: flex;
+	align-items: center;
+	gap: calc(2 * var(--default-grid-baseline));
+	padding: calc(2 * var(--default-grid-baseline)) calc(2 * var(--default-grid-baseline)) 0;
+}
+
+.deliver-compare__sound {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	gap: calc(2 * var(--default-grid-baseline));
+	min-width: 0;
+	min-height: 48px;
+	margin: 0;
+	padding: 4px 12px;
+	border: 2px solid var(--color-border-dark);
+	border-radius: var(--border-radius-large);
+	background: var(--color-background-dark);
+	color: var(--color-text-maxcontrast);
+	font-weight: normal;
+	text-align: start;
+	cursor: pointer;
+}
+
+.deliver-compare--mobile .deliver-compare__sound {
+	min-height: 52px;
+	padding: 4px 8px;
+}
+
+.deliver-compare__sound:hover {
+	border-color: var(--color-border-maxcontrast);
+}
+
+.deliver-compare__sound--on,
+.deliver-compare__sound--on:hover {
+	border-color: var(--color-primary-element);
+	background: var(--color-primary-element);
+	color: var(--color-primary-element-text);
+}
+
+.deliver-compare__sound :deep(.icon-vue) {
+	min-width: 24px;
+	min-height: 24px;
+}
+
+/* The colour tells which is heard; a phone keeps the room for the text */
+.deliver-compare--mobile .deliver-compare__sound :deep(.icon-vue) {
+	display: none;
+}
+
+.deliver-compare__sound-text {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-width: 0;
+	line-height: 1.25;
+}
+
+.deliver-compare__sound-name,
+.deliver-compare__loudness {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.deliver-compare__sound-name strong {
+	margin-inline-end: 6px;
+	font-size: 17px;
+}
+
+.deliver-compare__loudness {
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+}
+
+.deliver-compare__key {
+	padding: 0 6px;
+	border: 1px solid currentColor;
+	border-radius: 4px;
+	font-size: 12px;
+	opacity: 0.7;
+}
+
+.deliver-compare__gap {
+	flex: none;
+	color: var(--color-text-maxcontrast);
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+}
+
+.deliver-compare__chip {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 4px 2px 10px;
+	border-radius: var(--border-radius-pill);
+	background: var(--color-primary-element-light);
+	font-family: monospace;
+	font-size: 13px;
+	white-space: nowrap;
+}
+
+.deliver-compare__chip button {
+	display: flex;
+	min-height: 0;
+	margin: 0;
+	padding: 2px;
+	border: none;
+	border-radius: 50%;
+	background: none;
+	color: inherit;
+	cursor: pointer;
+}
+
+.deliver-compare--mobile .deliver-compare__controls {
+	padding: 0 var(--default-grid-baseline);
+	gap: var(--default-grid-baseline);
+}
+
+.deliver-compare--mobile .deliver-compare__timecode {
+	padding: 4px 8px;
+	font-size: 14px;
+}
+
+.deliver-compare--mobile .deliver-compare__offset {
+	width: 4em;
 }
 </style>

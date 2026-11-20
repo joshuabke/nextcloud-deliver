@@ -23,7 +23,7 @@ const KEYS = {
  * @param {EventTarget|null} target - the event's target
  * @return {boolean} whether the keystroke belongs to a text field
  */
-function isTyping(target) {
+export function isTyping(target) {
 	const element = /** @type {HTMLElement|null} */ (target)
 	return element?.isContentEditable === true
 		|| ['INPUT', 'TEXTAREA', 'SELECT'].includes(element?.tagName ?? '')
