@@ -806,6 +806,8 @@ function label(step) {
 				{{ label(step) }}
 			</button>
 		</div>
+		<!-- Toasts of the field at the Waveform, in the stage's top corner: clear of the transport buttons and of a sheet -->
+		<div id="deliver-wave-toasts" class="deliver-wave__toasts" @pointerdown.stop />
 		<!-- The Comment at its circle, with its Replies and a field to answer; on a phone a sheet from below -->
 		<WaveformCard
 			v-if="opened"
@@ -859,6 +861,25 @@ function label(step) {
 	border-radius: var(--border-radius-pill);
 	background: rgba(255, 255, 255, 0.08);
 	cursor: default;
+}
+
+.deliver-wave__toasts {
+	position: absolute;
+	top: 48px;
+	inset-inline-end: 8px;
+	z-index: 4;
+	max-width: min(360px, calc(100% - 16px));
+	cursor: auto;
+}
+
+.deliver-wave__toasts:empty {
+	display: none;
+}
+
+/* The toasts' own container (@nextcloud/dialogs) is fixed to the window's bottom corner: here it stands in the holder */
+.deliver-wave__toasts :deep([class*='_toastContainer']) {
+	position: static;
+	padding: 0;
 }
 
 /* The resets keep Nextcloud's button style away */

@@ -224,11 +224,16 @@ export function useReview({ version, projectMode, projectFps, refresh, collapsed
 		pin(player.value.range)
 	}
 
-	/** Drops the Range, and a pin on it */
+	/** Drops the Range, and a pin on it; the field at the Waveform keeps a place, the Range's start (N12a) */
 	function clearRange() {
 		player.value?.clearRange()
 		if (pinned.value && pinned.value.outFrame !== null) {
-			pinned.value = null
+			if (composing.value) {
+				pinned.value = { inFrame: pinned.value.inFrame, outFrame: null }
+				loose = true
+			} else {
+				pinned.value = null
+			}
 		}
 	}
 

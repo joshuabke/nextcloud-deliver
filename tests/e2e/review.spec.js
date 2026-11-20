@@ -1368,6 +1368,32 @@ test.describe('Audio review', () => {
 		await popup.getByRole('button', { name: 'Start a Range here' }).click()
 		await expect(popup).toBeVisible()
 		await expect(popup.getByRole('button', { name: 'End the Range here' })).toBeVisible()
+		// Ending and clearing the Range keep the card and a place, with and without text
+		await popup.getByRole('button', { name: 'End the Range here' }).click()
+		await popup.getByRole('button', { name: 'Clear the Range' }).click()
+		await expect(popup).toBeVisible()
+		await expect(field).toBeFocused()
+		await field.fill('about this stretch')
+		await popup.getByRole('button', { name: 'Start a Range here' }).click()
+		await popup.getByRole('button', { name: 'End the Range here' }).click()
+		await popup.getByRole('button', { name: 'Clear the Range' }).click()
+		await expect(popup).toBeVisible()
+		await expect(field).toHaveValue('about this stretch')
+		await field.fill('')
+		// A file's ✕ goes away when clicked: the card stays, the focus goes back into the field
+		const picking = page.waitForEvent('filechooser')
+		await popup.getByRole('button', { name: 'Attach files' }).click()
+		await (await picking).setFiles({ name: 'wrong.txt', mimeType: 'text/plain', buffer: Buffer.from('x') })
+		await popup.getByRole('button', { name: 'Remove wrong.txt' }).click()
+		await expect(popup).toBeVisible()
+		await expect(field).toBeFocused()
+		// As in Safari, where a clicked button takes no focus: the field is left for the page, and still the card stays
+		await popup.getByRole('button', { name: 'Start a Range here' }).evaluate((button) => button.addEventListener('mousedown', (event) => {
+			event.preventDefault()
+			document.activeElement.blur()
+		}))
+		await popup.getByRole('button', { name: 'Start a Range here' }).click()
+		await expect(popup).toBeVisible()
 		await page.keyboard.press('Escape')
 		await expect(popup).toHaveCount(0)
 
@@ -1397,6 +1423,41 @@ test.describe('Audio review', () => {
 		await expect(card).toHaveCount(0)
 		await page.keyboard.press('Escape')
 		await page.getByRole('button', { name: 'Show Comments' }).click()
+	})
+
+	test('under the list an empty pinned field lets go on a click elsewhere and on another Comment\'s Reply, but not on its own buttons', async () => {
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		const canvas = page.locator('.deliver-wave canvas')
+		await expect(canvas).toBeVisible()
+		const audio = page.locator('video.deliver-player__video')
+		await expect(audio).toHaveJSProperty('readyState', 4)
+		await page.getByRole('button', { name: '1 min' }).click()
+		const anchor = page.locator('.deliver-comments__anchor')
+		const goTo = async (seconds) => {
+			await audio.evaluate((element, at) => {
+				element.currentTime = at
+			}, seconds)
+			await expect(anchor).toHaveText(new RegExp(`^${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`))
+		}
+		await goTo(20)
+		await page.keyboard.press('c')
+		await expect(page.locator('#deliver-comment-body')).toBeFocused()
+		// Its own paperclip keeps the place
+		const picking = page.waitForEvent('filechooser')
+		await page.locator('.deliver-comments__form').getByRole('button', { name: 'Attach files' }).click()
+		await (await picking).setFiles([])
+		await audio.evaluate((element) => {
+			element.currentTime = 30
+		})
+		await expect(anchor).toHaveText(/^0:20/)
+		// A click elsewhere lets go
+		await page.locator('.deliver-review__title').click()
+		await goTo(40)
+		// So does a click into another Comment's Reply
+		await page.keyboard.press('c')
+		await expect(anchor).toHaveText(/^0:40/)
+		await page.locator('.deliver-comments__list > .deliver-comment').first().getByRole('button', { name: 'Reply', exact: true }).click()
+		await goTo(50)
 	})
 
 	test('a Comment half written stays with its Version: on the next Asset the field is empty and a keystroke stops the video', async () => {

@@ -7,7 +7,7 @@ import rangeIcon from '@mdi/svg/svg/ray-start-end.svg?raw'
 import sendIcon from '@mdi/svg/svg/send.svg?raw'
 import { showError, TOAST_PERMANENT_TIMEOUT } from '@nextcloud/dialogs'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
-import { computed, markRaw, ref, watch } from 'vue'
+import { computed, markRaw, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
@@ -138,22 +138,63 @@ const form = ref(null)
 const root = ref(null)
 
 /**
- * Leaving the composer lets go of an empty place (N11): the focus going
- * elsewhere on the page, not to the composer's own controls, their menus or a
- * file dialog, nor, at the Waveform, anywhere in its card (N12a)
+ * @return {Element|null} what counts as the composer: at the Waveform its whole card (N12a)
+ */
+function container() {
+	return (props.inline && root.value?.closest('[role="dialog"]')) || root.value
+}
+
+/**
+ * @param {EventTarget|null} target - where a pointer came down or the focus went
+ * @return {boolean} whether that is the composer, its card, or a menu or picker it opened
+ */
+function inside(target) {
+	return target instanceof Element && (container()?.contains(target) || target.closest('.v-popper__popper') !== null)
+}
+
+/**
+ * Leaving the composer lets go of an empty place (N11): a pointer coming
+ * down elsewhere on the page. Its own controls, their menus and the file
+ * dialog are not leaving, nor is anything in its card at the Waveform
+ * (N12a). Decided by the pointer, not the focus, as Safari gives a clicked
+ * button no focus.
+ *
+ * @param {PointerEvent} event - a pointer comes down anywhere
+ */
+function onPointerdown(event) {
+	// The field at the Waveform is the one written in while it is open
+	if (!props.inline && document.getElementById('deliver-comment-body-inline')) {
+		return
+	}
+	if (!inside(event.target)) {
+		emit('left')
+	}
+}
+
+/**
+ * The keyboard leaves: Tab to somewhere outside. A focus that goes nowhere,
+ * as when a clicked control disappears (a file's ✕, Clear the Range), is no
+ * leave, and goes back into the field.
  *
  * @param {FocusEvent} event - the focus leaves something in the composer
  */
 function onFocusout(event) {
-	const within = (props.inline && root.value?.closest('[role="dialog"]')) || root.value
-	setTimeout(() => {
-		const focus = document.activeElement
-		if (!document.hasFocus() || within?.contains(focus) || focus?.closest?.('.v-popper__popper') || within?.contains(event.relatedTarget)) {
-			return
+	const to = event.relatedTarget
+	if (to instanceof Element && to.isConnected) {
+		if (!inside(to)) {
+			emit('left')
 		}
-		emit('left')
+		return
+	}
+	setTimeout(() => {
+		if ((document.activeElement === document.body || document.activeElement === null) && !event.target.isConnected) {
+			input.value?.focus()
+		}
 	}, 0)
 }
+
+onMounted(() => document.addEventListener('pointerdown', onPointerdown, true))
+onBeforeUnmount(() => document.removeEventListener('pointerdown', onPointerdown, true))
 
 /** On a phone, writing makes room for the keyboard: the list steps aside (story 106). Only the text field starts it; a tap on a button beside it must not move the form under the finger */
 function startWriting() {
@@ -187,7 +228,8 @@ function submit() {
 			const message = t('deliver', 'The Comment is posted, but {name} could not be attached: {reason}', { name: e.fileName, reason: errorMessage(e) })
 			// At the Waveform the field closes with the Comment posted: the note stays as a toast until it is read
 			if (props.inline) {
-				showError(message, { timeout: TOAST_PERMANENT_TIMEOUT })
+				// Over the stage's top corner, clear of the transport buttons and of the next sheet
+				showError(message, { timeout: TOAST_PERMANENT_TIMEOUT, selector: '#deliver-wave-toasts' })
 			} else {
 				error.value = message
 			}
