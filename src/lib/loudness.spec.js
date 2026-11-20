@@ -102,6 +102,17 @@ describe('beside ffmpeg', () => {
 	})
 })
 
+describe('a broken decode', () => {
+	it('gives no loudness where a number would be past the server\'s ranges, so the Waveform goes in without it', () => {
+		// Samples a hundred times full scale: a peak of +40 dB
+		const absurd = tones([[5, 40]])
+		expect(measure(absurd)).toBeNull()
+		// A full-scale square wave is loud, but no nonsense
+		const square = Float32Array.from({ length: RATE * 5 }, (_, at) => (Math.floor(at / 24) % 2 === 0 ? 1 : -1))
+		expect(measure([square, square])).toMatchObject({ peak: 0, truePeak: false })
+	})
+})
+
 describe('the sample peak', () => {
 	it('is the loudest sample over all channels in dBFS, and says it is no true peak', () => {
 		const left = new Float32Array(RATE).fill(0.1)
