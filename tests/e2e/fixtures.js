@@ -8,6 +8,9 @@ const ROOT = join(FIXTURES, '..', '..', '..')
 /** WebM, because open-source Chromium builds carry no H.264 decoder */
 export const CLIP = join(FIXTURES, 'clip-25fps.webm')
 
+/** Long enough to skip ten seconds twice inside it */
+export const LONG = join(FIXTURES, 'long-25fps.webm')
+
 /** A Scrub Proxy of CLIP as ffmpeg makes it, for a server without ffmpeg to take one through the API (#169) */
 export const CLIP_SCRUB = join(FIXTURES, 'clip-25fps-scrub.mp4')
 
@@ -44,6 +47,7 @@ export default function globalSetup() {
 		relative(ROOT, file),
 	], { cwd: ROOT, stdio: 'inherit' })
 	make(CLIP, ['-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=25:duration=4', '-c:v', 'libvpx-vp9', '-b:v', '200k'])
+	make(LONG, ['-f', 'lavfi', '-i', 'testsrc=size=160x90:rate=25:duration=30', '-c:v', 'libvpx-vp9', '-b:v', '50k'])
 	make(CLIP_SCRUB, ['-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=25:duration=4', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-b:v', '200k', '-g', '25', '-f', 'mp4'])
 	make(MIX, ['-f', 'lavfi', '-i', 'sine=duration=1', '-f', 'wav'])
 	make(LONG_MIX, ['-f', 'lavfi', '-i', "aevalsrc=exprs='sin(2*PI*220*t)*(0.1+0.9*abs(sin(2*PI*t/7)))':s=8000:d=360", '-c:a', 'libopus', '-b:a', '6k', '-f', 'webm'])

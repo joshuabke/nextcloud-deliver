@@ -5,11 +5,13 @@ import closeIcon from '@mdi/svg/svg/close.svg?raw'
 import captionsOffIcon from '@mdi/svg/svg/closed-caption-outline.svg?raw'
 import captionsIcon from '@mdi/svg/svg/closed-caption.svg?raw'
 import moreIcon from '@mdi/svg/svg/dots-horizontal.svg?raw'
+import skipForwardIcon from '@mdi/svg/svg/fast-forward-10.svg?raw'
 import fullscreenExitIcon from '@mdi/svg/svg/fullscreen-exit.svg?raw'
 import fullscreenIcon from '@mdi/svg/svg/fullscreen.svg?raw'
 import pauseIcon from '@mdi/svg/svg/pause.svg?raw'
 import playIcon from '@mdi/svg/svg/play.svg?raw'
 import loopIcon from '@mdi/svg/svg/repeat.svg?raw'
+import skipBackIcon from '@mdi/svg/svg/rewind-10.svg?raw'
 import stepBackIcon from '@mdi/svg/svg/step-backward.svg?raw'
 import stepForwardIcon from '@mdi/svg/svg/step-forward.svg?raw'
 import volumeIcon from '@mdi/svg/svg/volume-high.svg?raw'
@@ -35,6 +37,7 @@ import { DOUBLE_TAP_MS } from '../lib/gestures.js'
 import { actionFor } from '../lib/hotkeys.js'
 import { t } from '../lib/l10n.js'
 import { hoverSource } from '../lib/media.js'
+import { SKIP_SECONDS, skipFrames } from '../lib/skip.js'
 import { formatAt, fpsValue, frameToTime, modesFor, stepOf, timeToFrame } from '../lib/timecode.js'
 import { watermarkTile } from '../lib/watermark.js'
 import { overview, readWaveform } from '../lib/waveform.js'
@@ -188,7 +191,7 @@ const { zoom, touched, reset: resetZoom, listeners: gestures } = useGestures({
 		if (side === 0) {
 			return
 		}
-		seekTo(frame.value + side * Math.round(JUMP_SECONDS * fpsValue(fps.value)))
+		seekTo(frame.value + skipFrames(side * JUMP_SECONDS, fpsValue(fps.value)))
 		showFlash(side < 0 ? t('deliver', '−{seconds} s', { seconds: JUMP_SECONDS }) : t('deliver', '+{seconds} s', { seconds: JUMP_SECONDS }), side)
 	},
 	holdStart: () => {
@@ -650,6 +653,16 @@ function pause() {
 	}
 }
 
+/**
+ * Shift+arrows and the skip buttons; the playback state stays, as when seeking
+ *
+ * @param {number} direction - -1 back, 1 forward
+ */
+function skip(direction) {
+	const now = video.value ? timeToFrame(video.value.currentTime, fps.value) : frame.value
+	seekTo(now + skipFrames(direction * SKIP_SECONDS, fpsValue(fps.value)))
+}
+
 /** Space and K */
 function playPause() {
 	if (playing.value) {
@@ -717,6 +730,8 @@ function onKey(event) {
 		playPause,
 		stepForward: () => step(1),
 		stepBack: () => step(-1),
+		skipForward: () => skip(1),
+		skipBack: () => skip(-1),
 		shuttleForward: () => shuttle(1),
 		shuttleBack: () => shuttle(-1),
 		markIn,
@@ -1051,10 +1066,28 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 				<NcButton
 					variant="tertiary"
 					:disabled="!source"
+					:aria-label="t('deliver', 'Back 10 seconds')"
+					@click="skip(-1)">
+					<template #icon>
+						<NcIconSvgWrapper :svg="skipBackIcon" />
+					</template>
+				</NcButton>
+				<NcButton
+					variant="tertiary"
+					:disabled="!source"
 					:aria-label="playing ? t('deliver', 'Pause') : t('deliver', 'Play')"
 					@click="playPause">
 					<template #icon>
 						<NcIconSvgWrapper :svg="playing ? pauseIcon : playIcon" />
+					</template>
+				</NcButton>
+				<NcButton
+					variant="tertiary"
+					:disabled="!source"
+					:aria-label="t('deliver', 'Forward 10 seconds')"
+					@click="skip(1)">
+					<template #icon>
+						<NcIconSvgWrapper :svg="skipForwardIcon" />
 					</template>
 				</NcButton>
 				<NcButton
@@ -1156,11 +1189,31 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 				<NcButton
 					variant="tertiary"
 					:disabled="!source"
+					:aria-label="t('deliver', 'Back 10 seconds (Shift+←)')"
+					:title="t('deliver', 'Back 10 seconds (Shift+←)')"
+					@click="skip(-1)">
+					<template #icon>
+						<NcIconSvgWrapper :svg="skipBackIcon" />
+					</template>
+				</NcButton>
+				<NcButton
+					variant="tertiary"
+					:disabled="!source"
 					:aria-label="playing ? t('deliver', 'Pause (Space)') : t('deliver', 'Play (Space)')"
 					:title="playing ? t('deliver', 'Pause (Space)') : t('deliver', 'Play (Space)')"
 					@click="playPause">
 					<template #icon>
 						<NcIconSvgWrapper :svg="playing ? pauseIcon : playIcon" />
+					</template>
+				</NcButton>
+				<NcButton
+					variant="tertiary"
+					:disabled="!source"
+					:aria-label="t('deliver', 'Forward 10 seconds (Shift+→)')"
+					:title="t('deliver', 'Forward 10 seconds (Shift+→)')"
+					@click="skip(1)">
+					<template #icon>
+						<NcIconSvgWrapper :svg="skipForwardIcon" />
 					</template>
 				</NcButton>
 				<NcButton
@@ -1287,6 +1340,8 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	display: flex;
 	flex-direction: column;
 	height: 100%;
+	/* The bar asks how wide the player is, not the window: beside a list it is narrower */
+	container: deliver-player / inline-size;
 	background: var(--color-main-background);
 	/* Holding a finger down plays faster; it must not select text or open the callout */
 	user-select: none;
@@ -1618,6 +1673,29 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	align-items: center;
 	gap: calc(2 * var(--default-grid-baseline));
 	padding: var(--default-grid-baseline) calc(2 * var(--default-grid-baseline));
+}
+
+/* Whatever one side needs it gets; the time sits in the middle where there is room */
+.deliver-player__controls {
+	grid-template-columns: minmax(max-content, 1fr) auto minmax(0, 1fr);
+}
+
+/* Where five transport buttons and the time do not fit one row (438 px with the video's buttons), the time goes under them */
+@container deliver-player (max-width: 440px) {
+	.deliver-player--mobile .deliver-player__controls {
+		grid-template-columns: minmax(0, 1fr) auto;
+	}
+
+	.deliver-player--mobile .deliver-player__group--center {
+		grid-column: 1 / -1;
+		grid-row: 2;
+		justify-content: center;
+	}
+
+	.deliver-player--mobile .deliver-player__group--end {
+		grid-column: 2;
+		grid-row: 1;
+	}
 }
 
 .deliver-player__group {

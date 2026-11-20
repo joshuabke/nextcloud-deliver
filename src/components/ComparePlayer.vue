@@ -10,7 +10,8 @@ import { compareSource, drifted, frameOnA, frameOnB } from '../lib/compare.js'
 import { actionFor } from '../lib/hotkeys.js'
 import { t } from '../lib/l10n.js'
 import { isStill } from '../lib/media.js'
-import { formatAt, frameToTime, timeToFrame } from '../lib/timecode.js'
+import { SKIP_SECONDS, skipFrames } from '../lib/skip.js'
+import { formatAt, fpsValue, frameToTime, timeToFrame } from '../lib/timecode.js'
 
 /** Frames B is ahead of A */
 const offset = defineModel('offset', { type: Number, default: 0 })
@@ -142,6 +143,18 @@ function startWipe(event) {
 }
 
 /**
+ * Shift+arrows: both sides jump together and play on if they played
+ *
+ * @param {number} direction - -1 back, 1 forward
+ */
+function skipBy(direction) {
+	seekTo(frame.value + skipFrames(direction * SKIP_SECONDS, fpsValue(props.a.fps)))
+	if (playing.value) {
+		play()
+	}
+}
+
+/**
  * Space and the arrows, as in the Review view
  *
  * @param {KeyboardEvent} event - the keystroke
@@ -152,6 +165,8 @@ function onKey(event) {
 		playPause: () => (playing.value ? pause() : play()),
 		stepForward: () => step(1),
 		stepBack: () => step(-1),
+		skipForward: () => skipBy(1),
+		skipBack: () => skipBy(-1),
 	}
 	if (actions[action]) {
 		event.preventDefault()
