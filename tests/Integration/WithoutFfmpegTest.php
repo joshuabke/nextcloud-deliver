@@ -597,6 +597,89 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertSame('Without ffmpeg, Deliver cannot read this format', $version['derived']['error']);
 	}
 
+	public function testTheBrowserThatUploadedAWavHandsInItsLoudness(): void {
+		$loudness = ['integrated' => -23.0, 'peak' => -22.9, 'truePeak' => true];
+		$this->make('-f lavfi -i sine=duration=2 -ar 48000 -ac 2 -f wav');
+		// Before the server read it: kept beside it, written into the Waveform once that is made
+		$this->nc->put("{$this->root}/mix.wav", (string)file_get_contents($this->fixture));
+		$asset = "/files/{$this->nc->fileId("{$this->root}/mix.wav")}/asset";
+		self::assertTrue($this->nc->ocs('GET', $asset)['data']['loudnessFromBrowser']);
+		$id = $this->nc->ocs('GET', $asset)['data']['versionId'];
+		$etag = $this->nc->etag("{$this->root}/mix.wav");
+		self::assertSame(400, $this->nc->ocs('POST', "/versions/$id/waveform", ['loudness' => $loudness])['status'], 'bound to the content it was measured from');
+		$given = $this->nc->ocs('POST', "/versions/$id/waveform", ['loudness' => $loudness, 'etag' => $etag]);
+		self::assertSame(200, $given['status'], json_encode($given['data']));
+		self::assertFalse($this->nc->ocs('GET', $asset)['data']['loudnessFromBrowser'], 'once is enough');
+		self::assertSame(409, $this->nc->ocs('POST', "/versions/$id/waveform", ['loudness' => $loudness, 'etag' => $etag])['status'], 'once is enough');
+		exec('php /var/www/html/occ deliver:worker --once 2>&1', $output, $code);
+		self::assertSame(0, $code, implode("\n", $output));
+		$version = $this->nc->ocs('GET', "/versions/$id")['data']['versions'][0];
+		$waveform = json_decode($this->nc->request('GET', $version['derived']['waveform']['url'])['body'], true);
+		self::assertSame($loudness, $waveform['loudness'], 'the server\'s peaks, the browser\'s loudness');
+		self::assertCount(100, $this->nc->waveform($version['derived']['waveform']['url'])['peaks']);
+
+		// After the server read it: written into its Waveform at once
+		$this->nc->put("{$this->root}/second.wav", (string)file_get_contents($this->fixture));
+		exec('php /var/www/html/occ deliver:worker --once 2>&1', $output, $code);
+		$second = $this->nc->ocs('GET', "/files/{$this->nc->fileId("{$this->root}/second.wav")}/asset")['data']['versionId'];
+		self::assertSame(200, $this->nc->ocs('POST', "/versions/$second/waveform", ['loudness' => $loudness, 'etag' => $this->nc->etag("{$this->root}/second.wav")])['status']);
+		$version = $this->nc->ocs('GET', "/versions/$second")['data']['versions'][0];
+		self::assertSame($loudness, json_decode($this->nc->request('GET', $version['derived']['waveform']['url'])['body'], true)['loudness']);
+	}
+
+	public function testOnlyAWavTakesItsLoudnessAloneAndOnlyWithoutFfmpeg(): void {
+		$loudness = ['integrated' => -23.0, 'peak' => -22.9, 'truePeak' => true];
+		$this->make('-f lavfi -i sine=duration=1 -c:a libmp3lame -f mp3');
+		$mp3 = $this->upload('take.mp3')['id'];
+		self::assertSame(409, $this->nc->ocs('POST', "/versions/$mp3/waveform", ['loudness' => $loudness, 'etag' => $this->nc->etag("{$this->root}/take.mp3")])['status'], 'other audio hands its loudness in with its Waveform');
+		$this->make('-f lavfi -i sine=duration=1 -f wav');
+		$this->nc->put("{$this->root}/mix.wav", (string)file_get_contents($this->fixture));
+		$wav = $this->nc->ocs('GET', "/files/{$this->nc->fileId("{$this->root}/mix.wav")}/asset")['data']['versionId'];
+		self::assertSame(400, $this->nc->ocs('POST', "/versions/$wav/waveform", ['loudness' => ['integrated' => 40, 'peak' => -1, 'truePeak' => true]])['status'], 'checked as with a Waveform');
+		// A Member who may only read the folder plants no numbers
+		$user = 'deliver-viewer-' . bin2hex(random_bytes(4));
+		$password = 'Viewer-' . bin2hex(random_bytes(8));
+		$this->nc->ocsForm('POST', '/ocs/v2.php/cloud/users', ['userid' => $user, 'password' => $password]);
+		$this->users[] = $user;
+		$this->nc->ocsForm('POST', '/ocs/v2.php/apps/files_sharing/api/v1/shares', ['path' => "/{$this->root}", 'shareType' => 0, 'shareWith' => $user, 'permissions' => 1]);
+		$etag = $this->nc->etag("{$this->root}/mix.wav");
+		self::assertSame(403, $this->nc->withUser($user, $password)->ocs('POST', "/versions/$wav/waveform", ['loudness' => $loudness, 'etag' => $etag])['status'], 'only whoever may write the file');
+		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['ffmpegPath' => '', 'ffprobePath' => ''])['status']);
+		self::assertFalse($this->nc->ocs('GET', "/files/{$this->nc->fileId("{$this->root}/mix.wav")}/asset")['data']['loudnessFromBrowser']);
+		self::assertSame(409, $this->nc->ocs('POST', "/versions/$wav/waveform", ['loudness' => $loudness, 'etag' => $etag])['status'], 'ffmpeg measures it');
+	}
+
+	public function testNumbersOfContentWrittenOverSinceAreRefused(): void {
+		$old = ['integrated' => -30.0, 'peak' => -20.0, 'truePeak' => true];
+		$new = ['integrated' => -12.0, 'peak' => -1.0, 'truePeak' => true];
+		$this->make('-f lavfi -i sine=duration=2 -ar 48000 -ac 2 -f wav');
+		$this->nc->put("{$this->root}/track9.wav", (string)file_get_contents($this->fixture));
+		$id = $this->nc->ocs('GET', "/files/{$this->nc->fileId("{$this->root}/track9.wav")}/asset")['data']['versionId'];
+		$first = $this->nc->etag("{$this->root}/track9.wav");
+		// The corrected export dropped again before the first one's measurement came in; in a later second,
+		// as Nextcloud keeps a file's ETag over a rewrite within the same second of its mtime
+		sleep(1);
+		$this->make('-f lavfi -i sine=duration=3 -ar 48000 -ac 2 -f wav');
+		$this->nc->put("{$this->root}/track9.wav", (string)file_get_contents($this->fixture));
+		$given = $this->nc->ocs('POST', "/versions/$id/waveform", ['loudness' => $old, 'etag' => $first]);
+		self::assertSame([409, 'The file changed since it was measured'], [$given['status'], $given['data']['message'] ?? null]);
+		self::assertSame(200, $this->nc->ocs('POST', "/versions/$id/waveform", ['loudness' => $new, 'etag' => $this->nc->etag("{$this->root}/track9.wav")])['status'], 'the new content\'s own numbers are taken');
+		exec('php /var/www/html/occ deliver:worker --once 2>&1', $output, $code);
+		$version = $this->nc->ocs('GET', "/versions/$id")['data']['versions'][0];
+		self::assertSame($new, json_decode($this->nc->request('GET', $version['derived']['waveform']['url'])['body'], true)['loudness']);
+
+		// A whole Waveform the uploading browser decoded is bound the same way
+		$this->make('-f lavfi -i sine=duration=1 -c:a libmp3lame -f mp3');
+		$this->nc->put("{$this->root}/take.mp3", (string)file_get_contents($this->fixture));
+		$mp3 = $this->nc->ocs('GET', "/files/{$this->nc->fileId("{$this->root}/take.mp3")}/asset")['data']['versionId'];
+		$stale = $this->nc->etag("{$this->root}/take.mp3");
+		sleep(1);
+		$this->make('-f lavfi -i sine=duration=1:frequency=880 -c:a libmp3lame -f mp3');
+		$this->nc->put("{$this->root}/take.mp3", (string)file_get_contents($this->fixture));
+		self::assertSame(409, $this->nc->ocs('POST', "/versions/$mp3/waveform", NextcloudClient::handIn(array_fill(0, 50, 60), 1000) + ['loudness' => $new, 'etag' => $stale])['status']);
+		self::assertSame(200, $this->nc->ocs('POST', "/versions/$mp3/waveform", NextcloudClient::handIn(array_fill(0, 50, 60), 1000) + ['loudness' => $new, 'etag' => $this->nc->etag("{$this->root}/take.mp3")])['status']);
+	}
+
 	public function testOnlyWhoMayWriteTheFileHandsInItsLoudness(): void {
 		$loudness = ['integrated' => -14.0, 'peak' => -1.0, 'truePeak' => true];
 		$this->make('-f lavfi -i sine=duration=1 -c:a libmp3lame -f mp3');

@@ -216,9 +216,10 @@ const decibels = (level) => (level > 0 ? Math.round(20 * Math.log10(level) * 10)
  * A meter that takes decoded audio piece by piece and tells its integrated
  * loudness and true peak once it has heard all of it.
  *
+ * @param {?number[]} layout - one weight a channel where the file says where its channels are (an extensible WAV); else by their count
  * @return {{add: (channels: Float32Array[], sampleRate: number) => void, done: () => ?{integrated: ?number, peak: ?number, truePeak: boolean}}} the meter; done gives null where the sound changed its rate or channels midway, had a sample that is no number, or a number came out past the server's ranges
  */
-export function loudnessMeter() {
+export function loudnessMeter(layout = null) {
 	let rate = 0
 	let weights = []
 	/** Per channel, the state of both filters: x1, x2, y1, y2 of the shelf, then of the high pass */
@@ -251,7 +252,7 @@ export function loudnessMeter() {
 			}
 			if (rate === 0) {
 				rate = sampleRate
-				weights = channelWeights(channels.length)
+				weights = layout?.length === channels.length ? layout : channelWeights(channels.length)
 				filters = kWeighting(sampleRate)
 				state = channels.map(() => new Float64Array(8))
 				peaks = channels.map(() => truePeakOf(sampleRate))

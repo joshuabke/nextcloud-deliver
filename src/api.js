@@ -6,6 +6,7 @@ import { generateOcsUrl, generateRemoteUrl, generateUrl } from '@nextcloud/route
 import { t } from './lib/l10n.js'
 import { baseLanguage } from './lib/language.js'
 import { fileIdAt } from './lib/upload.js'
+import { wavLoudness } from './lib/wav.js'
 import { decodeWaveform, toBase64 } from './lib/waveform.js'
 
 /** Set on the public review page; Members leave it null and use the OCS API */
@@ -133,9 +134,10 @@ export const decideVersion = (versionId, status) => axios.put(url(`/versions/${v
  * @param {number} versionId - the Version
  * @param {{rate: number, peaks: Uint8Array, loudness?: ?object}} waveform - its peaks a second, the peaks and, where measured, its loudness (A5)
  * @param {number} durationFrames - its length in Frames of the Version, milliseconds before the probe ran
+ * @param {?string} etag - the ETag of the uploaded content it was decoded from, where the uploading browser knows it: refused once the file changed
  * @return {Promise<object>} the server's answer
  */
-export const giveWaveform = (versionId, { rate, peaks, loudness }, durationFrames) => axios.post(url(`/versions/${versionId}/waveform`), { peaks: toBase64(peaks), rate, durationFrames, ...(loudness ? { loudness } : {}) }).then(data)
+export const giveWaveform = (versionId, { rate, peaks, loudness }, durationFrames, etag = null) => axios.post(url(`/versions/${versionId}/waveform`), { peaks: toBase64(peaks), rate, durationFrames, ...(loudness ? { loudness } : {}), ...(etag ? { etag } : {}) }).then(data)
 /**
  * Hands in the Thumbnail Strip the browser made with a Proxy (ADR 0019)
  *
@@ -174,9 +176,34 @@ export function decodeInTurn(file, onProgress) {
 /**
  * @param {number} versionId - an audio Version
  * @param {{rate: number, peaks: Uint8Array, seconds: number}} decoded - its Waveform; audio counts in milliseconds (ADR 0007), also before the probe ran
+ * @param {?string} etag - the ETag of the uploaded content it was decoded from
  * @return {Promise<object>} the server's answer
  */
-export const giveAudioWaveform = (versionId, decoded) => giveWaveform(versionId, decoded, Math.max(1, Math.round(decoded.seconds * 1000)))
+export const giveAudioWaveform = (versionId, decoded, etag = null) => giveWaveform(versionId, decoded, Math.max(1, Math.round(decoded.seconds * 1000)), etag)
+
+/**
+ * Measures a WAV's loudness after the files decoded before it, one at a
+ * time, reading it piece by piece (A9)
+ *
+ * @param {Blob} file - a WAV
+ * @param {AbortSignal} [signal] - stops the reading, as for a cancelled upload
+ * @return {Promise<?object>} its loudness; null for a WAV of another kind or nonsense
+ */
+export function measureWavInTurn(file, signal) {
+	const turn = decoding.then(() => wavLoudness(file, signal))
+	decoding = turn.catch(() => {})
+	return turn
+}
+
+/**
+ * Hands in the loudness of a WAV the server read the Waveform of (A9)
+ *
+ * @param {number} versionId - the Version
+ * @param {{integrated: ?number, peak: ?number, truePeak: boolean}} loudness - as wavLoudness measured it
+ * @param {string} etag - the ETag of the content it was measured from
+ * @return {Promise<object>} the server's answer
+ */
+export const giveLoudness = (versionId, loudness, etag) => axios.post(url(`/versions/${versionId}/waveform`), { loudness, etag }).then(data)
 
 /**
  * Where the server has no ffmpeg, the browser that uploaded an audio file
@@ -185,13 +212,18 @@ export const giveAudioWaveform = (versionId, decoded) => giveWaveform(versionId,
  * it, the first Member to open the Version decodes it.
  *
  * @param {Blob} file - what was uploaded
- * @param {{versionId: number, waveformFromBrowser: boolean}} asset - its Asset, as getAssetForFile or enableFile give it
+ * @param {{versionId: number, waveformFromBrowser: boolean, loudnessFromBrowser: boolean}} asset - its Asset, as getAssetForFile or enableFile give it
+ * @param {?string} etag - the ETag of the content the upload left, to which the loudness is bound
  */
-export function handInWaveform(file, asset) {
+export function handInWaveform(file, asset, etag = null) {
 	if (asset.waveformFromBrowser) {
-		decodeInTurn(file).then((decoded) => giveAudioWaveform(asset.versionId, decoded)).catch(() => {})
+		decodeInTurn(file).then((decoded) => giveAudioWaveform(asset.versionId, decoded, etag)).catch(() => {})
+	}
+	if (asset.loudnessFromBrowser && etag) {
+		measureWavInTurn(file).then((loudness) => loudness && giveLoudness(asset.versionId, loudness, etag)).catch(() => {})
 	}
 }
+
 // How far this browser has got with a Version's Proxy, and the Proxy itself, uploaded next to the Version's file, where the server has no ffmpeg (ADR 0019)
 export const reportProxy = (versionId, percent) => axios.post(url(`/versions/${versionId}/proxy/progress`), { percent }).then(data)
 export const giveProxy = (versionId, fileId, converted = false) => axios.post(url(`/versions/${versionId}/proxy`), { fileId, converted }).then(data)

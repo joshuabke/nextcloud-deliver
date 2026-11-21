@@ -108,6 +108,8 @@ class DerivedMedia {
 	// Sanity bounds, not properties of programme material: BS.1770 adds the channel powers, so full-scale multichannel signal reads well above full scale, but no real file reaches +15 LUFS; real material peaks below about +6 dBTP even with inter-sample overs and float files
 	private const LOUDNESS_RANGE = [-70.0, 15.0];
 	private const PEAK_RANGE = [-200.0, 12.0];
+	/** A WAV's loudness from the browser that uploaded it, beside its Waveform until the server's reader has made that (A9) */
+	private const WAV_LOUDNESS = 'loudness.json';
 	/** Set while the queue makes a Waveform because it had nothing else to do: such a Waveform gets no loudness (A5) */
 	private bool $idle = false;
 	/** Set while a request makes a Waveform itself: ffmpeg then has a short time and reads no further than the length its header says */
@@ -350,6 +352,8 @@ class DerivedMedia {
 			if ($waveform !== null) {
 				$this->put($version, 'waveform', self::waveformJson($waveform[0], $waveform[1]));
 				$this->mark($version->getId(), Job::KIND_WAVEFORM, self::STATE_READY);
+				// The uploading browser may have measured its loudness before this ran (A9)
+				$this->addWavLoudness($version);
 			}
 			// Without ffmpeg nothing queues the Proxy: a browser has to make it (ADR 0019)
 			if ($this->needsProxy($version, (int)filesize($path))) {
@@ -822,6 +826,88 @@ class DerivedMedia {
 		return json_encode(['rate' => $rate, 'peaks' => base64_encode($peaks)] + ($loudness === null ? [] : ['loudness' => $loudness]), JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION);
 	}
 
+	/** Whether the file of a Version is a WAV by its name, whose Waveform the server reads from its PCM without ffmpeg */
+	public static function isWav(Version $version): bool {
+		return in_array(strtolower(pathinfo($version->getName(), PATHINFO_EXTENSION)), ['wav', 'bwf'], true);
+	}
+
+	/**
+	 * Whether the browser that uploads a WAV is to measure its loudness (A9):
+	 * without ffmpeg the server reads a WAV's peaks from its PCM, but nobody
+	 * its loudness, and it has none yet
+	 */
+	public function wavLoudnessFromBrowser(Version $version): bool {
+		return self::isWav($version) && $this->withoutFfmpeg() && !$this->hasLoudness($version);
+	}
+
+	/**
+	 * The loudness the browser that uploaded a WAV measured from the file it
+	 * holds (A9), handed in alone: an addition to the Waveform the server
+	 * reads from the PCM, which wins (ADR 0012). Kept beside it until that is
+	 * made, then written into it as the loudness job writes its numbers.
+	 *
+	 * @throws InvalidRequestException the loudness is out of shape
+	 * @param ?string $etag the ETag of the content the browser measured, as its upload came back with it
+	 * @throws ProjectConflictException the server has ffmpeg, the file is no WAV or changed since, or the Version has its loudness
+	 */
+	public function acceptWavLoudness(Version $version, mixed $loudness, ?string $etag): Version {
+		$loudness = self::handedLoudness($loudness) ?? throw new InvalidRequestException('Loudness alone is a loudness and nothing else');
+		if ($etag === null || $etag === '') {
+			throw new InvalidRequestException('Loudness alone names the ETag of the content it was measured from');
+		}
+		$this->assertContent($version, $etag);
+		if (!$this->withoutFfmpeg()) {
+			throw new ProjectConflictException('This server measures loudness with ffmpeg');
+		}
+		if (!self::isWav($version)) {
+			throw new ProjectConflictException('Only the loudness of a WAV is handed in alone');
+		}
+		if ($this->hasLoudness($version)) {
+			throw new ProjectConflictException('This Version has its loudness');
+		}
+		$this->put($version, 'waveform', json_encode($loudness, JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION), self::WAV_LOUDNESS);
+		$this->addWavLoudness($version);
+		return $version;
+	}
+
+	/**
+	 * What a browser measured is bound to the content it measured: a file
+	 * written again since, by anyone, has numbers of another mix, so they are
+	 * refused (the rewrite dropped what was stored, as it always does)
+	 *
+	 * @param string $etag the ETag the upload of that content came back with
+	 * @throws ProjectConflictException the file changed since
+	 */
+	private function assertContent(Version $version, string $etag): void {
+		if (trim($etag, '"') !== $this->fileOf($version)?->getEtag()) {
+			throw new ProjectConflictException('The file changed since it was measured');
+		}
+	}
+
+	/** Whether a Version has loudness, in its Waveform or waiting beside it */
+	private function hasLoudness(Version $version): bool {
+		return $this->appDataJson($version, self::WAV_LOUDNESS) !== null || is_array($this->appDataJson($version, self::FILES['waveform'])['loudness'] ?? null);
+	}
+
+	/** Writes a WAV's loudness from the browser into its Waveform, once both are there */
+	private function addWavLoudness(Version $version): void {
+		$loudness = $this->appDataJson($version, self::WAV_LOUDNESS);
+		$waveform = $this->appDataJson($version, self::FILES['waveform']);
+		if ($loudness !== null && $waveform !== null && !isset($waveform['loudness'])) {
+			$this->put($version, 'waveform', json_encode(['loudness' => $loudness] + $waveform, JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION));
+		}
+	}
+
+	/** @return ?array<string, mixed> a JSON file of the Version's app data, null where there is none */
+	private function appDataJson(Version $version, string $name): ?array {
+		try {
+			$json = json_decode($this->appDataFactory->get(Application::APP_ID)->getFolder((string)$version->getId())->getFile($name)->getContent(), true);
+		} catch (NotFoundException) {
+			return null;
+		}
+		return is_array($json) ? $json : null;
+	}
+
 	/**
 	 * A Waveform and duration the browser worked out by decoding the file,
 	 * where the server has no ffmpeg to do it, or the delivering tool had
@@ -833,12 +919,17 @@ class DerivedMedia {
 	 * @param mixed $peaks one byte a peak in base64, as the Waveform stores them
 	 * @param int $rate peaks a second, as waveformRate() has it for the duration
 	 * @param mixed $loudness optional, as loudnessOf() has it (A5)
+	 * @param ?string $etag optional: the ETag of the content decoded, as its upload came back with it
 	 * @throws InvalidRequestException peaks, rate, duration or loudness out of shape
 	 * @throws ProjectConflictException the Version has a Waveform or is getting one
 	 * @return Version as it is now, read where it was a video not read yet
 	 */
-	public function acceptWaveform(Version $version, mixed $peaks, int $rate, int $durationFrames, mixed $loudness = null): Version {
+	public function acceptWaveform(Version $version, mixed $peaks, int $rate, int $durationFrames, mixed $loudness = null, ?string $etag = null): Version {
 		$loudness = self::handedLoudness($loudness);
+		// The uploading browser names what it decoded; a file written again since has another Waveform
+		if ($etag !== null && $etag !== '') {
+			$this->assertContent($version, $etag);
+		}
 		// A peak a byte, so the base64 of the most a Waveform has is a third longer
 		$bytes = is_string($peaks) && strlen($peaks) <= 4 * (int)ceil(self::WAVEFORM_MAX_PEAKS / 3) ? base64_decode($peaks, true) : false;
 		if ($bytes === false || $bytes === '' || strlen($bytes) > self::WAVEFORM_MAX_PEAKS || $durationFrames < 1) {

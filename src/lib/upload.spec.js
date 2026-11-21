@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { browserEnv, chunkPlan, current, HEARTBEAT, parseChunks, sameFile, sentElsewhere, uploadFile } from './upload.js'
+import { browserEnv, chunkPlan, current, etagOf, HEARTBEAT, parseChunks, sameFile, sentElsewhere, uploadFile } from './upload.js'
 
 /**
  * Nextcloud's WebDAV, as far as an upload sees it: files by URL, upload
@@ -52,7 +52,7 @@ function fakeDav(trouble = {}) {
 				return fail(412)
 			}
 			files.set(url, data)
-			return { headers: { 'oc-fileid': '00000042ocabc' } }
+			return { headers: { 'oc-fileid': '00000042ocabc', etag: '"5f3e"' } }
 		}
 		if (method === 'MOVE') {
 			const folder = url.replace(/\/\.file$/, '')
@@ -67,7 +67,7 @@ function fakeDav(trouble = {}) {
 				delete trouble.lostMove
 				return fail(524)
 			}
-			return { headers: { 'oc-fileid': '00000043ocabc' } }
+			return { headers: { 'oc-fileid': '00000043ocabc', 'oc-etag': 'W/"7a1c"' } }
 		}
 		return fail(405)
 	}
@@ -132,6 +132,22 @@ describe('an upload', () => {
 		expect(await bytes(dav.files.get(TARGET))).toEqual(await bytes(file(25)))
 		expect(progress.at(-1)).toBe(25)
 		expect(dav.folders.size).toBe(0)
+	})
+
+	it('names the ETag of the content the server took, for what is measured of it', async () => {
+		const etags = []
+		await uploadFile({ request: fakeDav().request, file: file(5), target: TARGET, uploadsUrl: UPLOADS, chunkSize: 10, onEtag: (etag) => etags.push(etag), env: fakeDav().env })
+		const dav = fakeDav()
+		await uploadFile({ request: dav.request, file: file(25), target: TARGET, uploadsUrl: UPLOADS, chunkSize: 10, onEtag: (etag) => etags.push(etag), env: dav.env })
+		expect(etags).toEqual(['5f3e', '7a1c'])
+	})
+
+	it('names no ETag where the last answer was lost', async () => {
+		const dav = fakeDav({ lostMove: true })
+		const etags = []
+		await uploadFile({ request: dav.request, file: file(25), target: TARGET, uploadsUrl: UPLOADS, chunkSize: 10, onEtag: (etag) => etags.push(etag), env: dav.env })
+		expect(etags).toEqual([])
+		expect(etagOf({ headers: {} })).toBeNull()
 	})
 
 	it('refuses a name that is taken, before uploading anything', async () => {

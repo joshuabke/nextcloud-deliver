@@ -33,6 +33,24 @@ describe('the meter in a worker', () => {
 		port1.close()
 	})
 
+	it('weights the channels as the file says where they are', async () => {
+		const { port1, port2 } = new MessageChannel()
+		serveMeter(port2)
+		const remote = remoteMeter(port1, () => {}, [1, 0])
+		const local = loudnessMeter([1, 0])
+		const plain = loudnessMeter()
+		for (let i = 0; i < 50; i++) {
+			const channels = piece(-23)
+			local.add(channels.map((samples) => samples.slice()), RATE)
+			plain.add(channels.map((samples) => samples.slice()), RATE)
+			await remote.add(channels, RATE)
+		}
+		const measured = await remote.done()
+		expect(measured).toEqual(local.done())
+		expect(measured.integrated).toBeLessThan(plain.done().integrated)
+		port1.close()
+	})
+
 	it('needs no timer at all, so a hidden tab does not hold it back', async () => {
 		vi.useFakeTimers()
 		const { port1, port2 } = new MessageChannel()
