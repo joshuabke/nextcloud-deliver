@@ -295,8 +295,6 @@
 		"Someone in this review is already called \"%s\".": "Im Review heißt schon jemand „%s“.",
 		"Someone in this review is already called \"{name}\".": "Im Review heißt schon jemand „{name}“.",
 		"Sort by": "Sortieren nach",
-		"Sound of V{number}": "Ton von V{number}",
-		"Sound of V{number}; click for the other side": "Ton von V{number}; klick für die andere Seite",
 		"Sound on": "Ton an",
 		"Speed {rate}×": "Tempo {rate}×",
 		"Stack as a Version of:": "Als Version stapeln von:",
@@ -680,6 +678,14 @@
 		"Show the Assets as a list": "Assets als Liste zeigen",
 		"Previous Comment": "Vorheriger Kommentar",
 		"Next Comment": "Nächster Kommentar",
-		"New Comment": "Neuer Kommentar"
+		"New Comment": "Neuer Kommentar",
+		"Sound": "Ton",
+		"Listen to {version} ({key})": "{version} anhören ({key})",
+		"Listen to {version}": "{version} anhören",
+		"Alternate A/B": "A/B abwechseln",
+		"Alternate A/B: every pass of the loop plays the other side": "A/B abwechseln: Jeder Durchlauf der Schleife spielt die andere Seite",
+		"Waveforms": "Wellenformen",
+		"Waveforms under the pictures": "Wellenformen unter den Bildern",
+		"Start a Range here, then go to its end (I and O)": "Hier einen Bereich beginnen, dann zu seinem Ende gehen (I und O)"
 	}
 }

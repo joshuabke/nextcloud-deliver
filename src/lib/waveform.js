@@ -3,8 +3,6 @@
  * file once and hands the peaks to the server, for everyone after it.
  */
 
-import { loudnessMeter } from './loudness.js'
-
 /** Peaks a second, as the server has them (ADR 0021); fewer only where a file would go past MAX_PEAKS */
 export const RATE = 50
 export const MAX_PEAKS = 2_000_000
@@ -125,24 +123,6 @@ export async function decodeWaveform(source, onProgress = () => {}) {
 }
 
 /**
- * A pause for the page now and then in a long loop on the main thread: the
- * decoder may hand over many pieces at once, and their peaks and loudness
- * would otherwise hold up drawing and input for a fifth of a second
- *
- * @param {number} every - milliseconds of work between two pauses
- * @return {() => Promise<void>} to await after each piece
- */
-export function breather(every = 40) {
-	let since = performance.now()
-	return async () => {
-		if (performance.now() - since >= every) {
-			await new Promise((resolve) => setTimeout(resolve))
-			since = performance.now()
-		}
-	}
-}
-
-/**
  * @param {object} sample - a Mediabunny AudioSample
  * @return {Float32Array[]} its channels
  */
@@ -166,6 +146,8 @@ async function streamWaveform(source, onProgress) {
 	// Loaded only here: most pages never decode a Waveform
 	const { ALL_FORMATS, AudioSampleSink, BlobSource, Input, UrlSource } = await import('mediabunny')
 	const input = new Input({ formats: ALL_FORMATS, source: typeof source === 'string' ? new UrlSource(source) : new BlobSource(source) })
+	/** The meter in its worker, ended whatever becomes of the decode */
+	let meter = null
 	try {
 		const track = await input.getPrimaryAudioTrack()
 		if (!track || !await track.canDecode()) {
@@ -176,15 +158,15 @@ async function streamWaveform(source, onProgress) {
 			return null
 		}
 		const peaks = collectPeaks(rateFor(seconds), seconds)
-		const meter = loudnessMeter()
+		// The loudness in a worker, beside the decode (A10)
+		const { meterOffPage } = await import('./meterOffPage.js')
+		meter = meterOffPage()
 		let end = 0
-		const pause = breather()
 		for await (const sample of new AudioSampleSink(track).samples()) {
 			try {
-				await pause()
 				const channels = channelsOf(sample)
 				peaks.add(channels, sample.timestamp, sample.sampleRate)
-				meter.add(channels, sample.sampleRate)
+				await meter.add(channels, sample.sampleRate)
 				end = Math.max(end, sample.timestamp + sample.duration)
 				onProgress(Math.min(99, Math.floor(end / seconds * 100)))
 			} finally {
@@ -192,8 +174,9 @@ async function streamWaveform(source, onProgress) {
 			}
 		}
 		// The duration the decoder reached is exact; the one from the container may be rounded
-		return { ...peaks.done(), loudness: meter.done(), seconds: end || seconds }
+		return { ...peaks.done(), loudness: await meter.done(), seconds: end || seconds }
 	} finally {
+		meter?.close()
 		input.dispose()
 	}
 }
@@ -232,4 +215,20 @@ export function uploaded(upload, kind) {
 	// OC-FileId carries the instance id after the number, as in 00000123ocabc123
 	const fileId = parseInt(upload.response?.headers?.['oc-fileid'], 10)
 	return upload.status === FINISHED && upload.file?.type?.startsWith(kind + '/') && fileId > 0 ? fileId : null
+}
+
+/**
+ * @param {object} version - a Version as the API describes it
+ * @return {Promise<?{rate: number, peaks: Uint8Array}>} its Waveform, or null while it has none ready or it cannot be read
+ */
+export async function fetchWaveform(version) {
+	const derived = version.derived?.waveform
+	if (derived?.state !== 'ready') {
+		return null
+	}
+	try {
+		return readWaveform(await (await fetch(derived.url)).json())
+	} catch {
+		return null
+	}
 }

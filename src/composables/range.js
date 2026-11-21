@@ -1,5 +1,8 @@
 import { computed, ref } from 'vue'
 
+/** A Range shorter than this, in seconds, does not loop: it would go round many times a second, a buzz */
+export const LEAST_LOOP = 0.1
+
 /**
  * The Range a player marks with I and O (story 107) and its loop, for the
  * Review view's player and for Compare alike.
@@ -38,10 +41,13 @@ export function useRange(frame) {
 
 	/**
 	 * @param {number} at - the Frame playing now
-	 * @return {number|null} where a looped Range goes back to once played past its out Frame; null to play on
+	 * @param {number} perSecond - Frames a second
+	 * @return {number|null} where a looped Range goes back to once played past its out Frame; null to play on, as past one too short to loop
 	 */
-	function wrapFrom(at) {
-		return loop.value && outPoint.value !== null && at > outPoint.value ? inPoint.value ?? 0 : null
+	function wrapFrom(at, perSecond) {
+		const start = inPoint.value ?? 0
+		const long = outPoint.value !== null && (outPoint.value - start + 1) / perSecond >= LEAST_LOOP
+		return loop.value && long && at > outPoint.value ? start : null
 	}
 
 	return { inPoint, outPoint, loop, range, loopsWhole, markIn, markOut, clearRange, wrapFrom }

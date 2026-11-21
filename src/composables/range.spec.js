@@ -27,15 +27,32 @@ describe('useRange', () => {
 		marks.markIn()
 		frame.value = 40
 		marks.markOut()
-		expect(marks.wrapFrom(41)).toBeNull()
+		expect(marks.wrapFrom(41, 25)).toBeNull()
 		marks.loop.value = true
 		expect(marks.loopsWhole.value).toBe(false)
-		expect(marks.wrapFrom(40)).toBeNull()
-		expect(marks.wrapFrom(41)).toBe(10)
+		expect(marks.wrapFrom(40, 25)).toBeNull()
+		expect(marks.wrapFrom(41, 25)).toBe(10)
 		marks.clearRange()
 		expect(marks.loop.value).toBe(false)
 		marks.loop.value = true
 		expect(marks.loopsWhole.value).toBe(true)
-		expect(marks.wrapFrom(1000)).toBeNull()
+		expect(marks.wrapFrom(1000, 25)).toBeNull()
+	})
+
+	it('does not loop a Range shorter than a tenth of a second, which would buzz', () => {
+		const frame = ref(100)
+		const marks = useRange(frame)
+		marks.markOut()
+		marks.loop.value = true
+		expect(marks.wrapFrom(101, 25)).toBeNull()
+		// Two Frames at 25 fps are 80 ms; three are 120
+		frame.value = 101
+		marks.markOut()
+		expect(marks.wrapFrom(102, 25)).toBeNull()
+		frame.value = 102
+		marks.markOut()
+		expect(marks.wrapFrom(103, 25)).toBe(100)
+		// Audio counts Frames in milliseconds
+		expect(marks.wrapFrom(103, 1000)).toBeNull()
 	})
 })
