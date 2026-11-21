@@ -13,7 +13,7 @@ import { AUDIO_BITRATE, fits, lowerTarget, needsProxy, plays, proxyBytes, proxyS
 import { unsupported } from './unsupported.js'
 import { browserEnv, uploadFile } from './upload.js'
 import { advance } from './uploadStatus.js'
-import { channelsOf, collectPeaks, rateFor } from './waveform.js'
+import { breather, channelsOf, collectPeaks, rateFor } from './waveform.js'
 
 /** Deliver's folder in the browser's private file system */
 const FOLDER = 'deliver-proxies'
@@ -422,9 +422,11 @@ async function convert(source, { maxHeight, maxBitrate, thumbCap }, want, { onPr
 					}
 				})(),
 				audio && (async () => {
+					const pause = breather()
 					for await (const sample of new AudioSampleSink(audio).samples()) {
 						try {
 							signal.throwIfAborted()
+							await pause()
 							hear(sample)
 						} finally {
 							sample.close()

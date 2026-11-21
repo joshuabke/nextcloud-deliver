@@ -125,6 +125,24 @@ export async function decodeWaveform(source, onProgress = () => {}) {
 }
 
 /**
+ * A pause for the page now and then in a long loop on the main thread: the
+ * decoder may hand over many pieces at once, and their peaks and loudness
+ * would otherwise hold up drawing and input for a fifth of a second
+ *
+ * @param {number} every - milliseconds of work between two pauses
+ * @return {() => Promise<void>} to await after each piece
+ */
+export function breather(every = 40) {
+	let since = performance.now()
+	return async () => {
+		if (performance.now() - since >= every) {
+			await new Promise((resolve) => setTimeout(resolve))
+			since = performance.now()
+		}
+	}
+}
+
+/**
  * @param {object} sample - a Mediabunny AudioSample
  * @return {Float32Array[]} its channels
  */
@@ -160,8 +178,10 @@ async function streamWaveform(source, onProgress) {
 		const peaks = collectPeaks(rateFor(seconds), seconds)
 		const meter = loudnessMeter()
 		let end = 0
+		const pause = breather()
 		for await (const sample of new AudioSampleSink(track).samples()) {
 			try {
+				await pause()
 				const channels = channelsOf(sample)
 				peaks.add(channels, sample.timestamp, sample.sampleRate)
 				meter.add(channels, sample.sampleRate)
