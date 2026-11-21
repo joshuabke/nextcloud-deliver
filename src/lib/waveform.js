@@ -3,8 +3,6 @@
  * file once and hands the peaks to the server, for everyone after it.
  */
 
-import { loudnessMeter } from './loudness.js'
-
 /** Peaks a second, as the server has them (ADR 0021); fewer only where a file would go past MAX_PEAKS */
 export const RATE = 50
 export const MAX_PEAKS = 2_000_000
@@ -148,6 +146,8 @@ async function streamWaveform(source, onProgress) {
 	// Loaded only here: most pages never decode a Waveform
 	const { ALL_FORMATS, AudioSampleSink, BlobSource, Input, UrlSource } = await import('mediabunny')
 	const input = new Input({ formats: ALL_FORMATS, source: typeof source === 'string' ? new UrlSource(source) : new BlobSource(source) })
+	/** The meter in its worker, ended whatever becomes of the decode */
+	let meter = null
 	try {
 		const track = await input.getPrimaryAudioTrack()
 		if (!track || !await track.canDecode()) {
@@ -158,13 +158,15 @@ async function streamWaveform(source, onProgress) {
 			return null
 		}
 		const peaks = collectPeaks(rateFor(seconds), seconds)
-		const meter = loudnessMeter()
+		// The loudness in a worker, beside the decode (A10)
+		const { meterOffPage } = await import('./meterOffPage.js')
+		meter = meterOffPage()
 		let end = 0
 		for await (const sample of new AudioSampleSink(track).samples()) {
 			try {
 				const channels = channelsOf(sample)
 				peaks.add(channels, sample.timestamp, sample.sampleRate)
-				meter.add(channels, sample.sampleRate)
+				await meter.add(channels, sample.sampleRate)
 				end = Math.max(end, sample.timestamp + sample.duration)
 				onProgress(Math.min(99, Math.floor(end / seconds * 100)))
 			} finally {
@@ -172,8 +174,9 @@ async function streamWaveform(source, onProgress) {
 			}
 		}
 		// The duration the decoder reached is exact; the one from the container may be rounded
-		return { ...peaks.done(), loudness: meter.done(), seconds: end || seconds }
+		return { ...peaks.done(), loudness: await meter.done(), seconds: end || seconds }
 	} finally {
+		meter?.close()
 		input.dispose()
 	}
 }

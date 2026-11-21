@@ -183,7 +183,7 @@ Precomputed audio peaks of a Version at a fixed rate (50 a second, ADR 0021), dr
 _Avoid_: Peaks, audio graph
 
 **Loudness**:
-The integrated loudness (LUFS, ITU-R BS.1770 / EBU R 128) and the peak (true peak in dBTP, or sample peak in dBFS where a browser measured it) of a Version's sound, measured with its Waveform and stored with it. Shown, never applied to playback.
+The integrated loudness (LUFS, ITU-R BS.1770 / EBU R 128) and the true peak (dBTP; a sample peak in dBFS only where a delivering tool handed in one) of a Version's sound, measured with its Waveform and stored with it. Shown, never applied to playback.
 _Avoid_: Volume, level, LUFS value
 
 **Processing**:

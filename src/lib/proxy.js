@@ -8,7 +8,6 @@
 import axios from '@nextcloud/axios'
 import { chunkSizeFor, errorMessage, getVersion, giveProxy, giveScrub, giveThumbs, giveWaveform, reportProxy, uploadsUrl } from '../api.js'
 import { t } from './l10n.js'
-import { loudnessMeter } from './loudness.js'
 import { AUDIO_BITRATE, fits, lowerTarget, needsProxy, plays, proxyBytes, proxySize, SCRUB_BITRATE, scrubFits, scrubSize, THUMB_WIDTH, thumbGrid, thumbSlot, verdict, videoBitrate, whyNot } from './proxyPlan.js'
 import { unsupported } from './unsupported.js'
 import { browserEnv, uploadFile } from './upload.js'
@@ -276,6 +275,8 @@ async function convert(source, { maxHeight, maxBitrate, thumbCap }, want, { onPr
 	let proxy = null
 	let proxyError = null
 	let scrub = null
+	/** The meter in its worker, ended whatever becomes of the pass */
+	let meter = null
 	const done = async () => {
 		await proxy?.done()
 		await scrub?.done()
@@ -315,7 +316,9 @@ async function convert(source, { maxHeight, maxBitrate, thumbCap }, want, { onPr
 			scrub = await scrubber(scrubSize({ width: video.displayWidth, height: video.displayHeight }), frames, seconds).catch(() => null)
 		}
 		const peaks = collectPeaks(rateFor(seconds), seconds)
-		const meter = loudnessMeter()
+		// The loudness in a worker, beside the pass (A10)
+		const { meterOffPage } = await import('./meterOffPage.js')
+		meter = meterOffPage()
 		let heard = false
 		let first = null
 		signal.throwIfAborted()
@@ -341,13 +344,13 @@ async function convert(source, { maxHeight, maxBitrate, thumbCap }, want, { onPr
 			}
 			return time
 		}
-		/** @param {object} sample - sound, which goes into the Waveform */
-		const hear = (sample) => {
+		/** @param {object} sample - sound, which goes into the Waveform; resolves once the meter has room */
+		const hear = async (sample) => {
 			if (want.waveform) {
 				const channels = channelsOf(sample)
 				peaks.add(channels, sample.timestamp, sample.sampleRate)
-				meter.add(channels, sample.sampleRate)
 				heard = true
+				await meter.add(channels, sample.sampleRate)
 			}
 		}
 
@@ -380,8 +383,8 @@ async function convert(source, { maxHeight, maxBitrate, thumbCap }, want, { onPr
 				audio: {
 					codec: 'aac',
 					bitrate: AUDIO_BITRATE,
-					process: (sample) => {
-						hear(sample)
+					process: async (sample) => {
+						await hear(sample)
 						return sample
 					},
 				},
@@ -425,7 +428,7 @@ async function convert(source, { maxHeight, maxBitrate, thumbCap }, want, { onPr
 					for await (const sample of new AudioSampleSink(audio).samples()) {
 						try {
 							signal.throwIfAborted()
-							hear(sample)
+							await hear(sample)
 						} finally {
 							sample.close()
 						}
@@ -459,13 +462,14 @@ async function convert(source, { maxHeight, maxBitrate, thumbCap }, want, { onPr
 			seconds,
 			bitrate,
 			thumbs: image?.type === stripType ? { image, every: grid.every, count: grid.count } : null,
-			peaks: heard ? { ...peaks.done(), loudness: meter.done() } : null,
+			peaks: heard ? { ...peaks.done(), loudness: await meter.done() } : null,
 		}
 	} catch (error) {
 		await scrub?.drop()
 		await proxy?.done()
 		throw error
 	} finally {
+		meter?.close()
 		input.dispose()
 	}
 }

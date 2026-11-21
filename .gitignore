@@ -2,9 +2,10 @@ node_modules/
 vendor/
 composer.lock
 
-# Built assets (vite)
+# Built assets (vite); assets/ holds the map of the inlined loudness worker
 js/
 css/
+/assets/
 
 # Docker instance data and local compose settings
 docker/
