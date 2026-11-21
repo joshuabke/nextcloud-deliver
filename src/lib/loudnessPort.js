@@ -3,7 +3,11 @@
  * decoded piece to a worker that keeps the meter and answers at the end, so
  * the true peak's work neither holds up the page nor waits for a hidden
  * tab's timers. A bounded number of pieces is on its way at a time: the loop
- * waits for the worker's acknowledgement, a message, not a timer.
+ * waits for the worker's acknowledgement, a message, not a timer. A worker
+ * that fails, with an error event, gives no loudness and holds up nothing.
+ * ponytail: a worker that stops answering without any event would hold the
+ * decode at its eighth piece; no timer guards it, as a hidden tab would
+ * stretch one, and browsers report a worker's crash as an error.
  */
 
 import { loudnessMeter } from './loudness.js'
@@ -40,12 +44,18 @@ export function remoteMeter(port, close = () => {}) {
 	let inFlight = 0
 	let room = null
 	let finish = null
-	// A worker that fails measures nothing: no loudness, and the decode goes on
-	port.onerror = () => {
+	let failed = false
+	// A worker that fails measures nothing: from then on every piece goes nowhere at once and the answer is no loudness, so the decode goes on and ends
+	const fail = () => {
+		failed = true
 		close()
 		room?.()
+		room = null
 		finish?.(null)
+		finish = null
 	}
+	port.onerror = fail
+	port.onmessageerror = fail
 	port.onmessage = ({ data }) => {
 		if (data.type === 'ack') {
 			inFlight--
@@ -54,10 +64,14 @@ export function remoteMeter(port, close = () => {}) {
 		} else if (data.type === 'done') {
 			close()
 			finish?.(data.loudness)
+			finish = null
 		}
 	}
 	return {
 		async add(channels, sampleRate) {
+			if (failed) {
+				return
+			}
 			port.postMessage({ type: 'add', channels, sampleRate }, channels.map((samples) => samples.buffer))
 			inFlight++
 			if (inFlight >= IN_FLIGHT) {
@@ -67,6 +81,9 @@ export function remoteMeter(port, close = () => {}) {
 			}
 		},
 		done() {
+			if (failed) {
+				return Promise.resolve(null)
+			}
 			return new Promise((resolve) => {
 				finish = resolve
 				port.postMessage({ type: 'done' })
