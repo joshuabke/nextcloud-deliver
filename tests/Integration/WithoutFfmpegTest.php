@@ -591,6 +591,48 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertSame('Without ffmpeg, Deliver cannot read this format', $version['derived']['error']);
 	}
 
+	public function testTheBrowserThatUploadedAWavHandsInItsLoudness(): void {
+		$loudness = ['integrated' => -23.0, 'peak' => -22.9, 'truePeak' => true];
+		$this->make('-f lavfi -i sine=duration=2 -ar 48000 -ac 2 -f wav');
+		// Before the server read it: kept beside it, written into the Waveform once that is made
+		$this->nc->put("{$this->root}/mix.wav", (string)file_get_contents($this->fixture));
+		$asset = "/files/{$this->nc->fileId("{$this->root}/mix.wav")}/asset";
+		self::assertTrue($this->nc->ocs('GET', $asset)['data']['loudnessFromBrowser']);
+		$id = $this->nc->ocs('GET', $asset)['data']['versionId'];
+		$given = $this->nc->ocs('POST', "/versions/$id/waveform", ['loudness' => $loudness]);
+		self::assertSame(200, $given['status'], json_encode($given['data']));
+		self::assertFalse($this->nc->ocs('GET', $asset)['data']['loudnessFromBrowser'], 'once is enough');
+		self::assertSame(409, $this->nc->ocs('POST', "/versions/$id/waveform", ['loudness' => $loudness])['status'], 'once is enough');
+		exec('php /var/www/html/occ deliver:worker --once 2>&1', $output, $code);
+		self::assertSame(0, $code, implode("\n", $output));
+		$version = $this->nc->ocs('GET', "/versions/$id")['data']['versions'][0];
+		$waveform = json_decode($this->nc->request('GET', $version['derived']['waveform']['url'])['body'], true);
+		self::assertSame($loudness, $waveform['loudness'], 'the server\'s peaks, the browser\'s loudness');
+		self::assertCount(100, $this->nc->waveform($version['derived']['waveform']['url'])['peaks']);
+
+		// After the server read it: written into its Waveform at once
+		$this->nc->put("{$this->root}/second.wav", (string)file_get_contents($this->fixture));
+		exec('php /var/www/html/occ deliver:worker --once 2>&1', $output, $code);
+		$second = $this->nc->ocs('GET', "/files/{$this->nc->fileId("{$this->root}/second.wav")}/asset")['data']['versionId'];
+		self::assertSame(200, $this->nc->ocs('POST', "/versions/$second/waveform", ['loudness' => $loudness])['status']);
+		$version = $this->nc->ocs('GET', "/versions/$second")['data']['versions'][0];
+		self::assertSame($loudness, json_decode($this->nc->request('GET', $version['derived']['waveform']['url'])['body'], true)['loudness']);
+	}
+
+	public function testOnlyAWavTakesItsLoudnessAloneAndOnlyWithoutFfmpeg(): void {
+		$loudness = ['integrated' => -23.0, 'peak' => -22.9, 'truePeak' => true];
+		$this->make('-f lavfi -i sine=duration=1 -c:a libmp3lame -f mp3');
+		$mp3 = $this->upload('take.mp3')['id'];
+		self::assertSame(409, $this->nc->ocs('POST', "/versions/$mp3/waveform", ['loudness' => $loudness])['status'], 'other audio hands its loudness in with its Waveform');
+		$this->make('-f lavfi -i sine=duration=1 -f wav');
+		$this->nc->put("{$this->root}/mix.wav", (string)file_get_contents($this->fixture));
+		$wav = $this->nc->ocs('GET', "/files/{$this->nc->fileId("{$this->root}/mix.wav")}/asset")['data']['versionId'];
+		self::assertSame(400, $this->nc->ocs('POST', "/versions/$wav/waveform", ['loudness' => ['integrated' => 40, 'peak' => -1, 'truePeak' => true]])['status'], 'checked as with a Waveform');
+		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['ffmpegPath' => '', 'ffprobePath' => ''])['status']);
+		self::assertFalse($this->nc->ocs('GET', "/files/{$this->nc->fileId("{$this->root}/mix.wav")}/asset")['data']['loudnessFromBrowser']);
+		self::assertSame(409, $this->nc->ocs('POST', "/versions/$wav/waveform", ['loudness' => $loudness])['status'], 'ffmpeg measures it');
+	}
+
 	public function testAWaveformFromTheBrowserIsChecked(): void {
 		$this->make('-f lavfi -i sine=duration=1 -c:a libmp3lame -f mp3');
 		$id = $this->upload('take.mp3')['id'];

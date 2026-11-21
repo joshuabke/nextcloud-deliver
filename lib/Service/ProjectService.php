@@ -418,13 +418,11 @@ class ProjectService {
 			// Without ffmpeg the browser that uploaded the audio decodes its Waveform from the file it holds (ADR 0012); a WAV's comes from its PCM here
 			'waveformFromBrowser' => $version->getWaveformState() === DerivedMedia::STATE_NONE
 				&& str_starts_with($file->getMimeType(), 'audio/')
-				&& !self::isWav($version)
+				&& !DerivedMedia::isWav($version)
 				&& $this->media->withoutFfmpeg(),
+			// Without ffmpeg the browser that uploaded a WAV measures its loudness from the file it holds (A9)
+			'loudnessFromBrowser' => $this->media->wavLoudnessFromBrowser($version),
 		];
-	}
-
-	private static function isWav(Version $version): bool {
-		return in_array(strtolower(pathinfo($version->getName(), PATHINFO_EXTENSION)), ['wav', 'bwf'], true);
 	}
 
 	/**
@@ -695,6 +693,10 @@ class ProjectService {
 	/** What a Member's browser decoded where the server has no ffmpeg (ADR 0003) */
 	public function giveWaveform(string $uid, int $versionId, mixed $peaks, int $rate, int $durationFrames, mixed $loudness = null): array {
 		[$version] = $this->reachVersion($uid, $versionId);
+		// A WAV's loudness alone, from the browser that uploaded it (A9)
+		if ($peaks === null && $loudness !== null) {
+			return $this->versionPayload($this->media->acceptWavLoudness($version, $loudness), $uid);
+		}
 		return $this->versionPayload($this->media->acceptWaveform($version, $peaks, $rate, $durationFrames, $loudness), $uid);
 	}
 
@@ -842,7 +844,7 @@ class ProjectService {
 			// Audio without a picture, once ffprobe has looked; null before
 			'audioOnly' => $version->getPlayable() === null ? null : !$version->getHasVideo() && (bool)$version->getHasAudio(),
 			// A WAV takes its markers as it is; anything else needs ffmpeg to become one
-			'wavExport' => self::isWav($version) || $this->ffmpeg->available(),
+			'wavExport' => DerivedMedia::isWav($version) || $this->ffmpeg->available(),
 			'width' => $version->getWidth(),
 			'height' => $version->getHeight(),
 			// The short side in pixels, as in "1080p"

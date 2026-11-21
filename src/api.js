@@ -6,6 +6,7 @@ import { generateOcsUrl, generateRemoteUrl, generateUrl } from '@nextcloud/route
 import { t } from './lib/l10n.js'
 import { baseLanguage } from './lib/language.js'
 import { fileIdAt } from './lib/upload.js'
+import { wavLoudness } from './lib/wav.js'
 import { decodeWaveform, toBase64 } from './lib/waveform.js'
 
 /** Set on the public review page; Members leave it null and use the OCS API */
@@ -179,6 +180,28 @@ export function decodeInTurn(file, onProgress) {
 export const giveAudioWaveform = (versionId, decoded) => giveWaveform(versionId, decoded, Math.max(1, Math.round(decoded.seconds * 1000)))
 
 /**
+ * Measures a WAV's loudness after the files decoded before it, one at a
+ * time, reading it piece by piece (A9)
+ *
+ * @param {Blob} file - a WAV
+ * @return {Promise<?object>} its loudness; null for a WAV of another kind or nonsense
+ */
+export function measureWavInTurn(file) {
+	const turn = decoding.then(() => wavLoudness(file))
+	decoding = turn.catch(() => {})
+	return turn
+}
+
+/**
+ * Hands in the loudness of a WAV the server read the Waveform of (A9)
+ *
+ * @param {number} versionId - the Version
+ * @param {{integrated: ?number, peak: ?number, truePeak: boolean}} loudness - as wavLoudness measured it
+ * @return {Promise<object>} the server's answer
+ */
+export const giveLoudness = (versionId, loudness) => axios.post(url(`/versions/${versionId}/waveform`), { loudness }).then(data)
+
+/**
  * Where the server has no ffmpeg, the browser that uploaded an audio file
  * decodes its Waveform from the file it still holds, so nobody downloads it
  * for that (spec: Media metadata and derived media). Fire and forget: without
@@ -191,7 +214,11 @@ export function handInWaveform(file, asset) {
 	if (asset.waveformFromBrowser) {
 		decodeInTurn(file).then((decoded) => giveAudioWaveform(asset.versionId, decoded)).catch(() => {})
 	}
+	if (asset.loudnessFromBrowser) {
+		measureWavInTurn(file).then((loudness) => loudness && giveLoudness(asset.versionId, loudness)).catch(() => {})
+	}
 }
+
 // How far this browser has got with a Version's Proxy, and the Proxy itself, uploaded next to the Version's file, where the server has no ffmpeg (ADR 0019)
 export const reportProxy = (versionId, percent) => axios.post(url(`/versions/${versionId}/proxy/progress`), { percent }).then(data)
 export const giveProxy = (versionId, fileId, converted = false) => axios.post(url(`/versions/${versionId}/proxy`), { fileId, converted }).then(data)

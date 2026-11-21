@@ -1,7 +1,7 @@
 import axios from '@nextcloud/axios'
 import { loadState } from '@nextcloud/initial-state'
 import { defineStore } from 'pinia'
-import { chunkSizeFor, decodeInTurn, enableFile, errorMessage, getVersion, giveAudioWaveform, regenerateVersion, uploadsUrl } from '../api.js'
+import { chunkSizeFor, decodeInTurn, enableFile, errorMessage, getVersion, giveAudioWaveform, giveLoudness, measureWavInTurn, regenerateVersion, uploadsUrl } from '../api.js'
 import { t } from '../lib/l10n.js'
 import { mediaKind, reviewable } from '../lib/media.js'
 import { cannotConvert, clearProxies, convertInTurn, dropProxy, handInPass, inspect, uploadProxy } from '../lib/proxy.js'
@@ -326,6 +326,10 @@ export const useUploadsStore = defineStore('uploads', {
 					item.waveform.progress = progress
 				}).catch(() => null)
 			}
+			// ... and of a WAV, whose Waveform the server reads, its loudness (A9), quietly
+			if (!hasFfmpeg && /\.(wav|bwf)$/i.test(item.name) && !item.measuring) {
+				item.measuring = measureWavInTurn(item.file).catch(() => null)
+			}
 			// Other tabs show it and leave it alone, also while a chunk or the final join takes long
 			const beat = setInterval(() => signal.aborted || this.remember(item), HEARTBEAT)
 			// Going away, a chunked upload waits for its file; one sent in one piece cannot go on
@@ -412,9 +416,13 @@ export const useUploadsStore = defineStore('uploads', {
 		 * Hands the Waveform the browser decoded to the server, once the Version exists
 		 *
 		 * @param {object} item - the upload
-		 * @param {{versionId: number, waveformFromBrowser: boolean}} asset - its Asset
+		 * @param {{versionId: number, waveformFromBrowser: boolean, loudnessFromBrowser: boolean}} asset - its Asset
 		 */
 		async handIn(item, asset) {
+			if (item.measuring && asset.loudnessFromBrowser) {
+				const loudness = await item.measuring
+				await (loudness && giveLoudness(asset.versionId, loudness).catch(() => {}))
+			}
 			if (!item.decoding) {
 				return
 			}
