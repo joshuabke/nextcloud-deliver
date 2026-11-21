@@ -41,7 +41,13 @@ class WithoutFfmpegTest extends TestCase {
 		$this->fixture = sys_get_temp_dir() . '/deliver-noffmpeg-' . bin2hex(random_bytes(4));
 	}
 
+	/** @var list<string> accounts made for a test */
+	private array $users = [];
+
 	protected function tearDown(): void {
+		foreach ($this->users as $user) {
+			$this->nc->ocsForm('DELETE', "/ocs/v2.php/cloud/users/$user");
+		}
 		$this->nc->ocs('PUT', '/admin/settings', ['ffmpegPath' => '', 'ffprobePath' => '']);
 		$this->nc->ocsForm('DELETE', '/ocs/v2.php/apps/provisioning_api/api/v1/config/apps/deliver/thumb_cap');
 		$this->nc->ocsForm('DELETE', '/ocs/v2.php/apps/provisioning_api/api/v1/config/apps/deliver/max_bitrate');
@@ -589,6 +595,31 @@ class WithoutFfmpegTest extends TestCase {
 		$version = $this->upload('cut.avi');
 
 		self::assertSame('Without ffmpeg, Deliver cannot read this format', $version['derived']['error']);
+	}
+
+	public function testOnlyWhoMayWriteTheFileHandsInItsLoudness(): void {
+		$loudness = ['integrated' => -14.0, 'peak' => -1.0, 'truePeak' => true];
+		$this->make('-f lavfi -i sine=duration=1 -c:a libmp3lame -f mp3');
+		$theirs = $this->upload('take.mp3')['id'];
+		$this->nc->put("{$this->root}/mine.mp3", (string)file_get_contents($this->fixture));
+		$mine = $this->nc->ocs('GET', "/files/{$this->nc->fileId("{$this->root}/mine.mp3")}/asset")['data']['versionId'];
+		// A Member who may only read the folder, decoding on opening
+		$user = 'deliver-viewer-' . bin2hex(random_bytes(4));
+		$password = 'Viewer-' . bin2hex(random_bytes(8));
+		$this->nc->ocsForm('POST', '/ocs/v2.php/cloud/users', ['userid' => $user, 'password' => $password]);
+		$this->users[] = $user;
+		$this->nc->ocsForm('POST', '/ocs/v2.php/apps/files_sharing/api/v1/shares', ['path' => "/{$this->root}", 'shareType' => 0, 'shareWith' => $user, 'permissions' => 1]);
+		$viewer = $this->nc->withUser($user, $password);
+
+		$given = $viewer->ocs('POST', "/versions/$theirs/waveform", NextcloudClient::handIn(array_fill(0, 50, 60), 1000) + ['loudness' => $loudness]);
+		self::assertSame(200, $given['status'], json_encode($given['data']));
+		$served = json_decode($this->nc->request('GET', $given['data']['derived']['waveform']['url'])['body'], true);
+		self::assertArrayNotHasKey('loudness', $served, 'the peaks are taken, the numbers left out');
+		self::assertCount(50, $this->nc->waveform($given['data']['derived']['waveform']['url'])['peaks']);
+
+		$given = $this->nc->ocs('POST', "/versions/$mine/waveform", NextcloudClient::handIn(array_fill(0, 50, 60), 1000) + ['loudness' => $loudness]);
+		self::assertSame(200, $given['status'], json_encode($given['data']));
+		self::assertSame($loudness, json_decode($this->nc->request('GET', $given['data']['derived']['waveform']['url'])['body'], true)['loudness'], 'whoever may write the file hands in both');
 	}
 
 	public function testAWaveformFromTheBrowserIsChecked(): void {
