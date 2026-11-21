@@ -275,9 +275,10 @@ export function barsShown(offset, pitch, pixels, count) {
  *
  * @param {{rate: number, peaks: Uint8Array}} waveform - as readWaveform gives it
  * @param {number} seconds - the length of one bar
+ * @param {?number} [scale] - the peak that stands for full height, as loudestOf gives it for several Waveforms; the piece's own loudest when left out
  * @return {Float32Array} 0 to 1 for each bar, the first at 0 s
  */
-export function bars({ rate, peaks }, seconds) {
+export function bars({ rate, peaks }, seconds, scale = null) {
 	const per = seconds * rate
 	const levels = new Float32Array(Math.max(1, Math.ceil(peaks.length / per)))
 	let loudest = 0.15 * 255
@@ -293,11 +294,58 @@ export function bars({ rate, peaks }, seconds) {
 		levels[bar] = level
 		loudest = Math.max(loudest, level)
 	}
+	loudest = scale ?? loudest
 	for (let bar = 0; bar < levels.length; bar++) {
 		levels[bar] /= loudest
 	}
 	return levels
 }
+
+/**
+ * Several Waveforms on one scale, as Compare's lanes are, so the louder
+ * Version looks louder; near silence on both stays thin.
+ *
+ * @param {Array<?{peaks: Uint8Array}>} waveforms - as readWaveform gives them; one missing counts for nothing
+ * @return {number} the loudest peak of them all, for bars
+ */
+export function loudestOf(waveforms) {
+	let loudest = 0.15 * 255
+	for (const waveform of waveforms) {
+		for (const peak of waveform?.peaks ?? []) {
+			if (peak > loudest) {
+				loudest = peak
+			}
+		}
+	}
+	return loudest
+}
+
+/**
+ * Lanes one above the other, in whole device pixels: the room between the
+ * top and the bottom shared out, a gap between each.
+ *
+ * @param {number} count - how many lanes
+ * @param {number} height - the stage's height
+ * @param {number} top - the room above the first
+ * @param {number} bottom - the room below the last
+ * @param {number} gap - between two
+ * @return {Array<{top: number, height: number}>} each lane's band
+ */
+export function laneBands(count, height, top, bottom, gap) {
+	const room = height - top - bottom - gap * (count - 1)
+	return Array.from({ length: count }, (_, lane) => {
+		const from = top + Math.round(lane * (room / count + gap))
+		return { top: from, height: top + Math.round(lane * (room / count + gap) + room / count) - from }
+	})
+}
+
+/**
+ * @param {number} seconds - how far a lane's wave is ahead of the playhead, as laneShift gives it
+ * @param {number} across - the seconds across the stage
+ * @param {number} pixels - the stage's width, in device pixels
+ * @return {number} the same in whole device pixels, so its bars keep to the pixels as the other lane's do
+ */
+export const shiftPixels = (seconds, across, pixels) => Math.round(seconds / across * pixels)
 
 /**
  * @param {number} seconds - where the playhead stands

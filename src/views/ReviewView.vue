@@ -230,7 +230,7 @@ function upload(event) {
 		<template #end>
 			<ApprovalControl />
 			<NcButton
-				v-if="context.versions.length > 1 && !isMobile"
+				v-if="context.versions.length > 1"
 				variant="tertiary"
 				:to="`/compare/${compareWith}/${id}`"
 				:aria-label="t('deliver', 'Compare with another Version')"

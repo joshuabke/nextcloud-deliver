@@ -1,8 +1,7 @@
 <script setup>
 import backIcon from '@mdi/svg/svg/arrow-left.svg?raw'
 import swapIcon from '@mdi/svg/svg/swap-horizontal.svg?raw'
-import volumeIcon from '@mdi/svg/svg/volume-high.svg?raw'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
@@ -15,9 +14,10 @@ import SegmentedControl from '../components/SegmentedControl.vue'
 import VersionPicker from '../components/VersionPicker.vue'
 import { errorMessage, getVersion, listComments } from '../api.js'
 import { usePanelOpen } from '../composables/panel.js'
+import { DERIVED_RECHECK } from '../composables/review.js'
 import { frameOnA } from '../lib/compare.js'
 import { t } from '../lib/l10n.js'
-import { isStill } from '../lib/media.js'
+import { derivedPending, isStill } from '../lib/media.js'
 import { formatAt } from '../lib/timecode.js'
 
 const props = defineProps({
@@ -74,6 +74,21 @@ watch(() => [props.a, props.b], async ([a, b]) => {
 		error.value = errorMessage(e)
 	}
 }, { immediate: true })
+
+let recheck = null
+// While either side's derived media is being made, the pair asks again, so a Waveform that becomes ready shows
+watch(() => [versionA.value?.derived, versionB.value?.derived], () => {
+	clearTimeout(recheck)
+	if (derivedPending(versionA.value) || derivedPending(versionB.value)) {
+		const a = props.a
+		recheck = setTimeout(() => getVersion(a).then((fresh) => {
+			if (props.a === a) {
+				context.value = fresh
+			}
+		}).catch(() => {}), DERIVED_RECHECK)
+	}
+})
+onBeforeUnmount(() => clearTimeout(recheck))
 
 /**
  * @param {number} a - the leading Version
@@ -150,25 +165,19 @@ function jump(comment) {
 				@select="open(a, $event)" />
 		</template>
 		<template #end>
-			<SegmentedControl v-model="mode" :options="LAYOUTS" :aria-label="t('deliver', 'Layout')" />
-			<NcButton
-				v-if="!isStill(versionA)"
-				variant="tertiary"
-				:aria-label="t('deliver', 'Sound of V{number}', { number: (audio === 'a' ? versionA : versionB).number })"
-				:title="t('deliver', 'Sound of V{number}; click for the other side', { number: (audio === 'a' ? versionA : versionB).number })"
-				@click="audio = audio === 'a' ? 'b' : 'a'">
-				<template #icon>
-					<NcIconSvgWrapper :svg="volumeIcon" />
-				</template>
-				{{ t('deliver', 'V{number}', { number: (audio === 'a' ? versionA : versionB).number }) }}
-			</NcButton>
+			<!-- Two pieces of audio have no pictures to lay out -->
+			<SegmentedControl
+				v-if="!audioOnly || !versionB.audioOnly"
+				v-model="mode"
+				:options="LAYOUTS"
+				:aria-label="t('deliver', 'Layout')" />
 		</template>
 
 		<ComparePlayer
 			ref="player"
 			v-model:offset="offset"
+			v-model:audio="audio"
 			:mode="mode"
-			:audio="audio"
 			:a="versionA"
 			:b="versionB"
 			:clock="clock"
@@ -176,12 +185,13 @@ function jump(comment) {
 			:commentsB="commentsB" />
 
 		<template #panel>
+			<!-- On a phone held upright the list waits under the grabber, as the Review view's does -->
 			<SegmentedControl
 				v-model="tab"
-				class="deliver-compare-view__tabs"
+				class="deliver-compare-view__tabs deliver-comments__head"
 				:options="tabs"
 				wide />
-			<ul v-if="shown.length" class="deliver-compare-view__list">
+			<ul v-if="shown.length" class="deliver-compare-view__list deliver-comments__list">
 				<li v-for="comment in shown" :key="comment.id">
 					<button
 						v-if="!isStill(versionA)"
@@ -194,7 +204,7 @@ function jump(comment) {
 					<p>{{ comment.body }}</p>
 				</li>
 			</ul>
-			<p v-else class="deliver-compare-view__empty">
+			<p v-else class="deliver-compare-view__empty deliver-comments__empty">
 				{{ t('deliver', 'No Comments yet.') }}
 			</p>
 		</template>

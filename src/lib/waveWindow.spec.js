@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, clampSpan, DEFAULT_SPAN, dragged, easeOut, GLIDE_MS, glided, glideStart, isWhole, MOTION_PER_PITCH, overviewWindow, pinchSpan, pixelPlace, readSpan, retarget, secondsAt, spreadSpan, stack, STACK_STEP, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan, xAt } from './waveWindow.js'
+import { barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, clampSpan, DEFAULT_SPAN, dragged, easeOut, GLIDE_MS, glided, glideStart, isWhole, laneBands, loudestOf, MOTION_PER_PITCH, overviewWindow, pinchSpan, pixelPlace, readSpan, retarget, secondsAt, shiftPixels, spreadSpan, stack, STACK_STEP, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan, xAt } from './waveWindow.js'
 
 describe('the window of the scrolling Waveform', () => {
 	it('centres the playhead, the wave left empty before the start and after the end', () => {
@@ -315,5 +315,33 @@ describe('the glide to a new place (N13)', () => {
 		expect(glideStart(100, 3000, 60)).toBe(2940)
 		expect(glideStart(3000, 100, 60)).toBe(160)
 		expect(glideStart(100, 115, 60)).toBe(100)
+	})
+})
+
+describe('Compare\'s lanes', () => {
+	it('scales several Waveforms to the loudest of them, so the louder looks louder', () => {
+		const loud = { rate: 1, peaks: Uint8Array.from([200, 100]) }
+		const soft = { rate: 1, peaks: Uint8Array.from([100, 50]) }
+		const scale = loudestOf([loud, soft, null])
+		expect(scale).toBe(200)
+		expect(Array.from(bars(soft, 1, scale))).toEqual([0.5, 0.25])
+		expect(Array.from(bars(soft, 1))).toEqual([1, 0.5])
+		// Near silence on both stays thin
+		expect(loudestOf([{ rate: 1, peaks: Uint8Array.from([3]) }])).toBeCloseTo(0.15 * 255, 5)
+	})
+
+	it('shares the stage out into lanes of whole pixels with a gap between them', () => {
+		const bands = laneBands(2, 301, 40, 8, 8)
+		expect(bands).toEqual([{ top: 40, height: 123 }, { top: 171, height: 122 }])
+		expect(bands[1].top + bands[1].height).toBe(301 - 8)
+		expect(laneBands(1, 300, 40, 40, 8)).toEqual([{ top: 40, height: 220 }])
+		for (const band of laneBands(2, 427, 120, 24, 24)) {
+			expect(Number.isInteger(band.top) && Number.isInteger(band.height)).toBe(true)
+		}
+	})
+
+	it('moves a lane by its shift in whole device pixels', () => {
+		expect(shiftPixels(2, 60, 1200)).toBe(40)
+		expect(shiftPixels(-1.001, 60, 1201)).toBe(-20)
 	})
 })

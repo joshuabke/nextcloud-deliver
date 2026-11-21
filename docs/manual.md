@@ -73,6 +73,14 @@ A Review Link shows only the files whoever made it may share in Files. A file sh
 - Double-click the wave, or rest a finger on it, to comment on that place; press Escape or tap elsewhere before typing to let go of the place again. C comments where the audio is when you press it, and the audio plays on while you write.
 - With the Comment list hidden (on a phone: held sideways, the list closed), the field to write in opens right at the wave instead, and the list stays hidden. It is the same field as under the list: open the list mid-sentence and your text is there.
 
+## Comparing Versions
+
+- **Compare** in the Review view (or **Compare with the Version before** in an Asset's menu) plays two Versions in step, side by side or under a wipe, with an offset in Frames for a cut that was trimmed in front.
+- Both always play; you hear one of them. The large **A/B switch** under the timeline says whose sound you hear: tap the other half, press **1** or **2**, or, after a click or tap in the player, **Tab**. Switching is instant and seamless: the sound you switch to goes on from the same moment, without a gap or a jump. (Moving through the page with Tab on the keyboard still works: Tab switches only once you clicked into the player.)
+- Two audio Versions show their Waveforms one above the other under one playhead, the one you hear in colour. They scroll and zoom like the Review view's Waveform; the offset moves the lower one against the upper. Click a lane's name to hear it. For video, **Waveforms** shows the same two lanes under the pictures.
+- Set a Range with **I** and **O** (or the Range button) and turn on **Loop** to hear it over and over (a Range shorter than a tenth of a second plays through instead). **Alternate A/B** plays the other Version on every pass: A, B, A, B …
+- Where Deliver measured them, each Version shows its integrated loudness (LUFS) and peak, and the difference between the two. Deliver never changes the level of what you hear: a louder mix plays louder.
+
 ## Captions
 
 A video can carry **Captions**, one SRT or WebVTT file per language.
