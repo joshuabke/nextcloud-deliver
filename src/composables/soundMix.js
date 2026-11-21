@@ -15,7 +15,13 @@ const FADE = 0.008
  * first one; until it runs, or where there is no Web Audio, the sides fall
  * back to muting the one not heard.
  *
- * @return {{mixing: import('vue').Ref<boolean>, start: (elements: HTMLMediaElement[], heard: number) => ?Promise<void>, hear: (elements: HTMLMediaElement[], heard: number) => void}} whether the gains decide, and what starts and switches them
+ * @return {{mixing: import('vue').Ref<boolean>, start: (elements: HTMLMediaElement[], heard: () => number) => ?Promise<void>, hear: (elements: HTMLMediaElement[], heard: number) => void, late: {refused: boolean}}} whether the gains decide, what starts and switches them, and whether this page starts the sides within the gesture
+ */
+/** Whether this page's browser refused a play() once the context ran, outside the gesture: from then on, for the page, the sides start within it */
+const late = { refused: false }
+
+/**
+ *
  */
 export function useSoundMix() {
 	const mixing = ref(false)
@@ -45,7 +51,7 @@ export function useSoundMix() {
 	 * From a gesture: makes the context or wakes it, and once it runs routes the sides through it
 	 *
 	 * @param {HTMLMediaElement[]} elements - the sides, A first
-	 * @param {number} heard - the index of the side heard
+	 * @param {() => number} heard - gives the index of the side heard when they join, which a switch while waiting may have changed
 	 * @return {?Promise<void>} settled once the context runs with both sides in it, or will not run; null without Web Audio
 	 */
 	function start(elements, heard) {
@@ -61,7 +67,7 @@ export function useSoundMix() {
 		// Called within the gesture; until it runs, muting stands in
 		return context.resume().then(() => {
 			if (context?.state === 'running') {
-				connect(elements, heard)
+				connect(elements, heard())
 			}
 		}).catch(() => {})
 	}
@@ -110,5 +116,5 @@ export function useSoundMix() {
 		context = null
 	})
 
-	return { mixing, start, hear }
+	return { mixing, start, hear, late }
 }

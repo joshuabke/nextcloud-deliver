@@ -1957,6 +1957,52 @@ test.describe('Comparing sound', () => {
 		}
 	})
 
+	test('while the AudioContext is slow to start, one start waits at a time and a switch made meanwhile is the side heard', async () => {
+		// A context that takes 300 ms to run, as a slow output may
+		const slow = await browser.newContext({ baseURL: BROWSER_URL })
+		await slow.addInitScript(() => {
+			const resume = AudioContext.prototype.resume
+			AudioContext.prototype.resume = function() {
+				return new Promise((done) => setTimeout(done, 300)).then(() => resume.call(this))
+			}
+		})
+		const page = await slow.newPage()
+		await login(page)
+		const open = async () => {
+			await page.goto(`/apps/deliver/compare/${mix[1].id}/${mix[0].id}`)
+			const videos = page.locator('.deliver-compare video')
+			await expect(videos.first()).toHaveJSProperty('readyState', 4)
+			await page.locator('.deliver-layout__bar h2').click()
+			return videos
+		}
+
+		// Play, Pause and Play within the wait: each side is sought by the Pause and by the one start, never again while it plays
+		let videos = await open()
+		await videos.evaluateAll((all) => {
+			window.seeks = [0, 0]
+			all.forEach((video, side) => video.addEventListener('seeking', () => window.seeks[side]++))
+		})
+		await page.keyboard.press('Space')
+		await page.keyboard.press('Space')
+		await page.keyboard.press('Space')
+		await page.waitForTimeout(1500)
+		expect(await page.evaluate(() => window.seeks)).toEqual([2, 2])
+		const state = await videos.evaluateAll((all) => all.map((video) => ({ paused: video.paused, time: video.currentTime })))
+		expect(state.map((each) => each.paused)).toEqual([false, false])
+		expect(Math.abs(state[1].time - state[0].time)).toBeLessThan(0.005)
+
+		// A switch made while the context starts is the side heard once it runs
+		videos = await open()
+		await page.keyboard.press('Space')
+		await page.waitForTimeout(100)
+		await page.keyboard.press('2')
+		await page.waitForTimeout(600)
+		expect(await videos.evaluateAll((all) => all.map((video) => !!video.deliverGain && !video.muted))).toEqual([true, true])
+		await expect.poll(() => heard(videos)).toEqual([false, true])
+		await expect(page.getByRole('radio', { name: /^V2/ })).toHaveAttribute('aria-checked', 'true')
+		await slow.close()
+	})
+
 	test('a looped Range alternating A and B plays A, then B, then A, switching at each wrap', async () => {
 		await page.goto(`/apps/deliver/compare/${mix[1].id}/${mix[0].id}`)
 		const videos = page.locator('.deliver-compare video')
