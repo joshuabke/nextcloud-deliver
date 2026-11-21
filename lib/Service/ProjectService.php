@@ -694,7 +694,11 @@ class ProjectService {
 
 	/** What a Member's browser decoded where the server has no ffmpeg (ADR 0003) */
 	public function giveWaveform(string $uid, int $versionId, mixed $peaks, int $rate, int $durationFrames, mixed $loudness = null): array {
-		[$version] = $this->reachVersion($uid, $versionId);
+		[$version, $file] = $this->reachVersion($uid, $versionId);
+		// Peaks are a picture anyone who sees the Version may hand in; loudness is a claim people act on, so only whoever may write its file hands that in, else it is left out
+		if ($file === null || !Access::canWrite($file)) {
+			$loudness = null;
+		}
 		return $this->versionPayload($this->media->acceptWaveform($version, $peaks, $rate, $durationFrames, $loudness), $uid);
 	}
 
