@@ -21,9 +21,11 @@ const IN_FLIGHT = 8
  * @param {{postMessage: (message: object, transfer?: Transferable[]) => void, onmessage: ?((event: {data: object}) => void)}} port - the worker's global scope, or one end of a MessageChannel
  */
 export function serveMeter(port) {
-	const meter = loudnessMeter()
+	let meter = loudnessMeter()
 	port.onmessage = ({ data }) => {
-		if (data.type === 'add') {
+		if (data.type === 'layout') {
+			meter = loudnessMeter(data.weights)
+		} else if (data.type === 'add') {
 			meter.add(data.channels, data.sampleRate)
 			port.postMessage({ type: 'ack' })
 		} else if (data.type === 'done') {
@@ -38,9 +40,10 @@ export function serveMeter(port) {
  *
  * @param {{postMessage: (message: object, transfer?: Transferable[]) => void, onmessage: ?((event: {data: object}) => void)}} port - the worker, or the other end of a MessageChannel
  * @param {() => void} close - ends the worker once it has answered
+ * @param {?number[]} layout - one weight a channel where the file says where they are; else by their count
  * @return {{add: (channels: Float32Array[], sampleRate: number) => Promise<void>, done: () => Promise<?object>, close: () => void}} the meter, as loudnessMeter's but answering in promises; close ends it unanswered
  */
-export function remoteMeter(port, close = () => {}) {
+export function remoteMeter(port, close = () => {}, layout = null) {
 	let inFlight = 0
 	let room = null
 	let finish = null
@@ -56,6 +59,9 @@ export function remoteMeter(port, close = () => {}) {
 	}
 	port.onerror = fail
 	port.onmessageerror = fail
+	if (layout) {
+		port.postMessage({ type: 'layout', weights: layout })
+	}
 	port.onmessage = ({ data }) => {
 		if (data.type === 'ack') {
 			inFlight--
@@ -96,10 +102,11 @@ export function remoteMeter(port, close = () => {}) {
 /**
  * The meter on the page, where no worker can be made: the same answers, no pauses
  *
+ * @param {?number[]} layout - one weight a channel where the file says where they are; else by their count
  * @return {{add: (channels: Float32Array[], sampleRate: number) => Promise<void>, done: () => Promise<?object>, close: () => void}} the meter
  */
-export function localMeter() {
-	const meter = loudnessMeter()
+export function localMeter(layout = null) {
+	const meter = loudnessMeter(layout)
 	return {
 		add: async (channels, sampleRate) => meter.add(channels, sampleRate),
 		done: async () => meter.done(),

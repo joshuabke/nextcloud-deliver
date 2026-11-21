@@ -32,6 +32,15 @@ function fileIdOf(response) {
 	return parseInt(response.headers['oc-fileid'], 10)
 }
 
+/**
+ * @param {{headers?: object}} response - Nextcloud's answer to a finished upload
+ * @return {?string} the ETag of the content it took, without quotes; null where it gives none
+ */
+export function etagOf(response) {
+	const etag = response?.headers?.['oc-etag'] ?? response?.headers?.etag
+	return typeof etag === 'string' && etag !== '' ? etag.replace(/^(W\/)?"|"$/g, '') : null
+}
+
 /** Pauses between attempts after a server error, in seconds */
 const BACKOFF = [1, 2, 4, 8, 16]
 
@@ -143,10 +152,11 @@ export async function retrying(attempt, { signal, online, untilOnline, sleep, on
  * @param {?string} options.folder - the upload folder of an upload that stopped, to go on with
  * @param {(folder: string) => void} options.onFolder - gets the upload folder once it exists, to go on after a reload
  * @param {(loaded: number) => void} options.onProgress - gets the bytes uploaded so far
+ * @param {(etag: ?string) => void} [options.onEtag] - gets the ETag of the content the server took, so what is measured of it can be bound to it
  * @param {object} options.env - signal, online, untilOnline, sleep and onPause, as retrying takes them
  * @return {Promise<number>} the Nextcloud file id of the upload
  */
-export async function uploadFile({ request, file, target, uploadsUrl, chunkSize, folder = null, onFolder = () => {}, onProgress = () => {}, env }) {
+export async function uploadFile({ request, file, target, uploadsUrl, chunkSize, folder = null, onFolder = () => {}, onProgress = () => {}, onEtag = () => {}, env }) {
 	const { signal } = env
 	const send = (config) => retrying(() => request({ ...config, signal }), env)
 	// Ask first, so a taken name is refused now rather than after the whole upload
@@ -167,6 +177,7 @@ export async function uploadFile({ request, file, target, uploadsUrl, chunkSize,
 			headers: { 'Content-Type': file.type || 'application/octet-stream', 'If-None-Match': '*' },
 			onUploadProgress: (event) => onProgress(event.loaded),
 		})
+		onEtag(etagOf(response))
 		return fileIdOf(response)
 	}
 	// The chunks the server still has from before; none when their folder is gone
@@ -205,7 +216,9 @@ export async function uploadFile({ request, file, target, uploadsUrl, chunkSize,
 	// An answer the server did give stands: a 412 means another file took the name meanwhile, and that is not this one.
 	return retrying(async () => {
 		try {
-			return fileIdOf(await request({ method: 'MOVE', url: `${folder}/.file`, headers: { ...headers, Overwrite: 'F' }, signal }))
+			const moved = await request({ method: 'MOVE', url: `${folder}/.file`, headers: { ...headers, Overwrite: 'F' }, signal })
+			onEtag(etagOf(moved))
+			return fileIdOf(moved)
 		} catch (error) {
 			const answered = error.response?.status !== undefined && error.response.status < 500
 			const arrived = signal?.aborted || answered ? null : await fileIdAt(request, target, signal)

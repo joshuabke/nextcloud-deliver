@@ -26,7 +26,7 @@ async function read(blob, at, length) {
  * 32 or 64 bits, WAVE_FORMAT_EXTENSIBLE too
  *
  * @param {Blob} blob - the file
- * @return {Promise<?{channels: number, sampleRate: number, bits: number, float: boolean, start: number, length: number}>} null for anything else
+ * @return {Promise<?{channels: number, sampleRate: number, bits: number, float: boolean, mask: ?number, start: number, length: number}>} null for anything else; mask is the extensible format's dwChannelMask
  */
 export async function wavFormat(blob) {
 	if (blob.size < 12) {
@@ -42,11 +42,15 @@ export async function wavFormat(blob) {
 		const chunk = await read(blob, at, 8)
 		const id = tag(chunk, 0)
 		const size = chunk.getUint32(4, true)
-		if (id === 'fmt ' && size >= 16) {
+		// The first `fmt ` counts, as on the server
+		if (id === 'fmt ' && size >= 16 && format === null) {
 			const fmt = await read(blob, at + 8, Math.min(size, 40))
-			const code = fmt.getUint16(0, true) === 0xFFFE && size >= 26 ? fmt.getUint16(24, true) : fmt.getUint16(0, true)
+			const extensible = fmt.getUint16(0, true) === 0xFFFE && size >= 26
+			const code = extensible ? fmt.getUint16(24, true) : fmt.getUint16(0, true)
 			format = {
 				code,
+				// WAVE_FORMAT_EXTENSIBLE says where each channel is; null where nothing does
+				mask: extensible ? fmt.getUint32(20, true) : null,
 				channels: fmt.getUint16(2, true),
 				sampleRate: fmt.getUint32(4, true),
 				block: fmt.getUint16(12, true),
@@ -56,14 +60,14 @@ export async function wavFormat(blob) {
 			if (format === null) {
 				return null
 			}
-			const { code, channels, sampleRate, block, bits } = format
+			const { code, channels, sampleRate, block, bits, mask } = format
 			const integer = code === 1 && [8, 16, 24, 32].includes(bits)
 			const float = code === 3 && [32, 64].includes(bits)
 			// A header that says nonsense is not read, as on the server
 			if (!(integer || float) || channels < 1 || sampleRate < 1 || sampleRate > MOST_RATE || block !== channels * bits / 8) {
 				return null
 			}
-			return { channels, sampleRate, bits, float, start: at + 8, length: Math.min(size, blob.size - at - 8) - Math.min(size, blob.size - at - 8) % block }
+			return { channels, sampleRate, bits, float, mask, start: at + 8, length: Math.min(size, blob.size - at - 8) - Math.min(size, blob.size - at - 8) % block }
 		}
 		at += 8 + size + (size % 2)
 	}
@@ -107,23 +111,50 @@ export async function* wavPieces(blob, { channels, bits, float, start, length })
 	}
 }
 
+/** Speaker positions of dwChannelMask whose channels BS.1770 weights 1.41: back and side left and right */
+const SURROUNDS = [4, 5, 9, 10]
+/** The LFE, which BS.1770 leaves out */
+const LFE = 3
+
+/**
+ * The weight of each channel of an extensible WAV by its channel mask: its
+ * channels follow the set bits from the lowest; the LFE 0, surrounds 1.41,
+ * everything else 1, also channels the mask does not name. A mask of no
+ * positions weights every channel 1.
+ *
+ * @param {number} mask - dwChannelMask
+ * @param {number} channels - how many
+ * @return {number[]} one weight a channel
+ */
+export function maskWeights(mask, channels) {
+	const positions = []
+	for (let bit = 0; bit < 32 && positions.length < channels; bit++) {
+		if ((mask >>> bit) & 1) {
+			positions.push(bit)
+		}
+	}
+	return Array.from({ length: channels }, (_, c) => (positions[c] === LFE ? 0 : SURROUNDS.includes(positions[c]) ? 1.41 : 1))
+}
+
 /**
  * The integrated loudness and true peak of a WAV, read from the file piece
  * by piece (A9)
  *
  * @param {Blob} blob - the file
+ * @param {AbortSignal} [signal] - stops the reading and the worker, as for a cancelled upload
  * @return {Promise<?{integrated: ?number, peak: ?number, truePeak: boolean}>} null for a WAV of another kind, or one measured as nonsense
  */
-export async function wavLoudness(blob) {
+export async function wavLoudness(blob, signal) {
 	const format = await wavFormat(blob)
 	if (format === null) {
 		return null
 	}
-	// In a worker, as for every Waveform (A10), handed each piece
+	// In a worker, as for every Waveform (A10), handed each piece, its channels weighted where the file says where they are
 	const { meterOffPage } = await import('./meterOffPage.js')
-	const meter = meterOffPage()
+	const meter = meterOffPage(format.mask === null ? null : maskWeights(format.mask, format.channels))
 	try {
 		for await (const planes of wavPieces(blob, format)) {
+			signal?.throwIfAborted()
 			await meter.add(planes, format.sampleRate)
 		}
 		return await meter.done()

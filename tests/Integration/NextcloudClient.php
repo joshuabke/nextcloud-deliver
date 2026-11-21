@@ -146,6 +146,12 @@ class NextcloudClient {
 		return $this->request($method, $this->dav($path), $body, $destination === null ? [] : ['Destination: ' . $this->baseUrl . $this->dav($destination)])['status'];
 	}
 
+	/** The ETag of a file, without quotes, as an upload of it comes back with */
+	public function etag(string $path): string {
+		$body = $this->request('PROPFIND', $this->dav($path), '<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:getetag/></d:prop></d:propfind>', ['Depth: 0', 'Content-Type: application/xml'])['body'];
+		return preg_match('/<d:getetag>&quot;([^&<]+)&quot;<\/d:getetag>|<d:getetag>"([^"<]+)"<\/d:getetag>/', $body, $m) === 1 ? ($m[1] ?: $m[2]) : '';
+	}
+
 	public function get(string $path): string {
 		return $this->request('GET', $this->dav($path))['body'];
 	}

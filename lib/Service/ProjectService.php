@@ -691,7 +691,7 @@ class ProjectService {
 	}
 
 	/** What a Member's browser decoded where the server has no ffmpeg (ADR 0003) */
-	public function giveWaveform(string $uid, int $versionId, mixed $peaks, int $rate, int $durationFrames, mixed $loudness = null): array {
+	public function giveWaveform(string $uid, int $versionId, mixed $peaks, int $rate, int $durationFrames, mixed $loudness = null, ?string $etag = null): array {
 		[$version, $file] = $this->reachVersion($uid, $versionId);
 		$writes = $file !== null && Access::canWrite($file);
 		// A WAV's loudness alone, from the browser that uploaded it (A9): only from whoever may write its file
@@ -699,13 +699,13 @@ class ProjectService {
 			if (!$writes) {
 				throw new AccessDeniedException('Only whoever may write the file hands in its loudness');
 			}
-			return $this->versionPayload($this->media->acceptWavLoudness($version, $loudness), $uid);
+			return $this->versionPayload($this->media->acceptWavLoudness($version, $loudness, $etag), $uid);
 		}
 		// Peaks are a picture anyone who sees the Version may hand in; loudness is a claim people act on, so only whoever may write its file hands that in, else it is left out
 		if (!$writes) {
 			$loudness = null;
 		}
-		return $this->versionPayload($this->media->acceptWaveform($version, $peaks, $rate, $durationFrames, $loudness), $uid);
+		return $this->versionPayload($this->media->acceptWaveform($version, $peaks, $rate, $durationFrames, $loudness, $etag), $uid);
 	}
 
 	/**

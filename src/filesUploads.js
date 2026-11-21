@@ -18,6 +18,7 @@ import { getAssetForFile, getIntake, handInWaveform } from './api.js'
 import { t } from './lib/l10n.js'
 import { convertInTurn, dropProxy, handInPass, inspect } from './lib/proxy.js'
 import { atUpload, passOf } from './lib/proxyPlan.js'
+import { etagOf } from './lib/upload.js'
 import { busy, encodingEta, timeLeft } from './lib/uploadStatus.js'
 import { uploaded } from './lib/waveform.js'
 
@@ -142,7 +143,7 @@ function onUpload(upload) {
 	const audio = uploaded(upload, 'audio')
 	if (audio !== null) {
 		// 404 for a file that is no Asset
-		getAssetForFile(audio).then((asset) => handInWaveform(upload.file, asset), () => {})
+		getAssetForFile(audio).then((asset) => handInWaveform(upload.file, asset, etagOf(upload.response)), () => {})
 	}
 	// Quicker than a look at the queue, it converts now from the file the browser still holds
 	start(upload)

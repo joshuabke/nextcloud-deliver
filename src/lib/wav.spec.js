@@ -1,5 +1,27 @@
 import { describe, expect, it } from 'vitest'
-import { wavFormat, wavLoudness, wavPieces } from './wav.js'
+import { maskWeights, wavFormat, wavLoudness, wavPieces } from './wav.js'
+
+/**
+ * The body of a `fmt ` chunk
+ *
+ * @param {object} format - as the WAV says it is
+ * @return {DataView} the body
+ */
+function fmtChunk({ code, channels, sampleRate, width, claimedBits, extensible, mask }) {
+	const fmt = new DataView(new ArrayBuffer(extensible ? 40 : 16))
+	fmt.setUint16(0, extensible ? 0xFFFE : code, true)
+	fmt.setUint16(2, channels, true)
+	fmt.setUint32(4, sampleRate, true)
+	fmt.setUint32(8, sampleRate * channels * width, true)
+	fmt.setUint16(12, channels * width, true)
+	fmt.setUint16(14, claimedBits, true)
+	if (extensible) {
+		fmt.setUint16(16, 22, true)
+		fmt.setUint32(20, mask, true)
+		fmt.setUint16(24, code, true)
+	}
+	return fmt
+}
 
 /**
  * A WAV as a Blob, its samples written as the format says
@@ -8,7 +30,7 @@ import { wavFormat, wavLoudness, wavPieces } from './wav.js'
  * @param {number[][]} frames - one array of values from −1 to 1 a frame, one value a channel
  * @return {Blob} the file
  */
-function wav({ code = 1, bits = 16, sampleRate = 48000, extensible = false, before = [], dataSize = null, claimedBits = bits }, frames) {
+function wav({ code = 1, bits = 16, sampleRate = 48000, extensible = false, mask = 0, before = [], dataSize = null, claimedBits = bits }, frames) {
 	const channels = frames[0]?.length ?? 2
 	const width = bits / 8
 	const data = new DataView(new ArrayBuffer(frames.length * channels * width))
@@ -29,17 +51,7 @@ function wav({ code = 1, bits = 16, sampleRate = 48000, extensible = false, befo
 			data.setInt32(at, Math.round(value * 2147483647), true)
 		}
 	}))
-	const fmt = new DataView(new ArrayBuffer(extensible ? 40 : 16))
-	fmt.setUint16(0, extensible ? 0xFFFE : code, true)
-	fmt.setUint16(2, channels, true)
-	fmt.setUint32(4, sampleRate, true)
-	fmt.setUint32(8, sampleRate * channels * width, true)
-	fmt.setUint16(12, channels * width, true)
-	fmt.setUint16(14, claimedBits, true)
-	if (extensible) {
-		fmt.setUint16(16, 22, true)
-		fmt.setUint16(24, code, true)
-	}
+	const fmt = fmtChunk({ code, channels, sampleRate, width, claimedBits, extensible, mask })
 	const chunk = (id, body) => {
 		const head = new DataView(new ArrayBuffer(8))
 		;[...id].forEach((char, i) => head.setUint8(i, char.charCodeAt(0)))
@@ -107,6 +119,18 @@ describe('a WAV read piece by piece', () => {
 		expect(await wavFormat(wav(options, ramp))).toBeNull()
 	})
 
+	it('takes the first `fmt ` where there are two, as the server does', async () => {
+		const alaw = fmtChunk({ code: 6, channels: 2, sampleRate: 48000, width: 1, claimedBits: 8 })
+		expect(await wavFormat(wav({ before: [['fmt ', alaw]] }, ramp))).toBeNull()
+		const pcm = fmtChunk({ code: 1, channels: 2, sampleRate: 44100, width: 2, claimedBits: 16 })
+		expect(await wavFormat(wav({ before: [['fmt ', pcm]] }, ramp))).toMatchObject({ sampleRate: 44100 })
+	})
+
+	it('reads where an extensible WAV says its channels are, and nothing where a plain one does not', async () => {
+		expect(await wavFormat(wav({ extensible: true, mask: 0x33 }, ramp))).toMatchObject({ mask: 0x33 })
+		expect(await wavFormat(wav({}, ramp))).toMatchObject({ mask: null })
+	})
+
 	it('leaves out what is no WAV', async () => {
 		expect(await wavFormat(new Blob(['ID3 not a wav at all']))).toBeNull()
 	})
@@ -123,6 +147,45 @@ describe('the loudness of a WAV', () => {
 		expect(measured.integrated).toBeCloseTo(-23, 1)
 		expect(measured.peak).toBeCloseTo(-23, 0)
 		expect(measured.truePeak).toBe(true)
+	})
+
+	it.each([
+		['5.1', 0x3F, 6, [1, 1, 1, 0, 1.41, 1.41]],
+		['7.1', 0x63F, 8, [1, 1, 1, 0, 1.41, 1.41, 1.41, 1.41]],
+		['quad', 0x33, 4, [1, 1, 1.41, 1.41]],
+		['stems in six channels, no position named', 0, 6, [1, 1, 1, 1, 1, 1]],
+		['a stereo mask on six channels', 0x3, 6, [1, 1, 1, 1, 1, 1]],
+	])('weights the channels of %s as its mask says', (_, mask, channels, weights) => {
+		expect(maskWeights(mask, channels)).toEqual(weights)
+	})
+
+	it('weights an extensible WAV by its mask: the LFE left out, a surround 1.41', async () => {
+		const amplitude = 10 ** (-23 / 20)
+		const frames = Array.from({ length: 48000 * 5 }, (_, n) => {
+			const value = amplitude * Math.sin(2 * Math.PI * 1000 * n / 48000)
+			return [0, 0, 0, value]
+		})
+		const unnamed = await wavLoudness(wav({ bits: 24, extensible: true, mask: 0 }, frames))
+		const surround = await wavLoudness(wav({ bits: 24, extensible: true, mask: 0x33 }, frames))
+		const lfe = await wavLoudness(wav({ bits: 24, extensible: true, mask: 0x0F }, frames))
+		expect(surround.integrated - unnamed.integrated).toBeCloseTo(10 * Math.log10(1.41), 1)
+		expect(lfe.integrated).toBeNull()
+	})
+
+	it('weights six plain channels as 5.1, the fourth the LFE', async () => {
+		const amplitude = 10 ** (-23 / 20)
+		const frames = Array.from({ length: 48000 * 5 }, (_, n) => {
+			const value = amplitude * Math.sin(2 * Math.PI * 1000 * n / 48000)
+			return [0, 0, 0, value, 0, 0]
+		})
+		expect((await wavLoudness(wav({ bits: 24 }, frames))).integrated).toBeNull()
+	})
+
+	it('stops reading once the upload is cancelled', async () => {
+		const frames = Array.from({ length: 150000 }, () => [0.25, -0.25])
+		const controller = new AbortController()
+		controller.abort()
+		await expect(wavLoudness(wav({}, frames), controller.signal)).rejects.toThrow()
 	})
 
 	it('has none for a WAV of another kind', async () => {
