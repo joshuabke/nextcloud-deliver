@@ -5,9 +5,6 @@
  * memory, as a WAV can be gigabytes.
  */
 
-import { loudnessMeter } from './loudness.js'
-import { breather } from './waveform.js'
-
 /** Frames a piece */
 const FRAMES = 65536
 /** Above any PCM a recorder writes, as the server's reader has it */
@@ -122,11 +119,15 @@ export async function wavLoudness(blob) {
 	if (format === null) {
 		return null
 	}
-	const meter = loudnessMeter()
-	const pause = breather()
-	for await (const planes of wavPieces(blob, format)) {
-		meter.add(planes, format.sampleRate)
-		await pause()
+	// In a worker, as for every Waveform (A10), handed each piece
+	const { meterOffPage } = await import('./meterOffPage.js')
+	const meter = meterOffPage()
+	try {
+		for await (const planes of wavPieces(blob, format)) {
+			await meter.add(planes, format.sampleRate)
+		}
+		return await meter.done()
+	} finally {
+		meter.close()
 	}
-	return meter.done()
 }

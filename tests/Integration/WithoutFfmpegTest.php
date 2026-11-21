@@ -634,9 +634,18 @@ class WithoutFfmpegTest extends TestCase {
 		$this->nc->put("{$this->root}/mix.wav", (string)file_get_contents($this->fixture));
 		$wav = $this->nc->ocs('GET', "/files/{$this->nc->fileId("{$this->root}/mix.wav")}/asset")['data']['versionId'];
 		self::assertSame(400, $this->nc->ocs('POST', "/versions/$wav/waveform", ['loudness' => ['integrated' => 40, 'peak' => -1, 'truePeak' => true]])['status'], 'checked as with a Waveform');
+		// A Member who may only read the folder plants no numbers
+		$user = 'deliver-viewer-' . bin2hex(random_bytes(4));
+		$password = 'Viewer-' . bin2hex(random_bytes(8));
+		$this->nc->ocsForm('POST', '/ocs/v2.php/cloud/users', ['userid' => $user, 'password' => $password]);
+		$this->users[] = $user;
+		$this->nc->ocsForm('POST', '/ocs/v2.php/apps/files_sharing/api/v1/shares', ['path' => "/{$this->root}", 'shareType' => 0, 'shareWith' => $user, 'permissions' => 1]);
+		self::assertSame(403, $this->nc->withUser($user, $password)->ocs('POST', "/versions/$wav/waveform", ['loudness' => $loudness])['status'], 'only whoever may write the file');
 		self::assertSame(200, $this->nc->ocs('PUT', '/admin/settings', ['ffmpegPath' => '', 'ffprobePath' => ''])['status']);
 		self::assertFalse($this->nc->ocs('GET', "/files/{$this->nc->fileId("{$this->root}/mix.wav")}/asset")['data']['loudnessFromBrowser']);
 		self::assertSame(409, $this->nc->ocs('POST', "/versions/$wav/waveform", ['loudness' => $loudness])['status'], 'ffmpeg measures it');
+	}
+
 	public function testOnlyWhoMayWriteTheFileHandsInItsLoudness(): void {
 		$loudness = ['integrated' => -14.0, 'peak' => -1.0, 'truePeak' => true];
 		$this->make('-f lavfi -i sine=duration=1 -c:a libmp3lame -f mp3');
