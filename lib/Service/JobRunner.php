@@ -37,30 +37,38 @@ class JobRunner {
 		// ponytail: count, then claim; two workers can overshoot the cap by one at the same instant
 		$cap = max(1, $this->config->getValueInt(Application::APP_ID, 'max_jobs', 1));
 		$running = $this->jobs->countRunningOnServer();
-		// Scrub Proxies hold up no other work: what they keep busy, the rest may go past (#169)
-		$others = $this->jobs->countRunningOnServer(Job::KIND_SCRUB);
+		// Scrub Proxies and loudness hold up no other work: what they keep busy, the rest may go past (#169, A5)
+		$others = $this->jobs->countRunningOnServer(Job::BACKGROUND_KINDS);
 		if ($others >= $cap) {
 			return false;
 		}
 		foreach ($this->jobs->findQueued(10) as $job) {
-			if ($job->getKind() === Job::KIND_SCRUB && $running >= $cap) {
+			if (in_array($job->getKind(), Job::BACKGROUND_KINDS, true) && $running >= $cap) {
 				return false;
+			}
+			// The loudness waits for the Waveforms the queue makes while idle (A5)
+			if ($job->getKind() === Job::KIND_LOUDNESS && $this->idleWaveform($worker, $now)) {
+				return true;
 			}
 			if ($this->jobs->claim($job, $worker, $now)) {
 				$this->media->process($job);
 				return true;
 			}
 		}
-		// Nothing else to do: a Waveform a Version lacks, such as one from before the fixed rate (ADR 0021)
+		return $this->idleWaveform($worker, $now);
+	}
+
+	/** Nothing else to do: a Waveform a Version lacks, such as one from before the fixed rate (ADR 0021) */
+	private function idleWaveform(string $worker, int $now): bool {
 		$job = $this->media->queueMissingWaveform();
-		if ($job !== null && $this->jobs->claim($job, $worker, $now)) {
-			$this->media->process($job);
-			if ($this->jobs->find($job->getId())?->getState() === Job::STATE_FAILED) {
-				$this->media->pauseIdleWaveforms();
-			}
-			return true;
+		if ($job === null || !$this->jobs->claim($job, $worker, $now)) {
+			return false;
 		}
-		return false;
+		$this->media->process($job, idle: true);
+		if ($this->jobs->find($job->getId())?->getState() === Job::STATE_FAILED) {
+			$this->media->pauseIdleWaveforms();
+		}
+		return true;
 	}
 
 	/** @return int how many jobs ran before the queue ran dry or the time was up */

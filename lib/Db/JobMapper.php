@@ -25,7 +25,7 @@ class JobMapper extends Mapper {
 			->where($qb->expr()->eq('j.state', $qb->createNamedParameter(Job::STATE_QUEUED)))
 			->andWhere($qb->expr()->isNull('p.deleted_at'))
 			// The Waveform of audio before the rest; a video's reads the whole master, so it keeps its place
-			->orderBy($qb->createFunction('CASE WHEN j.kind = ' . $qb->expr()->literal(Job::KIND_PROBE) . ' THEN 0 WHEN j.kind = ' . $qb->expr()->literal(Job::KIND_WAVEFORM) . ' AND v.has_video = ' . $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL) . ' THEN 1 WHEN j.kind = ' . $qb->expr()->literal(Job::KIND_SCRUB) . ' THEN 3 ELSE 2 END'))
+			->orderBy($qb->createFunction('CASE WHEN j.kind = ' . $qb->expr()->literal(Job::KIND_PROBE) . ' THEN 0 WHEN j.kind = ' . $qb->expr()->literal(Job::KIND_WAVEFORM) . ' AND v.has_video = ' . $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL) . ' THEN 1 WHEN j.kind = ' . $qb->expr()->literal(Job::KIND_SCRUB) . ' THEN 3 WHEN j.kind = ' . $qb->expr()->literal(Job::KIND_LOUDNESS) . ' THEN 4 ELSE 2 END'))
 			// A fresh upload's before the batch of older Versions (DerivedMedia::queueMissingScrubs)
 			->addOrderBy($qb->createFunction('CASE WHEN j.kind = ' . $qb->expr()->literal(Job::KIND_SCRUB) . ' THEN j.version_id ELSE 0 END'), 'DESC')
 			->addOrderBy('j.id')
@@ -135,16 +135,16 @@ class JobMapper extends Mapper {
 	/**
 	 * How many jobs the server runs right now, without the Proxies browsers make
 	 *
-	 * @param ?string $except without the jobs of this kind
+	 * @param list<string> $except without the jobs of these kinds
 	 */
-	public function countRunningOnServer(?string $except = null): int {
+	public function countRunningOnServer(array $except = []): int {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select($qb->func()->count('*', 'amount'))
 			->from($this->getTableName())
 			->where($qb->expr()->eq('state', $qb->createNamedParameter(Job::STATE_RUNNING)))
 			->andWhere($this->onServer($qb));
-		if ($except !== null) {
-			$qb->andWhere($qb->expr()->neq('kind', $qb->createNamedParameter($except)));
+		if ($except !== []) {
+			$qb->andWhere($qb->expr()->notIn('kind', $qb->createNamedParameter($except, IQueryBuilder::PARAM_STR_ARRAY)));
 		}
 		$result = $qb->executeQuery();
 		$amount = (int)$result->fetchOne();

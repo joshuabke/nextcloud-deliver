@@ -104,6 +104,12 @@ class DerivedMedia {
 	 * queue's. Per PHP process, which is one request.
 	 */
 	private static bool $requestRead = false;
+	/** Integrated loudness in LUFS and peak in dB that are shown at all, from ffmpeg or handed in (A5); the source of truth, which the browser's meter (src/lib/loudness.js) keeps as well */
+	// Sanity bounds, not properties of programme material: BS.1770 adds the channel powers, so full-scale multichannel signal reads well above full scale, but no real file reaches +15 LUFS; real material peaks below about +6 dBTP even with inter-sample overs and float files
+	private const LOUDNESS_RANGE = [-70.0, 15.0];
+	private const PEAK_RANGE = [-200.0, 12.0];
+	/** Set while the queue makes a Waveform because it had nothing else to do: such a Waveform gets no loudness (A5) */
+	private bool $idle = false;
 	/** Set while a request makes a Waveform itself: ffmpeg then has a short time and reads no further than the length its header says */
 	private bool $inRequest = false;
 	/** Seconds between two progress writes to the job row */
@@ -261,7 +267,8 @@ class DerivedMedia {
 	 * stderr for the admin panel. Failures are never thrown, so an install
 	 * without ffmpeg keeps working.
 	 */
-	public function process(Job $job): void {
+	public function process(Job $job, bool $idle = false): void {
+		$this->idle = $idle;
 		$version = $this->versions->find($job->getVersionId());
 		if ($version === null) {
 			$this->jobs->delete($job);
@@ -281,6 +288,7 @@ class DerivedMedia {
 				Job::KIND_THUMBS => $this->runThumbs($version, $path),
 				Job::KIND_WAVEFORM => $this->runWaveform($version, $path),
 				Job::KIND_SCRUB => $this->runScrub($version, $path),
+				Job::KIND_LOUDNESS => $this->runLoudness($version, $path),
 				default => throw new \RuntimeException('Unknown job kind ' . $job->getKind()),
 			};
 			$this->guard();
@@ -541,7 +549,9 @@ class DerivedMedia {
 	 * @return ?Job the job, to claim; null when there is other work or none
 	 */
 	public function queueMissingWaveform(): ?Job {
-		if ($this->time->getTime() < $this->config->getValueInt(Application::APP_ID, self::IDLE_WAVEFORMS_AFTER) || $this->jobs->findQueued(1) !== [] || !$this->ffmpeg->available()) {
+		// Waits for all other work but the loudness (A5), which waits for this
+		$next = $this->jobs->findQueued(1)[0] ?? null;
+		if ($this->time->getTime() < $this->config->getValueInt(Application::APP_ID, self::IDLE_WAVEFORMS_AFTER) || $next !== null && $next->getKind() !== Job::KIND_LOUDNESS || !$this->ffmpeg->available()) {
 			return null;
 		}
 		// A file that is not there fails no Version (its storage may be offline, and every other would fail the same): the look steps past it, at most this many a time, and goes on below it next time
@@ -705,6 +715,93 @@ class DerivedMedia {
 			throw new \RuntimeException($result['stderr'] ?: 'ffmpeg exited with ' . $result['code']);
 		}
 		$this->put($version, 'waveform', self::waveformJson($rate, $peaks->peaks()));
+		// Measuring the loudness would cost the Waveform five times its time, so it follows, last in the queue (A5); not for the old Waveforms made while idle, which are no reason to read every file again
+		if (!$this->idle) {
+			$this->enqueue($version->getId(), Job::KIND_LOUDNESS);
+		}
+	}
+
+	/**
+	 * The loudness of a Version with a Waveform from ffmpeg (A5): integrated
+	 * loudness and true peak by ffmpeg's ebur128 at the original rate over
+	 * every channel (it weights the surrounds of 5.1 and 7.1 and leaves out
+	 * the LFE), written into the Waveform's JSON, which takes its name only
+	 * once whole. A run stopped early prints no summary and gives no numbers.
+	 */
+	private function runLoudness(Version $version, string $path): void {
+		$result = $this->ffmpeg->run($this->ffmpeg->ffmpeg(), [
+			// The summary comes at the info level; frame lines only at verbose, so ffmpeg 4.4 and 5.1, which know no framelog=quiet, print none either
+			'-nostdin', '-nostats', '-hide_banner', '-v', 'info', '-progress', 'pipe:1',
+			...Ffmpeg::input($path),
+			'-map', '0:a:0', '-af', 'ebur128=peak=true:framelog=verbose', '-f', 'null', '-',
+		], 3600, fn (string $chunk) => $this->progressed($chunk));
+		$loudness = $result['code'] === 0 ? self::loudnessOf($result['stderr']) : null;
+		try {
+			$waveform = json_decode($this->file($version, 'waveform')->getContent(), true, 4, JSON_THROW_ON_ERROR);
+		} catch (NotFoundException|\JsonException) {
+			$waveform = null;
+		}
+		// No numbers is no failure of anything a Member or the admin can act on: the Waveform shows none
+		if ($loudness === null || !is_array($waveform)) {
+			// A warning, so a cause that meets every file (an ffmpeg without ebur128, a summary worded otherwise) shows in the log; no failed job, as nothing can be done about one file
+			$this->logger->warning('Deliver measured no loudness for Version {version}: {stderr}', ['version' => $version->getId(), 'stderr' => $this->ffmpeg->tail($result['stderr'])]);
+			return;
+		}
+		// ebur128 says 0.0 dBFS for a track without a sample, which has no peak
+		if (($waveform['peaks'] ?? '') === '') {
+			$loudness['peak'] = null;
+		}
+		$this->put($version, 'waveform', json_encode(['loudness' => $loudness] + $waveform, JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION));
+	}
+
+	/**
+	 * The loudness a browser or a delivering tool hands in with a Waveform:
+	 * optional, else integrated LUFS from −70 to +15 and a peak from −200 to
+	 * +12 dB, each a number or null, and whether the peak is a true peak
+	 *
+	 * @return ?array{integrated: ?float, peak: ?float, truePeak: bool}
+	 * @throws InvalidRequestException out of shape
+	 */
+	private static function handedLoudness(mixed $loudness): ?array {
+		if ($loudness === null) {
+			return null;
+		}
+		$within = static fn (mixed $value, float $low, float $high): bool => $value === null || (is_int($value) || is_float($value)) && is_finite((float)$value) && $value >= $low && $value <= $high;
+		if (!is_array($loudness) || !$within($loudness['integrated'] ?? null, ...self::LOUDNESS_RANGE) || !$within($loudness['peak'] ?? null, ...self::PEAK_RANGE) || !is_bool($loudness['truePeak'] ?? null)) {
+			throw new InvalidRequestException('Loudness is {integrated: LUFS from -70 to 15 or null, peak: dB from -200 to 12 or null, truePeak: true or false}');
+		}
+		$round = static fn (mixed $value): ?float => $value === null ? null : round((float)$value, 1);
+		return ['integrated' => $round($loudness['integrated'] ?? null), 'peak' => $round($loudness['peak'] ?? null), 'truePeak' => $loudness['truePeak']];
+	}
+
+	/**
+	 * The integrated loudness and true peak from the summary ffmpeg's ebur128
+	 * prints at its end (A5)
+	 *
+	 * @return ?array{integrated: ?float, peak: ?float, truePeak: bool} null without a summary or where a number lies past its range; integrated null below the absolute gate (silence), peak null without a sample
+	 */
+	public static function loudnessOf(string $stderr): ?array {
+		$number = '(-?inf|nan|-?\d+(?:[.,]\d+)?)';
+		// From the summary on: before it, ffmpeg prints the file's own tags, which may say anything
+		$at = strrpos($stderr, 'Summary:');
+		$summary = $at === false ? '' : substr($stderr, $at);
+		if (preg_match('/Integrated loudness:\s*I:\s*' . $number . '\s*LUFS/', $summary, $integrated) !== 1
+			|| preg_match('/True peak:\s*Peak:\s*' . $number . '\s*dBFS/', $summary, $peak) !== 1) {
+			return null;
+		}
+		$value = static fn (string $text): ?float => is_numeric($text = str_replace(',', '.', $text)) ? round((float)$text, 1) : null;
+		$lufs = $value($integrated[1]);
+		$dB = $value($peak[1]);
+		// One number past the ranges a hand-in is held to means the decode was broken: none of the measurement is shown
+		if ($lufs !== null && $lufs > self::LOUDNESS_RANGE[1] || $dB !== null && ($dB < self::PEAK_RANGE[0] || $dB > self::PEAK_RANGE[1])) {
+			return null;
+		}
+		return [
+			// ebur128 says −70.0 where every block lies below the absolute gate: no value
+			'integrated' => $lufs === null || $lufs <= self::LOUDNESS_RANGE[0] ? null : $lufs,
+			'peak' => $dB,
+			'truePeak' => true,
+		];
 	}
 
 	/** The peaks a second of a Waveform of this many seconds (ADR 0021) */
@@ -721,8 +818,8 @@ class DerivedMedia {
 	 * The stored Waveform: peak i is the loudest sample from i / rate to
 	 * (i + 1) / rate seconds into the file, one byte each, in base64 (ADR 0021)
 	 */
-	private static function waveformJson(int $rate, string $peaks): string {
-		return json_encode(['rate' => $rate, 'peaks' => base64_encode($peaks)], JSON_THROW_ON_ERROR);
+	private static function waveformJson(int $rate, string $peaks, ?array $loudness = null): string {
+		return json_encode(['rate' => $rate, 'peaks' => base64_encode($peaks)] + ($loudness === null ? [] : ['loudness' => $loudness]), JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION);
 	}
 
 	/**
@@ -735,11 +832,13 @@ class DerivedMedia {
 	 *
 	 * @param mixed $peaks one byte a peak in base64, as the Waveform stores them
 	 * @param int $rate peaks a second, as waveformRate() has it for the duration
-	 * @throws InvalidRequestException peaks, rate or duration out of shape
+	 * @param mixed $loudness optional, as loudnessOf() has it (A5)
+	 * @throws InvalidRequestException peaks, rate, duration or loudness out of shape
 	 * @throws ProjectConflictException the Version has a Waveform or is getting one
 	 * @return Version as it is now, read where it was a video not read yet
 	 */
-	public function acceptWaveform(Version $version, mixed $peaks, int $rate, int $durationFrames): Version {
+	public function acceptWaveform(Version $version, mixed $peaks, int $rate, int $durationFrames, mixed $loudness = null): Version {
+		$loudness = self::handedLoudness($loudness);
 		// A peak a byte, so the base64 of the most a Waveform has is a third longer
 		$bytes = is_string($peaks) && strlen($peaks) <= 4 * (int)ceil(self::WAVEFORM_MAX_PEAKS / 3) ? base64_decode($peaks, true) : false;
 		if ($bytes === false || $bytes === '' || strlen($bytes) > self::WAVEFORM_MAX_PEAKS || $durationFrames < 1) {
@@ -761,7 +860,7 @@ class DerivedMedia {
 			throw new InvalidRequestException('A Waveform of this duration has ' . $expected . ' peaks a second');
 		}
 		// Sound that runs on past the length, as a decoder may find, or a video's past its picture, is left out
-		$this->put($version, 'waveform', self::waveformJson($rate, substr($bytes, 0, max(1, (int)ceil($seconds * $rate)))));
+		$this->put($version, 'waveform', self::waveformJson($rate, substr($bytes, 0, max(1, (int)ceil($seconds * $rate))), $loudness));
 		if ($version->getDurationFrames() === null) {
 			$version->setDurationFrames($durationFrames);
 		}
@@ -1276,7 +1375,8 @@ class DerivedMedia {
 	/** Sets the state of one kind on the Version; a failure also records its error */
 	private function mark(int $versionId, string $kind, string $state, ?string $error = null): void {
 		$version = $this->versions->find($versionId);
-		if ($version === null) {
+		// The loudness has no state on the Version, and its failure fails nothing a Member sees: the job keeps its error for the admin
+		if ($version === null || $kind === Job::KIND_LOUDNESS) {
 			return;
 		}
 		match ($kind) {

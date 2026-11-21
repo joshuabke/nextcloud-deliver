@@ -16,6 +16,8 @@ The hand-in takes up to 2 000 000 peaks at the rate of the length: the Version's
 
 Every Waveform made before counts as missing: a migration sets the state of every ready one to none. With ffmpeg, whoever works the queue makes them one at a time whenever it has nothing else to do, so they never hold up an upload, and opening a Version (a Member or a Reviewer) queues its own Waveform ahead of them, so it shows in that visit. Without ffmpeg the browser ways remake them.
 
+The Version's loudness (decision A5) is measured from the same sound: with ffmpeg by a job that follows the Waveform, last in the queue, as ffmpeg's `ebur128` filter at the original rate over every channel gives the integrated loudness and the true peak but costs several times the Waveform itself; without ffmpeg the browser's decode for the Waveform gives the integrated loudness and the sample peak from the samples the peaks are made of. It is stored as `loudness`, `{"integrated": LUFS, "peak": dB, "truePeak": bool}`, in the same JSON; a Waveform without it (made before, a WAV's PCM read in PHP, a hand-in without it) shows none and is not made again for it.
+
 ## Considered Options
 
 - 2000 peaks and a second resolution for zooming: two formats for one thing, and the coarse one still wrong for long files.
