@@ -41,7 +41,7 @@ import { hoverSource } from '../lib/media.js'
 import { SKIP_SECONDS, skipFrames } from '../lib/skip.js'
 import { formatAt, fpsValue, frameToTime, modesFor, stepOf, timeToFrame } from '../lib/timecode.js'
 import { watermarkTile } from '../lib/watermark.js'
-import { overview, readWaveform } from '../lib/waveform.js'
+import { fetchWaveform, overview } from '../lib/waveform.js'
 import { overviewWindow, readSpan } from '../lib/waveWindow.js'
 import { useCommentsStore } from '../store/comments.js'
 
@@ -225,7 +225,7 @@ watch(() => props.version.id, async (id) => {
 	waveform.value = null
 	hover.value = null
 	resetZoom()
-	const [loadedStrip, loadedWaveform] = await Promise.all([loadStrip(), loadWaveform()])
+	const [loadedStrip, loadedWaveform] = await Promise.all([loadStrip(), fetchWaveform(props.version)])
 	// A later Version may have been opened in the meantime
 	if (props.version.id === id) {
 		strip.value = loadedStrip
@@ -236,7 +236,7 @@ watch(() => props.version.id, async (id) => {
 // Derived media that becomes ready while the Version is open shows without opening it again
 watch(() => props.version.derived?.waveform?.state, async (state) => {
 	const id = props.version.id
-	const loaded = state === 'ready' && waveform.value === null ? await loadWaveform() : null
+	const loaded = state === 'ready' && waveform.value === null ? await fetchWaveform(props.version) : null
 	if (loaded !== null && props.version.id === id) {
 		waveform.value = loaded
 	}
@@ -307,21 +307,6 @@ async function loadStrip() {
 			sheetWidth: image.naturalWidth,
 			sheetHeight: image.naturalHeight,
 		}
-	} catch {
-		return null
-	}
-}
-
-/**
- * @return {Promise<?{rate: number, peaks: Uint8Array}>} the Waveform, or null when there is none
- */
-async function loadWaveform() {
-	const derived = props.version.derived?.waveform
-	if (derived?.state !== 'ready') {
-		return null
-	}
-	try {
-		return readWaveform(await (await fetch(derived.url)).json())
 	} catch {
 		return null
 	}
@@ -598,7 +583,7 @@ onBeforeUnmount(() => {
 /** Follows the media element, and sends a looped Range back to its in Frame */
 function onTimeUpdate() {
 	frame.value = timeToFrame(video.value.currentTime, fps.value)
-	const wrap = wrapFrom(frame.value)
+	const wrap = wrapFrom(frame.value, fpsValue(fps.value))
 	if (wrap !== null) {
 		seekTo(wrap)
 	}

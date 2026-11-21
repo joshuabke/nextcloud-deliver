@@ -7,20 +7,29 @@ import { HOLD_MS, TAP_SLOP } from '../lib/gestures.js'
 import { avatarSeed, initials } from '../lib/initials.js'
 import { t } from '../lib/l10n.js'
 import { fpsValue, timeToFrame } from '../lib/timecode.js'
-import { barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, clampSpan, dragged, glided, glideStart, isWhole, pinchSpan, pixelPlace, retarget, secondsAt, spreadSpan, stack, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan } from '../lib/waveWindow.js'
+import { barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, clampSpan, dragged, glided, glideStart, isWhole, laneBands, loudestOf, pinchSpan, pixelPlace, retarget, secondsAt, shiftPixels, spreadSpan, stack, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan } from '../lib/waveWindow.js'
 import { useCommentsStore } from '../store/comments.js'
 
 // The Waveform of an audio Version on the stage (story 180): a window of it,
 // zoomed, scrolling under the playhead fixed in the centre. Drawn on a canvas
 // on animation frames while it plays, reading the media element's time, so
 // it moves smoothly between its timeupdate events without layout work.
+// Compare hands in two lanes instead, one Waveform above the other under the
+// one playhead, on side A's clock (A2).
 
 /** The seconds across the stage */
 const span = defineModel('span', { type: Number, required: true })
 
 const props = defineProps({
 	/** As readWaveform gives it */
-	waveform: { type: Object, required: true },
+	waveform: { type: Object, default: null },
+	/**
+	 * Compare's lanes in place of the one Waveform: {waveform, shift, audible, label} each, the
+	 * Waveform null while missing, shift the seconds its wave is ahead of the playhead; one scale for all
+	 */
+	lanes: { type: Array, default: null },
+	/** Compare's Range, {inFrame, outFrame}, tinted over the lanes */
+	marked: { type: Object, default: null },
 	fps: { type: Object, required: true },
 	durationFrames: { type: Number, required: true },
 	/** The Frame the player stands on, for a redraw when it seeks while standing */
@@ -44,11 +53,14 @@ const props = defineProps({
  * seek: a Frame to go to, keeping the playback state; hold and release: a drag holds playback and lets it go on;
  * comment: a Frame to comment on; jump: a Comment to go to; closeComposer: the field at the Waveform is closed from here
  */
-const emit = defineEmits(['seek', 'hold', 'release', 'comment', 'jump', 'closeComposer'])
+const emit = defineEmits(['seek', 'hold', 'release', 'comment', 'jump', 'closeComposer', 'pick'])
 
-/** Room above the wave for the zoom buttons, and below it for the Comments' circles, in px */
-const TOP = 40
-const BOTTOM = 40
+/** Room below the wave for the Comments' circles (none on lanes), in px */
+const BOTTOM = props.lanes ? 8 : 40
+/** Between two lanes, in px */
+const LANE_GAP = 8
+/** A lane that is not heard */
+const SUBDUED = { played: 'rgba(255, 255, 255, 0.5)', rest: 'rgba(255, 255, 255, 0.16)' }
 /** Half the card's width, to keep it on the stage */
 const CARD_HALF = 180
 
@@ -70,6 +82,8 @@ const host = ref(null)
 const canvas = ref(null)
 const duration = computed(() => props.durationFrames / fpsValue(props.fps))
 const steps = computed(() => stepsFor(duration.value))
+/** Room above the wave for the zoom buttons; lanes without them need little, in px */
+const TOP = computed(() => props.lanes && steps.value.length < 2 ? 12 : 40)
 const shown = computed(() => clampSpan(span.value, duration.value))
 const lastFrame = computed(() => Math.max(0, props.durationFrames - 1))
 
@@ -127,6 +141,11 @@ function tint(author) {
 	}
 	return tints.get(seed)
 }
+
+/** The Waveforms drawn: Compare's lanes, or the one, heard */
+const shownLanes = computed(() => props.lanes ?? [{ waveform: props.waveform, shift: 0, audible: true }])
+/** Lanes share one scale, the loudest of them; the one Waveform has its own */
+const loudest = computed(() => props.lanes ? loudestOf(props.lanes.map((lane) => lane.waveform)) : null)
 
 /** The seconds across the stage: the span, or the whole piece; never read off a sliding window */
 const across = computed(() => isWhole(shown.value, duration.value) ? duration.value : shown.value)
@@ -199,7 +218,7 @@ function draw() {
 	const { head, offset } = placeAt(at)
 	if (isWhole(shown.value, duration.value)) {
 		// The wave stands: it is drawn once, the played part laid over it up to the playhead
-		const layers = keep('layers', [props.waveform, props.comments, pixels.width, pixels.height, colors.played, store.selected, card.value?.id, props.pending], () => ({
+		const layers = keep('layers', [TOP.value, shownLanes.value, props.marked, props.comments, pixels.width, pixels.height, colors.played, store.selected, card.value?.id, props.pending], () => ({
 			rest: layer((each) => {
 				each.setTransform(ratio, 0, 0, ratio, 0, 0)
 				drawSpans(each, 0)
@@ -242,7 +261,7 @@ function layer(paint) {
 }
 
 /** Room above the wave for the zoom buttons */
-const waveTop = TOP - 4
+const waveTop = computed(() => TOP.value - 4)
 
 /**
  * A Range is a tinted span over the wave, its circle at its start
@@ -258,15 +277,21 @@ function drawSpans(context, offset) {
 			const to = (comment.outFrame + 1) * scale - offset
 			if (to > 0 && from < size.width) {
 				context.fillStyle = `rgba(${tint(comment.author)}, ${comment.resolved ? 0.1 : 0.22})`
-				context.fillRect(from, waveTop, to - from, size.height - waveTop)
+				context.fillRect(from, waveTop.value, to - from, size.height - waveTop.value)
 			}
 		}
+	}
+	if (props.marked) {
+		const from = props.marked.inFrame * scale - offset
+		const to = ((props.marked.outFrame ?? props.marked.inFrame) + 1) * scale - offset
+		context.fillStyle = 'rgba(255, 255, 255, 0.12)'
+		context.fillRect(from, waveTop.value, Math.max(2, to - from), size.height - waveTop.value)
 	}
 }
 
 /**
  * The bars, in device pixels: bar k at k × pitch − offset, whole pixels
- * wide and high, its height the same on every frame
+ * wide and high, its height the same on every frame; a lane each
  *
  * @param {CanvasRenderingContext2D} context - where to draw, untransformed
  * @param {number} offset - the window's left edge, in device pixels from the start of the piece
@@ -275,20 +300,38 @@ function drawSpans(context, offset) {
 function drawBars(context, offset, head) {
 	// Over the whole piece the wave stands; scrolling, it moves at the playback rate
 	const grid = barGrid(across.value, pixels.width, ratio, isWhole(shown.value, duration.value) ? 0 : props.media?.playbackRate || 1)
-	const levels = keep('bars', [props.waveform, grid.seconds], () => bars(props.waveform, grid.seconds))
-	const top = Math.round(TOP * ratio)
-	const room = Math.max(8, pixels.height - top - Math.round(BOTTOM * ratio)) / 2
-	const middle = Math.round(top + room)
+	const bands = laneBands(shownLanes.value.length, pixels.height, Math.round(TOP.value * ratio), Math.round(BOTTOM * ratio), Math.round(LANE_GAP * ratio))
+	shownLanes.value.forEach((lane, index) => {
+		if (lane.waveform) {
+			const levels = keep('bars' + index, [lane.waveform, grid.seconds, loudest.value], () => bars(lane.waveform, grid.seconds, loudest.value))
+			// A lane ahead of the playhead stands that much to the left, on whole pixels too
+			drawLane(context, levels, grid, bands[index], offset + shiftPixels(lane.shift, across.value, pixels.width), head, lane.audible ? colors : SUBDUED)
+		}
+	})
+}
+
+/**
+ * @param {CanvasRenderingContext2D} context - where to draw, untransformed
+ * @param {Float32Array} levels - as bars gives them
+ * @param {{pitch: number, width: number}} grid - as barGrid gives it
+ * @param {{top: number, height: number}} band - the lane, in device pixels
+ * @param {number} offset - the lane's left edge, in device pixels from the start of its piece
+ * @param {number} head - bars before it are played
+ * @param {{played: string, rest: string}} tints - its colours
+ */
+function drawLane(context, levels, grid, band, offset, head, tints) {
+	const room = Math.max(8, band.height) / 2
+	const middle = Math.round(band.top + room)
 	// The loudest bar keeps a margin above and below
 	const half = room * 0.85
 	const { first, last } = barsShown(offset, grid.pitch, pixels.width, levels.length)
 	let played = true
-	context.fillStyle = colors.played
+	context.fillStyle = tints.played
 	for (let bar = first; bar <= last; bar++) {
 		const x = bar * grid.pitch - offset
 		if (played && x + grid.width / 2 > head) {
 			played = false
-			context.fillStyle = colors.rest
+			context.fillStyle = tints.rest
 		}
 		const level = Math.max(1, Math.round(levels[bar] * half))
 		context.fillRect(x, middle - level, grid.width, 2 * level)
@@ -303,7 +346,7 @@ function drawBars(context, offset, head) {
  */
 function drawHead(context, head) {
 	const width = Math.max(2, Math.round(2 * ratio))
-	const top = Math.round(waveTop * ratio)
+	const top = Math.round(waveTop.value * ratio)
 	context.fillStyle = '#fff'
 	context.fillRect(head - Math.floor(width / 2), top, width, pixels.height - top)
 }
@@ -335,10 +378,10 @@ function drawPending(context, pending, scale, offset, height) {
 	context.fillStyle = colors.played
 	if (pending.outFrame !== null) {
 		context.globalAlpha = 0.25
-		context.fillRect(x, waveTop, (pending.outFrame + 1) * scale - offset - x, height - waveTop - BOTTOM)
+		context.fillRect(x, waveTop.value, (pending.outFrame + 1) * scale - offset - x, height - waveTop.value - BOTTOM)
 		context.globalAlpha = 1
 	}
-	context.fillRect(x - 1, waveTop, 2, height - waveTop - BOTTOM)
+	context.fillRect(x - 1, waveTop.value, 2, height - waveTop.value - BOTTOM)
 	context.beginPath()
 	context.arc(x, height - BOTTOM / 2, CIRCLE / 2 - 1, 0, 2 * Math.PI)
 	context.fillStyle = '#000'
@@ -439,7 +482,7 @@ function tick() {
 	}
 }
 
-watch([() => props.playing, () => props.frame, () => props.waveform, shown, () => props.comments, () => store.selected, () => props.pending, card], schedule)
+watch([() => props.playing, () => props.frame, shownLanes, () => props.marked, shown, () => props.comments, () => store.selected, () => props.pending, card], schedule)
 
 /** The stage's size in CSS px, and the browser's count of its device pixels, as last measured */
 let measured = { width: 0, height: 0, device: null }
@@ -866,6 +909,21 @@ function label(step) {
 				{{ label(step) }}
 			</button>
 		</div>
+		<!-- Each lane's name; a tap on it plays its sound, a tap on its wave seeks as anywhere -->
+		<button
+			v-for="(lane, index) in lanes ?? []"
+			:key="index"
+			type="button"
+			class="deliver-wave__lane"
+			:class="{ 'deliver-wave__lane--audible': lane.audible }"
+			:style="{ top: `calc(${TOP + 4}px + ${index} * (100% - ${TOP + BOTTOM - LANE_GAP}px) / ${lanes.length})` }"
+			:aria-pressed="lane.audible ? 'true' : 'false'"
+			:aria-label="t('deliver', 'Listen to {version}', { version: lane.label })"
+			:title="t('deliver', 'Listen to {version}', { version: lane.label })"
+			@pointerdown.stop
+			@click="emit('pick', index)">
+			{{ lane.label }}
+		</button>
 		<!-- Toasts of the field at the Waveform, in the stage's top corner: clear of the transport buttons and of a sheet -->
 		<div id="deliver-wave-toasts" class="deliver-wave__toasts" @pointerdown.stop />
 		<!-- The Comment at its circle, with its Replies and a field to answer; on a phone a sheet from below -->
@@ -968,6 +1026,35 @@ function label(step) {
 }
 
 .deliver-wave__step:focus-visible {
+	outline: 2px solid #fff;
+}
+
+.deliver-wave__lane {
+	position: absolute;
+	inset-inline-start: 8px;
+	z-index: 1;
+	min-height: 0;
+	margin: 0;
+	padding: 2px 10px;
+	border: none;
+	border-radius: var(--border-radius-pill);
+	background: rgba(0, 0, 0, 0.6);
+	color: rgba(255, 255, 255, 0.7);
+	font-size: 13px;
+	font-weight: bold;
+	cursor: pointer;
+}
+
+.deliver-wave__lane:not(.deliver-wave__lane--audible) {
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.deliver-wave__lane--audible {
+	background: var(--color-primary-element);
+	color: var(--color-primary-element-text);
+}
+
+.deliver-wave__lane:focus-visible {
 	outline: 2px solid #fff;
 }
 
