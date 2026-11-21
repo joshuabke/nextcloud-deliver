@@ -64,6 +64,29 @@ describe('the meter in a worker', () => {
 		expect(sent).toHaveLength(8)
 	})
 
+	it('lets the decode run on to its end where the worker fails before the end is asked', async () => {
+		const port = { postMessage: () => {}, onmessage: null, onerror: null }
+		const remote = remoteMeter(port)
+		for (let i = 0; i < 3; i++) {
+			await remote.add(piece(-23, 10), RATE)
+		}
+		port.onerror()
+		// Twenty more pieces after the failure: none waits
+		for (let i = 0; i < 20; i++) {
+			await remote.add(piece(-23, 10), RATE)
+		}
+		expect(await remote.done()).toBeNull()
+	})
+
+	it('answers no loudness where the worker fails while the end is awaited', async () => {
+		const port = { postMessage: () => {}, onmessage: null, onerror: null }
+		const remote = remoteMeter(port)
+		await remote.add(piece(-23, 10), RATE)
+		const result = remote.done()
+		port.onerror()
+		expect(await result).toBeNull()
+	})
+
 	it('gives no loudness where the worker fails, and lets the decode go on', async () => {
 		const port = { postMessage: () => {}, onmessage: null, onerror: null }
 		const remote = remoteMeter(port)
