@@ -810,6 +810,40 @@ test.describe('Review view', () => {
 		await expect(page.getByRole('button', { name: /^Pause \(/ })).toBeVisible()
 	})
 
+	test('dragging the playhead with the mouse seeks before release, holds playback and goes on if it played', async () => {
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		const video = page.locator('video.deliver-player__video')
+		await expect(video).toHaveJSProperty('readyState', 4)
+		const bar = await page.locator('.deliver-player__timeline').boundingBox()
+		const y = bar.y + bar.height / 2
+		const time = () => video.evaluate((element) => element.currentTime)
+		const paused = () => video.evaluate((element) => element.paused)
+
+		await page.getByRole('button', { name: /^Play \(/ }).click()
+		await expect.poll(paused).toBe(false)
+		await page.mouse.move(bar.x + bar.width * 0.2, y)
+		await page.mouse.down()
+		await page.mouse.move(bar.x + bar.width * 0.5, y, { steps: 5 })
+		// Still pressed: the picture is already there and playback is held
+		await expect.poll(time).toBeGreaterThan(1.8)
+		expect(await time()).toBeLessThan(2.3)
+		expect(await paused()).toBe(true)
+		await page.mouse.move(bar.x + bar.width * 0.75, y, { steps: 5 })
+		await expect.poll(time).toBeGreaterThan(2.8)
+		await page.mouse.up()
+		await expect.poll(paused).toBe(false)
+
+		// Paused stays paused
+		await page.getByRole('button', { name: /^Pause \(/ }).click()
+		await page.mouse.move(bar.x + bar.width * 0.8, y)
+		await page.mouse.down()
+		await page.mouse.move(bar.x + bar.width * 0.1, y, { steps: 5 })
+		await expect.poll(time).toBeLessThan(0.7)
+		await page.mouse.up()
+		await page.waitForTimeout(300)
+		expect(await paused()).toBe(true)
+	})
+
 	test('a click on a Comment\'s marker pauses', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		// The Compare test stacked a newer Version on the Asset; only the newest takes Comments
@@ -847,6 +881,8 @@ test.describe('Review view', () => {
 		await touch('touchStart', bar.x + bar.width * 0.2)
 		await touch('touchMove', bar.x + bar.width * 0.6)
 		await expect.poll(paused).toBe(true)
+		// The picture followed the finger before it lifted
+		await expect.poll(() => video.evaluate((element) => element.currentTime)).toBeGreaterThan(2)
 		await touch('touchEnd')
 		await expect.poll(paused).toBe(false)
 		expect(await video.evaluate((element) => element.currentTime)).toBeGreaterThan(2)
