@@ -56,7 +56,7 @@ export function useReview({ version, projectMode, projectFps, refresh, collapsed
 	const pinned = ref(null)
 	/** Whether typing set the pin, so emptying the field lets go of it again */
 	let pinnedByTyping = false
-	/** A place on audio pinned by C, a double click or a long press: let go again while nothing is written (story 181) */
+	/** A place on audio pinned by C or a long press: let go again while nothing is written (story 181) */
 	let loose = false
 	/** Whether the field holds text */
 	let written = false
@@ -113,7 +113,7 @@ export function useReview({ version, projectMode, projectFps, refresh, collapsed
 	}
 
 	/**
-	 * C, the Comment button, a double click or a long press on the Waveform
+	 * C, the Comment button or a long press on the Waveform
 	 *
 	 * @param {{inFrame: number, outFrame: ?number}} where - the Frame or Range to comment on
 	 */

@@ -217,7 +217,7 @@ const decibels = (level) => (level > 0 ? Math.round(20 * Math.log10(level) * 10)
  * loudness and true peak once it has heard all of it.
  *
  * @param {?number[]} layout - one weight a channel where the file says where its channels are (an extensible WAV); else by their count
- * @return {{add: (channels: Float32Array[], sampleRate: number) => void, done: () => ?{integrated: ?number, peak: ?number, truePeak: boolean}}} the meter; done gives null where the sound changed its rate or channels midway, had a sample that is no number, or a number came out past the server's ranges
+ * @return {{add: (channels: Float32Array[], sampleRate: number) => void, done: () => ?{integrated: ?number, peak: ?number}}} the meter; done gives null where the sound changed its rate or channels midway, had a sample that is no number, or a number came out past the server's ranges
  */
 export function loudnessMeter(layout = null) {
 	let rate = 0
@@ -300,7 +300,7 @@ export function loudnessMeter(layout = null) {
 				return null
 			}
 			if (rate === 0) {
-				return { integrated: null, peak: null, truePeak: true }
+				return { integrated: null, peak: null }
 			}
 			const perSegment = rate / 10
 			// 400 ms blocks, a new one every 100 ms (75 % overlap); a block's loudness is its mean square, K-weighted
@@ -317,7 +317,6 @@ export function loudnessMeter(layout = null) {
 			const measured = {
 				integrated: gated.length > 0 ? Math.round(loudness(mean(gated)) * 10) / 10 : null,
 				peak: decibels(Math.max(0, ...peaks.map((each) => each.peak()))),
-				truePeak: true,
 			}
 			// One number past the server's ranges means a broken decode: the Waveform goes in without loudness rather than not at all
 			return withinRanges(measured) ? measured : null
