@@ -228,8 +228,12 @@ function seekPlaying(target) {
 	}
 }
 
+/** Whether it played when a drag on the lanes or the bar took hold of it */
+let held = null
 /** Set while a pointer drags along the bar */
 let dragging = false
+/** The Frame a press on the bar came down on */
+let pressedAt = null
 
 /** The timeline counts on A's clock */
 function onTimeUpdate() {
@@ -363,9 +367,9 @@ function onDragStart(event) {
 		return
 	}
 	dragging = true
-	hold()
+	pressedAt = frameUnder(event)
 	event.currentTarget.setPointerCapture(event.pointerId)
-	live.want(frameUnder(event))
+	live.want(pressedAt)
 }
 
 /**
@@ -373,7 +377,12 @@ function onDragStart(event) {
  */
 function onDragMove(event) {
 	if (dragging) {
-		live.want(frameUnder(event))
+		const at = frameUnder(event)
+		// A click only seeks; once the pointer leaves its Frame it is a drag, which holds playback
+		if (at !== pressedAt) {
+			hold()
+		}
+		live.want(at)
 	}
 }
 
@@ -387,13 +396,15 @@ function onDragEnd(event) {
 	dragging = false
 	live.reset()
 	if (event.type === 'pointerup') {
-		seekTo(frameUnder(event))
+		// A click keeps playing, and starts a side that had run out again; a drag lets go in release
+		if (held === null) {
+			seekPlaying(frameUnder(event))
+		} else {
+			seekTo(frameUnder(event))
+		}
 	}
 	release()
 }
-
-/** Whether it played when a drag on the lanes took hold of it */
-let held = null
 
 /** A drag on the lanes holds playback */
 function hold() {

@@ -424,6 +424,9 @@ function release() {
 	heldWhilePlaying = false
 }
 
+/** The Frame a press on the bar came down on */
+let pressedAt = null
+
 const live = liveSeek((target) => {
 	const element = video.value
 	const time = frameToTime(target, fps.value)
@@ -446,8 +449,8 @@ function onDragStart(event) {
 	if (!durationFrames.value || (event.pointerType === 'mouse' && (event.button !== 0 || event.target.closest('button')))) {
 		return
 	}
-	hold()
 	dragging.value = true
+	pressedAt = frameAt(event)
 	event.currentTarget.setPointerCapture(event.pointerId)
 	follow(event)
 }
@@ -461,6 +464,10 @@ function follow(event) {
 	onHover(event)
 	if (dragging.value) {
 		const at = frameAt(event)
+		// A click only seeks and keeps the playback state, shuttle included; once the pointer leaves its Frame it is a drag
+		if (at !== pressedAt) {
+			hold()
+		}
 		frame.value = at
 		live.want(at)
 		emit('seeked')
