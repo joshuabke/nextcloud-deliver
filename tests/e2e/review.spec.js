@@ -1342,8 +1342,7 @@ test.describe('Audio review', () => {
 		const quarterOn = { position: { x: box.width * 0.75, y: box.height / 2 } }
 
 		// A click a quarter of the stage on seeks 15 seconds on, and C comments there
-		await canvas.click(quarterOn)
-		await page.keyboard.press('c')
+		await commentOnQuarter(page, canvas, quarterOn)
 		await expect(field).toBeFocused()
 		await expect(anchor).toHaveText('0:15.000')
 		// Escape in the empty field lets go of it: the next Comment follows the player again
@@ -1351,8 +1350,7 @@ test.describe('Audio review', () => {
 		await goTo(40)
 		await expect(anchor).toHaveText('0:40.000')
 		// With a word in the field the place stays, until the field is emptied
-		await canvas.click(quarterOn)
-		await page.keyboard.press('c')
+		await commentOnQuarter(page, canvas, quarterOn)
 		await expect(anchor).toHaveText('0:55.000')
 		await field.fill('kept')
 		await field.press('Escape')
@@ -1361,8 +1359,7 @@ test.describe('Audio review', () => {
 		await field.fill('')
 		await expect(anchor).toHaveText('1:40.000')
 		// A click on the wave, which seeks, lets go too
-		await canvas.click(quarterOn)
-		await page.keyboard.press('c')
+		await commentOnQuarter(page, canvas, quarterOn)
 		await expect(anchor).toHaveText('1:55.000')
 		// Once the wave has glided there: a click lands on what is drawn under it
 		await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - document.querySelector('video.deliver-player__video').currentTime))).toBeLessThan(0.01)
@@ -1370,8 +1367,7 @@ test.describe('Audio review', () => {
 		await expect(anchor).toHaveText('1:40.000')
 		await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - document.querySelector('video.deliver-player__video').currentTime))).toBeLessThan(0.01)
 
-		await canvas.click(quarterOn)
-		await page.keyboard.press('c')
+		await commentOnQuarter(page, canvas, quarterOn)
 		await expect(anchor).toHaveText('1:55.000')
 		await field.fill('clicked here')
 		await send()
@@ -1455,8 +1451,7 @@ test.describe('Audio review', () => {
 		})
 		await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - 200))).toBeLessThan(0.01)
 		// C opens the field at the wave, at that Frame, instead of the list
-		await canvas.click(quarterOn)
-		await page.keyboard.press('c')
+		await commentOnQuarter(page, canvas, quarterOn)
 		await expect(popup).toBeVisible()
 		await expect(field).toBeFocused()
 		await expect(popup.locator('.deliver-comments__anchor')).toHaveText('3:35.000')
@@ -1472,8 +1467,7 @@ test.describe('Audio review', () => {
 		})).toBeGreaterThan(0)
 
 		// Escape on the empty field closes it and lets go of the place
-		await canvas.click(quarterOn)
-		await page.keyboard.press('c')
+		await commentOnQuarter(page, canvas, quarterOn)
 		await expect(field).toBeFocused()
 		await field.press('Escape')
 		await expect(popup).toHaveCount(0)
@@ -1482,8 +1476,7 @@ test.describe('Audio review', () => {
 		})
 
 		// The draft is the list's: opening the list mid-sentence takes it there and closes the field at the wave
-		await canvas.click(quarterOn)
-		await page.keyboard.press('c')
+		await commentOnQuarter(page, canvas, quarterOn)
 		await field.fill('half a thought')
 		await page.getByRole('button', { name: 'Show Comments' }).click()
 		await expect(popup).toHaveCount(0)
@@ -1520,8 +1513,7 @@ test.describe('Audio review', () => {
 		const anchor = popup.locator('.deliver-comments__anchor')
 
 		// Emptied again, it stays with its place, and keys go on into the field, not to the player
-		await canvas.click(quarterOn)
-		await page.keyboard.press('c')
+		await commentOnQuarter(page, canvas, quarterOn)
 		await expect(anchor).toHaveText('3:50.000')
 		await field.pressSequentially('ab')
 		await field.press('Backspace')
@@ -1571,8 +1563,7 @@ test.describe('Audio review', () => {
 		await expect(popup).toHaveCount(0)
 
 		// With text, a click outside leaves it open; emptied, the next one closes it
-		await canvas.click(quarterOn)
-		await page.keyboard.press('c')
+		await commentOnQuarter(page, canvas, quarterOn)
 		await field.fill('kept')
 		await page.locator('.deliver-review__title').click()
 		await expect(popup).toBeVisible()
@@ -1586,8 +1577,7 @@ test.describe('Audio review', () => {
 			element.currentTime = 215
 		})
 		await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - document.querySelector('video.deliver-player__video').currentTime))).toBeLessThan(0.01)
-		await canvas.click(quarterOn)
-		await page.keyboard.press('c')
+		await commentOnQuarter(page, canvas, quarterOn)
 		await expect(popup).toBeVisible()
 		// 3:35 is a quarter of the stage left of the playhead now standing at 3:50, once the wave has glided there
 		await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - document.querySelector('video.deliver-player__video').currentTime))).toBeLessThan(0.01)
@@ -1595,8 +1585,7 @@ test.describe('Audio review', () => {
 		const card = page.getByRole('dialog', { name: /^Comment #/ })
 		await expect(card).toContainText('written at the wave')
 		await expect(popup).toHaveCount(0)
-		await canvas.click(quarterOn)
-		await page.keyboard.press('c')
+		await commentOnQuarter(page, canvas, quarterOn)
 		await expect(popup).toBeVisible()
 		await expect(card).toHaveCount(0)
 		await page.keyboard.press('Escape')
@@ -2456,4 +2445,18 @@ async function login(page) {
 	await page.locator('#password').fill(PASSWORD)
 	await page.getByRole('button', { name: 'Log in', exact: true }).click()
 	await page.waitForURL(/apps|dashboard/)
+}
+
+/**
+ * A click a quarter of the stage on seeks there, and C comments where it went
+ * once the wave has glided: a click lands on what is drawn
+ *
+ * @param {import('@playwright/test').Page} page - the Review view
+ * @param {import('@playwright/test').Locator} canvas - the Waveform's canvas
+ * @param {{position: {x: number, y: number}}} quarterOn - where to click
+ */
+async function commentOnQuarter(page, canvas, quarterOn) {
+	await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - document.querySelector('video.deliver-player__video').currentTime))).toBeLessThan(0.01)
+	await canvas.click(quarterOn)
+	await page.keyboard.press('c')
 }
