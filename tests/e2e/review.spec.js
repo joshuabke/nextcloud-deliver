@@ -1383,8 +1383,9 @@ test.describe('Audio review', () => {
 		expect(await audio.evaluate((element) => element.paused)).toBe(true)
 		// The Frame of the key press: where the element stopped, to the millisecond
 		const stopped = await audio.evaluate((element) => Math.round(element.currentTime * 1000))
-		const clock = `${Math.floor(stopped / 60000)}:${String(Math.floor(stopped % 60000 / 1000)).padStart(2, '0')}.${String(stopped % 1000).padStart(3, '0')}`
-		await expect(anchor).toHaveText(clock)
+		const clockOf = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms % 60000 / 1000)).padStart(2, '0')}.${String(ms % 1000).padStart(3, '0')}`
+		// The Frame's own time may differ from the element's by the last millisecond
+		await expect(anchor).toHaveText(new RegExp(`^(${clockOf(stopped - 1)}|${clockOf(stopped)}|${clockOf(stopped + 1)})$`))
 		await field.fill('while it played')
 		await send()
 		await expect(page.locator('.deliver-comment').filter({ hasText: 'while it played' })).toBeVisible()
@@ -1735,7 +1736,7 @@ test.describe('Audio review', () => {
 		await expect(sheet).toHaveCount(0)
 		await expect(field).toBeFocused()
 		// A long press on playing audio stops it
-		await member.getByRole('button', { name: 'Play (Space)' }).tap()
+		await member.getByRole('button', { name: 'Play', exact: true }).tap()
 		await expect.poll(() => member.locator('video.deliver-player__video').evaluate((element) => element.paused)).toBe(false)
 		await fingers('touchStart', [[box.x + box.width * 0.75, y]])
 		await member.waitForTimeout(700)
