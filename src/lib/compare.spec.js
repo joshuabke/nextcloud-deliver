@@ -98,7 +98,7 @@ describe('compare', () => {
 		expect(nextPass('b', false)).toBe('b')
 	})
 
-	it('shows loudness as measured, the peak\'s unit by how it was measured, and nothing where nothing was', () => {
+	it('shows loudness as measured, the peak in dBTP, and nothing where nothing was', () => {
 		expect(loudnessText({ integrated: -16.3, peak: -1 }, 'en')).toBe('−16.3 LUFS · −1.0 dBTP')
 		expect(loudnessText({ integrated: -16.3, peak: 0.4 }, 'de')).toBe('−16,3 LUFS · 0,4 dBTP')
 		// Silence has no integrated loudness, but maybe a peak
