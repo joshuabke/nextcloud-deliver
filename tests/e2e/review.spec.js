@@ -1321,7 +1321,7 @@ test.describe('Audio review', () => {
 		await page.getByRole('button', { name: '1 min' }).click()
 	})
 
-	test('a double click and C comment on the wave, an empty field lets go of the place, and a circle opens a card that follows the list and keeps a Reply half written', async () => {
+	test('C comments on the wave, an empty field lets go of the place, and a circle opens a card that follows the list and keeps a Reply half written', async () => {
 		await page.goto(`/apps/deliver/versions/${versionId}`)
 		const canvas = page.locator('.deliver-wave canvas')
 		await expect(canvas).toBeVisible()
@@ -1341,8 +1341,8 @@ test.describe('Audio review', () => {
 		const send = () => page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
 		const quarterOn = { position: { x: box.width * 0.75, y: box.height / 2 } }
 
-		// A double click a quarter of the stage on comments 15 seconds on, where the first click went
-		await canvas.dblclick(quarterOn)
+		// A click a quarter of the stage on seeks 15 seconds on, and C comments there
+		await commentOnQuarter(page, canvas, quarterOn)
 		await expect(field).toBeFocused()
 		await expect(anchor).toHaveText('0:15.000')
 		// Escape in the empty field lets go of it: the next Comment follows the player again
@@ -1350,7 +1350,7 @@ test.describe('Audio review', () => {
 		await goTo(40)
 		await expect(anchor).toHaveText('0:40.000')
 		// With a word in the field the place stays, until the field is emptied
-		await canvas.dblclick(quarterOn)
+		await commentOnQuarter(page, canvas, quarterOn)
 		await expect(anchor).toHaveText('0:55.000')
 		await field.fill('kept')
 		await field.press('Escape')
@@ -1359,7 +1359,7 @@ test.describe('Audio review', () => {
 		await field.fill('')
 		await expect(anchor).toHaveText('1:40.000')
 		// A click on the wave, which seeks, lets go too
-		await canvas.dblclick(quarterOn)
+		await commentOnQuarter(page, canvas, quarterOn)
 		await expect(anchor).toHaveText('1:55.000')
 		// Once the wave has glided there: a click lands on what is drawn under it
 		await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - document.querySelector('video.deliver-player__video').currentTime))).toBeLessThan(0.01)
@@ -1367,11 +1367,11 @@ test.describe('Audio review', () => {
 		await expect(anchor).toHaveText('1:40.000')
 		await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - document.querySelector('video.deliver-player__video').currentTime))).toBeLessThan(0.01)
 
-		await canvas.dblclick(quarterOn)
+		await commentOnQuarter(page, canvas, quarterOn)
 		await expect(anchor).toHaveText('1:55.000')
-		await field.fill('double-clicked here')
+		await field.fill('clicked here')
 		await send()
-		await expect(page.locator('.deliver-comment').filter({ hasText: 'double-clicked here' })).toBeVisible()
+		await expect(page.locator('.deliver-comment').filter({ hasText: 'clicked here' })).toBeVisible()
 
 		// C on audio leaves it playing, the Comment where it was at the key press
 		await page.getByRole('button', { name: 'Play (Space)' }).click()
@@ -1390,7 +1390,7 @@ test.describe('Audio review', () => {
 
 		// Standing on the first Comment, its circle is under the playhead; a click on it opens its card and does not seek
 		await page.getByRole('button', { name: '15 s' }).click()
-		const first = page.locator('.deliver-comments__list > .deliver-comment').filter({ hasText: 'double-clicked here' })
+		const first = page.locator('.deliver-comments__list > .deliver-comment').filter({ hasText: 'clicked here' })
 		const second = page.locator('.deliver-comments__list > .deliver-comment').filter({ hasText: 'while it played' })
 		const openFirst = async () => {
 			await first.locator('.deliver-comment__anchor').click()
@@ -1400,13 +1400,13 @@ test.describe('Audio review', () => {
 		}
 		await openFirst()
 		const card = page.getByRole('dialog', { name: /^Comment #/ })
-		await expect(card).toContainText('double-clicked here')
+		await expect(card).toContainText('clicked here')
 		await expect(first).toHaveClass(/deliver-comment--selected/)
 		// It follows the list: another Comment picked there shows in it
 		await second.locator('.deliver-comment__body').click()
 		await expect(card).toContainText('while it played')
 		await first.locator('.deliver-comment__body').click()
-		await expect(card).toContainText('double-clicked here')
+		await expect(card).toContainText('clicked here')
 		// Escape leaves a Reply half written alone; a click on the bar closes the card, and the Reply waits for it
 		await card.getByPlaceholder('Write a Reply').fill('half')
 		await page.keyboard.press('Escape')
@@ -1443,8 +1443,15 @@ test.describe('Audio review', () => {
 		const popup = page.getByRole('dialog', { name: 'New Comment' })
 		const field = popup.locator('#deliver-comment-body-inline')
 
-		// A double click opens the field at the wave, at that Frame, instead of the list
+		// A double click only seeks: no field opens
 		await canvas.dblclick(quarterOn)
+		await expect(popup).toHaveCount(0)
+		await audio.evaluate((element) => {
+			element.currentTime = 200
+		})
+		await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - 200))).toBeLessThan(0.01)
+		// C opens the field at the wave, at that Frame, instead of the list
+		await commentOnQuarter(page, canvas, quarterOn)
 		await expect(popup).toBeVisible()
 		await expect(field).toBeFocused()
 		await expect(popup.locator('.deliver-comments__anchor')).toHaveText('3:35.000')
@@ -1460,7 +1467,7 @@ test.describe('Audio review', () => {
 		})).toBeGreaterThan(0)
 
 		// Escape on the empty field closes it and lets go of the place
-		await canvas.dblclick(quarterOn)
+		await commentOnQuarter(page, canvas, quarterOn)
 		await expect(field).toBeFocused()
 		await field.press('Escape')
 		await expect(popup).toHaveCount(0)
@@ -1469,7 +1476,7 @@ test.describe('Audio review', () => {
 		})
 
 		// The draft is the list's: opening the list mid-sentence takes it there and closes the field at the wave
-		await canvas.dblclick(quarterOn)
+		await commentOnQuarter(page, canvas, quarterOn)
 		await field.fill('half a thought')
 		await page.getByRole('button', { name: 'Show Comments' }).click()
 		await expect(popup).toHaveCount(0)
@@ -1506,7 +1513,7 @@ test.describe('Audio review', () => {
 		const anchor = popup.locator('.deliver-comments__anchor')
 
 		// Emptied again, it stays with its place, and keys go on into the field, not to the player
-		await canvas.dblclick(quarterOn)
+		await commentOnQuarter(page, canvas, quarterOn)
 		await expect(anchor).toHaveText('3:50.000')
 		await field.pressSequentially('ab')
 		await field.press('Backspace')
@@ -1556,7 +1563,7 @@ test.describe('Audio review', () => {
 		await expect(popup).toHaveCount(0)
 
 		// With text, a click outside leaves it open; emptied, the next one closes it
-		await canvas.dblclick(quarterOn)
+		await commentOnQuarter(page, canvas, quarterOn)
 		await field.fill('kept')
 		await page.locator('.deliver-review__title').click()
 		await expect(popup).toBeVisible()
@@ -1570,7 +1577,7 @@ test.describe('Audio review', () => {
 			element.currentTime = 215
 		})
 		await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - document.querySelector('video.deliver-player__video').currentTime))).toBeLessThan(0.01)
-		await canvas.dblclick(quarterOn)
+		await commentOnQuarter(page, canvas, quarterOn)
 		await expect(popup).toBeVisible()
 		// 3:35 is a quarter of the stage left of the playhead now standing at 3:50, once the wave has glided there
 		await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - document.querySelector('video.deliver-player__video').currentTime))).toBeLessThan(0.01)
@@ -1578,7 +1585,7 @@ test.describe('Audio review', () => {
 		const card = page.getByRole('dialog', { name: /^Comment #/ })
 		await expect(card).toContainText('written at the wave')
 		await expect(popup).toHaveCount(0)
-		await canvas.dblclick(quarterOn)
+		await commentOnQuarter(page, canvas, quarterOn)
 		await expect(popup).toBeVisible()
 		await expect(card).toHaveCount(0)
 		await page.keyboard.press('Escape')
@@ -1751,9 +1758,9 @@ test.describe('Audio review', () => {
 		await expect(card).toContainText('and a reply')
 		await expect(card.locator('textarea')).toHaveCount(0)
 		await expect(card.getByRole('button', { name: 'Go to' })).toBeVisible()
-		// A double click elsewhere seeks but opens no field
+		// A click elsewhere seeks but opens no field
 		await card.getByRole('button', { name: 'Close' }).click()
-		await wave.dblclick({ position: { x: stage.width * 0.75, y: stage.height / 2 } })
+		await wave.click({ position: { x: stage.width * 0.75, y: stage.height / 2 } })
 		await expect(reviewer.locator('#deliver-comment-body')).toHaveCount(0)
 		await visitor.close()
 	})
@@ -2438,4 +2445,18 @@ async function login(page) {
 	await page.locator('#password').fill(PASSWORD)
 	await page.getByRole('button', { name: 'Log in', exact: true }).click()
 	await page.waitForURL(/apps|dashboard/)
+}
+
+/**
+ * A click a quarter of the stage on seeks there, and C comments where it went
+ * once the wave has glided: a click lands on what is drawn
+ *
+ * @param {import('@playwright/test').Page} page - the Review view
+ * @param {import('@playwright/test').Locator} canvas - the Waveform's canvas
+ * @param {{position: {x: number, y: number}}} quarterOn - where to click
+ */
+async function commentOnQuarter(page, canvas, quarterOn) {
+	await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - document.querySelector('video.deliver-player__video').currentTime))).toBeLessThan(0.01)
+	await canvas.click(quarterOn)
+	await page.keyboard.press('c')
 }

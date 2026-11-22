@@ -41,7 +41,7 @@ const props = defineProps({
 	comments: { type: Array, default: () => [] },
 	/** How time is shown, for the card */
 	clock: { type: Object, required: true },
-	/** Whether a double click or a long press opens the Comment field */
+	/** Whether a long press opens the Comment field */
 	canComment: { type: Boolean, default: false },
 	/** Where the Comment being written goes, {inFrame, outFrame}, while the field holds it */
 	pending: { type: Object, default: null },
@@ -559,7 +559,7 @@ const composeLeft = ref(0)
 watch(() => props.composing && props.pending?.inFrame, () => {
 	if (props.composing && props.pending) {
 		card.value = null
-		// Where the place stands once the wave has come to rest: a glide after the seek of a double click brings the mark under the card, which does not move
+		// Where the place stands once the wave has come to rest: a glide after a seek brings the mark under the card, which does not move
 		const x = props.pending.inFrame * perFrame() - offsetAt(now())
 		composeLeft.value = Math.min(size.width - CARD_HALF - 8, Math.max(CARD_HALF + 8, x))
 	}
@@ -730,11 +730,6 @@ function onUp(event) {
 	press = null
 }
 
-/** The last click or tap that sought, for the double click after it */
-let lastTap = null
-/** How long a double click may take; the system's own setting is out of reach */
-const DOUBLE_CLICK_MS = 500
-
 /**
  * A click or a tap: on a circle it opens the Comment's card; with a card
  * open it only closes it; elsewhere it only seeks, and playback goes on as it was
@@ -743,30 +738,13 @@ const DOUBLE_CLICK_MS = 500
  */
 function tap(event) {
 	const circle = hit(event.clientX, event.clientY, event.pointerType)
-	const again = lastTap !== null && event.timeStamp - lastTap.at < DOUBLE_CLICK_MS && Math.abs(event.clientX - lastTap.x) < TAP_SLOP
 	if (circle) {
 		openCircle(circle, xOf(event))
 	} else if (card.value) {
 		card.value = null
-	} else if (!again) {
-		// The wave moves under the pointer once it seeks: the second click of a double stays on the first one's Frame
-		lastTap = { at: event.timeStamp, x: event.clientX, frame: frameAtX(xOf(event)) }
-		emit('seek', lastTap.frame)
+	} else {
+		emit('seek', frameAtX(xOf(event)))
 	}
-}
-
-/**
- * A double click comments on that place; the first click went there already
- *
- * @param {MouseEvent} event - the second click
- */
-function onDoubleClick(event) {
-	if (props.canComment && !hit(event.clientX, event.clientY, 'mouse')) {
-		const recent = lastTap !== null && event.timeStamp - lastTap.at < 2 * DOUBLE_CLICK_MS
-		emit('comment', recent ? lastTap.frame : frameAtX(event.clientX - host.value.getBoundingClientRect().left))
-	}
-	// The next click begins afresh, however soon it comes
-	lastTap = null
 }
 
 /**
@@ -890,7 +868,6 @@ function label(step) {
 		@pointerup="onUp"
 		@pointercancel="onUp"
 		@wheel="onWheel"
-		@dblclick="onDoubleClick"
 		@contextmenu.prevent>
 		<canvas ref="canvas" class="deliver-wave__canvas" aria-hidden="true" />
 		<div
