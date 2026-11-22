@@ -733,14 +733,20 @@ function onKey(event) {
 	actions[action]()
 }
 
-/** C, or the Comment button: the Range if one is set, else the current Frame; audio plays on, the Comment at the Frame of the key press */
+/** C, or the Comment button: the Range if one is set, else the current Frame; the picture or the sound stops, audio too */
 function comment() {
-	if (props.version.audioOnly) {
-		emit('comment', range.value ?? { inFrame: frameNow(), outFrame: null })
-		return
-	}
 	pause()
 	emit('comment', range.value ?? { inFrame: frame.value, outFrame: null })
+}
+
+/**
+ * A long press on the Waveform comments on that place; the sound stops there too
+ *
+ * @param {number} inFrame - the place pressed
+ */
+function commentAt(inFrame) {
+	pause()
+	emit('comment', { inFrame, outFrame: null })
 }
 
 /**
@@ -904,7 +910,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 				@seek="seekTo"
 				@hold="hold"
 				@release="release"
-				@comment="emit('comment', { inFrame: $event, outFrame: null })"
+				@comment="commentAt"
 				@jump="emit('jump', $event)"
 				@closeComposer="emit('closeComposer')">
 				<template #composer>

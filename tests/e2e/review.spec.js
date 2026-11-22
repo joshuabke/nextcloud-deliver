@@ -1373,20 +1373,22 @@ test.describe('Audio review', () => {
 		await send()
 		await expect(page.locator('.deliver-comment').filter({ hasText: 'clicked here' })).toBeVisible()
 
-		// C on audio leaves it playing, the Comment where it was at the key press
+		// C on audio stops it, as on video, the Comment where it was at the key press
 		await page.getByRole('button', { name: 'Play (Space)' }).click()
 		await expect.poll(() => audio.evaluate((element) => element.currentTime)).toBeGreaterThan(117)
 		await page.locator('.deliver-review__title').click()
 		await page.keyboard.press('c')
 		await expect(field).toBeFocused()
-		const pinned = await anchor.textContent()
 		await page.waitForTimeout(500)
-		expect(await audio.evaluate((element) => element.paused)).toBe(false)
-		await expect(anchor).toHaveText(pinned)
+		expect(await audio.evaluate((element) => element.paused)).toBe(true)
+		// The Frame of the key press: where the element stopped, to the millisecond
+		const stopped = await audio.evaluate((element) => Math.round(element.currentTime * 1000))
+		const clockOf = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms % 60000 / 1000)).padStart(2, '0')}.${String(ms % 1000).padStart(3, '0')}`
+		// The Frame's own time may differ from the element's by the last millisecond
+		await expect(anchor).toHaveText(new RegExp(`^(${clockOf(stopped - 1)}|${clockOf(stopped)}|${clockOf(stopped + 1)})$`))
 		await field.fill('while it played')
 		await send()
 		await expect(page.locator('.deliver-comment').filter({ hasText: 'while it played' })).toBeVisible()
-		await page.getByRole('button', { name: 'Pause (Space)' }).click()
 
 		// Standing on the first Comment, its circle is under the playhead; a click on it opens its card and does not seek
 		await page.getByRole('button', { name: '15 s' }).click()
@@ -1740,6 +1742,13 @@ test.describe('Audio review', () => {
 		await sheet.getByRole('button', { name: 'Close' }).tap()
 		await expect(sheet).toHaveCount(0)
 		await expect(field).toBeFocused()
+		// A long press on playing audio stops it
+		await member.getByRole('button', { name: 'Play', exact: true }).tap()
+		await expect.poll(() => member.locator('video.deliver-player__video').evaluate((element) => element.paused)).toBe(false)
+		await fingers('touchStart', [[box.x + box.width * 0.75, y]])
+		await member.waitForTimeout(700)
+		await fingers('touchEnd', [])
+		await expect.poll(() => member.locator('video.deliver-player__video').evaluate((element) => element.paused)).toBe(true)
 		await phone.close()
 
 		const link = (await (await api.post(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`)).json()).ocs.data
