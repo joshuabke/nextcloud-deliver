@@ -98,16 +98,16 @@ describe('compare', () => {
 		expect(nextPass('b', false)).toBe('b')
 	})
 
-	it('shows loudness as measured, the peak\'s unit by how it was measured, and nothing where nothing was', () => {
-		expect(loudnessText({ integrated: -16.3, peak: -1, truePeak: true }, 'en')).toBe('−16.3 LUFS · −1.0 dBTP')
-		expect(loudnessText({ integrated: -16.3, peak: 0.4, truePeak: false }, 'de')).toBe('−16,3 LUFS · 0,4 dBFS')
+	it('shows loudness as measured, the peak in dBTP, and nothing where nothing was', () => {
+		expect(loudnessText({ integrated: -16.3, peak: -1 }, 'en')).toBe('−16.3 LUFS · −1.0 dBTP')
+		expect(loudnessText({ integrated: -16.3, peak: 0.4 }, 'de')).toBe('−16,3 LUFS · 0,4 dBTP')
 		// Silence has no integrated loudness, but maybe a peak
-		expect(loudnessText({ integrated: null, peak: -60.2, truePeak: true }, 'en')).toBe('−60.2 dBTP')
-		expect(loudnessText({ integrated: null, peak: null, truePeak: true }, 'en')).toBeNull()
+		expect(loudnessText({ integrated: null, peak: -60.2 }, 'en')).toBe('−60.2 dBTP')
+		expect(loudnessText({ integrated: null, peak: null }, 'en')).toBeNull()
 		expect(loudnessText(null, 'en')).toBeNull()
 		expect(loudnessText(undefined, 'en')).toBeNull()
-		expect(loudnessParts({ integrated: -16.3, peak: -1, truePeak: true }, 'en')).toEqual(['−16.3 LUFS', '−1.0 dBTP'])
-		expect(loudnessParts({ integrated: null, peak: -1, truePeak: false }, 'en')).toEqual(['−1.0 dBFS'])
+		expect(loudnessParts({ integrated: -16.3, peak: -1 }, 'en')).toEqual(['−16.3 LUFS', '−1.0 dBTP'])
+		expect(loudnessParts({ integrated: null, peak: -1 }, 'en')).toEqual(['−1.0 dBTP'])
 	})
 
 	it('tells how far apart the two sides are in LU, only where both were measured', () => {

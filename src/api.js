@@ -199,7 +199,7 @@ export function measureWavInTurn(file, signal) {
  * Hands in the loudness of a WAV the server read the Waveform of (A9)
  *
  * @param {number} versionId - the Version
- * @param {{integrated: ?number, peak: ?number, truePeak: boolean}} loudness - as wavLoudness measured it
+ * @param {{integrated: ?number, peak: ?number}} loudness - as wavLoudness measured it
  * @param {string} etag - the ETag of the content it was measured from
  * @return {Promise<object>} the server's answer
  */

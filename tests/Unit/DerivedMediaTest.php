@@ -74,17 +74,17 @@ class DerivedMediaTest extends TestCase {
 	public function testLoudnessIsReadFromTheSummaryOfEbur128(): void {
 		// As ffmpeg 7.1 prints it at the info level
 		$summary = "[Parsed_ebur128_1 @ 0x7cf0] Summary:\n\n  Integrated loudness:\n    I:         -23.0 LUFS\n    Threshold: -33.0 LUFS\n\n  Loudness range:\n    LRA:         0.0 LU\n\n  True peak:\n    Peak:      -22.9 dBFS\n";
-		self::assertSame(['integrated' => -23.0, 'peak' => -22.9, 'truePeak' => true], DerivedMedia::loudnessOf("Input #0, wav\n" . $summary . '[out#0] size=1250KiB'));
-		self::assertSame(['integrated' => null, 'peak' => null, 'truePeak' => true], DerivedMedia::loudnessOf(str_replace(['-23.0 LUFS', '-22.9 dBFS'], ['-70.0 LUFS', '-inf dBFS'], $summary)), 'silence: below the absolute gate, no peak');
+		self::assertSame(['integrated' => -23.0, 'peak' => -22.9], DerivedMedia::loudnessOf("Input #0, wav\n" . $summary . '[out#0] size=1250KiB'));
+		self::assertSame(['integrated' => null, 'peak' => null], DerivedMedia::loudnessOf(str_replace(['-23.0 LUFS', '-22.9 dBFS'], ['-70.0 LUFS', '-inf dBFS'], $summary)), 'silence: below the absolute gate, no peak');
 		self::assertSame(-23.0, DerivedMedia::loudnessOf(str_replace('-23.0 LUFS', '-23,0 LUFS', $summary))['integrated'], 'whatever the locale writes');
 		self::assertNull(DerivedMedia::loudnessOf("Input #0, wav\n[out#0] size=1250KiB"), 'stopped before its end: no numbers rather than those of a part');
 		$tagged = "Input #0, mp3\n  Metadata:\n    comment         : Integrated loudness: I: 5.0 LUFS True peak: Peak: 3.0 dBFS\n";
-		self::assertSame(['integrated' => -23.0, 'peak' => -22.9, 'truePeak' => true], DerivedMedia::loudnessOf($tagged . $summary), 'a tag that reads like the summary is no summary');
+		self::assertSame(['integrated' => -23.0, 'peak' => -22.9], DerivedMedia::loudnessOf($tagged . $summary), 'a tag that reads like the summary is no summary');
 		self::assertNull(DerivedMedia::loudnessOf($tagged), 'nor without one');
 		self::assertNull(DerivedMedia::loudnessOf(str_replace(['-23.0 LUFS', '-22.9 dBFS'], ['10.0 LUFS', '93.8 dBFS'], $summary)), 'one absurd number means a broken decode: none of it is shown');
 		self::assertNull(DerivedMedia::loudnessOf(str_replace('-23.0 LUFS', '15.1 LUFS', $summary)));
-		self::assertSame(['integrated' => 6.0, 'peak' => 0.0, 'truePeak' => true], DerivedMedia::loudnessOf(str_replace(['-23.0 LUFS', '-22.9 dBFS'], ['6.0 LUFS', '0.0 dBFS'], $summary)), 'a full-scale square wave is kept');
-		self::assertSame(['integrated' => 15.0, 'peak' => 12.0, 'truePeak' => true], DerivedMedia::loudnessOf(str_replace(['-23.0 LUFS', '-22.9 dBFS'], ['15.0 LUFS', '12.0 dBFS'], $summary)), 'the ends of the ranges are in');
+		self::assertSame(['integrated' => 6.0, 'peak' => 0.0], DerivedMedia::loudnessOf(str_replace(['-23.0 LUFS', '-22.9 dBFS'], ['6.0 LUFS', '0.0 dBFS'], $summary)), 'a full-scale square wave is kept');
+		self::assertSame(['integrated' => 15.0, 'peak' => 12.0], DerivedMedia::loudnessOf(str_replace(['-23.0 LUFS', '-22.9 dBFS'], ['15.0 LUFS', '12.0 dBFS'], $summary)), 'the ends of the ranges are in');
 	}
 
 	public function testTheRateDropsOnlyPastElevenHours(): void {
