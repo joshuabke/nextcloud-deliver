@@ -113,7 +113,7 @@ export function useReview({ version, projectMode, projectFps, refresh, collapsed
 	}
 
 	/**
-	 * C, the Comment button, a double click or a long press on the Waveform
+	 * C, the Comment button or a long press on the Waveform
 	 *
 	 * @param {{inFrame: number, outFrame: ?number}} where - the Frame or Range to comment on
 	 */
