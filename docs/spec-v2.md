@@ -51,7 +51,7 @@ Deliver becomes a proper Nextcloud app, rebuilt from scratch, in which media fil
 
 ### Comments
 
-28. As a Member or Reviewer, I want to press C, or start typing in the Comment field, to stop the picture and open a Comment at the Frame on screen, also on a phone (audio included, story 181), so that commenting is fast.
+28. As a Member or Reviewer, I want to press C, or start typing in the Comment field, to stop the picture and open a Comment at the Frame on screen, also on a phone (C stops audio too, story 181; typing leaves it playing), so that commenting is fast.
 29. As a Member or Reviewer, I want to set an in and out point with I and O and comment on that Range, so that I can flag a whole passage.
 30. As a Member or Reviewer, I want plain-text Comments with line breaks and clickable URLs, so that feedback stays readable in marker notes.
 31. As a Member or Reviewer, I want to reply to a Comment, so that discussions stay attached to the Frame.

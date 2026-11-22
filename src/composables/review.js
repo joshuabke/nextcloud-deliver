@@ -175,7 +175,7 @@ export function useReview({ version, projectMode, projectFps, refresh, collapsed
 	/**
 	 * Typing started: the picture stops, as with C, and the Comment belongs to
 	 * the Frame on screen now, not to wherever the player is when it is sent.
-	 * Audio plays on while it is commented on (story 181).
+	 * Typing does not stop audio (C does, story 181).
 	 */
 	function hold() {
 		written = true
