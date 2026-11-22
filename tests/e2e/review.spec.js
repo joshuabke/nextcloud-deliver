@@ -1373,7 +1373,7 @@ test.describe('Audio review', () => {
 		await send()
 		await expect(page.locator('.deliver-comment').filter({ hasText: 'double-clicked here' })).toBeVisible()
 
-		// C on audio leaves it playing, the Comment where it was at the key press
+		// C on audio stops it, as on video, the Comment where it was at the key press
 		await page.getByRole('button', { name: 'Play (Space)' }).click()
 		await expect.poll(() => audio.evaluate((element) => element.currentTime)).toBeGreaterThan(117)
 		await page.locator('.deliver-review__title').click()
@@ -1381,12 +1381,11 @@ test.describe('Audio review', () => {
 		await expect(field).toBeFocused()
 		const pinned = await anchor.textContent()
 		await page.waitForTimeout(500)
-		expect(await audio.evaluate((element) => element.paused)).toBe(false)
+		expect(await audio.evaluate((element) => element.paused)).toBe(true)
 		await expect(anchor).toHaveText(pinned)
 		await field.fill('while it played')
 		await send()
 		await expect(page.locator('.deliver-comment').filter({ hasText: 'while it played' })).toBeVisible()
-		await page.getByRole('button', { name: 'Pause (Space)' }).click()
 
 		// Standing on the first Comment, its circle is under the playhead; a click on it opens its card and does not seek
 		await page.getByRole('button', { name: '15 s' }).click()

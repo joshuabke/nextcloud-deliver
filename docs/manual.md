@@ -70,7 +70,7 @@ A Review Link shows only the files whoever made it may share in Files. A file sh
 - When you jump somewhere, the wave glides there in a fraction of a second; with reduced motion switched on in your system it jumps at once.
 - On a phone the wave takes your fingers: a swipe goes through time, not to the next Asset, a tap goes to that place instead of into fullscreen, and resting a finger comments (see below) instead of playing faster; a double tap does not jump. The next Asset is in the ⋯ menu.
 - Comments sit under the wave as circles with their authors' initials; close ones stack, resolved ones are paler, and a Range tints the wave from its start to its end. Where more than three meet, one circle shows their number: tap it to zoom in until they part. Click a circle to read the Comment with its Replies, answer it right there, or go to it; a Reply you started stays when the card closes.
-- Double-click the wave, or rest a finger on it, to comment on that place; press Escape or tap elsewhere before typing to let go of the place again. C comments where the audio is when you press it, and the audio plays on while you write.
+- Double-click the wave, or rest a finger on it, to comment on that place; press Escape or tap elsewhere before typing to let go of the place again. C stops the audio and comments where it was when you press it; a long press on the wave stops it too.
 - With the Comment list hidden (on a phone: held sideways, the list closed), the field to write in opens right at the wave instead, and the list stays hidden. It is the same field as under the list: open the list mid-sentence and your text is there.
 
 ## Comparing Versions
