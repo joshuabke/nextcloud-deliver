@@ -598,7 +598,7 @@ class WithoutFfmpegTest extends TestCase {
 	}
 
 	public function testTheBrowserThatUploadedAWavHandsInItsLoudness(): void {
-		$loudness = ['integrated' => -23.0, 'peak' => -22.9, 'truePeak' => true];
+		$loudness = ['integrated' => -23.0, 'peak' => -22.9];
 		$this->make('-f lavfi -i sine=duration=2 -ar 48000 -ac 2 -f wav');
 		// Before the server read it: kept beside it, written into the Waveform once that is made
 		$this->nc->put("{$this->root}/mix.wav", (string)file_get_contents($this->fixture));
@@ -628,14 +628,14 @@ class WithoutFfmpegTest extends TestCase {
 	}
 
 	public function testOnlyAWavTakesItsLoudnessAloneAndOnlyWithoutFfmpeg(): void {
-		$loudness = ['integrated' => -23.0, 'peak' => -22.9, 'truePeak' => true];
+		$loudness = ['integrated' => -23.0, 'peak' => -22.9];
 		$this->make('-f lavfi -i sine=duration=1 -c:a libmp3lame -f mp3');
 		$mp3 = $this->upload('take.mp3')['id'];
 		self::assertSame(409, $this->nc->ocs('POST', "/versions/$mp3/waveform", ['loudness' => $loudness, 'etag' => $this->nc->etag("{$this->root}/take.mp3")])['status'], 'other audio hands its loudness in with its Waveform');
 		$this->make('-f lavfi -i sine=duration=1 -f wav');
 		$this->nc->put("{$this->root}/mix.wav", (string)file_get_contents($this->fixture));
 		$wav = $this->nc->ocs('GET', "/files/{$this->nc->fileId("{$this->root}/mix.wav")}/asset")['data']['versionId'];
-		self::assertSame(400, $this->nc->ocs('POST', "/versions/$wav/waveform", ['loudness' => ['integrated' => 40, 'peak' => -1, 'truePeak' => true]])['status'], 'checked as with a Waveform');
+		self::assertSame(400, $this->nc->ocs('POST', "/versions/$wav/waveform", ['loudness' => ['integrated' => 40, 'peak' => -1]])['status'], 'checked as with a Waveform');
 		// A Member who may only read the folder plants no numbers
 		$user = 'deliver-viewer-' . bin2hex(random_bytes(4));
 		$password = 'Viewer-' . bin2hex(random_bytes(8));
@@ -650,8 +650,8 @@ class WithoutFfmpegTest extends TestCase {
 	}
 
 	public function testNumbersOfContentWrittenOverSinceAreRefused(): void {
-		$old = ['integrated' => -30.0, 'peak' => -20.0, 'truePeak' => true];
-		$new = ['integrated' => -12.0, 'peak' => -1.0, 'truePeak' => true];
+		$old = ['integrated' => -30.0, 'peak' => -20.0];
+		$new = ['integrated' => -12.0, 'peak' => -1.0];
 		$this->make('-f lavfi -i sine=duration=2 -ar 48000 -ac 2 -f wav');
 		$this->nc->put("{$this->root}/track9.wav", (string)file_get_contents($this->fixture));
 		$id = $this->nc->ocs('GET', "/files/{$this->nc->fileId("{$this->root}/track9.wav")}/asset")['data']['versionId'];
@@ -681,7 +681,7 @@ class WithoutFfmpegTest extends TestCase {
 	}
 
 	public function testOnlyWhoMayWriteTheFileHandsInItsLoudness(): void {
-		$loudness = ['integrated' => -14.0, 'peak' => -1.0, 'truePeak' => true];
+		$loudness = ['integrated' => -14.0, 'peak' => -1.0];
 		$this->make('-f lavfi -i sine=duration=1 -c:a libmp3lame -f mp3');
 		$theirs = $this->upload('take.mp3')['id'];
 		$this->nc->put("{$this->root}/mine.mp3", (string)file_get_contents($this->fixture));
@@ -719,17 +719,18 @@ class WithoutFfmpegTest extends TestCase {
 			'no peaks' => NextcloudClient::handIn([], 1000),
 			'no duration' => NextcloudClient::handIn($second, 0),
 			'loudness that is no object' => NextcloudClient::handIn($second, 1000) + ['loudness' => -14],
-			'loudness louder than anything' => NextcloudClient::handIn($second, 1000) + ['loudness' => ['integrated' => 40, 'peak' => -1, 'truePeak' => false]],
-			'a peak as text' => NextcloudClient::handIn($second, 1000) + ['loudness' => ['integrated' => -14, 'peak' => '-1', 'truePeak' => false]],
-			'loudness without saying which peak' => NextcloudClient::handIn($second, 1000) + ['loudness' => ['integrated' => -14, 'peak' => -1]],
+			'loudness louder than anything' => NextcloudClient::handIn($second, 1000) + ['loudness' => ['integrated' => 40, 'peak' => -1]],
+			'a peak as text' => NextcloudClient::handIn($second, 1000) + ['loudness' => ['integrated' => -14, 'peak' => '-1']],
+			'the old flag for a sample peak' => NextcloudClient::handIn($second, 1000) + ['loudness' => ['integrated' => -14, 'peak' => -1, 'truePeak' => false]],
+			'loudness without a peak' => NextcloudClient::handIn($second, 1000) + ['loudness' => ['integrated' => -14]],
 		] as $case => $body) {
 			self::assertSame(400, $this->nc->ocs('POST', "/versions/$id/waveform", $body)['status'], $case);
 		}
-		$loudness = ['integrated' => -20.54, 'peak' => -12.3, 'truePeak' => false];
+		$loudness = ['integrated' => -20.54, 'peak' => -12.3];
 		self::assertSame(200, $this->nc->ocs('POST', "/versions/$id/waveform", NextcloudClient::handIn(array_fill(0, 2000, 100), 1000) + ['loudness' => $loudness])['status'], 'sound past the length is no reason to refuse it');
 		$version = $this->nc->ocs('GET', "/versions/$id")['data']['versions'][0];
 		self::assertCount(50, $this->nc->waveform($version['derived']['waveform']['url'])['peaks'], 'but it is left out: the Waveform is as long as the Version');
-		self::assertSame(['integrated' => -20.5, 'peak' => -12.3, 'truePeak' => false], json_decode($this->nc->request('GET', $version['derived']['waveform']['url'])['body'], true)['loudness'], 'the loudness the browser measured, to a tenth');
+		self::assertSame(['integrated' => -20.5, 'peak' => -12.3], json_decode($this->nc->request('GET', $version['derived']['waveform']['url'])['body'], true)['loudness'], 'the loudness the browser measured, to a tenth');
 	}
 
 	#[DataProvider('pcm')]
