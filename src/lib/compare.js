@@ -169,15 +169,15 @@ function decibels(locale) {
 /**
  * A Version's loudness, shown and never applied (A1)
  *
- * @param {?{integrated: ?number, peak: ?number, truePeak: boolean}} loudness - as its Waveform carries it, if measured
+ * @param {?{integrated: ?number, peak: ?number}} loudness - as its Waveform carries it, if measured
  * @param {string} locale - the user's language
- * @return {string[]} "−16.3 LUFS" and "−1.0 dBTP", the peak in dBFS where it is no true peak; each only where it was measured
+ * @return {string[]} "−16.3 LUFS" and "−1.0 dBTP"; each only where it was measured
  */
 export function loudnessParts(loudness, locale) {
 	const format = decibels(locale)
 	return [
 		typeof loudness?.integrated === 'number' ? `${format(loudness.integrated)} LUFS` : null,
-		typeof loudness?.peak === 'number' ? `${format(loudness.peak)} ${loudness.truePeak ? 'dBTP' : 'dBFS'}` : null,
+		typeof loudness?.peak === 'number' ? `${format(loudness.peak)} dBTP` : null,
 	].filter(Boolean)
 }
 

@@ -146,7 +146,6 @@ describe('the loudness of a WAV', () => {
 		const measured = await wavLoudness(wav({ bits: 24 }, frames))
 		expect(measured.integrated).toBeCloseTo(-23, 1)
 		expect(measured.peak).toBeCloseTo(-23, 0)
-		expect(measured.truePeak).toBe(true)
 	})
 
 	it.each([

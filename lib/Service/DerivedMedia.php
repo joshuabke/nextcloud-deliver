@@ -760,10 +760,10 @@ class DerivedMedia {
 
 	/**
 	 * The loudness a browser or a delivering tool hands in with a Waveform:
-	 * optional, else integrated LUFS from −70 to +15 and a peak from −200 to
-	 * +12 dB, each a number or null, and whether the peak is a true peak
+	 * optional, else integrated LUFS from −70 to +15 and a true peak from −200 to
+	 * +12 dBTP, each a number or null, and no other key
 	 *
-	 * @return ?array{integrated: ?float, peak: ?float, truePeak: bool}
+	 * @return ?array{integrated: ?float, peak: ?float}
 	 * @throws InvalidRequestException out of shape
 	 */
 	private static function handedLoudness(mixed $loudness): ?array {
@@ -771,18 +771,20 @@ class DerivedMedia {
 			return null;
 		}
 		$within = static fn (mixed $value, float $low, float $high): bool => $value === null || (is_int($value) || is_float($value)) && is_finite((float)$value) && $value >= $low && $value <= $high;
-		if (!is_array($loudness) || !$within($loudness['integrated'] ?? null, ...self::LOUDNESS_RANGE) || !$within($loudness['peak'] ?? null, ...self::PEAK_RANGE) || !is_bool($loudness['truePeak'] ?? null)) {
-			throw new InvalidRequestException('Loudness is {integrated: LUFS from -70 to 15 or null, peak: dB from -200 to 12 or null, truePeak: true or false}');
+		// Only these two keys, both there: a peak is a true peak in dBTP, never a sample peak
+		if (!is_array($loudness) || array_diff(array_keys($loudness), ['integrated', 'peak']) !== [] || !array_key_exists('integrated', $loudness) || !array_key_exists('peak', $loudness)
+			|| !$within($loudness['integrated'], ...self::LOUDNESS_RANGE) || !$within($loudness['peak'], ...self::PEAK_RANGE)) {
+			throw new InvalidRequestException('Loudness is {integrated: LUFS from -70 to 15 or null, peak: true peak in dBTP from -200 to 12 or null}, with both and nothing else');
 		}
 		$round = static fn (mixed $value): ?float => $value === null ? null : round((float)$value, 1);
-		return ['integrated' => $round($loudness['integrated'] ?? null), 'peak' => $round($loudness['peak'] ?? null), 'truePeak' => $loudness['truePeak']];
+		return ['integrated' => $round($loudness['integrated']), 'peak' => $round($loudness['peak'])];
 	}
 
 	/**
 	 * The integrated loudness and true peak from the summary ffmpeg's ebur128
 	 * prints at its end (A5)
 	 *
-	 * @return ?array{integrated: ?float, peak: ?float, truePeak: bool} null without a summary or where a number lies past its range; integrated null below the absolute gate (silence), peak null without a sample
+	 * @return ?array{integrated: ?float, peak: ?float} null without a summary or where a number lies past its range; integrated null below the absolute gate (silence), peak null without a sample
 	 */
 	public static function loudnessOf(string $stderr): ?array {
 		$number = '(-?inf|nan|-?\d+(?:[.,]\d+)?)';
@@ -804,7 +806,6 @@ class DerivedMedia {
 			// ebur128 says −70.0 where every block lies below the absolute gate: no value
 			'integrated' => $lufs === null || $lufs <= self::LOUDNESS_RANGE[0] ? null : $lufs,
 			'peak' => $dB,
-			'truePeak' => true,
 		];
 	}
 
