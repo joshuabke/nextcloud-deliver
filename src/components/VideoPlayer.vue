@@ -465,7 +465,7 @@ function follow(event) {
 	if (dragging.value) {
 		const at = frameAt(event)
 		// A click only seeks and keeps the playback state, shuttle included; once the pointer leaves its Frame it is a drag
-		if (at !== pressedAt) {
+		if (at !== pressedAt && !holding) {
 			hold()
 		}
 		frame.value = at

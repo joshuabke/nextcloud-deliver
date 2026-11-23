@@ -379,7 +379,7 @@ function onDragMove(event) {
 	if (dragging) {
 		const at = frameUnder(event)
 		// A click only seeks; once the pointer leaves its Frame it is a drag, which holds playback
-		if (at !== pressedAt) {
+		if (at !== pressedAt && held === null) {
 			hold()
 		}
 		live.want(at)

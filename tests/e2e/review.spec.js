@@ -844,7 +844,7 @@ test.describe('Review view', () => {
 		expect(await paused()).toBe(true)
 	})
 
-	test('a click on the bar keeps a shuttle speed, a drag goes on at the speed it had', async () => {
+	test('a click on the bar keeps a shuttle speed and keeps playing', async () => {
 		await page.goto(`/apps/deliver/versions/${versionId}`)
 		const video = page.locator('video.deliver-player__video')
 		await expect(video).toHaveJSProperty('readyState', 4)
@@ -959,7 +959,26 @@ test.describe('Review view', () => {
 		await expect.poll(paused).toEqual([false, false])
 		await page.mouse.move(bar.x + bar.width * 0.1, y)
 		await page.mouse.down()
-		await page.mouse.move(bar.x + bar.width * 0.5, y, { steps: 5 })
+		// A steady drag: A is sought one seek at a time, the latest Frame next, and not once for every move
+		// (a drag holds playback once; pausing seeks again, which would abort the seek on its way)
+		await videos.first().evaluate((element) => {
+			const { get, set } = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'currentTime')
+			window.assigned = 0
+			window.settled = 0
+			element.addEventListener('seeked', () => window.settled++)
+			Object.defineProperty(element, 'currentTime', {
+				get: () => get.call(element),
+				set: (value) => {
+					window.assigned++
+					set.call(element, value)
+				},
+			})
+		})
+		for (let step = 1; step <= 60; step++) {
+			await page.mouse.move(bar.x + bar.width * (0.1 + step * 0.0075), y)
+		}
+		const drag = await page.evaluate(() => ({ assigned: window.assigned, settled: window.settled }))
+		expect(drag.assigned).toBeLessThanOrEqual(drag.settled + 4)
 		// Still pressed: both sides are there already, B a second on from A, and neither plays
 		await expect.poll(async () => (await times())[0]).toBeGreaterThan(1.8)
 		await expect.poll(async () => (await times())[1] - (await times())[0]).toBeCloseTo(1, 1)
@@ -1357,7 +1376,7 @@ test.describe('Audio review', () => {
 		await expect.poll(() => audio.evaluate((element) => element.currentTime)).toBeGreaterThan(170)
 		// The wave moved with the pointer before release
 		await expect.poll(wave).not.toBe(start)
-		await page.mouse.move(bar.x + bar.width * 0.6, y)
+		await page.mouse.move(bar.x + bar.width * 0.9, y, { steps: 12 })
 		await page.mouse.up()
 		await page.waitForTimeout(500)
 		// Drawn from the time the element is at: a fresh draw changes nothing
@@ -1366,6 +1385,20 @@ test.describe('Audio review', () => {
 		await page.getByRole('button', { name: '1 min' }).click()
 		await page.waitForTimeout(300)
 		expect(await wave()).toBe(settled)
+		// A seek that changes no prop of the stage (the last of a drag lands so, while the drag holds timeupdate
+		// back) still draws the wave again: here timeupdate is stopped on its way to the player
+		await audio.evaluate((element) => {
+			window.addEventListener('timeupdate', (event) => event.stopPropagation(), true)
+			const clear = CanvasRenderingContext2D.prototype.clearRect
+			window.draws = 0
+			CanvasRenderingContext2D.prototype.clearRect = function(...args) {
+				window.draws++
+				return clear.apply(this, args)
+			}
+			element.currentTime -= 20
+		})
+		// At once, not with whatever redraw comes by later
+		await expect.poll(() => page.evaluate(() => window.draws), { timeout: 500 }).toBeGreaterThan(0)
 		await page.emulateMedia({ reducedMotion: 'no-preference' })
 	})
 
