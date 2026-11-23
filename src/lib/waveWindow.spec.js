@@ -359,7 +359,7 @@ describe('the time drawn while playing', () => {
 		}
 		const steps = drawn.slice(1).map((seconds, i) => seconds - drawn[i])
 		expect(Math.min(...steps)).toBeGreaterThan(0)
-		expect(Math.max(...steps)).toBeLessThan(0.03)
+		expect(Math.max(...steps)).toBeLessThan(0.02)
 	})
 
 	it('takes currentTime at once on a seek, a pause and after a gap', () => {
@@ -367,5 +367,7 @@ describe('the time drawn while playing', () => {
 		expect(steadied({ seconds: 10, time: 0 }, 10, 16, false, 1)).toBe(10)
 		expect(steadied({ seconds: 10, time: 0 }, 10.05, 500, true, 1)).toBe(10.05)
 		expect(steadied(null, 3, 0, true, 1)).toBe(3)
+		// a paused element (J shuttle, the end) stays where currentTime is, however fresh the last frame
+		expect(steadied({ seconds: 10, time: 0 }, 9.9, 16, false, 1)).toBe(9.9)
 	})
 })

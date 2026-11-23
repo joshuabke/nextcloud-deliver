@@ -496,7 +496,7 @@ export const retarget = (glide, to, across) => ({ ...glide, from: glideStart(gli
  * While playing, a media element's currentTime moves in coarse steps (an
  * audio buffer at a time, tens of milliseconds), so a window drawn from it
  * stands still for some frames and then jumps. The time to draw runs on with
- * the clock instead and is only pulled towards currentTime, so it moves a bit
+ * the clock instead and is only pulled towards currentTime (slowly), so it moves a bit
  * every frame. A seek, a pause or a long gap since the last frame takes
  * currentTime as it is.
  *
@@ -513,5 +513,5 @@ export function steadied(before, at, time, playing, rate) {
 		return at
 	}
 	const expected = before.seconds + gap * rate
-	return Math.abs(at - expected) > 0.25 ? at : expected + (at - expected) * Math.min(1, gap / 0.1)
+	return Math.abs(at - expected) > 0.25 ? at : expected + (at - expected) * Math.min(1, gap / 0.3)
 }

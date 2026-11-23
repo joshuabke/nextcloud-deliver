@@ -455,9 +455,11 @@ function schedule() {
 function drawn() {
 	const at = now()
 	const time = performance.now()
+	let exact = false
 	if (following) {
 		// The stage's own continuous seeks, a sideways wheel or swipe, are followed at once, as a drag is
 		following = false
+		exact = true
 		glide = null
 	} else if (last !== null && dragAt === null && drawnAt !== null && !motion.matches) {
 		const expected = last.at + (props.playing ? (time - last.time) / 1000 * (props.media?.playbackRate || 1) : 0)
@@ -468,7 +470,7 @@ function drawn() {
 	}
 	last = { at, time }
 	// Followed only from a media element; a drag or the stored Frame is exact
-	const live = props.media && dragAt === null ? steadied(steady, at, time, props.playing, props.media.playbackRate || 1) : at
+	const live = props.media && dragAt === null && !exact ? steadied(steady, at, time, !props.media.paused, props.media.playbackRate || 1) : at
 	steady = { seconds: live, time }
 	const seconds = glide && glide.span === shown.value ? glided(glide, time, live) : null
 	if (seconds === null) {
