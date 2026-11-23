@@ -7,7 +7,7 @@ import { HOLD_MS, TAP_SLOP } from '../lib/gestures.js'
 import { avatarSeed, initials } from '../lib/initials.js'
 import { t } from '../lib/l10n.js'
 import { fpsValue, timeToFrame } from '../lib/timecode.js'
-import { barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, clampSpan, dragged, glided, glideStart, isWhole, laneBands, loudestOf, pinchSpan, pixelPlace, retarget, secondsAt, shiftPixels, spreadSpan, stack, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan } from '../lib/waveWindow.js'
+import { barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, clampSpan, dragged, glided, glideStart, isWhole, laneBands, loudestOf, pinchSpan, pixelPlace, retarget, secondsAt, shiftPixels, spreadSpan, stack, steadied, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan } from '../lib/waveWindow.js'
 import { useCommentsStore } from '../store/comments.js'
 
 // The Waveform of an audio Version on the stage (story 180): a window of it,
@@ -103,6 +103,8 @@ const motion = window.matchMedia('(prefers-reduced-motion: reduce)')
 let glide = null
 let drawnAt = null
 let last = null
+/** What the last frame drew while playing: currentTime moves in coarse steps, so the drawing runs on between them */
+let steady = null
 
 /**
  * What only changes with the zoom, the width or the Comments, worked out
@@ -453,9 +455,11 @@ function schedule() {
 function drawn() {
 	const at = now()
 	const time = performance.now()
+	let exact = false
 	if (following) {
 		// The stage's own continuous seeks, a sideways wheel or swipe, are followed at once, as a drag is
 		following = false
+		exact = true
 		glide = null
 	} else if (last !== null && dragAt === null && drawnAt !== null && !motion.matches) {
 		const expected = last.at + (props.playing ? (time - last.time) / 1000 * (props.media?.playbackRate || 1) : 0)
@@ -465,10 +469,13 @@ function drawn() {
 		}
 	}
 	last = { at, time }
-	const seconds = glide && glide.span === shown.value ? glided(glide, time, at) : null
+	// Followed only from a media element; a drag or the stored Frame is exact
+	const live = props.media && dragAt === null && !exact ? steadied(steady, at, time, !props.media.paused && !props.media.seeking && props.media.readyState >= 3, props.media.playbackRate || 1) : at
+	steady = { seconds: live, time }
+	const seconds = glide && glide.span === shown.value ? glided(glide, time, live) : null
 	if (seconds === null) {
 		glide = null
-		return at
+		return live
 	}
 	return seconds
 }

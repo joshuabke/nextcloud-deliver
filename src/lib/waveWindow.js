@@ -491,3 +491,30 @@ export function glided(glide, time, target) {
  * @return {{from: number, at: number}} the glide, going on
  */
 export const retarget = (glide, to, across) => ({ ...glide, from: glideStart(glide.from, to, across) })
+
+const STEADY_GAP = 0.06
+
+/**
+ * While playing, a media element's currentTime moves in coarse steps (an
+ * audio buffer at a time, tens of milliseconds), so a window drawn from it
+ * stands still for some frames and then jumps. The time to draw runs on with
+ * the clock instead and is only pulled towards currentTime (slowly), so it moves a bit
+ * every frame. A seek, a pause, a long gap since the last frame, or a drawn time
+ * more than STEADY_GAP (just above Firefox's 40 ms steps) from currentTime takes
+ * currentTime as it is, which also bounds the lead when currentTime stalls.
+ *
+ * @param {?{seconds: number, time: number}} before - what the last frame drew, and when (ms)
+ * @param {number} at - currentTime now, in seconds
+ * @param {number} time - now (ms)
+ * @param {boolean} playing - whether the media plays
+ * @param {number} rate - its playback rate
+ * @return {number} the seconds to draw
+ */
+export function steadied(before, at, time, playing, rate) {
+	const gap = before ? (time - before.time) / 1000 : Infinity
+	if (!playing || gap > 0.1 || gap < 0) {
+		return at
+	}
+	const expected = before.seconds + gap * rate
+	return Math.abs(at - expected) > STEADY_GAP ? at : expected + (at - expected) * Math.min(1, gap / 0.3)
+}
