@@ -1900,6 +1900,16 @@ test.describe('Audio review', () => {
 			await fingers('touchEnd', [])
 		}
 		const start = await time()
+		// A first tap that lets go of the empty field skips nothing either
+		await fingers('touchStart', [[box.x + box.width * 0.75, y]])
+		await member.waitForTimeout(700)
+		await fingers('touchEnd', [])
+		await expect(anchor).toHaveText('0:15.000')
+		await tapAt(box.x + box.width * 0.85)
+		await tapAt(box.x + box.width * 0.85)
+		await member.waitForTimeout(500)
+		await expect(anchor).toHaveText('0:00.000')
+		expect(await time()).toBe(start)
 		await tapAt(box.x + box.width * 0.85)
 		await member.waitForTimeout(500)
 		expect(await time()).toBe(start)

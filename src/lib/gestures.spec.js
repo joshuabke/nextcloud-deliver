@@ -33,5 +33,6 @@ describe('waveTap', () => {
 	it('opens a circle or closes a card instead of skipping', () => {
 		expect(waveTap({ ...tap, since: 10, circle: true }).action).toBe('open')
 		expect(waveTap({ ...tap, since: 10, card: true }).action).toBe('close')
+		expect(waveTap({ ...tap, since: 10, field: true }).action).toBe('close')
 	})
 })

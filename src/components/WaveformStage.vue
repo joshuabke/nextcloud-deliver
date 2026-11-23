@@ -586,6 +586,14 @@ let press = null
 /** Two fingers: their distance and the span when they came down */
 let pinch = null
 
+/** When the place pinned for a Comment was last let go, on the clock of pointer events */
+let placeLetGoAt = -1
+watch(() => props.pending, (now, was) => {
+	if (was && !now) {
+		placeLetGoAt = performance.now()
+	}
+}, { flush: 'sync' })
+
 /** The stage's left edge, read once a pointer comes down */
 let left = 0
 
@@ -632,7 +640,7 @@ function onDown(event) {
 		pinch = { distance: spread(), span: shown.value }
 		return
 	}
-	press = { id: event.pointerId, x: event.clientX, y: event.clientY, from: onScreen(), moved: false, long: false }
+	press = { id: event.pointerId, x: event.clientX, y: event.clientY, from: onScreen(), moved: false, long: false, down: event.timeStamp }
 	// A finger or a pen resting on a circle opens its card, as a tap does; elsewhere, where one may comment, the Comment field for that place
 	if (event.pointerType !== 'mouse') {
 		const at = press
@@ -769,6 +777,8 @@ function tap(event) {
 	const { action, side } = waveTap({
 		circle: !!circle,
 		card: !!card.value,
+		// An empty field is let go by the touch itself; one with text stays, and its tap counts
+		field: placeLetGoAt >= press.down,
 		since: lastTapAt === null ? null : event.timeStamp - lastTapAt,
 		x: xOf(event),
 		width: size.width,
@@ -922,7 +932,7 @@ function label(step) {
 				{{ label(step) }}
 			</button>
 		</div>
-		<!-- Each lane's name; a tap on it plays its sound, a tap on its wave seeks as anywhere -->
+		<!-- Each lane's name; a tap on it plays its sound, a click on its wave seeks as anywhere -->
 		<button
 			v-for="(lane, index) in lanes ?? []"
 			:key="index"

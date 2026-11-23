@@ -34,16 +34,16 @@ export function tapSide(x, width) {
 
 /**
  * What a tap by finger or pen on the scrolling Waveform does: it never seeks. A circle opens, an open card
- * closes, and a tap that follows a plain one within DOUBLE_TAP_MS skips to the side it hit (0 in the middle).
+ * closes (as does an empty Comment field this touch just closed), and a tap that follows a plain one within DOUBLE_TAP_MS skips to the side it hit (0 in the middle).
  *
- * @param {{circle: boolean, card: boolean, since: number|null, x: number, width: number}} tap - what it hit, an open card, ms since the last plain tap (null if none), where
+ * @param {{circle: boolean, card: boolean, field?: boolean, since: number|null, x: number, width: number}} tap - what it hit, an open card, ms since the last plain tap (null if none), where
  * @return {{action: 'open'|'close'|'skip'|'first', side: number}} 'first' waits for a second tap
  */
-export function waveTap({ circle, card, since, x, width }) {
+export function waveTap({ circle, card, field = false, since, x, width }) {
 	if (circle) {
 		return { action: 'open', side: 0 }
 	}
-	if (card) {
+	if (card || field) {
 		return { action: 'close', side: 0 }
 	}
 	if (since !== null && since < DOUBLE_TAP_MS) {
