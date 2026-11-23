@@ -470,7 +470,7 @@ function drawn() {
 	}
 	last = { at, time }
 	// Followed only from a media element; a drag or the stored Frame is exact
-	const live = props.media && dragAt === null && !exact ? steadied(steady, at, time, !props.media.paused, props.media.playbackRate || 1) : at
+	const live = props.media && dragAt === null && !exact ? steadied(steady, at, time, !props.media.paused && !props.media.seeking && props.media.readyState >= 3, props.media.playbackRate || 1) : at
 	steady = { seconds: live, time }
 	const seconds = glide && glide.span === shown.value ? glided(glide, time, live) : null
 	if (seconds === null) {

@@ -352,7 +352,7 @@ describe('the time drawn while playing', () => {
 		const drawn = []
 		for (let frame = 0; frame < 30; frame++) {
 			const time = frame * 16
-			const at = Math.floor(time / 80) * 0.08
+			const at = Math.floor(time / 40) * 0.04
 			const seconds = steadied(before, at, time, true, 1)
 			drawn.push(seconds)
 			before = { seconds, time }
@@ -369,5 +369,19 @@ describe('the time drawn while playing', () => {
 		expect(steadied(null, 3, 0, true, 1)).toBe(3)
 		// a paused element (J shuttle, the end) stays where currentTime is, however fresh the last frame
 		expect(steadied({ seconds: 10, time: 0 }, 9.9, 16, false, 1)).toBe(9.9)
+	})
+
+	it('never leads a stalled currentTime by more than the gap, nor takes long to follow a small seek', () => {
+		let before = { seconds: 10, time: 0 }
+		let lead = 0
+		for (let frame = 1; frame < 60; frame++) {
+			const seconds = steadied(before, 10, frame * 16, true, 1)
+			lead = Math.max(lead, seconds - 10)
+			before = { seconds, time: frame * 16 }
+		}
+		expect(lead).toBeLessThanOrEqual(0.06)
+		// a seek of 0.2 s during playback shows at once, as does one of 0.1 s
+		expect(steadied({ seconds: 10, time: 0 }, 10.2, 16, true, 1)).toBe(10.2)
+		expect(steadied({ seconds: 10, time: 0 }, 9.9, 16, true, 1)).toBe(9.9)
 	})
 })
