@@ -587,7 +587,7 @@ function openMarker(mark, event) {
 	if (!tapped || again) {
 		emit('jump', comment)
 	}
-	if (tapped || peek.value) {
+	if (tapped || peek.value || mark.cluster) {
 		showPeek(mark, comment)
 		peek.value.tapped = tapped
 		peek.value.pressed = true
@@ -1538,7 +1538,8 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	transition: height 0.12s, top 0.12s;
 }
 
-.deliver-player__scrubber:hover .deliver-player__track {
+/* Not on a phone, where a tap's hover would stay */
+.deliver-player:not(.deliver-player--mobile) .deliver-player__scrubber:hover .deliver-player__track {
 	top: 2px;
 	height: 12px;
 }
@@ -1649,15 +1650,15 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	z-index: 1;
 	width: 24px;
 	height: 24px;
-	margin: 0;
+	margin: 0 !important;
 	padding: 1px 0 0;
 	border: 2px solid var(--deliver-marker-line);
 	border-radius: 50%;
-	background: linear-gradient(var(--deliver-marker-fill) 0 0) #000;
+	background: linear-gradient(var(--deliver-marker-fill) 0 0) #000 !important;
 	color: #fff;
 	font: bold 10px/20px sans-serif;
 	cursor: pointer;
-	/* Centred on its Frame; a negative margin loses against Nextcloud's button style */
+	/* Centred on its Frame */
 	transform: translateX(-50%);
 }
 
