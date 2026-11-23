@@ -271,7 +271,7 @@ test.describe('Review view', () => {
 		await expect(first.locator('.deliver-comment__time')).not.toBeEmpty()
 		await expect(page.locator('.deliver-comment__anchor').first()).toHaveText('00:00:00:05')
 		// Its author's initials, directly above the bar
-		await expect(page.locator('.deliver-player__marker')).toHaveText('DE')
+		await expect(page.locator('.deliver-player__marker')).toHaveText('D')
 		const marker = await page.locator('.deliver-player__marker').boundingBox()
 		const under = await page.locator('.deliver-player__timeline').boundingBox()
 		expect(marker.y + marker.height).toBeLessThanOrEqual(under.y)
