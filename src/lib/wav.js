@@ -142,7 +142,7 @@ export function maskWeights(mask, channels) {
  *
  * @param {Blob} blob - the file
  * @param {AbortSignal} [signal] - stops the reading and the worker, as for a cancelled upload
- * @return {Promise<?{integrated: ?number, peak: ?number, truePeak: boolean}>} null for a WAV of another kind, or one measured as nonsense
+ * @return {Promise<?{integrated: ?number, peak: ?number}>} null for a WAV of another kind, or one measured as nonsense
  */
 export async function wavLoudness(blob, signal) {
 	const format = await wavFormat(blob)

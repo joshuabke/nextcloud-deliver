@@ -49,7 +49,7 @@ describe('a Waveform on its way', () => {
 		const sent = toBase64(peaks)
 		expect(sent).toBe(Buffer.from(peaks).toString('base64'))
 		expect(readWaveform({ rate: 50, peaks: sent })).toEqual({ rate: 50, peaks, loudness: null })
-		const loudness = { integrated: -14.2, peak: -0.8, truePeak: true }
+		const loudness = { integrated: -14.2, peak: -0.8 }
 		expect(readWaveform({ rate: 50, peaks: sent, loudness }).loudness).toEqual(loudness)
 	})
 })

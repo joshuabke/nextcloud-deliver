@@ -121,7 +121,6 @@ onBeforeUnmount(() => {
 		:aria-label="comment ? t('deliver', 'Comment #{number}', { number }) : label"
 		tabindex="-1"
 		@pointerdown.stop
-		@dblclick.stop
 		@wheel.stop>
 		<slot v-if="!comment" />
 		<ul v-else class="deliver-wave-card__thread">

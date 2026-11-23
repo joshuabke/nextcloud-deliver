@@ -345,7 +345,7 @@ class DerivedMediaTest extends TestCase {
 		$version = $this->version($this->idOf('empty.wav'));
 		self::assertSame('ready', $version['derived']['waveform']['state'], 'silent, not failed');
 		self::assertSame([], $this->nc->waveform($version['derived']['waveform']['url'])['peaks']);
-		self::assertSame(['integrated' => null, 'peak' => null, 'truePeak' => true], $this->loudness($this->version($this->idOf('empty.wav'))), 'no sample, no peak');
+		self::assertSame(['integrated' => null, 'peak' => null], $this->loudness($this->version($this->idOf('empty.wav'))), 'no sample, no peak');
 	}
 
 	public function testFfmpegMeasuresTheLoudnessWithTheWaveform(): void {
@@ -370,10 +370,10 @@ class DerivedMediaTest extends TestCase {
 		$order = $this->inNextcloud('foreach (\\OCP\\Server::get(\\OCA\\Deliver\\Db\\JobMapper::class)->findQueued(10) as $job) { echo $job->getKind(), " "; }');
 		self::assertSame('loudness loudness loudness', trim($order), 'each file drawn in its own request, each loudness queued');
 		$this->drainQueue();
-		self::assertSame(['integrated' => -23.0, 'peak' => -23.0, 'truePeak' => true], $this->loudness($ebu));
+		self::assertSame(['integrated' => -23.0, 'peak' => -23.0], $this->loudness($ebu));
 		self::assertCount(1000, $this->nc->waveform($this->version($this->idOf('ebu.wav'))['derived']['waveform']['url'])['peaks'], 'the Waveform as it was, its loudness beside it');
 		self::assertSame(-24.5, $this->loudness($this->version($this->idOf('surround.flac')))['integrated']);
-		self::assertSame(['integrated' => null, 'peak' => -23.0, 'truePeak' => true], $this->loudness($this->version($this->idOf('lfe.flac'))), 'the LFE has a peak, but no loudness');
+		self::assertSame(['integrated' => null, 'peak' => -23.0], $this->loudness($this->version($this->idOf('lfe.flac'))), 'the LFE has a peak, but no loudness');
 	}
 
 	public function testAWaveformMadeWhileIdleGetsNoLoudnessAndGoesBeforeIt(): void {

@@ -85,7 +85,7 @@ describe('integrated loudness after EBU Tech 3341', () => {
 	})
 
 	it('has none for silence, and none at all where the sound changes its rate midway or a sample is no number', () => {
-		expect(measure([new Float32Array(RATE * 5), new Float32Array(RATE * 5)])).toEqual({ integrated: null, peak: null, truePeak: true })
+		expect(measure([new Float32Array(RATE * 5), new Float32Array(RATE * 5)])).toEqual({ integrated: null, peak: null })
 		const meter = loudnessMeter()
 		meter.add(tones([[1, -23]]), RATE)
 		meter.add(tones([[1, -23]], 2, 44100), 44100)
@@ -98,7 +98,7 @@ describe('integrated loudness after EBU Tech 3341', () => {
 
 describe('beside ffmpeg', () => {
 	it('reads noise that is loud and soft in turns as ebur128 in ffmpeg does (−20.5 LUFS, true peak −12.2 dBTP)', () => {
-		expect(measure(noise(), 44100, 4096)).toEqual({ integrated: -20.5, peak: -12.2, truePeak: true })
+		expect(measure(noise(), 44100, 4096)).toEqual({ integrated: -20.5, peak: -12.2 })
 	})
 })
 
@@ -109,7 +109,7 @@ describe('a broken decode', () => {
 		expect(measure(absurd)).toBeNull()
 		// A full-scale square wave is loud, but no nonsense
 		const square = Float32Array.from({ length: RATE * 5 }, (_, at) => (Math.floor(at / 24) % 2 === 0 ? 1 : -1))
-		expect(measure([square, square])).toMatchObject({ truePeak: true })
+		expect(measure([square, square])).toMatchObject({ peak: expect.any(Number) })
 	})
 
 	it('keeps the ends of the server\'s ranges and nothing past them', () => {
@@ -179,7 +179,7 @@ describe('the true peak after BS.1770-4 Annex 2', () => {
 		const left = new Float32Array(RATE).fill(0.1)
 		const right = new Float32Array(RATE).fill(0.1)
 		right[100] = -0.5
-		expect(measure([left, right])).toMatchObject({ peak: -6, truePeak: true })
+		expect(measure([left, right])).toMatchObject({ peak: -6 })
 	})
 })
 
