@@ -418,6 +418,63 @@ test.describe('Review view', () => {
 		await phone.close()
 	})
 
+	test('on a phone at half height the layout keeps its height through a step to the next Asset, loading or still', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const dav = `/remote.php/dav/files/${USER}/${folder}`
+		const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64')
+		expect((await api.fetch(`${dav}/clip2.webm`, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(201)
+		expect((await api.fetch(`${dav}/clip3.png`, { method: 'PUT', data: pixel })).status()).toBe(201)
+		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
+		await api.dispose()
+		const first = project.ocs.data.assets.find((asset) => asset.name === 'clip').versions[0].id
+
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const touchPage = await phone.newPage()
+		await login(touchPage)
+		// Each Asset's own load is held back, so that the stage stands empty for a while
+		await touchPage.route(/\/versions\/\d+(\?|$)/, async (route) => {
+			if (route.request().method() === 'GET' && route.request().resourceType() !== 'document') {
+				await new Promise((resolve) => setTimeout(resolve, 1500))
+			}
+			await route.fallback()
+		})
+		await touchPage.goto(`/apps/deliver/versions/${first}`)
+		await touchPage.locator('.deliver-layout__grabber').tap()
+		await expect(touchPage.locator('.deliver-layout--middle')).toHaveCount(1)
+		await expect(touchPage.locator('.deliver-player, .deliver-still')).toHaveCount(1)
+		const main = touchPage.locator('.deliver-layout__main')
+		const height = (await main.boundingBox()).height
+		// Sampled in the page, every frame, while the next Assets load and show
+		await touchPage.evaluate(() => {
+			window.deliverHeights = new Set()
+			const watch = () => {
+				window.deliverHeights.add(Math.round(document.querySelector('.deliver-layout__main').getBoundingClientRect().height * 10))
+				requestAnimationFrame(watch)
+			}
+			watch()
+		})
+		const next = async () => {
+			await touchPage.getByRole('button', { name: 'More' }).tap()
+			await touchPage.getByRole('menuitem', { name: 'Next Asset' }).tap()
+		}
+		await next()
+		await expect(touchPage.locator('.deliver-player, .deliver-still')).toHaveCount(0)
+		await expect(touchPage.locator('.deliver-player, .deliver-still')).toHaveCount(1)
+		await next()
+		await expect(touchPage.locator('.deliver-player, .deliver-still')).toHaveCount(0)
+		await expect(touchPage.locator('.deliver-player, .deliver-still')).toHaveCount(1)
+		const heights = await touchPage.evaluate(() => [...window.deliverHeights])
+		expect(heights).toEqual([Math.round(height * 10)])
+		await phone.close()
+
+		const cleanup = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const left = await (await cleanup.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
+		for (const asset of left.ocs.data.assets.filter((each) => each.name !== 'clip')) {
+			await cleanup.delete(`/ocs/v2.php/apps/deliver/api/v1/assets/${asset.id}/files?format=json`)
+		}
+		await cleanup.dispose()
+	})
+
 	test('on a phone: stacked, by touch, and a Reviewer comments on a Range', async ({ playwright }) => {
 		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
 		const page = await phone.newPage()

@@ -336,9 +336,9 @@ body.deliver-review footer {
 	height: calc(56.25vw + 102px);
 }
 
-/* Compare's controls, and a still, keep the room they had on a narrow phone; only the player's are one row */
+/* Compare's controls keep the room they had on a narrow phone; only the player's are one row. Keyed on Compare, not on the missing player: while the next Asset loads no player is mounted, and the list would jump */
 @media (max-width: 440px) {
-	.deliver-layout--upright.deliver-layout--middle .deliver-layout__main:not(:has(.deliver-player)) {
+	.deliver-layout--upright.deliver-layout--middle .deliver-layout__main:has(.deliver-compare) {
 		height: calc(56.25vw + 136.5px);
 	}
 }
