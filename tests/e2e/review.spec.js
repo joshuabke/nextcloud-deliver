@@ -849,14 +849,16 @@ test.describe('Review view', () => {
 		const video = page.locator('video.deliver-player__video')
 		await expect(video).toHaveJSProperty('readyState', 4)
 		await page.locator('.deliver-layout__bar h2').click()
-		for (let press = 0; press < 3; press++) {
-			await page.keyboard.press('l')
-		}
-		await expect.poll(() => video.evaluate((element) => element.playbackRate)).toBe(4)
+		// L plays, a second L (once it plays: the player counts a press while it does not as a first) doubles it.
+		// 2x, not 4x, which a clip of four seconds runs out in before the click comes, and ending drops the shuttle
+		await page.keyboard.press('l')
+		await expect(page.getByRole('button', { name: /^Pause \(/ })).toBeVisible()
+		await page.keyboard.press('l')
+		await expect.poll(() => video.evaluate((element) => element.playbackRate)).toBe(2)
 		const bar = await page.locator('.deliver-player__timeline').boundingBox()
 		await page.mouse.click(bar.x + bar.width * 0.1, bar.y + bar.height / 2)
 		await page.waitForTimeout(100)
-		expect(await video.evaluate((element) => ({ rate: element.playbackRate, paused: element.paused }))).toEqual({ rate: 4, paused: false })
+		expect(await video.evaluate((element) => ({ rate: element.playbackRate, paused: element.paused }))).toEqual({ rate: 2, paused: false })
 		await page.keyboard.press('k')
 	})
 
