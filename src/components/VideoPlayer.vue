@@ -124,6 +124,8 @@ const span = ref(readSpan())
 const shownWindow = computed(() => scrolling.value ? overviewWindow(frame.value / fpsValue(fps.value), span.value, durationFrames.value / fpsValue(fps.value)) : null)
 const hover = ref(null)
 const scrubber = ref(null)
+/** Whether a mouse is over the bar: a tap's :hover would stay */
+const pointed = ref(false)
 /** The Comment whose card shows over the bar, its circle, and where; tapped: a finger opened it, pressed: its circle was pressed on it */
 const peek = ref(null)
 /** The stage's Waveform, and a Comment's card about to open there */
@@ -1044,7 +1046,13 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 		</div>
 
 		<!-- The Comments, the Waveform behind them, and the bar, thicker on hover to follow thumbnails -->
-		<div ref="scrubber" class="deliver-player__scrubber" @mouseleave="leaveScrubber">
+		<div
+			ref="scrubber"
+			class="deliver-player__scrubber"
+			:class="{ 'deliver-player__scrubber--pointed': pointed }"
+			@pointerenter="pointed = $event.pointerType === 'mouse'"
+			@pointerleave="pointed = false"
+			@mouseleave="leaveScrubber">
 			<video
 				v-if="scrubSource"
 				ref="scrubVideo"
@@ -1567,16 +1575,15 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	transition: height 0.12s, top 0.12s;
 }
 
-/* Only for a mouse: a tap's hover would stay */
-@media (hover: hover) and (pointer: fine) {
-	.deliver-player__scrubber:hover .deliver-player__track {
-		top: 2px;
-		height: 12px;
-	}
+.deliver-player__scrubber--pointed .deliver-player__track {
+	top: 2px;
+	height: 12px;
+}
 
-	.deliver-player--mobile .deliver-player__scrubber:hover .deliver-player__track {
-		top: 10px;
-	}
+/* In the middle of the taller bar, where its knob is */
+.deliver-player--mobile .deliver-player__scrubber--pointed .deliver-player__track {
+	top: 10px;
+	height: 12px;
 }
 
 /* Where the player stands: a white line, right below the centre of a circle on that Frame */

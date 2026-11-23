@@ -900,7 +900,7 @@ test.describe('Review view', () => {
 		const video = page.locator('video.deliver-player__video')
 		await expect(video).toHaveJSProperty('readyState', 4)
 		const frameOf = (target) => target.evaluate((element) => Math.floor(element.currentTime * 25 + 0.001))
-		const marker = page.locator('.deliver-player__marker', { hasText: '3' })
+		const marker = page.locator('.deliver-player__marker[aria-label*=": at 8"]')
 		await expect(marker).toHaveAttribute('aria-label', /^1 of 3, .*: at 85$/)
 		// The mouse shows the first and steps on with every click; the wrap comes back to it
 		await marker.hover()
@@ -934,7 +934,7 @@ test.describe('Review view', () => {
 		await expect(touchVideo).toHaveJSProperty('readyState', 4)
 		const card = touchPage.locator('.deliver-player__peek--tapped')
 		// A finger a little beside the circle still takes it, and opens the card without seeking
-		const box = await touchPage.locator('.deliver-player__marker', { hasText: '3' }).boundingBox()
+		const box = await touchPage.locator('.deliver-player__marker[aria-label*=": at 8"]').boundingBox()
 		const tap = (beside = 0) => touchPage.touchscreen.tap(box.x + box.width / 2 - beside, box.y + box.height / 2)
 		await tap(18)
 		await expect(card).toContainText('at 85')
@@ -953,7 +953,7 @@ test.describe('Review view', () => {
 		const tapAt = async (y) => {
 			await touchPage.reload()
 			await expect(touchVideo).toHaveJSProperty('readyState', 4)
-			await expect(touchPage.locator('.deliver-player__marker', { hasText: '3' })).toBeVisible()
+			await expect(touchPage.locator('.deliver-player__marker[aria-label*=": at 8"]')).toBeVisible()
 			await touchPage.touchscreen.tap(box.x + box.width / 2, y)
 		}
 		for (const y of [row.y + 1, row.y + row.height - 1]) {
@@ -961,7 +961,16 @@ test.describe('Review view', () => {
 			await expect(card).toContainText('1 of 3')
 			expect(await touchVideo.evaluate((element) => element.currentTime)).toBe(0)
 		}
+		// The bar grows under a mouse, on a narrow window too, not under a finger
+		await page.setViewportSize({ width: 900, height: 800 })
+		await page.locator('.deliver-player__timeline').hover()
+		await expect(page.locator('.deliver-player__track')).toHaveCSS('height', '12px')
+		const [knob, track] = await Promise.all(['.deliver-player__timeline', '.deliver-player__track'].map((each) => page.locator(each).boundingBox()))
+		expect(track.y + track.height / 2).toBeCloseTo(knob.y + knob.height / 2, 0)
+		await page.setViewportSize({ width: 1280, height: 720 })
 		await tapAt(row.y + row.height + 16)
+		await touchPage.waitForTimeout(300)
+		await expect(touchPage.locator('.deliver-player__track')).toHaveCSS('height', '6px')
 		await expect.poll(() => frameOf(touchVideo)).toBeGreaterThan(80)
 		await expect(card).toHaveCount(0)
 		await tapAt(row.y - 4)
