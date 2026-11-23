@@ -1,3 +1,5 @@
+import { usernameToColor } from '@nextcloud/vue/functions/usernameToColor'
+
 /**
  * The initials NcAvatar shows for a name: the first letter, and the first
  * of the last word.
@@ -23,4 +25,20 @@ export function initials(name) {
  */
 export function avatarSeed(author) {
 	return author.type === 'reviewer' ? `deliver-reviewer-${author.id}` : author.name
+}
+
+/** Each author's colour, worked out once: the Waveform draws them on every frame */
+const tints = new Map()
+
+/**
+ * @param {object} author - whoever wrote or decided something
+ * @return {string} the rgb of their avatar
+ */
+export function avatarRgb(author) {
+	const seed = avatarSeed(author)
+	if (!tints.has(seed)) {
+		const { r, g, b } = usernameToColor(seed)
+		tints.set(seed, `${r}, ${g}, ${b}`)
+	}
+	return tints.get(seed)
 }

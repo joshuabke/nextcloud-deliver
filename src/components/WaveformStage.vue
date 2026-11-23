@@ -1,13 +1,12 @@
 <script setup>
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
-import { usernameToColor } from '@nextcloud/vue/functions/usernameToColor'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import WaveformCard from './WaveformCard.vue'
 import { HOLD_MS, TAP_SLOP } from '../lib/gestures.js'
-import { avatarSeed, initials } from '../lib/initials.js'
+import { avatarRgb } from '../lib/initials.js'
 import { t } from '../lib/l10n.js'
 import { fpsValue, timeToFrame } from '../lib/timecode.js'
-import { barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, clampSpan, dragged, glided, glideStart, isWhole, laneBands, loudestOf, pinchSpan, pixelPlace, retarget, secondsAt, shiftPixels, spreadSpan, stack, steadied, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan } from '../lib/waveWindow.js'
+import { acrossOf, barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, circleLook, circlesOf, clampSpan, dragged, glided, glideStart, INSET, isWhole, laneBands, loudestOf, pinchSpan, pixelPlace, retarget, secondsAt, shiftPixels, spreadSpan, steadied, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan } from '../lib/waveWindow.js'
 import { useCommentsStore } from '../store/comments.js'
 
 // The Waveform of an audio Version on the stage (story 180): a window of it,
@@ -128,40 +127,34 @@ function keep(name, key, make) {
 	return kept[name].value
 }
 
-/** Each author's colour, as their avatar has it */
-const tints = new Map()
-
-/**
- * @param {object} author - a Comment's author
- * @return {string} the rgb of their avatar
- */
-function tint(author) {
-	const seed = avatarSeed(author)
-	if (!tints.has(seed)) {
-		const { r, g, b } = usernameToColor(seed)
-		tints.set(seed, `${r}, ${g}, ${b}`)
-	}
-	return tints.get(seed)
-}
-
 /** The Waveforms drawn: Compare's lanes, or the one, heard */
 const shownLanes = computed(() => props.lanes ?? [{ waveform: props.waveform, shift: 0, audible: true }])
 /** Lanes share one scale, the loudest of them; the one Waveform has its own */
 const loudest = computed(() => props.lanes ? loudestOf(props.lanes.map((lane) => lane.waveform)) : null)
 
-/** The seconds across the stage: the span, or the whole piece; never read off a sliding window */
-const across = computed(() => isWhole(shown.value, duration.value) ? duration.value : shown.value)
+/** Room before and after the whole piece, in px, as the bar has it; Compare's bar has none */
+const inset = props.lanes ? 0 : INSET
+
+/**
+ * @return {number} the seconds across the stage: the span, or the whole piece with the room around it; never read off a sliding window
+ */
+const across = () => acrossOf(shown.value, duration.value, size.width, inset)
+
+/**
+ * @return {number} the seconds of room before and after the whole piece
+ */
+const margin = () => inset / size.width * across()
 
 /**
  * @return {number} px per Frame at this zoom
  */
-const perFrame = () => size.width / across.value / fpsValue(props.fps)
+const perFrame = () => size.width / across() / fpsValue(props.fps)
 
 /**
  * @return {Array<{comment: object, x: number}|{cluster: object[], x: number}>} the circles, from the start of the piece
  */
 function circles() {
-	return keep('circles', [props.comments, across.value, size.width], () => stack(props.comments, perFrame()))
+	return keep('circles', [props.comments, across(), size.width], () => circlesOf(props.comments, perFrame()))
 }
 
 /** Where a drag has taken the playhead, until it lets go */
@@ -190,7 +183,7 @@ function frameOf(seconds) {
  * @return {{head: number, offset: number}} the playhead's column and the window's left edge, in whole device pixels
  */
 function placeAt(at) {
-	return pixelPlace(at, across.value, pixels.width, isWhole(shown.value, duration.value))
+	return pixelPlace(at, across(), pixels.width, isWhole(shown.value, duration.value), Math.round(inset * ratio))
 }
 
 /**
@@ -223,14 +216,14 @@ function draw() {
 		const layers = keep('layers', [TOP.value, shownLanes.value, props.marked, props.comments, pixels.width, pixels.height, colors.played, store.selected, card.value?.id, props.pending], () => ({
 			rest: layer((each) => {
 				each.setTransform(ratio, 0, 0, ratio, 0, 0)
-				drawSpans(each, 0)
+				drawSpans(each, offset / ratio)
 				each.setTransform(1, 0, 0, 1, 0, 0)
-				drawBars(each, 0, -Infinity)
+				drawBars(each, offset, -Infinity)
 			}),
-			played: layer((each) => drawBars(each, 0, Infinity)),
+			played: layer((each) => drawBars(each, offset, Infinity)),
 			top: layer((each) => {
 				each.setTransform(ratio, 0, 0, ratio, 0, 0)
-				drawTop(each, 0)
+				drawTop(each, offset / ratio)
 			}),
 		}))
 		context.drawImage(layers.rest, 0, 0)
@@ -278,7 +271,7 @@ function drawSpans(context, offset) {
 			const from = comment.inFrame * scale - offset
 			const to = (comment.outFrame + 1) * scale - offset
 			if (to > 0 && from < size.width) {
-				context.fillStyle = `rgba(${tint(comment.author)}, ${comment.resolved ? 0.1 : 0.22})`
+				context.fillStyle = `rgba(${avatarRgb(comment.author)}, ${comment.resolved ? 0.1 : 0.22})`
 				context.fillRect(from, waveTop.value, to - from, size.height - waveTop.value)
 			}
 		}
@@ -301,13 +294,13 @@ function drawSpans(context, offset) {
  */
 function drawBars(context, offset, head) {
 	// Over the whole piece the wave stands; scrolling, it moves at the playback rate
-	const grid = barGrid(across.value, pixels.width, ratio, isWhole(shown.value, duration.value) ? 0 : props.media?.playbackRate || 1)
+	const grid = barGrid(across(), pixels.width, ratio, isWhole(shown.value, duration.value) ? 0 : props.media?.playbackRate || 1)
 	const bands = laneBands(shownLanes.value.length, pixels.height, Math.round(TOP.value * ratio), Math.round(BOTTOM * ratio), Math.round(LANE_GAP * ratio))
 	shownLanes.value.forEach((lane, index) => {
 		if (lane.waveform) {
 			const levels = keep('bars' + index, [lane.waveform, grid.seconds, loudest.value], () => bars(lane.waveform, grid.seconds, loudest.value))
 			// A lane ahead of the playhead stands that much to the left, on whole pixels too
-			drawLane(context, levels, grid, bands[index], offset + shiftPixels(lane.shift, across.value, pixels.width), head, lane.audible ? colors : SUBDUED)
+			drawLane(context, levels, grid, bands[index], offset + shiftPixels(lane.shift, across(), pixels.width), head, lane.audible ? colors : SUBDUED)
 		}
 	})
 }
@@ -341,7 +334,7 @@ function drawLane(context, levels, grid, band, offset, head, tints) {
 }
 
 /**
- * The playhead, under the zoom buttons, on whole device pixels
+ * The playhead, from under the zoom buttons down to the lane of the circles, on whole device pixels: no circle covers it
  *
  * @param {CanvasRenderingContext2D} context - where to draw, untransformed
  * @param {number} head - its x, in device pixels
@@ -350,7 +343,8 @@ function drawHead(context, head) {
 	const width = Math.max(2, Math.round(2 * ratio))
 	const top = Math.round(waveTop.value * ratio)
 	context.fillStyle = '#fff'
-	context.fillRect(head - Math.floor(width / 2), top, width, pixels.height - top)
+	const bottom = props.lanes ? 0 : Math.round((BOTTOM - 4) * ratio)
+	context.fillRect(head - Math.floor(width / 2), top, width, pixels.height - bottom - top)
 }
 
 /**
@@ -397,8 +391,7 @@ function drawPending(context, pending, scale, offset, height) {
 }
 
 /**
- * The Comments as their authors' initials in circles, in their avatars' colour, resolved ones paler;
- * a place with more of them one neutral circle with their count
+ * The Comments' circles, as circleLook has them
  *
  * @param {CanvasRenderingContext2D} context - the canvas
  * @param {Array<{comment: object, x: number}|{cluster: object[], x: number}>} list - the circles
@@ -411,24 +404,23 @@ function drawCircles(context, list, offset, y) {
 	context.textAlign = 'center'
 	context.textBaseline = 'middle'
 	context.lineWidth = 2
-	for (const { comment, cluster, x: at } of list) {
-		const x = at - offset
+	for (const circle of list) {
+		const x = circle.x - offset
 		if (x < -radius || x > size.width + radius) {
 			continue
 		}
-		const rgb = comment ? tint(comment.author) : '255, 255, 255'
-		const ringed = comment ? comment.id === store.selected || comment.id === card.value?.id : cluster.some((each) => each.id === store.selected)
-		context.globalAlpha = comment?.resolved ? 0.45 : 1
+		const look = circleLook(circle, [store.selected, card.value?.id])
+		context.globalAlpha = look.pale ? 0.45 : 1
 		context.beginPath()
 		context.arc(x, y, radius - 1, 0, 2 * Math.PI)
 		context.fillStyle = '#000'
 		context.fill()
-		context.fillStyle = comment ? `rgba(${rgb}, 0.3)` : 'rgba(255, 255, 255, 0.18)'
+		context.fillStyle = look.fill
 		context.fill()
-		context.strokeStyle = ringed ? '#fff' : comment ? `rgb(${rgb})` : 'rgba(255, 255, 255, 0.6)'
+		context.strokeStyle = look.line
 		context.stroke()
 		context.fillStyle = '#fff'
-		context.fillText(comment ? initials(comment.author.name) : String(cluster.length), x, y + 0.5)
+		context.fillText(look.text, x, y + 0.5)
 	}
 	context.globalAlpha = 1
 }
@@ -465,7 +457,7 @@ function drawn() {
 		const expected = last.at + (props.playing ? (time - last.time) / 1000 * (props.media?.playbackRate || 1) : 0)
 		if (Math.abs(at - expected) > SEEK_GAP) {
 			const running = glide && glide.span === shown.value && glided(glide, time, at) !== null
-			glide = running ? retarget(glide, at, across.value) : { from: glideStart(drawnAt, at, across.value), at: time, span: shown.value }
+			glide = running ? retarget(glide, at, across()) : { from: glideStart(drawnAt, at, across()), at: time, span: shown.value }
 		}
 	}
 	last = { at, time }
@@ -655,7 +647,7 @@ function onDown(event) {
  * @return {number} the Frame there
  */
 function frameAtX(x) {
-	return frameOf(secondsAt(x, windowAt(onScreen(), shown.value, duration.value), size.width, duration.value))
+	return frameOf(secondsAt(x, windowAt(onScreen(), shown.value, duration.value, margin()), size.width, duration.value))
 }
 
 /**
@@ -704,7 +696,7 @@ function onMove(event) {
 		emit('hold')
 	}
 	if (press.moved) {
-		dragAt = dragged({ from: press.from, dx, x: xOf(event), span: shown.value, width: size.width, duration: duration.value })
+		dragAt = dragged({ from: press.from, dx, x: xOf(event), span: shown.value, width: size.width, duration: duration.value, margin: margin() })
 		emit('seek', frameOf(dragAt))
 		schedule()
 	}
@@ -784,7 +776,7 @@ function openCircle(circle, x) {
 		return
 	}
 	const { cluster } = circle
-	const parted = spreadSpan(cluster, fpsValue(props.fps), size.width, duration.value)
+	const parted = spreadSpan(cluster, fpsValue(props.fps), size.width - 2 * inset, duration.value)
 	if (parted === null) {
 		open(cluster[0], x, cluster)
 		return

@@ -43,7 +43,7 @@ import { SKIP_SECONDS, skipFrames } from '../lib/skip.js'
 import { formatAt, fpsValue, frameToTime, modesFor, stepOf, timeToFrame } from '../lib/timecode.js'
 import { watermarkTile } from '../lib/watermark.js'
 import { fetchWaveform, overview } from '../lib/waveform.js'
-import { overviewWindow, readSpan } from '../lib/waveWindow.js'
+import { CIRCLE, circleAt, circleLook, circlesOf, overviewWindow, readSpan } from '../lib/waveWindow.js'
 import { useCommentsStore } from '../store/comments.js'
 
 /** The drawing being made for the next Comment */
@@ -124,21 +124,46 @@ const span = ref(readSpan())
 const shownWindow = computed(() => scrolling.value ? overviewWindow(frame.value / fpsValue(fps.value), span.value, durationFrames.value / fpsValue(fps.value)) : null)
 const hover = ref(null)
 const scrubber = ref(null)
-/** The Comment whose card shows over the bar, and where */
+/** The Comment whose card shows over the bar, its circle, and where; tapped: a finger opened it, pressed: its circle was pressed on it */
 const peek = ref(null)
+/** The bar's width, in px */
+const barWidth = ref(0)
+const barResized = new ResizeObserver(([entry]) => {
+	barWidth.value = entry.contentRect.width
+})
+/** The Comments' circles above the bar, as on the whole Waveform */
+const marks = computed(() => !barWidth.value || !durationFrames.value
+	? []
+	: circlesOf(props.comments, barWidth.value / durationFrames.value).map((circle) => {
+			const { comment, cluster } = circle
+			const each = cluster ?? [comment]
+			const at = each.find((one) => one.id === peek.value?.comment.id) ?? each[0]
+			const name = at.author.name + ': ' + at.body
+			return {
+				...circle,
+				...circleLook(circle, [store.selected, peek.value?.tapped && peek.value.comment.id]),
+				key: each[0].id,
+				label: cluster ? countOf({ mark: circle, comment: at }) + ', ' + name : name,
+			}
+		}))
 
 /** Half the card's width, to keep it inside the player */
 const PEEK_HALF = 160
 
 /**
- * @param {object} comment - the Comment under the pointer
- * @param {Event} event - hovering or focusing its avatar
+ * @param {object} mark - the circle under the pointer
+ * @param {object} comment - its Comment, or one of its count
  */
-function showPeek(comment, event) {
-	const box = scrubber.value.getBoundingClientRect()
-	const marker = event.currentTarget.getBoundingClientRect()
-	const centre = marker.left + marker.width / 2 - box.left
-	peek.value = { comment, left: Math.min(box.width - PEEK_HALF - 4, Math.max(PEEK_HALF + 4, centre)) }
+function showPeek(mark, comment) {
+	peek.value = { mark, comment, left: Math.min(barWidth.value - PEEK_HALF - 4, Math.max(PEEK_HALF + 4, mark.x)) }
+}
+
+/**
+ * @param {{mark: {cluster: object[]}, comment: object}} shown - a count circle and the Comment shown of it
+ * @return {string} which of how many that is
+ */
+function countOf({ mark, comment }) {
+	return t('deliver', '{index} of {count}', { index: mark.cluster.findIndex((each) => each.id === comment.id) + 1, count: mark.cluster.length })
 }
 const tool = ref('pen')
 const color = ref(COLORS[0])
@@ -509,45 +534,63 @@ function onDragEnd(event) {
 /**
  * The card over a marker follows the mouse and the keyboard; a finger opens it with a tap, below
  *
- * @param {object} comment - the marker's Comment
+ * @param {object} mark - the marker
  * @param {PointerEvent|FocusEvent} event - the pointer entering, or focus
  */
-function peekAt(comment, event) {
+function peekAt(mark, event) {
 	if (event.pointerType === 'mouse' || (event.type === 'focus' && event.currentTarget.matches(':focus-visible'))) {
-		showPeek(comment, event)
+		showPeek(mark, mark.comment ?? mark.cluster[0])
 	}
 }
 
-/** Whether the last press on a marker was a finger's or a pen's */
+/** Whether the last press on the markers was a finger's or a pen's */
 let tappedMarker = false
 
 /**
- * @param {PointerEvent} event - a press on a marker
+ * @param {PointerEvent} event - a press on a marker or beside it
  */
 function pressMarker(event) {
 	tappedMarker = event.pointerType !== 'mouse'
 }
 
 /** The last tap on a marker, to tell a double tap */
-let lastTap = { id: null, at: 0 }
+let lastTap = { key: null, at: 0 }
+
+/**
+ * A finger beside a marker takes the nearest, as on the Waveform
+ *
+ * @param {MouseEvent} event - the click
+ */
+function pressBeside(event) {
+	const mark = tappedMarker && circleAt(marks.value, event.clientX - scrubber.value.getBoundingClientRect().left, 0, CIRCLE)
+	if (mark) {
+		openMarker(mark, event)
+	}
+}
 
 /**
  * A marker clicked goes to its Frame, through the view's jump. A tap only opens its card, to be read
  * also in fullscreen, until it is tapped away or playback starts; a double
- * tap goes to the Frame.
+ * tap goes to the Frame. Of a count, the first press takes the first
+ * Comment, every further one the next, round and round.
  *
- * @param {object} comment - the marker's Comment
+ * @param {object} mark - the marker
  * @param {MouseEvent} event - the click
  */
-function openMarker(comment, event) {
-	const again = lastTap.id === comment.id && event.timeStamp - lastTap.at < DOUBLE_TAP_MS
-	lastTap = { id: comment.id, at: event.timeStamp }
-	if (!tappedMarker || again) {
+function openMarker(mark, event) {
+	const tapped = tappedMarker
+	const again = tapped && lastTap.key === mark.key && event.timeStamp - lastTap.at < DOUBLE_TAP_MS
+	lastTap = { key: mark.key, at: event.timeStamp }
+	const each = mark.cluster ?? [mark.comment]
+	const shown = each.findIndex((comment) => comment.id === peek.value?.comment.id)
+	const comment = each[shown < 0 ? 0 : (shown + (peek.value.pressed && !again ? 1 : 0)) % each.length]
+	if (!tapped || again) {
 		emit('jump', comment)
 	}
-	if (tappedMarker) {
-		showPeek(comment, event)
-		peek.value.tapped = true
+	if (tapped || peek.value) {
+		showPeek(mark, comment)
+		peek.value.tapped = tapped
+		peek.value.pressed = true
 	}
 }
 
@@ -611,12 +654,14 @@ const waveformPoints = computed(() => {
 })
 
 onMounted(() => {
+	barResized.observe(scrubber.value)
 	window.addEventListener('keydown', onKey)
 })
 onBeforeUnmount(() => {
 	if (captionTrack.value) {
 		URL.revokeObjectURL(captionTrack.value)
 	}
+	barResized.disconnect()
 	window.removeEventListener('keydown', onKey)
 	stopReverse()
 	clearTimeout(flashTimer)
@@ -969,7 +1014,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 			</p>
 		</div>
 
-		<!-- The bar, its Comments and, on hover, its Waveform and a thicker bar to follow thumbnails -->
+		<!-- The Comments, the Waveform behind them, and the bar, thicker on hover to follow thumbnails -->
 		<div ref="scrubber" class="deliver-player__scrubber" @mouseleave="leaveScrubber">
 			<video
 				v-if="scrubSource"
@@ -983,6 +1028,53 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 				@loadedmetadata="onScrubLoaded"
 				@seeked="onScrubSeeked"
 				@error="onScrubError" />
+			<!-- A circle per Comment, centred above its Frame, as on the Waveform; close ones are one with their count; hovering shows the Comment -->
+			<div class="deliver-player__markers" @pointerdown="pressMarker" @click="pressBeside">
+				<svg
+					v-if="peaks.length && !version.audioOnly"
+					class="deliver-player__waveform"
+					viewBox="0 0 100 100"
+					preserveAspectRatio="none"
+					aria-hidden="true">
+					<polygon :points="waveformPoints" />
+				</svg>
+				<button
+					v-for="mark in marks"
+					:key="mark.key"
+					type="button"
+					class="deliver-player__marker"
+					:class="{ 'deliver-player__marker--resolved': mark.pale }"
+					:style="{ left: mark.x + 'px', '--deliver-marker-fill': mark.fill, '--deliver-marker-line': mark.line }"
+					:aria-label="mark.label"
+					@pointerenter="peekAt(mark, $event)"
+					@pointerleave="$event.pointerType === 'mouse' && (peek = null)"
+					@focus="peekAt(mark, $event)"
+					@blur="peek?.tapped || (peek = null)"
+					@click.stop="openMarker(mark, $event)">
+					{{ mark.text }}
+				</button>
+				<div
+					v-if="peek"
+					class="deliver-player__peek"
+					:class="{ 'deliver-player__peek--tapped': peek.tapped }"
+					:style="{ left: peek.left + 'px' }"
+					@click.stop="peek = null">
+					<PersonAvatar :author="peek.comment.author" :size="32" />
+					<div class="deliver-player__peek-content">
+						<div class="deliver-player__peek-head">
+							<strong>{{ peek.comment.author.name }}</strong>
+							<NcDateTime :timestamp="peek.comment.createdAt * 1000" relativeTime="short" />
+							<span v-if="peek.mark.cluster">{{ countOf(peek) }}</span>
+							<span class="deliver-player__peek-number">#{{ store.numbers.get(peek.comment.id) }}</span>
+						</div>
+						<p>
+							<span class="deliver-player__peek-time">{{ formatAt(peek.comment.inFrame, clock) }}</span>
+							{{ peek.comment.body }}
+						</p>
+					</div>
+				</div>
+			</div>
+
 			<div
 				class="deliver-player__timeline"
 				@pointerdown="onDragStart"
@@ -1017,53 +1109,6 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 						:height="scrubSize.height" />
 					<div v-if="hover?.tile && !scrubDrawn" class="deliver-player__tile" :style="hover.tile" />
 					<span v-if="hover" class="deliver-player__hover-time">{{ formatAt(hover.frame, clock) }}</span>
-				</div>
-			</div>
-
-			<!-- One avatar per Comment, centred under its Frame; hovering shows the Comment -->
-			<div class="deliver-player__markers">
-				<svg
-					v-if="peaks.length && !version.audioOnly"
-					class="deliver-player__waveform"
-					viewBox="0 0 100 100"
-					preserveAspectRatio="none"
-					aria-hidden="true">
-					<polygon :points="waveformPoints" />
-				</svg>
-				<button
-					v-for="each in comments"
-					:key="each.id"
-					type="button"
-					class="deliver-player__marker"
-					:class="{ 'deliver-player__marker--resolved': each.resolved }"
-					:style="{ left: leftOf(each) + '%' }"
-					:aria-label="each.author.name + ': ' + each.body"
-					@pointerdown="pressMarker"
-					@pointerenter="peekAt(each, $event)"
-					@pointerleave="$event.pointerType === 'mouse' && (peek = null)"
-					@focus="peekAt(each, $event)"
-					@blur="peek?.tapped || (peek = null)"
-					@click="openMarker(each, $event)">
-					<PersonAvatar :author="each.author" :size="20" />
-				</button>
-				<div
-					v-if="peek"
-					class="deliver-player__peek"
-					:class="{ 'deliver-player__peek--tapped': peek.tapped }"
-					:style="{ left: peek.left + 'px' }"
-					@click="peek = null">
-					<PersonAvatar :author="peek.comment.author" :size="32" />
-					<div class="deliver-player__peek-content">
-						<div class="deliver-player__peek-head">
-							<strong>{{ peek.comment.author.name }}</strong>
-							<NcDateTime :timestamp="peek.comment.createdAt * 1000" relativeTime="short" />
-							<span class="deliver-player__peek-number">#{{ store.numbers.get(peek.comment.id) }}</span>
-						</div>
-						<p>
-							<span class="deliver-player__peek-time">{{ formatAt(peek.comment.inFrame, clock) }}</span>
-							{{ peek.comment.body }}
-						</p>
-					</div>
 				</div>
 			</div>
 		</div>
@@ -1467,6 +1512,11 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	height: 6px;
 }
 
+/* Clear of the circles above it */
+.deliver-player--mobile .deliver-player__window {
+	inset-block: 5px;
+}
+
 .deliver-player--mobile .deliver-player__playhead::after {
 	content: '';
 	position: absolute;
@@ -1493,7 +1543,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	height: 12px;
 }
 
-/* Where the player stands: a white line, right above the centre of an avatar on that Frame */
+/* Where the player stands: a white line, right below the centre of a circle on that Frame */
 .deliver-player__playhead {
 	position: absolute;
 	top: 0;
@@ -1505,7 +1555,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	pointer-events: none;
 }
 
-/* The Waveform, faint, behind the avatars */
+/* The Waveform, faint, behind the circles */
 .deliver-player__waveform {
 	position: absolute;
 	inset: 2px 0;
@@ -1548,9 +1598,10 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	background: rgba(255, 196, 0, 0.45);
 }
 
+/* Above the circles */
 .deliver-player__hover {
 	position: absolute;
-	bottom: calc(100% + 6px);
+	bottom: calc(100% + 34px);
 	transform: translateX(-50%);
 	display: flex;
 	flex-direction: column;
@@ -1586,23 +1637,25 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 .deliver-player__markers {
 	position: relative;
 	height: 28px;
+	/* Two quick taps are a double tap here, not a zoom */
+	touch-action: manipulation;
 }
 
-/* The resets keep Nextcloud's button style away */
+/* A circle as the Waveform draws it (circleLook, drawCircles); the resets keep Nextcloud's button style away */
 .deliver-player__marker {
 	position: absolute;
 	top: 2px;
 	min-height: 0;
 	z-index: 1;
-	/* Two quick taps are a double tap here, not a zoom */
-	touch-action: manipulation;
 	width: 24px;
 	height: 24px;
 	margin: 0;
-	padding: 0;
-	border: 2px solid var(--color-main-background);
+	padding: 1px 0 0;
+	border: 2px solid var(--deliver-marker-line);
 	border-radius: 50%;
-	background: none;
+	background: linear-gradient(var(--deliver-marker-fill) 0 0) #000;
+	color: #fff;
+	font: bold 10px/20px sans-serif;
 	cursor: pointer;
 	/* Centred on its Frame; a negative margin loses against Nextcloud's button style */
 	transform: translateX(-50%);
@@ -1610,7 +1663,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 
 .deliver-player__marker:hover {
 	z-index: 2;
-	border-color: var(--color-main-text);
+	border-color: #fff;
 }
 
 .deliver-player__marker--resolved {
@@ -1620,7 +1673,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 /* The Comment under the pointer, as a card over the bar */
 .deliver-player__peek {
 	position: absolute;
-	bottom: calc(100% + 22px);
+	bottom: calc(100% + 6px);
 	z-index: 2;
 	display: flex;
 	gap: 10px;

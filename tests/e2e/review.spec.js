@@ -270,7 +270,12 @@ test.describe('Review view', () => {
 		await expect(first).toContainText('sound starts too early')
 		await expect(first.locator('.deliver-comment__time')).not.toBeEmpty()
 		await expect(page.locator('.deliver-comment__anchor').first()).toHaveText('00:00:00:05')
-		await expect(page.locator('.deliver-player__marker')).toHaveCount(1)
+		// Its author's initials, directly above the bar
+		await expect(page.locator('.deliver-player__marker')).toHaveText('DE')
+		const marker = await page.locator('.deliver-player__marker').boundingBox()
+		const under = await page.locator('.deliver-player__timeline').boundingBox()
+		expect(marker.y + marker.height).toBeLessThanOrEqual(under.y)
+		expect(under.y - marker.y - marker.height).toBeLessThan(6)
 
 		// A Range, set with I and O
 		// Focus the page without touching the player
@@ -284,7 +289,8 @@ test.describe('Review view', () => {
 		await expect(page.locator('.deliver-comments__anchor')).toHaveText(/–/)
 		await page.locator('#deliver-comment-body').fill('shorten this passage')
 		await page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
-		await expect(page.locator('.deliver-player__marker')).toHaveCount(2)
+		// Both start on the same Frame: one circle with their count
+		await expect(page.locator('.deliver-player__marker')).toHaveText('2')
 
 		// Resolving hides it from the unresolved filter, a Reply stays with its parent
 		await page.locator('.deliver-comment').first().getByRole('button', { name: 'Mark as resolved' }).click()
@@ -881,6 +887,67 @@ test.describe('Review view', () => {
 		expect(await video.evaluate((element) => element.currentTime)).toBeCloseTo(2, 1)
 	})
 
+	test('close Comments share a marker with their count: each press takes the next, a double tap goes to the one shown', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
+		const newest = Math.max(...project.ocs.data.assets[0].versions.map((each) => each.id))
+		const ids = []
+		for (const inFrame of [85, 86, 87]) {
+			const made = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${newest}/comments?format=json`, { data: { inFrame, body: `at ${inFrame}` } })
+			ids.push((await made.json()).ocs.data.id)
+		}
+		await page.goto(`/apps/deliver/versions/${newest}`)
+		const video = page.locator('video.deliver-player__video')
+		await expect(video).toHaveJSProperty('readyState', 4)
+		const frameOf = (target) => target.evaluate((element) => Math.floor(element.currentTime * 25 + 0.001))
+		const marker = page.locator('.deliver-player__marker', { hasText: '3' })
+		await expect(marker).toHaveAttribute('aria-label', /^1 of 3, .*: at 85$/)
+		// The mouse shows the first and steps on with every click; the wrap comes back to it
+		await marker.hover()
+		await expect(page.locator('.deliver-player__peek')).toContainText('1 of 3')
+		for (const frame of [85, 86, 87, 85]) {
+			await marker.click()
+			await expect.poll(() => frameOf(video)).toBe(frame)
+		}
+		await page.mouse.move(0, 0)
+		await expect(page.locator('.deliver-player__peek')).toHaveCount(0)
+		// The keyboard too: focus shows the first, Enter goes there and then on
+		await page.locator('.deliver-layout__bar h2').click()
+		await marker.focus()
+		await page.keyboard.press('Enter')
+		await expect.poll(() => frameOf(video)).toBe(85)
+		await page.keyboard.press('Enter')
+		await expect.poll(() => frameOf(video)).toBe(86)
+		await expect(marker).toHaveAttribute('aria-label', /^2 of 3, .*: at 86$/)
+
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const touchPage = await phone.newPage()
+		await login(touchPage)
+		await touchPage.goto(`/apps/deliver/versions/${newest}`)
+		const touchVideo = touchPage.locator('video.deliver-player__video')
+		await expect(touchVideo).toHaveJSProperty('readyState', 4)
+		const card = touchPage.locator('.deliver-player__peek--tapped')
+		// A finger a little beside the circle still takes it, and opens the card without seeking
+		const box = await touchPage.locator('.deliver-player__marker', { hasText: '3' }).boundingBox()
+		const tap = (beside = 0) => touchPage.touchscreen.tap(box.x + box.width / 2 - beside, box.y + box.height / 2)
+		await tap(18)
+		await expect(card).toContainText('at 85')
+		expect(await touchVideo.evaluate((element) => element.currentTime)).toBe(0)
+		await touchPage.waitForTimeout(700)
+		await tap()
+		await expect(card).toContainText('2 of 3')
+		await touchPage.waitForTimeout(700)
+		await tap()
+		await tap()
+		await expect(card).toContainText('at 87')
+		await expect.poll(() => frameOf(touchVideo)).toBe(87)
+		await phone.close()
+		for (const id of ids) {
+			expect((await api.delete(`/ocs/v2.php/apps/deliver/api/v1/comments/${id}?format=json`)).ok()).toBe(true)
+		}
+		await api.dispose()
+	})
+
 	test('a finger on the timeline holds playback and resumes on lifting only if it played', async () => {
 		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
 		const touchPage = await phone.newPage()
@@ -1109,7 +1176,7 @@ test.describe('Audio review', () => {
 		const time = () => audio.evaluate((element) => element.currentTime)
 		// The playhead is the white line down the middle of the stage
 		const centre = () => canvas.evaluate((element) => {
-			const pixel = element.getContext('2d').getImageData(Math.round(element.width / 2) - 1, element.height - 2, 1, 1).data
+			const pixel = element.getContext('2d').getImageData(Math.round(element.width / 2) - 1, element.height - Math.round(44 * element.width / element.clientWidth), 1, 1).data
 			return pixel[0] + pixel[1] + pixel[2]
 		})
 
