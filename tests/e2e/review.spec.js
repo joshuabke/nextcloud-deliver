@@ -452,6 +452,15 @@ test.describe('Review view', () => {
 			await expect(page.locator(`.deliver-layout--${level}`)).toHaveCount(1)
 		}
 
+		// The controls are one row: Play and the time with the length on the left, the rest on the right
+		const row = await page.locator('.deliver-player__controls').boundingBox()
+		for (const control of [page.getByRole('button', { name: 'Play', exact: true }), page.locator('.deliver-player__time'), page.getByRole('button', { name: 'Fullscreen', exact: true })]) {
+			const box = await control.boundingBox()
+			expect(box.y + box.height).toBeLessThanOrEqual(row.y + row.height)
+		}
+		expect(row.height).toBeLessThan(50)
+		await expect(page.locator('.deliver-player__time')).toHaveText('00:00:00:00 / 00:00:04:00')
+
 		// A tap on the timeline seeks and leaves no thumbnail behind
 		await page.locator('.deliver-player__timeline').tap()
 		await page.waitForTimeout(300)
@@ -494,9 +503,13 @@ test.describe('Review view', () => {
 		const options = reviewer.getByRole('button', { name: 'Comment options' })
 		await options.tap()
 		await reviewer.getByRole('menuitem', { name: 'Start a Range here' }).tap()
+		// Frame steps and skipping are in the player's menu, which stays open
+		await reviewer.getByRole('button', { name: 'Playback settings' }).tap()
+		await expect(reviewer.getByRole('menuitem', { name: 'Forward 10 seconds' })).toBeVisible()
 		for (let i = 0; i < 3; i++) {
-			await reviewer.getByRole('button', { name: 'One Frame forward' }).tap()
+			await reviewer.getByRole('menuitem', { name: 'One Frame forward' }).tap()
 		}
+		await reviewer.keyboard.press('Escape')
 		await options.tap()
 		await reviewer.getByRole('menuitem', { name: 'End the Range here' }).tap()
 		await expect(reviewer.locator('.deliver-comments__anchor')).toContainText('–')

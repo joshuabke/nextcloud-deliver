@@ -1068,27 +1068,9 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 			</div>
 		</div>
 
-		<!-- A phone: Frame steps around Play, the rest of the settings in one menu -->
+		<!-- A phone: one row, Play and the time on the left; skipping, Frame steps and the settings in one menu -->
 		<div v-if="isMobile" class="deliver-player__controls">
 			<div class="deliver-player__group">
-				<NcButton
-					variant="tertiary"
-					:disabled="!source"
-					:aria-label="t('deliver', 'One Frame back')"
-					@click="step(-1)">
-					<template #icon>
-						<NcIconSvgWrapper :svg="stepBackIcon" />
-					</template>
-				</NcButton>
-				<NcButton
-					variant="tertiary"
-					:disabled="!source"
-					:aria-label="t('deliver', 'Back 10 seconds')"
-					@click="skip(-1)">
-					<template #icon>
-						<NcIconSvgWrapper :svg="skipBackIcon" />
-					</template>
-				</NcButton>
 				<NcButton
 					variant="tertiary"
 					:disabled="!source"
@@ -1098,28 +1080,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 						<NcIconSvgWrapper :svg="playing ? pauseIcon : playIcon" />
 					</template>
 				</NcButton>
-				<NcButton
-					variant="tertiary"
-					:disabled="!source"
-					:aria-label="t('deliver', 'Forward 10 seconds')"
-					@click="skip(1)">
-					<template #icon>
-						<NcIconSvgWrapper :svg="skipForwardIcon" />
-					</template>
-				</NcButton>
-				<NcButton
-					variant="tertiary"
-					:disabled="!source"
-					:aria-label="t('deliver', 'One Frame forward')"
-					@click="step(1)">
-					<template #icon>
-						<NcIconSvgWrapper :svg="stepForwardIcon" />
-					</template>
-				</NcButton>
-			</div>
-
-			<div class="deliver-player__group deliver-player__group--center">
-				<span class="deliver-player__timecode deliver-player__timecode--plain">{{ position }}</span>
+				<span class="deliver-player__time">{{ position }}<span class="deliver-player__duration"> / {{ duration }}</span></span>
 			</div>
 
 			<div class="deliver-player__group deliver-player__group--end">
@@ -1135,6 +1096,32 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 					<template #icon>
 						<NcIconSvgWrapper :svg="moreIcon" />
 					</template>
+					<!-- The menu stays open: one steps several times -->
+					<NcActionButton :disabled="!source" @click="skip(-1)">
+						<template #icon>
+							<NcIconSvgWrapper :svg="skipBackIcon" />
+						</template>
+						{{ t('deliver', 'Back 10 seconds') }}
+					</NcActionButton>
+					<NcActionButton :disabled="!source" @click="skip(1)">
+						<template #icon>
+							<NcIconSvgWrapper :svg="skipForwardIcon" />
+						</template>
+						{{ t('deliver', 'Forward 10 seconds') }}
+					</NcActionButton>
+					<NcActionButton :disabled="!source" @click="step(-1)">
+						<template #icon>
+							<NcIconSvgWrapper :svg="stepBackIcon" />
+						</template>
+						{{ t('deliver', 'One Frame back') }}
+					</NcActionButton>
+					<NcActionButton :disabled="!source" @click="step(1)">
+						<template #icon>
+							<NcIconSvgWrapper :svg="stepForwardIcon" />
+						</template>
+						{{ t('deliver', 'One Frame forward') }}
+					</NcActionButton>
+					<NcActionSeparator />
 					<NcActionButton :modelValue="loop" type="checkbox" @click="loop = !loop">
 						{{ loopLabel }}
 					</NcActionButton>
@@ -1697,21 +1684,32 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	grid-template-columns: minmax(max-content, 1fr) auto minmax(0, 1fr);
 }
 
-/* Where five transport buttons and the time do not fit one row (438 px with the video's buttons), the time goes under them */
-@container deliver-player (max-width: 440px) {
-	.deliver-player--mobile .deliver-player__controls {
-		grid-template-columns: minmax(0, 1fr) auto;
-	}
+.deliver-player--mobile .deliver-player__controls {
+	display: flex;
+	justify-content: space-between;
+}
 
-	.deliver-player--mobile .deliver-player__group--center {
-		grid-column: 1 / -1;
-		grid-row: 2;
-		justify-content: center;
-	}
+/* Beside Play; narrower type than the desktop's, so that a timecode of an hour and its length fit a phone */
+.deliver-player__time {
+	font-family: monospace;
+	font-size: 13px;
+	white-space: nowrap;
+}
 
-	.deliver-player--mobile .deliver-player__group--end {
-		grid-column: 2;
-		grid-row: 1;
+.deliver-player__duration {
+	color: var(--color-text-maxcontrast);
+}
+
+/* The narrowest have room for where the player stands only */
+@container deliver-player (max-width: 370px) {
+	.deliver-player__time {
+		font-size: 12px;
+	}
+}
+
+@container deliver-player (max-width: 345px) {
+	.deliver-player__duration {
+		display: none;
 	}
 }
 
@@ -1781,10 +1779,5 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	inset: 0;
 	padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 	z-index: 10000;
-}
-
-.deliver-player__timecode--plain {
-	padding: 2px 8px;
-	font-size: 15px;
 }
 </style>
