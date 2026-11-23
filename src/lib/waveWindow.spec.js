@@ -205,20 +205,22 @@ describe('the Comments on the scrolling Waveform and above the bar', () => {
 		expect(circles.flatMap((circle) => circle.cluster ?? [circle.comment])).toHaveLength(59)
 	})
 
-	it('stand at the same place on the whole Waveform and above the bar, which is inset', () => {
+	it('stand above the bar, which is inset, at their moment on the whole Waveform', () => {
 		const [width, duration, perSecond] = [393, 360, 1000]
 		const across = acrossOf(duration, duration, width, INSET)
 		const { offset } = pixelPlace(0, across, width, true, INSET)
 		const comments = [comment(1, 0), comment(2, 152000), comment(3, 360000)]
-		const wave = circlesOf(comments, width / across / perSecond).map((circle) => circle.x - offset)
+		const wave = comments.map((each) => each.inFrame * width / across / perSecond - offset)
 		const bar = circlesOf(comments, (width - 2 * INSET) / duration / perSecond).map((circle) => INSET + circle.x)
 		wave.forEach((x, at) => expect(x).toBeCloseTo(bar[at], 6))
-		// The first and the last stay whole on the stage, and a click there is their moment
+		// The wave starts and ends with the bar, and a click there is their moment
 		expect(wave[0]).toBe(INSET)
 		expect(wave[2]).toBeCloseTo(width - INSET, 6)
 		const view = windowAt(0, duration, duration, INSET / width * across)
 		expect(secondsAt(wave[1], view, width, duration)).toBeCloseTo(152, 6)
 		expect(dragged({ from: 0, dx: 0, x: wave[1], span: duration, width, duration, margin: INSET / width * across })).toBeCloseTo(152, 6)
+		// A swipe along the wave takes the playhead as far
+		expect(wheelSeek(0, wave[1] - wave[0], 0, across, width, duration)).toBeCloseTo(152, 6)
 		expect(acrossOf(60, duration, width, INSET)).toBe(60)
 	})
 

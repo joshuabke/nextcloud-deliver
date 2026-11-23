@@ -132,13 +132,13 @@ export function wheelZoom(span, deltaY, deltaMode, duration) {
  * @param {number} seconds - where the playhead stands
  * @param {number} deltaX - the wheel's sideways delta; to the right goes later
  * @param {number} deltaMode - as WheelEvent has it
- * @param {number} span - the seconds across the stage
+ * @param {number} across - the seconds across the stage, as acrossOf gives it
  * @param {number} width - the stage's width, in px
  * @param {number} duration - the length of the piece
  * @return {number} the seconds the playhead stands at after it
  */
-export function wheelSeek(seconds, deltaX, deltaMode, span, width, duration) {
-	return Math.min(duration, Math.max(0, seconds + wheelPixels(deltaX, deltaMode, width) / width * Math.min(span, duration)))
+export function wheelSeek(seconds, deltaX, deltaMode, across, width, duration) {
+	return Math.min(duration, Math.max(0, seconds + wheelPixels(deltaX, deltaMode, width) / width * across))
 }
 
 /**

@@ -54,8 +54,6 @@ const props = defineProps({
  */
 const emit = defineEmits(['seek', 'hold', 'release', 'comment', 'jump', 'closeComposer', 'pick'])
 
-/** Room below the wave for the Comments' circles (none on lanes), in px */
-const BOTTOM = props.lanes ? 8 : 40
 /** Between two lanes, in px */
 const LANE_GAP = 8
 /** A lane that is not heard */
@@ -85,6 +83,10 @@ const steps = computed(() => stepsFor(duration.value))
 const TOP = computed(() => props.lanes && steps.value.length < 2 ? 12 : 40)
 const shown = computed(() => clampSpan(span.value, duration.value))
 const lastFrame = computed(() => Math.max(0, props.durationFrames - 1))
+/** Whether the Comments have their lane under the wave: not over the whole piece, where the bar's row right below shows the same, nor on lanes */
+const circled = computed(() => !props.lanes && !isWhole(shown.value, duration.value))
+/** Room below the wave, for the circles' lane where there is one, in px */
+const BOTTOM = computed(() => circled.value ? 40 : 8)
 
 /** The canvas in CSS px, in device pixels, and the device pixels to a CSS px */
 let size = { width: 0, height: 0 }
@@ -154,7 +156,7 @@ const perFrame = () => size.width / across() / fpsValue(props.fps)
  * @return {Array<{comment: object, x: number}|{cluster: object[], x: number}>} the circles, from the start of the piece
  */
 function circles() {
-	return keep('circles', [props.comments, across(), size.width], () => circlesOf(props.comments, perFrame()))
+	return circled.value ? keep('circles', [props.comments, across(), size.width], () => circlesOf(props.comments, perFrame())) : []
 }
 
 /** Where a drag has taken the playhead, until it lets go */
@@ -213,7 +215,7 @@ function draw() {
 	const { head, offset } = placeAt(at)
 	if (isWhole(shown.value, duration.value)) {
 		// The wave stands: it is drawn once, the played part laid over it up to the playhead
-		const layers = keep('layers', [TOP.value, shownLanes.value, props.marked, props.comments, pixels.width, pixels.height, colors.played, store.selected, card.value?.id, props.pending], () => ({
+		const layers = keep('layers', [TOP.value, shownLanes.value, props.marked, props.comments, pixels.width, pixels.height, colors.played, props.pending], () => ({
 			rest: layer((each) => {
 				each.setTransform(ratio, 0, 0, ratio, 0, 0)
 				drawSpans(each, offset / ratio)
@@ -295,7 +297,7 @@ function drawSpans(context, offset) {
 function drawBars(context, offset, head) {
 	// Over the whole piece the wave stands; scrolling, it moves at the playback rate
 	const grid = barGrid(across(), pixels.width, ratio, isWhole(shown.value, duration.value) ? 0 : props.media?.playbackRate || 1)
-	const bands = laneBands(shownLanes.value.length, pixels.height, Math.round(TOP.value * ratio), Math.round(BOTTOM * ratio), Math.round(LANE_GAP * ratio))
+	const bands = laneBands(shownLanes.value.length, pixels.height, Math.round(TOP.value * ratio), Math.round(BOTTOM.value * ratio), Math.round(LANE_GAP * ratio))
 	shownLanes.value.forEach((lane, index) => {
 		if (lane.waveform) {
 			const levels = keep('bars' + index, [lane.waveform, grid.seconds, loudest.value], () => bars(lane.waveform, grid.seconds, loudest.value))
@@ -343,7 +345,7 @@ function drawHead(context, head) {
 	const width = Math.max(2, Math.round(2 * ratio))
 	const top = Math.round(waveTop.value * ratio)
 	context.fillStyle = '#fff'
-	const bottom = props.lanes ? 0 : Math.round((BOTTOM - 4) * ratio)
+	const bottom = circled.value ? Math.round((BOTTOM.value - 4) * ratio) : 0
 	context.fillRect(head - Math.floor(width / 2), top, width, pixels.height - bottom - top)
 }
 
@@ -354,14 +356,14 @@ function drawHead(context, head) {
  * @param {number} offset - the window's left edge, in px from the start of the piece
  */
 function drawTop(context, offset) {
-	drawCircles(context, circles(), offset, size.height - BOTTOM / 2)
+	drawCircles(context, circles(), offset, size.height - BOTTOM.value / 2)
 	if (props.pending) {
 		drawPending(context, props.pending, perFrame(), offset, size.height)
 	}
 }
 
 /**
- * The place the Comment being written goes: a line over the wave, its Range tinted, and an open circle on the lane
+ * The place the Comment being written goes: a line over the wave, its Range tinted, and an open circle on the lane, or over the whole piece at the wave's foot
  *
  * @param {CanvasRenderingContext2D} context - the canvas
  * @param {{inFrame: number, outFrame: ?number}} pending - the place
@@ -371,15 +373,17 @@ function drawTop(context, offset) {
  */
 function drawPending(context, pending, scale, offset, height) {
 	const x = pending.inFrame * scale - offset
+	const foot = height - BOTTOM.value
+	const y = height - Math.max(BOTTOM.value, CIRCLE + 4) / 2
 	context.fillStyle = colors.played
 	if (pending.outFrame !== null) {
 		context.globalAlpha = 0.25
-		context.fillRect(x, waveTop.value, (pending.outFrame + 1) * scale - offset - x, height - waveTop.value - BOTTOM)
+		context.fillRect(x, waveTop.value, (pending.outFrame + 1) * scale - offset - x, foot - waveTop.value)
 		context.globalAlpha = 1
 	}
-	context.fillRect(x - 1, waveTop.value, 2, height - waveTop.value - BOTTOM)
+	context.fillRect(x - 1, waveTop.value, 2, foot - waveTop.value)
 	context.beginPath()
-	context.arc(x, height - BOTTOM / 2, CIRCLE / 2 - 1, 0, 2 * Math.PI)
+	context.arc(x, y, CIRCLE / 2 - 1, 0, 2 * Math.PI)
 	context.fillStyle = '#000'
 	context.fill()
 	context.strokeStyle = colors.played
@@ -387,7 +391,7 @@ function drawPending(context, pending, scale, offset, height) {
 	context.stroke()
 	context.setLineDash([])
 	context.fillStyle = colors.played
-	context.fillText('+', x, height - BOTTOM / 2 + 0.5)
+	context.fillText('+', x, y + 0.5)
 }
 
 /**
@@ -666,7 +670,7 @@ function onScreen() {
 function hit(clientX, clientY, pointerType) {
 	const box = host.value.getBoundingClientRect()
 	const x = clientX - box.left + offsetAt(onScreen())
-	return circleAt(circles(), x, clientY - box.top - (size.height - BOTTOM / 2), pointerType === 'mouse' ? CIRCLE / 2 : CIRCLE)
+	return circleAt(circles(), x, clientY - box.top - (size.height - BOTTOM.value / 2), pointerType === 'mouse' ? CIRCLE / 2 : CIRCLE)
 }
 
 /**
@@ -776,7 +780,7 @@ function openCircle(circle, x) {
 		return
 	}
 	const { cluster } = circle
-	const parted = spreadSpan(cluster, fpsValue(props.fps), size.width - 2 * inset, duration.value)
+	const parted = spreadSpan(cluster, fpsValue(props.fps), size.width, duration.value)
 	if (parted === null) {
 		open(cluster[0], x, cluster)
 		return
@@ -786,7 +790,7 @@ function openCircle(circle, x) {
 }
 
 /**
- * Opens a Comment's card at its circle, and selects it in the list too; the circle does not seek
+ * Opens a Comment's card at its circle, on the wave or above the bar, and selects it in the list too; opening does not seek
  *
  * @param {object} comment - the Comment
  * @param {number} x - where it was hit, from the stage's left edge
@@ -800,6 +804,8 @@ function open(comment, x, siblings) {
 	card.value = { id: comment.id, left: Math.min(size.width - CARD_HALF - 8, Math.max(CARD_HALF + 8, x)), siblings }
 	store.selected = comment.id
 }
+
+defineExpose({ open })
 
 /**
  * @param {object} comment - another Comment of the same place
@@ -831,7 +837,7 @@ function onWheel(event) {
 	}
 	if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
 		event.preventDefault()
-		const target = frameOf(wheelSeek(now(), event.deltaX, event.deltaMode, shown.value, size.width, duration.value))
+		const target = frameOf(wheelSeek(now(), event.deltaX, event.deltaMode, across(), size.width, duration.value))
 		// A swipe against the start or the end moves nothing, and must not keep the next seek from gliding
 		if (target !== frameOf(now())) {
 			following = true

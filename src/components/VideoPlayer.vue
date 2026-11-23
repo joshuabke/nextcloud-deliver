@@ -43,7 +43,7 @@ import { SKIP_SECONDS, skipFrames } from '../lib/skip.js'
 import { formatAt, fpsValue, frameToTime, modesFor, stepOf, timeToFrame } from '../lib/timecode.js'
 import { watermarkTile } from '../lib/watermark.js'
 import { fetchWaveform, overview } from '../lib/waveform.js'
-import { CIRCLE, circleAt, circleLook, circlesOf, overviewWindow, readSpan } from '../lib/waveWindow.js'
+import { CIRCLE, circleAt, circleLook, circlesOf, INSET, overviewWindow, readSpan } from '../lib/waveWindow.js'
 import { useCommentsStore } from '../store/comments.js'
 
 /** The drawing being made for the next Comment */
@@ -126,6 +126,9 @@ const hover = ref(null)
 const scrubber = ref(null)
 /** The Comment whose card shows over the bar, its circle, and where; tapped: a finger opened it, pressed: its circle was pressed on it */
 const peek = ref(null)
+/** The stage's Waveform, and a Comment's card about to open there */
+const wave = ref(null)
+let cardTimer = 0
 /** The bar's width, in px */
 const barWidth = ref(0)
 const barResized = new ResizeObserver(([entry]) => {
@@ -137,7 +140,7 @@ const marks = computed(() => !barWidth.value || !durationFrames.value
 	: circlesOf(props.comments, barWidth.value / durationFrames.value).map((circle) => {
 			const { comment, cluster } = circle
 			const each = cluster ?? [comment]
-			const at = each.find((one) => one.id === peek.value?.comment.id) ?? each[0]
+			const at = shownOf(circle)
 			const name = at.author.name + ': ' + at.body
 			return {
 				...circle,
@@ -146,6 +149,16 @@ const marks = computed(() => !barWidth.value || !durationFrames.value
 				label: cluster ? countOf({ mark: circle, comment: at }) + ', ' + name : name,
 			}
 		}))
+
+/**
+ * @param {object} mark - a circle above the bar
+ * @return {object} its Comment, or of a count the one its card shows, the first while none does; at the scrolling Waveform the one selected
+ */
+function shownOf(mark) {
+	const { comment, cluster } = mark
+	const find = (id) => cluster?.find((each) => each.id === id)
+	return comment ?? find(peek.value?.comment.id) ?? (scrolling.value && find(store.selected)) ?? cluster[0]
+}
 
 /** Half the card's width, to keep it inside the player */
 const PEEK_HALF = 160
@@ -250,6 +263,7 @@ watch(() => props.version.id, async (id) => {
 	strip.value = null
 	waveform.value = null
 	hover.value = null
+	clearTimeout(cardTimer)
 	resetZoom()
 	const [loadedStrip, loadedWaveform] = await Promise.all([loadStrip(), fetchWaveform(props.version)])
 	// A later Version may have been opened in the meantime
@@ -539,7 +553,7 @@ function onDragEnd(event) {
  */
 function peekAt(mark, event) {
 	if (event.pointerType === 'mouse' || (event.type === 'focus' && event.currentTarget.matches(':focus-visible'))) {
-		showPeek(mark, mark.comment ?? mark.cluster[0])
+		showPeek(mark, shownOf(mark))
 	}
 }
 
@@ -553,8 +567,8 @@ function pressMarker(event) {
 	tappedMarker = event.pointerType !== 'mouse'
 }
 
-/** The last tap on a marker, to tell a double tap */
-let lastTap = { key: null, at: 0 }
+/** The last press on a marker, to tell a double one, and the Comment that showed before it */
+let lastPress = { key: null, at: 0, comment: null }
 
 /**
  * A finger beside a marker takes the nearest, as on the Waveform
@@ -572,22 +586,35 @@ function pressBeside(event) {
  * A marker clicked goes to its Frame, through the view's jump. A tap only opens its card, to be read
  * also in fullscreen, until it is tapped away or playback starts; a double
  * tap goes to the Frame. Of a count, the first press takes the first
- * Comment, every further one the next, round and round.
+ * Comment, every further one the next, round and round; a double tap or
+ * click, whose first press stepped on, takes the one that showed before it.
+ * At the scrolling Waveform the press opens the card of the wave's circles
+ * instead, where a count steps through its Comments with the card's buttons.
  *
  * @param {object} mark - the marker
  * @param {MouseEvent} event - the click
  */
 function openMarker(mark, event) {
 	const tapped = tappedMarker
-	const again = tapped && lastTap.key === mark.key && event.timeStamp - lastTap.at < DOUBLE_TAP_MS
-	lastTap = { key: mark.key, at: event.timeStamp }
+	// Enter held or pressed quickly is no double click: it has no detail
+	const again = event.detail > 0 && lastPress.key === mark.key && event.timeStamp - lastPress.at < DOUBLE_TAP_MS
 	const each = mark.cluster ?? [mark.comment]
-	const shown = each.findIndex((comment) => comment.id === peek.value?.comment.id)
-	const comment = each[shown < 0 ? 0 : (shown + (peek.value.pressed && !again ? 1 : 0)) % each.length]
+	const before = shownOf(mark)
+	const steps = peek.value?.pressed && peek.value.comment.id === before.id
+	const comment = again ? lastPress.comment : each[(each.indexOf(before) + (steps ? 1 : 0)) % each.length]
+	lastPress = again ? { key: null, at: 0, comment: null } : { key: mark.key, at: event.timeStamp, comment: before }
 	if (!tapped || again) {
 		emit('jump', comment)
 	}
-	if (tapped || peek.value || mark.cluster) {
+	if (scrolling.value) {
+		peek.value = null
+		store.selected = comment.id
+		clearTimeout(cardTimer)
+		if (!tapped || !again) {
+			// A phone's sheet may cover the bar: it waits for the second tap of a double one
+			cardTimer = setTimeout(() => wave.value?.open(comment, INSET + mark.x, mark.cluster ?? null), isMobile.value ? DOUBLE_TAP_MS : 0)
+		}
+	} else if (tapped || peek.value || mark.cluster) {
 		showPeek(mark, comment)
 		peek.value.tapped = tapped
 		peek.value.pressed = true
@@ -662,6 +689,7 @@ onBeforeUnmount(() => {
 		URL.revokeObjectURL(captionTrack.value)
 	}
 	barResized.disconnect()
+	clearTimeout(cardTimer)
 	window.removeEventListener('keydown', onKey)
 	stopReverse()
 	clearTimeout(flashTimer)
@@ -979,6 +1007,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 			<!-- Audio has no picture, so its Waveform takes the stage, zoomed and scrolling under the playhead -->
 			<WaveformStage
 				v-if="scrolling"
+				ref="wave"
 				v-model:span="span"
 				:waveform="waveform"
 				:fps="fps"
@@ -1538,10 +1567,16 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	transition: height 0.12s, top 0.12s;
 }
 
-/* Not on a phone, where a tap's hover would stay */
-.deliver-player:not(.deliver-player--mobile) .deliver-player__scrubber:hover .deliver-player__track {
-	top: 2px;
-	height: 12px;
+/* Only for a mouse: a tap's hover would stay */
+@media (hover: hover) and (pointer: fine) {
+	.deliver-player__scrubber:hover .deliver-player__track {
+		top: 2px;
+		height: 12px;
+	}
+
+	.deliver-player--mobile .deliver-player__scrubber:hover .deliver-player__track {
+		top: 10px;
+	}
 }
 
 /* Where the player stands: a white line, right below the centre of a circle on that Frame */
