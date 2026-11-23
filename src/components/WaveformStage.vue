@@ -719,7 +719,7 @@ function endDrag() {
 }
 
 /**
- * @param {PointerEvent} event - a pointer lifts, or the browser takes it for scrolling the page
+ * @param {PointerEvent} event - a pointer lifts, or the browser takes it away
  */
 function onUp(event) {
 	if (!pointers.delete(event.pointerId)) {

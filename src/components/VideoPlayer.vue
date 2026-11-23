@@ -876,7 +876,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 		ref="root"
 		class="deliver-player"
 		:class="{ 'deliver-player--fullscreen': fullscreen, 'deliver-player--filling': filling, 'deliver-player--mobile': isMobile }">
-		<div class="deliver-player__stage" :class="{ 'deliver-player__stage--sound': scrolling }" v-on="gestures">
+		<div class="deliver-player__stage" v-on="gestures">
 			<!-- Two fingers zoom the picture and its drawings together -->
 			<div
 				class="deliver-player__zoom"
@@ -1375,11 +1375,6 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	background: #000;
 	/* Fingers are the player's: no page scrolling or browser zoom on the picture */
 	touch-action: none;
-}
-
-/* The scrolling Waveform leaves the page its upright scrolling */
-.deliver-player__stage--sound {
-	touch-action: pan-y;
 }
 
 /* What a double tap or a hold did, for a moment */
