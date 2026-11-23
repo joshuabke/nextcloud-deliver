@@ -174,7 +174,18 @@ function showFlash(text, side = 0) {
 /** The speed and state to go back to when a held finger lifts */
 let beforeHold = null
 
-const JUMP_SECONDS = 5
+/**
+ * A double tap: the skip of the buttons, shown for a moment
+ *
+ * @param {number} side - -1 back, 1 on, 0 nothing
+ */
+function skipTap(side) {
+	if (side === 0) {
+		return
+	}
+	skip(side)
+	showFlash(side < 0 ? t('deliver', '−{seconds} s', { seconds: SKIP_SECONDS }) : t('deliver', '+{seconds} s', { seconds: SKIP_SECONDS }), side)
+}
 
 /** Touch on the picture (story 104); drawing takes the fingers for itself */
 const { zoom, touched, reset: resetZoom, listeners: gestures } = useGestures({
@@ -188,13 +199,7 @@ const { zoom, touched, reset: resetZoom, listeners: gestures } = useGestures({
 			playPause()
 		}
 	},
-	doubleTap: (side) => {
-		if (side === 0) {
-			return
-		}
-		seekTo(frame.value + skipFrames(side * JUMP_SECONDS, fpsValue(fps.value)))
-		showFlash(side < 0 ? t('deliver', '−{seconds} s', { seconds: JUMP_SECONDS }) : t('deliver', '+{seconds} s', { seconds: JUMP_SECONDS }), side)
-	},
+	doubleTap: skipTap,
 	holdStart: () => {
 		beforeHold = { playing: playing.value, speed: speed.value }
 		speed.value = 2
@@ -947,6 +952,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 				:pending="pending"
 				:composing="composing"
 				@seek="seekTo"
+				@skip="skipTap"
 				@hold="hold"
 				@release="release"
 				@comment="commentAt"
