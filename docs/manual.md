@@ -62,6 +62,10 @@ A Review Link shows only the files whoever made it may share in Files. A file sh
 - Any other Project it made is deleted for good at once, since nobody else could restore it.
 - Its Comments, Approvals and Reactions elsewhere stay, by a Deleted user.
 
+## On a phone
+
+- For video and audio, Play stands under the bar beside the time and the length. Skipping ten seconds and single Frames are in the ⋯ menu in the same row; it stays open while you step.
+
 ## Reviewing audio
 
 - An audio Version plays on its Waveform, at first zoomed to one minute, the wave scrolling under the playhead in the middle. Drag the wave sideways to go through time; a click or a tap goes to that place. Neither stops playback: a drag holds it and lets it go on where you let go, except at the very end, where it stays.
@@ -72,7 +76,6 @@ A Review Link shows only the files whoever made it may share in Files. A file sh
 - Comments sit under the wave as circles with their authors' initials; close ones stack, resolved ones are paler, and a Range tints the wave from its start to its end. Where more than three meet, one circle shows their number: tap it to zoom in until they part. Click a circle to read the Comment with its Replies, answer it right there, or go to it; a Reply you started stays when the card closes.
 - Rest a finger on the wave to comment on that place; press Escape or tap elsewhere before typing to let go of the place again. C stops the audio and comments where it was when you press it; a long press on the wave stops it too.
 - With the Comment list hidden (on a phone: held sideways, the list closed), the field to write in opens right at the wave instead, and the list stays hidden. It is the same field as under the list: open the list mid-sentence and your text is there.
-- On a phone, skipping ten seconds and single Frames are in the ⋯ menu beside the time, for audio and video. The menu stays open while you step.
 
 ## Comparing Versions
 

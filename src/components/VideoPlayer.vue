@@ -40,7 +40,7 @@ import { t } from '../lib/l10n.js'
 import { liveSeek } from '../lib/liveSeek.js'
 import { hoverSource } from '../lib/media.js'
 import { SKIP_SECONDS, skipFrames } from '../lib/skip.js'
-import { formatAt, fpsValue, frameToTime, modesFor, stepOf, timeToFrame } from '../lib/timecode.js'
+import { formatAt, formatLength, fpsValue, frameToTime, modesFor, stepOf, timeToFrame } from '../lib/timecode.js'
 import { watermarkTile } from '../lib/watermark.js'
 import { fetchWaveform, overview } from '../lib/waveform.js'
 import { overviewWindow, readSpan } from '../lib/waveWindow.js'
@@ -150,7 +150,7 @@ const shownDrawings = computed(() => playing.value || props.drawing
 	: drawingsAt(props.comments, frame.value).map((comment) => comment.annotation))
 
 const position = computed(() => formatAt(frame.value, props.clock))
-const duration = computed(() => formatAt(durationFrames.value, props.clock))
+const duration = computed(() => formatLength(durationFrames.value, props.clock))
 const progress = computed(() => durationFrames.value ? (frame.value / durationFrames.value) * 100 : 0)
 
 defineExpose({ seekTo, frame, pause, range, markIn, markOut, clearRange })

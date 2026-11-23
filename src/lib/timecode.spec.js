@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AUDIO_MODES, formatAt, formatRange, frameToTime, MODES, modesFor, runtime, smpte, stepOf, timeToFrame } from './timecode.js'
+import { AUDIO_MODES, formatAt, formatLength, formatRange, frameToTime, MODES, modesFor, runtime, smpte, stepOf, timeToFrame } from './timecode.js'
 
 const PAL = { num: 25, den: 1 }
 const FILM = { num: 24000, den: 1001 }
@@ -46,6 +46,19 @@ describe('timecode display', () => {
 		expect(formatAt(50, { ...hourOne, mode: 'smpte' })).toBe('01:00:02:00')
 		expect(formatAt(50, { ...hourOne, mode: 'frames' })).toBe('50')
 		expect(formatAt(50, { ...hourOne, mode: 'seconds' })).toBe('2.00 s')
+	})
+
+	it('writes a length from nothing, whatever the start timecode', () => {
+		const tenHours = { fps: PAL, startFrame: 900000 }
+		expect(formatLength(100, { ...tenHours, mode: 'smpte' })).toBe('00:00:04:00')
+		expect(formatLength(100, { ...tenHours, mode: 'frames' })).toBe('100')
+		expect(formatLength(100, { ...tenHours, mode: 'seconds' })).toBe('4.00 s')
+		expect(formatLength(1800, { fps: NTSC, startFrame: 107892, dropFrame: true })).toBe('00:01:00;02')
+		// A Broadcast WAV that starts an hour into the session
+		const wav = { fps: { num: 1000, den: 1 }, displayFps: PAL, startFrame: 3600000 }
+		expect(formatLength(4000, { ...wav, mode: 'ms' })).toBe('0:04.000')
+		expect(formatLength(4000, { ...wav, mode: 'smpte' })).toBe('00:00:04:00')
+		expect(formatLength(4000, { ...wav, mode: 'frames' })).toBe('100')
 	})
 
 	it('writes a Range from its in to its out Frame', () => {

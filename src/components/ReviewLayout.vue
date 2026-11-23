@@ -336,6 +336,13 @@ body.deliver-review footer {
 	height: calc(56.25vw + 102px);
 }
 
+/* Compare's controls, and a still, keep the room they had on a narrow phone; only the player's are one row */
+@media (max-width: 440px) {
+	.deliver-layout--upright.deliver-layout--middle .deliver-layout__main:not(:has(.deliver-player)) {
+		height: calc(56.25vw + 136.5px);
+	}
+}
+
 /* Pulled up: of the player only its timeline and controls stay, the picture plays on unseen */
 .deliver-layout--upright.deliver-layout--up .deliver-layout__main {
 	flex: none;

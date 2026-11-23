@@ -70,6 +70,18 @@ export function formatAt(frame, { fps, displayFps, mode = 'smpte', startFrame = 
 }
 
 /**
+ * A length in the same display modes: it counts from nothing, whatever the
+ * Version's start timecode.
+ *
+ * @param {number} frames - how many Frames
+ * @param {object} clock - as for formatAt
+ * @return {string} the length as the Review view shows it
+ */
+export function formatLength(frames, clock) {
+	return formatAt(frames, { ...clock, startFrame: 0 })
+}
+
+/**
  * @param {number} ms - milliseconds
  * @return {string} m:ss.mmm, or h:mm:ss.mmm from an hour on
  */

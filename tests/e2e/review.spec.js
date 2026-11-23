@@ -406,6 +406,16 @@ test.describe('Review view', () => {
 
 		await page.getByRole('radio', { name: 'Wipe' }).click()
 		await expect(page.locator('.deliver-compare__handle')).toBeVisible()
+
+		// On a phone half the height of the sheet leaves Compare's controls, taller than the player's one row, their room
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const touchPage = await phone.newPage()
+		await login(touchPage)
+		await touchPage.goto(`/apps/deliver/compare/${stack[1].id}/${stack[0].id}`)
+		await touchPage.locator('.deliver-layout__grabber').tap()
+		await expect(touchPage.locator('.deliver-layout--middle')).toHaveCount(1)
+		expect((await touchPage.locator('.deliver-layout__main').boundingBox()).height).toBeCloseTo(390 * 9 / 16 + 136.5, 0)
+		await phone.close()
 	})
 
 	test('on a phone: stacked, by touch, and a Reviewer comments on a Range', async ({ playwright }) => {
