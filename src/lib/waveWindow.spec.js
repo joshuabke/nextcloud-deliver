@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, clampSpan, DEFAULT_SPAN, dragged, easeOut, GLIDE_MS, glided, glideStart, isWhole, laneBands, loudestOf, MOTION_PER_PITCH, overviewWindow, pinchSpan, pixelPlace, readSpan, retarget, secondsAt, shiftPixels, spreadSpan, stack, STACK_STEP, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan, xAt } from './waveWindow.js'
+import { barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, clampSpan, DEFAULT_SPAN, dragged, easeOut, GLIDE_MS, glided, glideStart, isWhole, laneBands, loudestOf, MOTION_PER_PITCH, overviewWindow, pinchSpan, pixelPlace, readSpan, retarget, secondsAt, shiftPixels, spreadSpan, stack, STACK_STEP, steadied, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan, xAt } from './waveWindow.js'
 
 describe('the window of the scrolling Waveform', () => {
 	it('centres the playhead, the wave left empty before the start and after the end', () => {
@@ -343,5 +343,29 @@ describe('Compare\'s lanes', () => {
 	it('moves a lane by its shift in whole device pixels', () => {
 		expect(shiftPixels(2, 60, 1200)).toBe(40)
 		expect(shiftPixels(-1.001, 60, 1201)).toBe(-20)
+	})
+})
+
+describe('the time drawn while playing', () => {
+	it('moves every frame although currentTime moves in coarse steps', () => {
+		let before = null
+		const drawn = []
+		for (let frame = 0; frame < 30; frame++) {
+			const time = frame * 16
+			const at = Math.floor(time / 80) * 0.08
+			const seconds = steadied(before, at, time, true, 1)
+			drawn.push(seconds)
+			before = { seconds, time }
+		}
+		const steps = drawn.slice(1).map((seconds, i) => seconds - drawn[i])
+		expect(Math.min(...steps)).toBeGreaterThan(0)
+		expect(Math.max(...steps)).toBeLessThan(0.03)
+	})
+
+	it('takes currentTime at once on a seek, a pause and after a gap', () => {
+		expect(steadied({ seconds: 10, time: 0 }, 50, 16, true, 1)).toBe(50)
+		expect(steadied({ seconds: 10, time: 0 }, 10, 16, false, 1)).toBe(10)
+		expect(steadied({ seconds: 10, time: 0 }, 10.05, 500, true, 1)).toBe(10.05)
+		expect(steadied(null, 3, 0, true, 1)).toBe(3)
 	})
 })
