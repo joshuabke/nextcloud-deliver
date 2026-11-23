@@ -844,21 +844,22 @@ test.describe('Review view', () => {
 		expect(await paused()).toBe(true)
 	})
 
-	test('a click on the bar keeps a shuttle speed and keeps playing', async () => {
+	test('a click on the bar keeps a backwards shuttle going, from where it was clicked', async () => {
 		await page.goto(`/apps/deliver/versions/${versionId}`)
 		const video = page.locator('video.deliver-player__video')
 		await expect(video).toHaveJSProperty('readyState', 4)
 		await page.locator('.deliver-layout__bar h2').click()
-		// L plays, a second L (once it plays: the player counts a press while it does not as a first) doubles it.
-		// 2x, not 4x, which a clip of four seconds runs out in before the click comes, and ending drops the shuttle
-		await page.keyboard.press('l')
-		await expect(page.getByRole('button', { name: /^Pause \(/ })).toBeVisible()
-		await page.keyboard.press('l')
-		await expect.poll(() => video.evaluate((element) => element.playbackRate)).toBe(2)
 		const bar = await page.locator('.deliver-player__timeline').boundingBox()
-		await page.mouse.click(bar.x + bar.width * 0.1, bar.y + bar.height / 2)
-		await page.waitForTimeout(100)
-		expect(await video.evaluate((element) => ({ rate: element.playbackRate, paused: element.paused }))).toEqual({ rate: 2, paused: false })
+		const y = bar.y + bar.height / 2
+		await page.mouse.click(bar.x + bar.width * 0.9, y)
+		await page.keyboard.press('j')
+		await expect(page.getByRole('button', { name: /^Pause \(/ })).toBeVisible()
+		// A click is only a seek: the shuttle goes on backwards from there (holding playback would drop it,
+		// and letting go would play forwards from 2.0 s)
+		await page.mouse.click(bar.x + bar.width * 0.5, y)
+		await page.waitForTimeout(300)
+		expect(await video.evaluate((element) => element.currentTime)).toBeLessThan(2)
+		await expect(page.getByRole('button', { name: /^Pause \(/ })).toBeVisible()
 		await page.keyboard.press('k')
 	})
 
