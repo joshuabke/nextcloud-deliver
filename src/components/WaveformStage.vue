@@ -484,6 +484,13 @@ function tick() {
 
 watch([() => props.playing, () => props.frame, shownLanes, () => props.marked, shown, () => props.comments, () => store.selected, () => props.pending, card], schedule)
 
+// A seek that settles after the last prop change (a drag's final seek) still moves the time drawn from
+watch(() => props.media, (media, before) => {
+	before?.removeEventListener('seeked', schedule)
+	media?.addEventListener('seeked', schedule)
+}, { immediate: true })
+onBeforeUnmount(() => props.media?.removeEventListener('seeked', schedule))
+
 /** The stage's size in CSS px, and the browser's count of its device pixels, as last measured */
 let measured = { width: 0, height: 0, device: null }
 

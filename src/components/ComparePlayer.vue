@@ -24,6 +24,7 @@ import { useSoundMix } from '../composables/soundMix.js'
 import { averageError, compareSource, FALLBACK_TOLERANCE, follower, frameOnA, frameOnB, laneShift, loudnessGap, loudnessParts, nextPass, outOfStep, switchKey, toleranceFor } from '../lib/compare.js'
 import { actionFor, isTyping } from '../lib/hotkeys.js'
 import { t } from '../lib/l10n.js'
+import { liveSeek } from '../lib/liveSeek.js'
 import { isStill } from '../lib/media.js'
 import { SKIP_SECONDS, skipFrames } from '../lib/skip.js'
 import { formatAt, fpsValue, frameToTime, timeToFrame } from '../lib/timecode.js'
@@ -227,8 +228,18 @@ function seekPlaying(target) {
 	}
 }
 
+/** Whether it played when a drag on the lanes or the bar took hold of it */
+let held = null
+/** Set while a pointer drags along the bar */
+let dragging = false
+/** The Frame a press on the bar came down on */
+let pressedAt = null
+
 /** The timeline counts on A's clock */
 function onTimeUpdate() {
+	if (dragging) {
+		return
+	}
 	frame.value = timeToFrame(videoA.value.currentTime, props.a.fps)
 }
 
@@ -329,16 +340,71 @@ function markRange() {
 	}
 }
 
+/** The bar's drag follows the pointer, one seek of A at a time */
+const live = liveSeek((target) => {
+	const same = videoA.value && videoA.value.currentTime === frameToTime(target, props.a.fps)
+	seekTo(target)
+	return !same
+})
+
 /**
- * @param {MouseEvent} event - a click on the timeline
+ * @param {PointerEvent} event - the pointer on the timeline
+ * @return {number} the Frame under it
  */
-function scrub(event) {
+function frameUnder(event) {
 	const box = event.currentTarget.getBoundingClientRect()
-	seekPlaying(Math.floor(Math.min(1, Math.max(0, (event.clientX - box.left) / box.width)) * durationFrames.value))
+	return Math.floor(Math.min(1, Math.max(0, (event.clientX - box.left) / box.width)) * durationFrames.value)
 }
 
-/** Whether it played when a drag on the lanes took hold of it */
-let held = null
+/**
+ * Pressing on the bar takes the playhead there and it follows the pointer
+ * while pressed, playback held meanwhile (decision L3)
+ *
+ * @param {PointerEvent} event - a pointer comes down on the bar
+ */
+function onDragStart(event) {
+	if (!durationFrames.value || (event.pointerType === 'mouse' && (event.button !== 0 || event.target.closest('button')))) {
+		return
+	}
+	dragging = true
+	pressedAt = frameUnder(event)
+	event.currentTarget.setPointerCapture(event.pointerId)
+	live.want(pressedAt)
+}
+
+/**
+ * @param {PointerEvent} event - the pointer moves
+ */
+function onDragMove(event) {
+	if (dragging) {
+		const at = frameUnder(event)
+		// A click only seeks; once the pointer leaves its Frame it is a drag, which holds playback
+		if (at !== pressedAt && held === null) {
+			hold()
+		}
+		live.want(at)
+	}
+}
+
+/**
+ * @param {PointerEvent} event - the pointer lets go
+ */
+function onDragEnd(event) {
+	if (!dragging) {
+		return
+	}
+	dragging = false
+	live.reset()
+	if (event.type === 'pointerup') {
+		// A click keeps playing, and starts a side that had run out again; a drag lets go in release
+		if (held === null) {
+			seekPlaying(frameUnder(event))
+		} else {
+			seekTo(frameUnder(event))
+		}
+	}
+	release()
+}
 
 /** A drag on the lanes holds playback */
 function hold() {
@@ -482,6 +548,7 @@ onBeforeUnmount(() => {
 					preload="auto"
 					@loadedmetadata="onLoaded"
 					@timeupdate="onTimeUpdate"
+					@seeked="live.settled()"
 					@ended="onEnded" />
 				<span class="deliver-compare__label">{{ t('deliver', 'V{number}', { number: a.number }) }}</span>
 			</div>
@@ -519,7 +586,13 @@ onBeforeUnmount(() => {
 				@pick="listen($event === 0 ? 'a' : 'b')" />
 		</div>
 
-		<div v-if="!stillA" class="deliver-compare__timeline" @click="scrub">
+		<div
+			v-if="!stillA"
+			class="deliver-compare__timeline"
+			@pointerdown="onDragStart"
+			@pointermove="onDragMove"
+			@pointerup="onDragEnd"
+			@pointercancel="onDragEnd">
 			<div
 				v-if="shownWindow"
 				class="deliver-compare__window"
@@ -803,6 +876,8 @@ onBeforeUnmount(() => {
 	position: relative;
 	height: 24px;
 	cursor: pointer;
+	/* A finger drags along the bar instead of scrolling the page */
+	touch-action: none;
 	border-bottom: 1px solid var(--color-border);
 }
 

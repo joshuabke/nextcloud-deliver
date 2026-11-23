@@ -37,6 +37,7 @@ import { COLORS, drawingsAt } from '../lib/drawing.js'
 import { DOUBLE_TAP_MS } from '../lib/gestures.js'
 import { actionFor } from '../lib/hotkeys.js'
 import { t } from '../lib/l10n.js'
+import { liveSeek } from '../lib/liveSeek.js'
 import { hoverSource } from '../lib/media.js'
 import { SKIP_SECONDS, skipFrames } from '../lib/skip.js'
 import { formatAt, fpsValue, frameToTime, modesFor, stepOf, timeToFrame } from '../lib/timecode.js'
@@ -423,45 +424,86 @@ function release() {
 	heldWhilePlaying = false
 }
 
+/** The Frame a press on the bar came down on */
+let pressedAt = null
+
+const live = liveSeek((target) => {
+	const element = video.value
+	const time = frameToTime(target, fps.value)
+	if (!element || element.currentTime === time) {
+		return false
+	}
+	element.currentTime = time
+	return true
+})
+
 /**
- * A finger on the bar scrubs as the mouse hovers: the exact Frame shows
- * above it, and the player goes there when it lifts (story 105).
+ * Pressing on the bar takes the playhead there, and it follows the pointer
+ * while the button or finger is down (story 105, decision L3): the element
+ * is sought live, one seek at a time. Playback is held meanwhile and goes on
+ * after, as it did before (N2).
  *
- * @param {PointerEvent} event - a finger or pen comes down on the bar
+ * @param {PointerEvent} event - a pointer comes down on the bar
  */
 function onDragStart(event) {
-	if (event.pointerType === 'mouse' || !durationFrames.value) {
+	if (!durationFrames.value || (event.pointerType === 'mouse' && (event.button !== 0 || event.target.closest('button')))) {
 		return
 	}
-	hold()
 	dragging.value = true
+	pressedAt = frameAt(event)
 	event.currentTarget.setPointerCapture(event.pointerId)
-	onHover(event)
+	follow(event)
 }
 
 /**
- * The mouse hovers and a finger drags; a tap leaves no hover behind, not
+ * The pointer shows the Frame under it; a drag takes the player there
+ *
+ * @param {PointerEvent} event - the pointer moves
+ */
+function follow(event) {
+	onHover(event)
+	if (dragging.value) {
+		const at = frameAt(event)
+		// A click only seeks and keeps the playback state, shuttle included; once the pointer leaves its Frame it is a drag
+		if (at !== pressedAt && !holding) {
+			hold()
+		}
+		frame.value = at
+		live.want(at)
+		emit('seeked')
+	}
+}
+
+/**
+ * The mouse hovers and a drag follows; a tap leaves no hover behind, not
  * even through the mouse events a touch browser sends after it
  *
  * @param {PointerEvent} event - the pointer moves
  */
 function onPointerMove(event) {
 	if (event.pointerType === 'mouse' || dragging.value) {
-		onHover(event)
+		follow(event)
 	}
 }
 
-/** The finger lifts: the player goes to the Frame it showed */
-function onDragEnd() {
+/**
+ * The pointer lets go: the player is exactly on the Frame it showed, and playback goes on if it played
+ *
+ * @param {PointerEvent} event - the pointer lets go or is taken away
+ */
+function onDragEnd(event) {
 	if (!dragging.value) {
 		return
 	}
 	dragging.value = false
-	if (hover.value) {
-		seekTo(hover.value.frame)
+	live.reset()
+	if (event.type === 'pointerup') {
+		seekTo(frameAt(event))
 	}
 	release()
-	leaveScrubber()
+	if (event.pointerType !== 'mouse') {
+		leaveScrubber()
+	}
 }
 
 /**
@@ -582,6 +624,9 @@ onBeforeUnmount(() => {
 
 /** Follows the media element, and sends a looped Range back to its in Frame */
 function onTimeUpdate() {
+	if (dragging.value) {
+		return
+	}
 	frame.value = timeToFrame(video.value.currentTime, fps.value)
 	const wrap = wrapFrom(frame.value, fpsValue(fps.value))
 	if (wrap !== null) {
@@ -749,13 +794,6 @@ function commentAt(inFrame) {
 	emit('comment', { inFrame, outFrame: null })
 }
 
-/**
- * @param {MouseEvent} event - click on the timeline
- */
-function scrub(event) {
-	seekTo(frameAt(event))
-}
-
 /** The media element knows the length once its metadata is in */
 function onLoaded() {
 	durationFrames.value = timeToFrame(video.value.duration, fps.value)
@@ -854,6 +892,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 					preload="metadata"
 					@loadedmetadata="onLoaded"
 					@timeupdate="onTimeUpdate"
+					@seeked="live.settled()"
 					@play="playing = true"
 					@pause="playing = reverse !== null"
 					@ended="pause"
@@ -946,7 +985,6 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 				@error="onScrubError" />
 			<div
 				class="deliver-player__timeline"
-				@click="scrub"
 				@pointerdown="onDragStart"
 				@pointermove="onPointerMove"
 				@pointerup="onDragEnd"
