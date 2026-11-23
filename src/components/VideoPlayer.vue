@@ -157,7 +157,7 @@ const marks = computed(() => !barWidth.value || !durationFrames.value
 function shownOf(mark) {
 	const { comment, cluster } = mark
 	const find = (id) => cluster?.find((each) => each.id === id)
-	return comment ?? find(peek.value?.comment.id) ?? (scrolling.value && find(store.selected)) ?? cluster[0]
+	return comment ?? find(peek.value?.comment.id) ?? (scrolling.value ? find(store.selected) : null) ?? cluster[0]
 }
 
 /** Half the card's width, to keep it inside the player */

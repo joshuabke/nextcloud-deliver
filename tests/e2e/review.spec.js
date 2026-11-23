@@ -948,17 +948,25 @@ test.describe('Review view', () => {
 		await expect(card).toContainText('2 of 3')
 		await expect(card).toContainText('at 86')
 		await expect.poll(() => frameOf(touchVideo)).toBe(86)
-		// The whole row takes a finger, to its edges; a pixel on is the picture's or the bar's
+		// Above and below its circle the whole row takes a finger; the picture over it and the bar under it keep theirs
 		const row = await touchPage.locator('.deliver-player__markers').boundingBox()
-		const under = await touchPage.locator('.deliver-player__timeline').boundingBox()
-		expect(under.y).toBeCloseTo(row.y + row.height, 0)
-		for (const y of [row.y + 1, row.y + row.height - 1]) {
+		const tapAt = async (y) => {
 			await touchPage.reload()
 			await expect(touchVideo).toHaveJSProperty('readyState', 4)
-			await touchPage.touchscreen.tap(box.x + box.width / 2 - 14, y)
+			await expect(touchPage.locator('.deliver-player__marker', { hasText: '3' })).toBeVisible()
+			await touchPage.touchscreen.tap(box.x + box.width / 2, y)
+		}
+		for (const y of [row.y + 1, row.y + row.height - 1]) {
+			await tapAt(y)
 			await expect(card).toContainText('1 of 3')
 			expect(await touchVideo.evaluate((element) => element.currentTime)).toBe(0)
 		}
+		await tapAt(row.y + row.height + 16)
+		await expect.poll(() => frameOf(touchVideo)).toBeGreaterThan(80)
+		await expect(card).toHaveCount(0)
+		await tapAt(row.y - 4)
+		await expect(touchPage.locator('.deliver-player--fullscreen, .deliver-player--filling')).toHaveCount(1)
+		await expect(card).toHaveCount(0)
 		await phone.close()
 		for (const id of ids) {
 			expect((await api.delete(`/ocs/v2.php/apps/deliver/api/v1/comments/${id}?format=json`)).ok()).toBe(true)
@@ -1924,7 +1932,7 @@ test.describe('Audio review', () => {
 			await target.goto(`/apps/deliver/versions/${versionId}`)
 			await expect(target.locator('.deliver-wave canvas')).toBeVisible()
 			await expect(target.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
-			await target.getByRole('button', { name: 'Whole' }).click()
+			await target.getByRole('button', { name: 'Whole', exact: true }).click()
 		}
 		const timeOf = (target) => target.locator('video.deliver-player__video').evaluate((element) => element.currentTime)
 		const markerOf = (target) => target.locator('.deliver-player__marker[aria-label*="on the whole"]')
@@ -1947,7 +1955,7 @@ test.describe('Audio review', () => {
 		// The mouse's small card is gone, the list selected, and the marker ringed
 		await expect(page.locator('.deliver-player__peek')).toHaveCount(0)
 		await expect(page.locator('.deliver-comment--selected')).toContainText('on the whole')
-		await expect(marker).toHaveCSS('border-color', 'rgb(255, 255, 255)')
+		await expect(marker).toHaveAttribute('style', /--deliver-marker-line: #fff/)
 		// The card steps through the count, and a double click goes to the one it shows
 		await card(page).getByRole('button', { name: 'Next Comment' }).click()
 		await expect(card(page)).toContainText('close by')
