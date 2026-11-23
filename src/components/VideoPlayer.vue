@@ -1092,7 +1092,8 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 						<NcIconSvgWrapper :svg="muted ? mutedIcon : volumeIcon" />
 					</template>
 				</NcButton>
-				<NcActions variant="tertiary" :aria-label="t('deliver', 'Playback settings')">
+				<!-- In the browser's own fullscreen only what is inside the player shows -->
+				<NcActions variant="tertiary" :container="fullscreen && !filling ? root : 'body'" :aria-label="t('deliver', 'Playback settings')">
 					<template #icon>
 						<NcIconSvgWrapper :svg="moreIcon" />
 					</template>
@@ -1689,10 +1690,10 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	justify-content: space-between;
 }
 
-/* Beside Play; narrower type than the desktop's, so that a timecode of an hour and its length fit a phone */
+/* Beside Play; smaller type on a phone held upright, so that a timecode and its length fit */
 .deliver-player__time {
 	font-family: monospace;
-	font-size: 13px;
+	font-size: 15px;
 	white-space: nowrap;
 }
 
@@ -1700,13 +1701,19 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	color: var(--color-text-maxcontrast);
 }
 
-/* The narrowest have room for where the player stands only */
+@container deliver-player (max-width: 430px) {
+	.deliver-player__time {
+		font-size: 13px;
+	}
+}
+
 @container deliver-player (max-width: 370px) {
 	.deliver-player__time {
 		font-size: 12px;
 	}
 }
 
+/* The narrowest have room for where the player stands only */
 @container deliver-player (max-width: 345px) {
 	.deliver-player__duration {
 		display: none;
