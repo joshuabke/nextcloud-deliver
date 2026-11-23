@@ -945,8 +945,8 @@ function label(step) {
 	position: absolute;
 	inset: 0;
 	cursor: grab;
-	/* A finger dragging sideways moves through time, upright it scrolls the page; two fingers zoom the wave, not the page */
-	touch-action: pan-y;
+	/* The stage takes every touch: with pan-y, iOS Safari cancels a sideways drag (pointercancel) as soon as the finger drifts about 10 px upright, and the wave stops following */
+	touch-action: none;
 }
 
 .deliver-wave:active {
