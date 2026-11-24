@@ -2124,6 +2124,40 @@ test.describe('Comparing sound', () => {
 		}
 	})
 
+	test('the sides start as one although the second\'s play comes 50 ms after the first\'s', async () => {
+		const fresh = await context.newPage()
+		await fresh.addInitScript(() => {
+			const play = HTMLMediaElement.prototype.play
+			HTMLMediaElement.prototype.play = function() {
+				const late = this === document.querySelectorAll('.deliver-compare video')[1] ? 50 : 0
+				return new Promise((done) => setTimeout(done, late)).then(() => play.call(this))
+			}
+		})
+		await fresh.goto(`/apps/deliver/compare/${mix[1].id}/${mix[0].id}`)
+		const videos = fresh.locator('.deliver-compare video')
+		await expect(videos.first()).toHaveJSProperty('readyState', 4)
+		// The readings of the first 400 ms both play, before the side not heard would be put back
+		const apart = await fresh.evaluate(() => new Promise((resolve) => {
+			const [a, b] = document.querySelectorAll('.deliver-compare video')
+			const found = []
+			b.addEventListener('playing', () => {
+				const start = performance.now()
+				const tick = () => {
+					found.push(b.currentTime - a.currentTime)
+					if (performance.now() - start < 400) {
+						requestAnimationFrame(tick)
+					} else {
+						resolve(found)
+					}
+				}
+				tick()
+			}, { once: true })
+			document.querySelector('.deliver-compare__controls button[aria-label="Play (Space)"]').click()
+		}))
+		expect(Math.abs(apart.reduce((sum, each) => sum + each, 0) / apart.length)).toBeLessThan(0.005)
+		await fresh.close()
+	})
+
 	test('while the AudioContext is slow to start, one start waits at a time and a switch made meanwhile is the side heard', async () => {
 		// A context that takes 300 ms to run, as a slow output may
 		const slow = await browser.newContext({ baseURL: BROWSER_URL })
