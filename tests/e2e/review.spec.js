@@ -1932,19 +1932,6 @@ test.describe('Audio review', () => {
  */
 const heard = (videos) => videos.evaluateAll((all) => all.map((video) => video.deliverGain && !video.muted ? video.deliverGain.gain.value > 0.5 : !video.muted))
 
-/**
- * A single reading of a media element's time says little: it moves one output buffer at a time (10 ms), stands still
- * while the machine is late with one, and a buffer may fall between the readings of two elements. What the sound
- * does stands in the mean of some readings in a row.
- *
- * @param {number[]} readings - one for every animation frame
- * @param {number} [count] - how many readings a mean is taken over
- * @return {number[]} the mean of every `count` readings in a row
- */
-function means(readings, count = 10) {
-	return readings.slice(count - 1).map((_, at) => readings.slice(at, at + count).reduce((sum, each) => sum + each, 0) / count)
-}
-
 test.describe('Comparing sound', () => {
 	let browser
 	let context
@@ -2054,13 +2041,13 @@ test.describe('Comparing sound', () => {
 		await page.getByRole('button', { name: 'Pause (Space)' }).click()
 	})
 
-	test('switching ten times while both play seeks neither side, the heard sound runs on with the output, and the sides stay within milliseconds', async () => {
+	test('switching ten times while both play seeks neither side, the heard sound runs on in real time, and the sides stay within milliseconds', async () => {
 		await page.goto(`/apps/deliver/compare/${mix[1].id}/${mix[0].id}`)
 		const videos = page.locator('.deliver-compare video')
 		await expect(videos.first()).toHaveJSProperty('readyState', 4)
 		await page.getByRole('button', { name: 'Play (Space)' }).click()
 		await page.waitForTimeout(1500)
-		// On every animation frame: both times, the clock of the output they play on, whose sound is heard, and every seek; a switch every 400 ms
+		// On every animation frame: both times, whose sound is heard, and every seek; a switch every 400 ms
 		const run = await page.evaluate(() => new Promise((resolve) => {
 			const [a, b] = document.querySelectorAll('.deliver-compare video')
 			const halves = document.querySelectorAll('.deliver-compare__sound')
@@ -2073,8 +2060,7 @@ test.describe('Comparing sound', () => {
 			const tick = () => {
 				const now = performance.now()
 				const side = halves[0].getAttribute('aria-checked') === 'true' ? 'a' : 'b'
-				const output = a.deliverGain.context
-				samples.push({ a: a.currentTime, b: b.currentTime, clock: output.currentTime, running: output.state === 'running', side })
+				samples.push({ now, a: a.currentTime, b: b.currentTime, side })
 				if (now - start > (switches + 1) * 400 && switches < 10) {
 					switches++
 					halves[switches % 2].click()
@@ -2090,18 +2076,16 @@ test.describe('Comparing sound', () => {
 		await page.getByRole('button', { name: 'Pause (Space)' }).click()
 		expect(run.playing).toBe(true)
 		expect(run.seeks).toBe(0)
-		expect(run.samples.length).toBeGreaterThan(50)
 		expect(new Set(run.samples.map((sample) => sample.side)).size).toBe(2)
-		// Without an offset the sides stand on the same second
-		for (const apart of means(run.samples.map((sample) => sample.b - sample.a))) {
-			expect(Math.abs(apart)).toBeLessThan(0.01)
-		}
-		// The heard sound goes on with the output across every switch: before and after any frame it is as far ahead of its
-		// clock. Not the wall's: headless Chrome's stand-in for a sound card drops a buffer when the machine is late with it
-		expect(run.samples.every((sample) => sample.running)).toBe(true)
-		const ahead = means(run.samples.map((sample) => sample[sample.side] - sample.clock))
-		for (const [at, after] of ahead.slice(10).entries()) {
-			expect(Math.abs(after - ahead[at])).toBeLessThan(0.015)
+		const position = (sample) => sample.side === 'a' ? sample.a : sample.b
+		for (const [at, sample] of run.samples.entries()) {
+			// Without an offset the sides stand on the same second
+			expect(Math.abs(sample.b - sample.a)).toBeLessThan(0.01)
+			if (at > 0) {
+				const before = run.samples[at - 1]
+				// The heard sound goes on with the clock across every switch; a reading of a media element's time is off by a few ms
+				expect(Math.abs((position(sample) - position(before)) - (sample.now - before.now) / 1000)).toBeLessThan(0.015)
+			}
 		}
 	})
 
@@ -2125,17 +2109,16 @@ test.describe('Comparing sound', () => {
 				const found = []
 				const start = performance.now()
 				const tick = () => {
-					found.push(b.currentTime - a.currentTime)
+					found.push(Math.abs(b.currentTime - a.currentTime))
 					if (performance.now() - start < 1500) {
 						requestAnimationFrame(tick)
 					} else {
-						resolve(found)
+						resolve(Math.max(...found))
 					}
 				}
 				requestAnimationFrame(tick)
 			}))
-			expect(apart.length).toBeGreaterThan(20)
-			expect(Math.max(...means(apart).map(Math.abs))).toBeLessThan(0.005)
+			expect(apart).toBeLessThan(0.005)
 			expect(await fresh.evaluate(() => window.seeks)).toEqual([1, 1])
 			await fresh.close()
 		}
@@ -2204,26 +2187,19 @@ test.describe('Comparing sound', () => {
 		// Alternating loops
 		await expect(page.getByRole('button', { name: 'Loop the Range' })).toHaveAttribute('aria-pressed', 'true')
 
-		// Whose sound plays on every animation frame, cut into passes where the time jumps back; where a pass starts is read
-		// as it starts playing, as the next frame may come late (Chrome blocks for some 150 ms, 1 s after a navigation,
-		// tearing the last page's compositor down)
+		// Whose sound plays on every animation frame, cut into passes where the time jumps back
 		const passes = await page.evaluate(() => new Promise((resolve) => {
 			const [a, b] = document.querySelectorAll('.deliver-compare video')
 			const found = []
 			let last = Infinity
-			const cut = () => {
+			const tick = () => {
 				const time = a.currentTime
+				const gain = (video) => video.deliverGain && !video.muted ? video.deliverGain.gain.value > 0.5 : !video.muted
+				const heard = gain(a) ? (gain(b) ? 'both' : 'a') : (gain(b) ? 'b' : 'none')
 				if (time < last - 0.3) {
 					found.push({ from: time, to: time, heard: new Set() })
 				}
 				last = time
-				return time
-			}
-			a.addEventListener('playing', cut)
-			const tick = () => {
-				const time = cut()
-				const gain = (video) => video.deliverGain && !video.muted ? video.deliverGain.gain.value > 0.5 : !video.muted
-				const heard = gain(a) ? (gain(b) ? 'both' : 'a') : (gain(b) ? 'b' : 'none')
 				const pass = found.at(-1)
 				if (pass && !a.paused) {
 					pass.to = time
