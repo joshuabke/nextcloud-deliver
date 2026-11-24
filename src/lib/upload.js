@@ -41,6 +41,9 @@ export function etagOf(response) {
 	return typeof etag === 'string' && etag !== '' ? etag.replace(/^(W\/)?"|"$/g, '') : null
 }
 
+/** So many taken names are walked past: a server that answers anything, with a login page say, has every one of them */
+const NAMES = 100
+
 /** Pauses between attempts after a server error, in seconds */
 const BACKOFF = [1, 2, 4, 8, 16]
 
@@ -87,12 +90,13 @@ export const sameFile = (record, file) => record.name === file.name && record.si
 export const folderOf = (target) => target.slice(0, target.lastIndexOf('/'))
 
 /**
- * @param {{status: string, target: string, name: string, size: number, lastModified: number}} item - an upload
+ * @param {{status: string, target: string, assetId: ?number, name: string, size: number, lastModified: number}} item - an upload
  * @param {string} folderUrl - the WebDAV URL of a folder
+ * @param {?number} assetId - the Asset the file is to be a Version of
  * @param {File} file - one picked or dropped for it
  * @return {boolean} whether the upload stopped and goes on with this file, also under the name it took in the folder
  */
-export const goesOn = (item, folderUrl, file) => item.status === 'interrupted' && folderOf(item.target) === folderUrl && sameFile(item, file)
+export const goesOn = (item, folderUrl, assetId, file) => item.status === 'interrupted' && folderOf(item.target) === folderUrl && item.assetId === assetId && sameFile(item, file)
 
 /** A tab touches the record of the upload it sends this often, in milliseconds */
 export const HEARTBEAT = 10 * 1000
@@ -183,8 +187,8 @@ export async function uploadFile({ request, file, target, onTaken = null, upload
 	})
 	// Ask first, so a taken name is refused now rather than after the whole upload
 	const findName = async () => {
-		while (await taken()) {
-			if (!onTaken) {
+		for (let tries = 0; await taken(); tries++) {
+			if (!onTaken || tries >= NAMES) {
 				throw Object.assign(new Error('taken'), { response: { status: 412 } })
 			}
 			target = await onTaken()

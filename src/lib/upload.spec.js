@@ -105,11 +105,14 @@ describe('chunks', () => {
 		expect(sameFile({ name: 'cut.mov', size: 24, lastModified: 1000 }, file(25))).toBe(false)
 	})
 
-	it('goes on with it in its folder only, also under the name its upload took there', () => {
-		const stopped = { status: 'interrupted', name: 'cut.mov', size: 25, lastModified: 1000, target: `${UPLOADS}/Cut/cut_v2.mov` }
-		expect(goesOn(stopped, `${UPLOADS}/Cut`, file(25))).toBe(true)
-		expect(goesOn(stopped, `${UPLOADS}/Cut/sub`, file(25))).toBe(false)
-		expect(goesOn({ ...stopped, status: 'uploading' }, `${UPLOADS}/Cut`, file(25))).toBe(false)
+	it('goes on with it in its folder and on its Version Stack only, also under the name its upload took there', () => {
+		const stopped = { status: 'interrupted', name: 'cut.mov', size: 25, lastModified: 1000, assetId: 7, target: `${UPLOADS}/Cut/cut_v2.mov` }
+		expect(goesOn(stopped, `${UPLOADS}/Cut`, 7, file(25))).toBe(true)
+		expect(goesOn(stopped, `${UPLOADS}/Cut/sub`, 7, file(25))).toBe(false)
+		expect(goesOn(stopped, `${UPLOADS}/Cut`, 8, file(25))).toBe(false)
+		expect(goesOn(stopped, `${UPLOADS}/Cut`, null, file(25))).toBe(false)
+		expect(goesOn({ ...stopped, assetId: null }, `${UPLOADS}/Cut`, null, file(25))).toBe(true)
+		expect(goesOn({ ...stopped, status: 'uploading' }, `${UPLOADS}/Cut`, 7, file(25))).toBe(false)
 	})
 })
 
@@ -205,6 +208,18 @@ describe('an upload', () => {
 		expect(await uploadFile({ request: dav.request, file: file(5), target: TARGET, onTaken: numbered(), uploadsUrl: UPLOADS, chunkSize: 10, env: dav.env })).toBe(42)
 		expect(dav.log).toEqual(['HEAD ana/Cut/cut.mov', 'HEAD ana/Cut/cut_v2.mov', 'HEAD ana/Cut/cut_v3.mov', 'PUT ana/Cut/cut_v3.mov'])
 		expect([...dav.files.values()].map((blob) => blob.size)).toEqual([3, 5, 5])
+	})
+
+	it('gives up where every name is taken, as a server answering anything with a page does', async () => {
+		let heads = 0
+		const always = async () => {
+			if (++heads > 1000) {
+				throw new Error('never ends')
+			}
+			return { headers: {} }
+		}
+		await expect(uploadFile({ request: always, file: file(5), target: TARGET, onTaken: numbered(), uploadsUrl: UPLOADS, chunkSize: 10, env: fakeDav().env })).rejects.toMatchObject({ response: { status: 412 } })
+		expect(heads).toBeLessThan(200)
 	})
 
 	it('moves the chunks it sent to the next free name when another file took its own meanwhile', async () => {

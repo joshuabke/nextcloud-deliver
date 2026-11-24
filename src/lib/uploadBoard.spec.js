@@ -3,7 +3,7 @@ import { HEARTBEAT } from './upload.js'
 import { mergeBoard, totals } from './uploadBoard.js'
 
 const now = Date.UTC(2026, 9, 21)
-const record = (fields = {}) => ({ name: 'cut.mov', size: 100, target: '/cut.mov', folder: null, loaded: 40, status: 'uploading', speed: 10, seen: now - 1000, left: false, ...fields })
+const record = (fields = {}) => ({ key: fields.target ?? '/cut.mov', name: 'cut.mov', size: 100, target: '/cut.mov', folder: null, loaded: 40, status: 'uploading', speed: 10, seen: now - 1000, left: false, ...fields })
 let ids = 100
 const merge = (items, records, done = []) => mergeBoard(items, records, done, now, () => ids++)
 
@@ -29,8 +29,15 @@ describe('the upload card of every tab', () => {
 	})
 
 	it('leaves this tab its own uploads, failed ones too, without a mirrored copy', () => {
-		const own = { id: 1, target: '/cut.mov', status: 'failed', error: 'taken' }
+		const own = { id: 1, key: '/cut.mov', target: '/cut.mov', status: 'failed', error: 'taken' }
 		expect(merge([own], [record()]).items).toEqual([own])
+	})
+
+	it('keeps uploads apart that go to the same name, which only one of them will get', () => {
+		const own = { id: 1, key: 'one', target: '/cut.mov', status: 'uploading' }
+		const stopped = { left: true, folder: '/up/1' }
+		const shown = merge([own], [record({ key: 'one' }), record({ ...stopped, key: 'two' }), record({ ...stopped, key: 'three' })]).items
+		expect(shown.map((item) => [item.key, item.status])).toEqual([['one', 'uploading'], ['two', 'interrupted'], ['three', 'interrupted']])
 	})
 
 	it('shows finished uploads of every tab until one tab hides them', () => {
