@@ -3,6 +3,8 @@ import { fadeCurve } from '../lib/compare.js'
 
 /** The crossfade of a switch, linear, in seconds */
 const FADE = 0.008
+/** The longest a start waits for a side that will not play, in milliseconds */
+const PATIENCE = 500
 
 /**
  * Compare's two sides into one AudioContext (A7): both media elements play
@@ -15,7 +17,7 @@ const FADE = 0.008
  * first one; until it runs, or where there is no Web Audio, the sides fall
  * back to muting the one not heard.
  *
- * @return {{mixing: import('vue').Ref<boolean>, start: (elements: HTMLMediaElement[], heard: () => number) => ?Promise<void>, hear: (elements: HTMLMediaElement[], heard: number) => void, late: {refused: boolean}}} whether the gains decide, what starts and switches them, and whether this page starts the sides within the gesture
+ * @return {{mixing: import('vue').Ref<boolean>, start: (elements: HTMLMediaElement[], heard: () => number) => ?Promise<void>, hear: (elements: HTMLMediaElement[], heard: number) => void, together: (play: () => Promise<unknown>) => Promise<unknown>, late: {refused: boolean}}} whether the gains decide, what starts and switches them and has them start as one, and whether this page starts the sides within the gesture
  */
 /** Whether this page's browser refused a play() once the context ran, outside the gesture: from then on, for the page, the sides start within it */
 const late = { refused: false }
@@ -26,6 +28,10 @@ const late = { refused: false }
 export function useSoundMix() {
 	const mixing = ref(false)
 	let context = null
+	/** Both gains meet here, the one way out */
+	let out = null
+	/** The start the way out is cut for; a later one takes it over */
+	let starting = null
 	/** Each element's gain; an element joins a context once and for good */
 	const gains = new WeakMap()
 
@@ -38,7 +44,7 @@ export function useSoundMix() {
 			if (element && !gains.has(element)) {
 				const gain = context.createGain()
 				gain.gain.value = index === heard ? 1 : 0
-				context.createMediaElementSource(element).connect(gain).connect(context.destination)
+				context.createMediaElementSource(element).connect(gain).connect(out)
 				gains.set(element, gain)
 				// What is heard, readable from outside (browser tests)
 				element.deliverGain = gain
@@ -60,7 +66,11 @@ export function useSoundMix() {
 			return null
 		}
 		try {
-			context ??= new Context()
+			if (!context) {
+				context = new Context()
+				out = context.createGain()
+				out.connect(context.destination)
+			}
 		} catch {
 			return null
 		}
@@ -91,10 +101,41 @@ export function useSoundMix() {
 	}
 
 	/**
+	 * Starts both sides on one render quantum. The output takes sound a buffer
+	 * at a time (10 ms measured); a buffer taken between the two starts would
+	 * leave one side that much behind for good. So the way out is cut until
+	 * both play: an element in the graph runs only as sound is taken from it.
+	 *
+	 * @param {() => Promise<unknown>} play - seeks and plays both sides
+	 * @return {Promise<unknown>} what play gave
+	 */
+	function together(play) {
+		if (!mixing.value) {
+			return play()
+		}
+		const mine = starting = {}
+		out.disconnect()
+		const join = () => {
+			if (starting === mine) {
+				starting = null
+				out.connect(out.context.destination)
+			}
+		}
+		setTimeout(join, PATIENCE)
+		return play().finally(join)
+	}
+
+	/**
 	 * @param {AudioParam} gain - a side's gain
 	 * @param {number} to - 0 or 1
 	 */
 	function fade(gain, to) {
+		if (starting) {
+			// Nothing sounds that would have to be faded
+			gain.cancelScheduledValues(0)
+			gain.value = to
+			return
+		}
 		const now = context.currentTime
 		const from = gain.value
 		try {
@@ -116,5 +157,5 @@ export function useSoundMix() {
 		context = null
 	})
 
-	return { mixing, start, hear, late }
+	return { mixing, start, hear, together, late }
 }
