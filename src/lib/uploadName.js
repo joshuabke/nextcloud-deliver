@@ -66,3 +66,10 @@ export function nameProblem(name, filename, validate) {
 	}
 	return null
 }
+
+/**
+ * @param {{renamed: ?string, fileId: ?number}} item - an upload that failed
+ * @param {?number} status - the HTTP status it failed with
+ * @return {boolean} whether the server does not take the name it was given here
+ */
+export const nameRefused = (item, status) => !item.fileId && status === 400 && Boolean(item.renamed)

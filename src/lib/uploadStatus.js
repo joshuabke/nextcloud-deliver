@@ -122,6 +122,17 @@ export function advance(status, progress, now = Date.now()) {
 }
 
 /**
+ * A pass made before there was a Version to hand it in for goes up now
+ *
+ * @param {{state: string, progress: number}} proxy - its status, changed
+ */
+export function handOver(proxy) {
+	if (proxy.state === 'made') {
+		Object.assign(proxy, { state: 'uploading', progress: 0 })
+	}
+}
+
+/**
  * Where the pass this browser makes has got, to follow "Proxy" or "Derived media"
  *
  * @param {{state: string, progress?: number, error?: string, since?: number}} proxy - its status
@@ -134,7 +145,7 @@ export function proxyPhase(proxy) {
 		uploading: t('deliver', 'Upload {percent} %', { percent: proxy.progress }),
 		handing: t('deliver', 'Finishing on the server'),
 		// Made, but there is no Version yet to hand it in for: a name is asked for, or the file still goes up
-		made: t('deliver', 'Done'),
+		made: t('deliver', 'Encoded'),
 		ready: t('deliver', 'Done'),
 		// Taken over by a Proxy by hand or ffmpeg, or stopped on purpose
 		stopped: t('deliver', 'Stopped'),
@@ -183,7 +194,7 @@ export function processingOf(item) {
 			kind: 'browserProxy',
 			label: passLabel(item.proxy),
 			text: proxyPhase(item.proxy),
-			done: ['made', 'ready'].includes(item.proxy.state),
+			done: item.proxy.state === 'ready',
 		})
 	}
 	const derived = item.version?.derived

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { advance, encodingEta, processingFailed, processingOf, proxyLine, settled, statusOf, timeLeft } from './uploadStatus.js'
+import { advance, encodingEta, handOver, processingFailed, processingOf, proxyLine, settled, statusOf, timeLeft } from './uploadStatus.js'
 
 const done = (version) => ({ status: 'done', loaded: 10, size: 10, version })
 const derived = (states, fields = {}) => ({ playable: true, derived: { error: null, progress: null, ...Object.fromEntries(Object.entries(states).map(([kind, state]) => [kind, { state }])) }, ...fields })
@@ -47,7 +47,12 @@ describe('upload status', () => {
 		expect(settled(making)).toBe(false)
 		// Made while the file goes up or its name is asked for, it waits for the Version
 		const waiting = { status: 'failed', error: 'taken', version: null, proxy: { progress: 99, state: 'made' } }
-		expect(processingOf(waiting).map(({ text, done }) => [text, done])).toEqual([['Done', true]])
+		expect(processingOf(waiting).map(({ text, done }) => [text, done])).toEqual([['Encoded', false]])
+		// Once there is a Version it goes up, never back to its last percent; one still being made goes on
+		handOver(waiting.proxy)
+		expect(processingOf(waiting)[0].text).toBe('Upload 0 %')
+		handOver(making.proxy)
+		expect(processingOf(making)[0].text).toBe('Encoding 40 %')
 		const uploading = { ...done(derived({ proxy: 'none' })), proxy: { progress: 10, state: 'uploading' } }
 		expect(processingOf(uploading)[0].text).toBe('Upload 10 %')
 		expect(processingOf(uploading)[0].label).toBe('Proxy')

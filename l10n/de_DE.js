@@ -631,6 +631,7 @@ OC.L10N.register(
 		"This device cannot make Proxies.": "Dieses Gerät kann keine Proxies erzeugen.",
 		"This format needs ffmpeg, which this Nextcloud lacks.": "Dieses Format braucht ffmpeg, das dieser Nextcloud fehlt.",
 		"Could not read the file.": "Die Datei konnte nicht gelesen werden.",
+		"Encoded": "Encoding fertig",
 		"Encoding {percent} %": "Encoding {percent} %",
 		"Upload {percent} %": "Upload {percent} %",
 		"The Proxy came out above the Proxy bitrate threshold of {max} Mbit/s, even at a lower bitrate.": "Der Proxy lag auch mit niedrigerer Bitrate über der Proxy-Bitratengrenze von {max} Mbit/s.",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { freeName, nameProblem } from './uploadName.js'
+import { freeName, nameProblem, nameRefused } from './uploadName.js'
 
 /**
  * Nextcloud's own check, as far as it goes here
@@ -54,6 +54,16 @@ describe('a free name for an upload', () => {
 
 	it('counts on where the name is counted already', async () => {
 		expect(await freeName('mix (2).mp3', folder('mix (2).mp3'))).toBe('mix (3).mp3')
+	})
+})
+
+describe('a name the server refuses', () => {
+	it('is one the upload was given here, and only while its file is not up', () => {
+		expect(nameRefused({ renamed: 'mix_v2.wav', fileId: null }, 400)).toBe(true)
+		expect(nameRefused({ renamed: null, fileId: null }, 400)).toBe(false)
+		expect(nameRefused({ renamed: 'mix_v2.wav', fileId: null }, 403)).toBe(false)
+		// Up already, it is the Version that was refused, with a reason of its own
+		expect(nameRefused({ renamed: 'mix_v2.wav', fileId: 42 }, 400)).toBe(false)
 	})
 })
 

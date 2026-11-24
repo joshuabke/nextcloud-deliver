@@ -9,8 +9,8 @@ import { atUpload, lightest, passOf } from '../lib/proxyPlan.js'
 import { refusal } from '../lib/unsupported.js'
 import { browserEnv, current, folderOf, goesOn, HEARTBEAT, retrying, sameFile, uploadFile } from '../lib/upload.js'
 import { ACTIVE, mergeBoard, totals } from '../lib/uploadBoard.js'
-import { freeName } from '../lib/uploadName.js'
-import { busy, settled } from '../lib/uploadStatus.js'
+import { freeName, nameRefused } from '../lib/uploadName.js'
+import { busy, handOver, settled } from '../lib/uploadStatus.js'
 import { versionNames } from '../lib/versionName.js'
 import { useProjectsStore } from './projects.js'
 
@@ -487,7 +487,7 @@ export const useUploadsStore = defineStore('uploads', {
 				// Once an answer was lost, a file under its name may be this very upload, so no other name is offered
 				item.unsure ||= error.unsure
 				// Nextcloud does not take the name it was given here
-				const refused = error.response?.status === 400 && Boolean(item.renamed)
+				const refused = nameRefused(item, error.response?.status)
 				// Another name is asked for in its row; what this browser makes meanwhile goes on
 				const taken = !signal.aborted && !item.fileId && !item.unsure && (error.response?.status === 412 || refused)
 				if (taken) {
@@ -554,10 +554,7 @@ export const useUploadsStore = defineStore('uploads', {
 			if (!item.proxying) {
 				return
 			}
-			// Made before there was a Version, it goes up now
-			if (item.proxy.state === 'made') {
-				item.proxy.state = 'running'
-			}
+			handOver(item.proxy)
 			// The server takes no derived media from a Member without Manage on the Version
 			if (!await handInPass(asset.versionId, item.proxying, item.proxy, item.proxyController)) {
 				item.proxy = null
