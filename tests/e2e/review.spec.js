@@ -1842,7 +1842,7 @@ test.describe('Audio review', () => {
 		for (const zoom of ['1 min', 'Whole']) {
 			const whole = zoom === 'Whole'
 			await page.getByRole('button', { name: zoom, exact: true }).click()
-			await goTo(100)
+			await goTo(20)
 			const start = await time()
 			// On the wave a click goes nowhere; a double click skips ten seconds on the thirds, nothing in the middle
 			await canvas.click({ position: { x: box.width * 0.85, y: box.height / 2 } })
@@ -1878,7 +1878,7 @@ test.describe('Audio review', () => {
 			// A click there seeks, and two quick ones seek twice
 			await canvas.dblclick({ position: { x, y: strip } })
 			await expect.poll(time).toBeCloseTo(whole ? 270 : start + 30, 0)
-			await goTo(100)
+			await goTo(20)
 
 			// A drag that begins there drags, without the line
 			await hover(x, strip)
@@ -1889,7 +1889,7 @@ test.describe('Audio review', () => {
 			for (const at of [x, x - 40, Math.round(box.width / 2) + 5]) {
 				expect(await line(at)).toBe(0)
 			}
-			expect(await time()).toBeCloseTo(whole ? 180 : 115, 0)
+			expect(await time()).toBeCloseTo(whole ? 180 : 35, 0)
 			await page.mouse.up()
 
 			// Over a circle there is no line, but a click opens it
@@ -1909,12 +1909,17 @@ test.describe('Audio review', () => {
 			await expect(card).toHaveCount(0)
 		}
 
-		// While it plays on under it, the line stays at the mouse
+		// Before the start of the piece a click goes to the start, and the line shows it there
 		await page.getByRole('button', { name: '1 min' }).click()
-		await goTo(100)
+		await goTo(20)
+		const first = Math.round(box.width / 2 - 20 * box.width / 60)
+		await hover(first - 40, strip)
+		await expect.poll(() => line(first)).toBe(8)
+		expect(await line(first - 40)).toBe(0)
+		// While it plays on under it, the line stays at the mouse
 		await page.getByRole('button', { name: 'Play (Space)' }).click()
 		await hover(200, strip)
-		await expect.poll(time).toBeGreaterThan(102)
+		await expect.poll(time).toBeGreaterThan(22)
 		expect(await line(200)).toBe(8)
 		await page.getByRole('button', { name: 'Pause (Space)' }).click()
 		// Standing, the mouse over the wave or still in the strip draws nothing again
@@ -2192,7 +2197,12 @@ test.describe('Comparing sound', () => {
 
 		// A click on a wave seeks and keeps playing; the player then has the focus, and Tab switches
 		const box = await canvas.boundingBox()
+		const sought = videos.first().evaluate((video) => new Promise((resolve) => video.addEventListener('seeking', () => resolve(true), { once: true })))
 		await canvas.click({ position: { x: box.width * 0.6, y: box.height * 0.6 } })
+		expect(await sought).toBe(true)
+		// Lanes have no strip: at their foot the mouse shows no place to go to
+		await canvas.hover({ position: { x: box.width * 0.6, y: box.height - 5 } })
+		expect(await page.locator('.deliver-wave').evaluate((element) => element.style.cursor)).toBe('')
 		expect(await videos.first().evaluate((video) => video.paused)).toBe(false)
 		await page.keyboard.press('Tab')
 		await expect.poll(() => heard(videos)).toEqual([false, true])
