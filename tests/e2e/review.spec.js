@@ -2370,6 +2370,12 @@ test.describe('Uploads whose name is taken', () => {
 	const other = Buffer.concat([readFileSync(MIX), Buffer.alloc(2)])
 
 	test('a new Version gets its number in its name, wherever it is uploaded, and replaces nothing', async () => {
+		// Another upload, interrupted, that was on its way to the name this one takes
+		const interrupted = await page.evaluate((target) => {
+			const record = { name: 'elsewhere.wav', size: 1, lastModified: 1, type: 'audio/wav', target, projectId: null, assetId: 1, folder: '/remote.php/dav/uploads/none', loaded: 0, status: 'uploading', seen: Date.now(), left: true }
+			localStorage.setItem(`deliver.upload:${target}`, JSON.stringify(record))
+			return `deliver.upload:${target}`
+		}, `${BROWSER_URL}${dav}/mix_v2.wav`)
 		await card(page, 'mix').click({ button: 'right' })
 		let chooser = page.waitForEvent('filechooser')
 		await page.getByRole('menuitem', { name: 'Upload a new Version' }).click()
@@ -2379,7 +2385,8 @@ test.describe('Uploads whose name is taken', () => {
 		expect((await api.fetch(`${dav}/mix.wav`, { method: 'HEAD' })).headers()['content-length']).toBe(String(readFileSync(MIX).length))
 		await page.locator('.deliver-uploads-card__open').click()
 		const uploads = page.getByRole('dialog', { name: 'Uploads' })
-		await expect(uploads.locator('.deliver-uploads__name')).toHaveText('mix_v2.wav')
+		await expect(uploads.locator('.deliver-uploads__name', { hasText: 'mix_v2.wav' })).toHaveCount(1)
+		expect(await page.evaluate((key) => localStorage.getItem(key), interrupted)).not.toBeNull()
 		await page.keyboard.press('Escape')
 
 		// The next number is taken by a file outside the Stack, so the one after it

@@ -16,14 +16,14 @@ import { useProjectsStore } from './projects.js'
 
 /**
  * Uploads that are being sent, by any tab, and unfinished chunked ones to go
- * on with after a reload (story 135), one key each after this prefix and the
- * target: one tab writes each, so no tab writes over another's. Every tab
- * shows them, so uploading is in one place however many tabs are open.
+ * on with after a reload (story 135), a key of its own each after this prefix,
+ * whatever name it goes to: one tab writes each, so no tab writes over
+ * another's, and no upload over another's. Every tab shows them, so uploading is in one place however many tabs are open.
  */
 const RECORD = 'deliver.upload:'
 /** Finished uploads whose Processing the card still shows, in every tab and after a reload, until they are hidden: one key each by Version id */
 const DONE = 'deliver.processing:'
-/** A cancel asked for in one tab, for the tab that sends the upload: { target, at } */
+/** A cancel asked for in one tab, for the tab that sends the upload: { key, at } */
 const CANCEL = 'deliver.upload-cancel'
 /** Whether the server has ffmpeg (story 138); without it the uploading browser decodes the Waveform */
 export const hasFfmpeg = loadState('deliver', 'ffmpeg', true)
@@ -136,8 +136,8 @@ export const useUploadsStore = defineStore('uploads', {
 					this.sync()
 				} else if (event.key === CANCEL && event.newValue) {
 					// Another tab asks to cancel an upload this one sends
-					const { target } = JSON.parse(event.newValue)
-					const item = this.active.find((each) => each.target === target)
+					const { key } = JSON.parse(event.newValue)
+					const item = this.active.find((each) => each.key === key)
 					if (item) {
 						this.cancel(item)
 					}
@@ -146,7 +146,7 @@ export const useUploadsStore = defineStore('uploads', {
 		},
 		/** Takes in the uploads other tabs send, stopped ones, and finished ones still shown */
 		sync() {
-			const records = readAll(RECORD).map(({ value }) => value)
+			const records = readAll(RECORD).map(({ key, value }) => ({ ...value, key }))
 			const done = readAll(DONE).map(({ value }) => value)
 			const { items, added } = mergeBoard(this.items, records, done, Date.now(), () => nextId++)
 			this.items = items
@@ -171,7 +171,7 @@ export const useUploadsStore = defineStore('uploads', {
 			for (const file of files) {
 				const target = `${folderUrl}/${encodeURIComponent(file.name)}`
 				// The same file to the same place goes on where it stopped, under the name it took
-				const stopped = this.items.find((item) => goesOn(item, folderUrl, file))
+				const stopped = this.items.find((item) => goesOn(item, folderUrl, assetId, file))
 				if (stopped) {
 					this.resume(stopped, file)
 					continue
@@ -179,6 +179,8 @@ export const useUploadsStore = defineStore('uploads', {
 				const theirs = mediaKind(file.type)
 				const item = {
 					id: nextId++,
+					// No crypto.randomUUID: it needs a secure context
+					key: RECORD + Date.now().toString(36) + Math.random().toString(36).slice(2),
 					name: file.name,
 					size: file.size,
 					lastModified: file.lastModified,
@@ -277,7 +279,7 @@ export const useUploadsStore = defineStore('uploads', {
 			}
 			// The tab that sends it stops it; the records then take it off every list
 			if (item.status === 'elsewhere') {
-				write(CANCEL, { target: item.target, at: Date.now() })
+				write(CANCEL, { key: item.key, at: Date.now() })
 				return
 			}
 			item.controller?.abort()
@@ -367,7 +369,6 @@ export const useUploadsStore = defineStore('uploads', {
 			const nextName = versionNames(item.name, async () => (await retrying(() => getVersion(item.stackedOn), env)).versions)
 			const onTaken = async () => {
 				const name = await nextName()
-				this.forget(item)
 				this.rename(item, name)
 				// Sent in one piece, it goes up again
 				item.status = item.folder ? item.status : 'uploading'
@@ -640,16 +641,16 @@ export const useUploadsStore = defineStore('uploads', {
 		 * @param {boolean} left - whether this tab goes away, so another may go on with it at once
 		 */
 		remember(item, left = false) {
-			const { name, renamed, size, lastModified, type, target, projectId, assetId, stackedOn, folder, loaded, status } = item
+			const { key, name, renamed, size, lastModified, type, target, projectId, assetId, stackedOn, folder, loaded, status } = item
 			// Status and speed too, so the other tabs show it just as this one does
 			const shared = { name, renamed, size, lastModified, type, target, projectId, assetId, stackedOn, folder, loaded, status, speed: this.speed }
-			write(RECORD + target, { ...shared, seen: Date.now(), left })
+			write(key, { ...shared, seen: Date.now(), left })
 		},
 		/**
 		 * @param {object} item - an upload that needs no going on with any more
 		 */
 		forget(item) {
-			write(RECORD + item.target, null)
+			write(item.key, null)
 		},
 	},
 })
