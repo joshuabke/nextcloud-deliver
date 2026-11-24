@@ -2187,19 +2187,25 @@ test.describe('Comparing sound', () => {
 		// Alternating loops
 		await expect(page.getByRole('button', { name: 'Loop the Range' })).toHaveAttribute('aria-pressed', 'true')
 
-		// Whose sound plays on every animation frame, cut into passes where the time jumps back
+		// Whose sound plays on every animation frame, cut into passes where the time jumps back; where a pass starts is read
+		// as A starts playing too, as the next frame may come late (the main thread was blocked for 150 ms and more here)
 		const passes = await page.evaluate(() => new Promise((resolve) => {
 			const [a, b] = document.querySelectorAll('.deliver-compare video')
 			const found = []
 			let last = Infinity
-			const tick = () => {
+			const cut = () => {
 				const time = a.currentTime
-				const gain = (video) => video.deliverGain && !video.muted ? video.deliverGain.gain.value > 0.5 : !video.muted
-				const heard = gain(a) ? (gain(b) ? 'both' : 'a') : (gain(b) ? 'b' : 'none')
 				if (time < last - 0.3) {
 					found.push({ from: time, to: time, heard: new Set() })
 				}
 				last = time
+				return time
+			}
+			a.addEventListener('playing', cut)
+			const tick = () => {
+				const time = cut()
+				const gain = (video) => video.deliverGain && !video.muted ? video.deliverGain.gain.value > 0.5 : !video.muted
+				const heard = gain(a) ? (gain(b) ? 'both' : 'a') : (gain(b) ? 'b' : 'none')
 				const pass = found.at(-1)
 				if (pass && !a.paused) {
 					pass.to = time
