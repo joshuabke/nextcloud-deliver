@@ -2124,6 +2124,86 @@ test.describe('Comparing sound', () => {
 		}
 	})
 
+	test('the sides start as one although the second\'s play comes 50 ms after the first\'s', async () => {
+		const fresh = await context.newPage()
+		await fresh.addInitScript(() => {
+			const play = HTMLMediaElement.prototype.play
+			HTMLMediaElement.prototype.play = function() {
+				const late = this === document.querySelectorAll('.deliver-compare video')[1] ? 50 : 0
+				return new Promise((done) => setTimeout(done, late)).then(() => play.call(this))
+			}
+		})
+		await fresh.goto(`/apps/deliver/compare/${mix[1].id}/${mix[0].id}`)
+		const videos = fresh.locator('.deliver-compare video')
+		await expect(videos.first()).toHaveJSProperty('readyState', 4)
+		// The readings of the first 400 ms both play, before the side not heard would be put back
+		const apart = await fresh.evaluate(() => new Promise((resolve) => {
+			const [a, b] = document.querySelectorAll('.deliver-compare video')
+			const found = []
+			b.addEventListener('playing', () => {
+				const start = performance.now()
+				const tick = () => {
+					found.push(b.currentTime - a.currentTime)
+					if (performance.now() - start < 400) {
+						requestAnimationFrame(tick)
+					} else {
+						resolve(found)
+					}
+				}
+				tick()
+			}, { once: true })
+			document.querySelector('.deliver-compare__controls button[aria-label="Play (Space)"]').click()
+		}))
+		expect(Math.abs(apart.reduce((sum, each) => sum + each, 0) / apart.length)).toBeLessThan(0.005)
+		await fresh.close()
+	})
+
+	test('only a start from a stand cuts the output: a seek while playing and a loop\'s next pass leave no hole in what is heard', async () => {
+		const fresh = await context.newPage()
+		// Every cut of the way out of the graph, and whether a side was playing
+		await fresh.addInitScript(() => {
+			window.cuts = []
+			const disconnect = AudioNode.prototype.disconnect
+			AudioNode.prototype.disconnect = function(...args) {
+				window.cuts.push([...document.querySelectorAll('.deliver-compare video')].some((video) => !video.paused) ? 'playing' : 'standing')
+				return disconnect.apply(this, args)
+			}
+		})
+		await fresh.goto(`/apps/deliver/compare/${mix[1].id}/${mix[0].id}`)
+		const videos = fresh.locator('.deliver-compare video')
+		await expect(videos.first()).toHaveJSProperty('readyState', 4)
+		const bar = await fresh.locator('.deliver-compare__timeline').boundingBox()
+		const at = (share) => fresh.mouse.click(bar.x + bar.width * share, bar.y + bar.height / 2)
+		const time = () => videos.first().evaluate((video) => video.currentTime)
+
+		// A seek while playing
+		await fresh.getByRole('button', { name: 'Play (Space)' }).click()
+		await expect.poll(time).toBeGreaterThan(0.3)
+		await fresh.keyboard.press('Shift+ArrowRight')
+		await expect.poll(time).toBeGreaterThan(10)
+		await at(0.2)
+		await expect.poll(time).toBeLessThan(6)
+		expect(await videos.evaluateAll((all) => all.map((video) => video.paused))).toEqual([false, false])
+		await fresh.getByRole('button', { name: 'Pause (Space)' }).click()
+
+		// A looped Range, round twice
+		await at(0.25)
+		await fresh.keyboard.press('i')
+		await at(0.3)
+		await fresh.keyboard.press('o')
+		await at(0.25)
+		await fresh.getByRole('button', { name: 'Loop the Range' }).click()
+		await videos.first().evaluate((video) => {
+			window.seeks = 0
+			video.addEventListener('seeking', () => window.seeks++)
+		})
+		await fresh.getByRole('button', { name: 'Play (Space)' }).click()
+		// The start's own and one a pass
+		await expect.poll(() => fresh.evaluate(() => window.seeks)).toBeGreaterThan(2)
+		expect(await fresh.evaluate(() => window.cuts)).toEqual(['standing', 'standing'])
+		await fresh.close()
+	})
+
 	test('while the AudioContext is slow to start, one start waits at a time and a switch made meanwhile is the side heard', async () => {
 		// A context that takes 300 ms to run, as a slow output may
 		const slow = await browser.newContext({ baseURL: BROWSER_URL })

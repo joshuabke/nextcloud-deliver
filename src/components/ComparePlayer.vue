@@ -63,7 +63,7 @@ const playing = ref(false)
 const wipe = ref(50)
 const { outPoint, loop, range, loopsWhole, markIn, markOut, clearRange, wrapFrom } = useRange(frame)
 /** Both sides into one AudioContext, the one heard at a gain of 1 (A7); muting stands in until it runs */
-const { mixing, start: startMix, hear, late } = useSoundMix()
+const { mixing, start: startMix, hear, together, late } = useSoundMix()
 /** Each pass of the loop plays the other side (A2c); off until asked for, every time */
 const alternate = ref(false)
 /** Each side's Waveform, once loaded, with its loudness where it was measured */
@@ -192,8 +192,10 @@ function play() {
 
 /** Both from the same Frame, at once */
 function startBoth() {
-	seekTo(frame.value)
-	Promise.all([videoA.value?.play(), videoB.value?.play()]).catch((error) => {
+	together(elements(), () => {
+		seekTo(frame.value)
+		return Promise.all([videoA.value?.play(), videoB.value?.play()])
+	}).catch((error) => {
 		// Safari may refuse a play() that is no longer in the gesture: then, for the rest of the page, the sides start within it (unmeasured)
 		late.refused ||= error?.name === 'NotAllowedError'
 		pause()
