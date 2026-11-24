@@ -2292,7 +2292,7 @@ test.describe('Comparing sound', () => {
 			const cut = () => {
 				const time = a.currentTime
 				if (time < last - 0.3) {
-					found.push({ from: time, to: time, heard: new Set(), at: sought })
+					found.push({ from: sought && !a.seeking ? time - (clock() - sought) : time, to: time, heard: new Set(), at: sought })
 				}
 				last = time
 				return time
