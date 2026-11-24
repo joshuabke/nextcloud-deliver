@@ -42,7 +42,7 @@ export function etagOf(response) {
 }
 
 /** So many taken names are walked past: a server that answers anything, with a login page say, has every one of them */
-const NAMES = 100
+export const NAMES = 100
 
 /** Pauses between attempts after a server error, in seconds */
 const BACKOFF = [1, 2, 4, 8, 16]

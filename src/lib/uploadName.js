@@ -4,6 +4,7 @@
  */
 import { t } from './l10n.js'
 import { extensionOf } from './media.js'
+import { NAMES } from './upload.js'
 
 /**
  * @param {string} filename - a filename
@@ -14,13 +15,14 @@ export const stemOf = (filename) => filename.slice(0, filename.length - extensio
 /**
  * @param {string} filename - the name that is taken
  * @param {(name: string) => Promise<boolean>} taken - whether a name is, in that folder
- * @return {Promise<string>} the first free one: `mix (2).mp3` for `mix.mp3`, `mix (3).mp3` for that
+ * @return {Promise<string>} the first free one: `mix (2).mp3` for `mix.mp3`, `mix (3).mp3` for that; after a hundred the next, free or not
  */
 export async function freeName(filename, taken) {
 	const [, base, counted] = /^(.*?)(?: \((\d{1,4})\))?$/.exec(stemOf(filename))
-	for (let number = Number(counted ?? 1) + 1; ; number++) {
+	const start = Number(counted ?? 1) + 1
+	for (let number = start; ; number++) {
 		const name = `${base} (${number})${filename.slice(stemOf(filename).length)}`
-		if (!await taken(name)) {
+		if (number - start >= NAMES || !await taken(name)) {
 			return name
 		}
 	}

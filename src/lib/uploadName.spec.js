@@ -27,6 +27,18 @@ describe('a free name for an upload', () => {
 		expect(await freeName('mix', folder())).toBe('mix (2)')
 	})
 
+	it('ends where every name is taken, as a server answering anything with a page does', async () => {
+		let asked = 0
+		const always = async () => {
+			if (++asked > 1000) {
+				throw new Error('never ends')
+			}
+			return true
+		}
+		expect(await freeName('mix.mp3', always)).toMatch(/^mix \(\d+\)\.mp3$/)
+		expect(asked).toBeLessThan(200)
+	})
+
 	it('counts on where the name is counted already', async () => {
 		expect(await freeName('mix (2).mp3', folder('mix (2).mp3'))).toBe('mix (3).mp3')
 	})
