@@ -2063,15 +2063,18 @@ test.describe('Comparing sound', () => {
 			const samples = []
 			const start = performance.now()
 			let switches = 0
-			const read = () => Math.abs(b.currentTime - a.currentTime)
+			const side = () => halves[0].getAttribute('aria-checked') === 'true' ? 'a' : 'b'
+			const read = () => {
+				const clock = output.currentTime
+				return { ahead: (side() === 'a' ? a : b).currentTime - clock, apart: Math.abs(b.currentTime - a.currentTime) }
+			}
 			const tick = async () => {
-				// The sides read twice, as on a page's first Play below
+				// Read twice, as on a page's first Play below; held up after the clock, a reading is too far ahead, never behind
 				const first = read()
 				await null
+				const second = read()
 				const now = performance.now()
-				const side = halves[0].getAttribute('aria-checked') === 'true' ? 'a' : 'b'
-				const clock = output.currentTime
-				samples.push({ ahead: (side === 'a' ? a : b).currentTime - clock, running: output.state === 'running', apart: Math.min(first, read()), side })
+				samples.push({ ahead: Math.min(first.ahead, second.ahead), apart: Math.min(first.apart, second.apart), running: output.state === 'running', side: side() })
 				if (now - start > (switches + 1) * 400 && switches < 10) {
 					switches++
 					halves[switches % 2].click()
