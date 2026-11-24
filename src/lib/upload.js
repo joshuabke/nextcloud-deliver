@@ -80,6 +80,20 @@ export function parseChunks(xml) {
  */
 export const sameFile = (record, file) => record.name === file.name && record.size === file.size && record.lastModified === file.lastModified
 
+/**
+ * @param {string} target - the WebDAV URL of a file
+ * @return {string} that of its folder
+ */
+export const folderOf = (target) => target.slice(0, target.lastIndexOf('/'))
+
+/**
+ * @param {{status: string, target: string, name: string, size: number, lastModified: number}} item - an upload
+ * @param {string} folderUrl - the WebDAV URL of a folder
+ * @param {File} file - one picked or dropped for it
+ * @return {boolean} whether the upload stopped and goes on with this file, also under the name it took in the folder
+ */
+export const goesOn = (item, folderUrl, file) => item.status === 'interrupted' && folderOf(item.target) === folderUrl && sameFile(item, file)
+
 /** A tab touches the record of the upload it sends this often, in milliseconds */
 export const HEARTBEAT = 10 * 1000
 /** How long an upload that stopped is offered to go on with (story 135); Nextcloud drops its folder after a day */
@@ -141,12 +155,14 @@ export async function retrying(attempt, { signal, online, untilOnline, sleep, on
 /**
  * Puts a file into a folder of Files. It never replaces a file of the same
  * name: the name is checked first, and the last step refuses one that
- * appeared meanwhile.
+ * appeared meanwhile. Where onTaken names another target, the upload goes on
+ * there, with the chunks it sent.
  *
  * @param {object} options - what to upload, and how
  * @param {(config: object) => Promise<object>} options.request - axios, or a fake of it
  * @param {File} options.file - what to upload
  * @param {string} options.target - WebDAV URL the file gets
+ * @param {?() => Promise<string>} [options.onTaken] - gives the next WebDAV URL to try where the last one is taken, a new one each time; null refuses the file
  * @param {string} options.uploadsUrl - WebDAV URL of the user's upload folders
  * @param {number} options.chunkSize - the server's largest chunk; 0 sends the file in one piece
  * @param {?string} options.folder - the upload folder of an upload that stopped, to go on with
@@ -156,39 +172,85 @@ export async function retrying(attempt, { signal, online, untilOnline, sleep, on
  * @param {object} options.env - signal, online, untilOnline, sleep and onPause, as retrying takes them
  * @return {Promise<number>} the Nextcloud file id of the upload
  */
-export async function uploadFile({ request, file, target, uploadsUrl, chunkSize, folder = null, onFolder = () => {}, onProgress = () => {}, onEtag = () => {}, env }) {
+export async function uploadFile({ request, file, target, onTaken = null, uploadsUrl, chunkSize, folder = null, onFolder = () => {}, onProgress = () => {}, onEtag = () => {}, env }) {
 	const { signal } = env
 	const send = (config) => retrying(() => request({ ...config, signal }), env)
-	// Ask first, so a taken name is refused now rather than after the whole upload
-	const taken = await request({ method: 'HEAD', url: target, signal }).then(() => true, (error) => {
+	const taken = () => send({ method: 'HEAD', url: target }).then(() => true, (error) => {
 		if (signal?.aborted) {
 			throw error
 		}
 		return false
 	})
-	if (taken) {
-		throw Object.assign(new Error('taken'), { response: { status: 412 } })
+	// Ask first, so a taken name is refused now rather than after the whole upload
+	const findName = async () => {
+		while (await taken()) {
+			if (!onTaken) {
+				throw Object.assign(new Error('taken'), { response: { status: 412 } })
+			}
+			target = await onTaken()
+		}
+	}
+	// The step that makes the file. One whose answer is lost (a proxy giving up while the server joins a large file) may
+	// have worked all the same: the name was free before, so a file of this size there now is this one. Sent again, it
+	// would find its name taken or its folder gone. An answer the server did give otherwise stands: a 412 means another
+	// file took the name meanwhile, and that is not this one.
+	const finish = async (step) => {
+		let lost = false
+		const attempt = async () => {
+			try {
+				const response = await request({ ...step(), signal })
+				onEtag(etagOf(response))
+				return fileIdOf(response)
+			} catch (error) {
+				lost ||= error.response?.status === undefined || error.response.status >= 500
+				const arrived = lost && !signal?.aborted ? await fileIdAt(request, target, signal, file.size) : null
+				if (arrived) {
+					return arrived
+				}
+				throw error
+			}
+		}
+		for (;;) {
+			try {
+				return await retrying(attempt, env)
+			} catch (error) {
+				const refused = target
+				if (error.response?.status !== 412 || !onTaken) {
+					throw error
+				}
+				await findName()
+				if (target === refused) {
+					throw error
+				}
+				lost = false
+			}
+		}
 	}
 	if (!chunkSize || file.size <= chunkSize) {
-		const response = await send({
+		await findName()
+		return finish(() => ({
 			method: 'PUT',
 			url: target,
 			data: file,
 			headers: { 'Content-Type': file.type || 'application/octet-stream', 'If-None-Match': '*' },
 			onUploadProgress: (event) => onProgress(event.loaded),
-		})
-		onEtag(etagOf(response))
-		return fileIdOf(response)
+		}))
 	}
 	// The chunks the server still has from before; none when their folder is gone
 	let have = new Map()
+	let joined = null
 	if (folder) {
-		have = await request({ method: 'PROPFIND', url: folder, headers: { Depth: '1' }, signal }).then((response) => parseChunks(response.data), () => null)
-		if (have === null) {
+		have = await request({ method: 'PROPFIND', url: folder, headers: { Depth: '1' }, signal }).then((response) => parseChunks(response.data), async (error) => {
 			folder = null
-			have = new Map()
+			// Joined, but nobody heard: its tab was gone, or the answer lost
+			joined = error.response?.status === 404 ? await fileIdAt(request, target, signal, file.size) : null
+			return new Map()
+		})
+		if (joined) {
+			return joined
 		}
 	}
+	await findName()
 	const headers = { Destination: target, 'OC-Total-Length': String(file.size) }
 	if (!folder) {
 		// No crypto.randomUUID: it needs a secure context, and an instance may run on plain http
@@ -211,37 +273,25 @@ export async function uploadFile({ request, file, target, uploadsUrl, chunkSize,
 		done += chunk.end - chunk.start
 		onProgress(done)
 	}
-	// A MOVE whose answer is lost (a proxy giving up while the server joins a large file) may have worked all the same:
-	// the name was free before, so a file there now is this one. Sent again, the MOVE would find its folder gone.
-	// An answer the server did give stands: a 412 means another file took the name meanwhile, and that is not this one.
-	return retrying(async () => {
-		try {
-			const moved = await request({ method: 'MOVE', url: `${folder}/.file`, headers: { ...headers, Overwrite: 'F' }, signal })
-			onEtag(etagOf(moved))
-			return fileIdOf(moved)
-		} catch (error) {
-			const answered = error.response?.status !== undefined && error.response.status < 500
-			const arrived = signal?.aborted || answered ? null : await fileIdAt(request, target, signal)
-			if (arrived) {
-				return arrived
-			}
-			throw error
-		}
-	}, env)
+	return finish(() => ({ method: 'MOVE', url: `${folder}/.file`, headers: { ...headers, Destination: target, Overwrite: 'F' } }))
 }
 
 /**
  * @param {(config: object) => Promise<object>} request - axios, or a fake of it
  * @param {string} url - WebDAV URL of a file or folder
  * @param {AbortSignal} [signal] - ends the request
- * @return {Promise<?number>} its file id, or null when there is nothing
+ * @param {?number} [size] - the size in bytes the file must have
+ * @return {Promise<?number>} its file id, or null when there is nothing, or a file of another size
  */
-export function fileIdAt(request, url, signal) {
+export function fileIdAt(request, url, signal, size = null) {
 	return request({
 		method: 'PROPFIND',
 		url,
 		headers: { Depth: '0' },
-		data: '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><d:prop><oc:fileid/></d:prop></d:propfind>',
+		data: '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><d:prop><oc:fileid/><d:getcontentlength/></d:prop></d:propfind>',
 		signal,
-	}).then((response) => Number(response.data.match(/<(?:\w+:)?fileid>(\d+)</)?.[1]) || null, () => null)
+	}).then(({ data }) => {
+		const length = data.match(/<(?:\w+:)?getcontentlength>(\d+)</)?.[1]
+		return size !== null && Number(length) !== size ? null : Number(data.match(/<(?:\w+:)?fileid>(\d+)</)?.[1]) || null
+	}, () => null)
 }

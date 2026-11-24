@@ -3,13 +3,14 @@ import { loadState } from '@nextcloud/initial-state'
 import { defineStore } from 'pinia'
 import { chunkSizeFor, decodeInTurn, enableFile, errorMessage, getVersion, giveAudioWaveform, giveLoudness, measureWavInTurn, regenerateVersion, uploadsUrl } from '../api.js'
 import { t } from '../lib/l10n.js'
-import { mediaKind, reviewable } from '../lib/media.js'
+import { mediaKind, reviewable, stackKind } from '../lib/media.js'
 import { cannotConvert, clearProxies, convertInTurn, dropProxy, handInPass, inspect, uploadProxy } from '../lib/proxy.js'
 import { atUpload, lightest, passOf } from '../lib/proxyPlan.js'
 import { refusal } from '../lib/unsupported.js'
-import { browserEnv, current, HEARTBEAT, sameFile, uploadFile } from '../lib/upload.js'
+import { browserEnv, current, folderOf, goesOn, HEARTBEAT, retrying, sameFile, uploadFile } from '../lib/upload.js'
 import { ACTIVE, mergeBoard, totals } from '../lib/uploadBoard.js'
 import { busy, settled } from '../lib/uploadStatus.js'
+import { versionNames } from '../lib/versionName.js'
 import { useProjectsStore } from './projects.js'
 
 /**
@@ -160,15 +161,16 @@ export const useUploadsStore = defineStore('uploads', {
 		 * @param {string} where.folderUrl - WebDAV URL of the folder, without a trailing slash
 		 * @param {?number} where.projectId - the Project they join, 0 for No Project; null for the Folder Project above the folder
 		 * @param {?number} where.assetId - the Asset each becomes the next Version of (story 17)
-		 * @param {?string} where.kind - the kind of media of that Asset's Version Stack
+		 * @param {object[]} where.versions - that Asset's Version Stack: its kind of media counts, and its next number where the file's name is taken
 		 * @param {?(versionId: number) => void} where.onDone - gets the new Version id once it exists
 		 * @param {boolean} expand - open the dialog, rather than only the card
 		 */
-		add(files, { folderUrl, projectId = null, assetId = null, kind = null, onDone = null }, expand = false) {
+		add(files, { folderUrl, projectId = null, assetId = null, versions = [], onDone = null }, expand = false) {
+			const kind = stackKind(versions)
 			for (const file of files) {
 				const target = `${folderUrl}/${encodeURIComponent(file.name)}`
-				// The same file to the same place goes on where it stopped
-				const stopped = this.items.find((item) => item.status === 'interrupted' && item.target === target && sameFile(item, file))
+				// The same file to the same place goes on where it stopped, under the name it took
+				const stopped = this.items.find((item) => goesOn(item, folderUrl, file))
 				if (stopped) {
 					this.resume(stopped, file)
 					continue
@@ -181,8 +183,12 @@ export const useUploadsStore = defineStore('uploads', {
 					lastModified: file.lastModified,
 					type: file.type,
 					target,
+					// The name its file got in the folder, where that is not its own
+					renamed: null,
 					projectId,
 					assetId,
+					// A Version of the Stack it goes on, to read the next number from
+					stackedOn: versions[0]?.id ?? null,
 					folder: null,
 					fileId: null,
 					status: 'waiting',
@@ -314,6 +320,26 @@ export const useUploadsStore = defineStore('uploads', {
 			item.status = item.fileId ? 'finishing' : 'uploading'
 			item.controller = new AbortController()
 			const signal = item.controller.signal
+			const env = {
+				...browserEnv(signal),
+				onPause: (paused) => {
+					item.status = paused ? 'paused' : item.loaded === item.size ? 'finishing' : 'uploading'
+					// Nothing moves while offline, so no time left is known
+					this.speed = 0
+					this.remember(item)
+				},
+			}
+			// A new Version whose name is taken gets the number it will have, as the server counts now, else the next free one
+			const nextName = versionNames(item.name, async () => (await retrying(() => getVersion(item.stackedOn), env)).versions)
+			const onTaken = async () => {
+				const name = await nextName()
+				this.forget(item)
+				this.rename(item, name)
+				// Sent in one piece, it goes up again
+				item.status = item.folder ? item.status : 'uploading'
+				this.remember(item)
+				return item.target
+			}
 			// ... and a video gets its Thumbnail Strip, Waveform and Scrub Proxy, and its Proxy where it needs one, in one pass while it goes up (#168)
 			const want = !hasFfmpeg && item.type.startsWith('video/') && !item.proxying && passOf(item.seen, atUpload(item.seen))
 			if (want) {
@@ -348,11 +374,13 @@ export const useUploadsStore = defineStore('uploads', {
 					request: axios.request,
 					file: item.file,
 					target: item.target,
+					onTaken: item.stackedOn ? onTaken : null,
 					uploadsUrl: uploadsUrl(),
 					chunkSize: chunkSizeFor(item.size),
 					folder: item.folder,
 					onFolder: (folder) => {
 						item.folder = folder
+						item.strayed = false
 						this.remember(item)
 					},
 					onEtag: (etag) => {
@@ -378,22 +406,14 @@ export const useUploadsStore = defineStore('uploads', {
 							this.remember(item)
 						}
 					},
-					env: {
-						...browserEnv(signal),
-						onPause: (paused) => {
-							item.status = paused ? 'paused' : item.loaded === item.size ? 'finishing' : 'uploading'
-							// Nothing moves while offline, so no time left is known
-							this.speed = 0
-							this.remember(item)
-						},
-					},
+					env,
 				})
 				this.forget(item)
 				item.folder = null
 				const asset = await enableFile(item.fileId, item.projectId, item.assetId)
 				Object.assign(item, { status: 'done', loaded: item.size })
 				// Its Processing shows in every tab, and after a reload
-				write(DONE + asset.versionId, { versionId: asset.versionId, name: item.name, size: item.size, projectId: item.projectId, assetId: item.assetId, seen: Date.now() })
+				write(DONE + asset.versionId, { versionId: asset.versionId, name: item.renamed ?? item.name, size: item.size, projectId: item.projectId, assetId: item.assetId, seen: Date.now() })
 				this.handIn(item, asset)
 				this.handInPass(item, asset)
 				this.refreshProjects(item)
@@ -407,6 +427,10 @@ export const useUploadsStore = defineStore('uploads', {
 				// Its Proxy has no Version to go to; a retry makes it again
 				item.proxying && dropProxy(item.proxying, item.proxy, item.proxyController)
 				Object.assign(item, { proxy: null, proxying: null })
+				// An object store joins the chunks only under the name they were sent for: another try sends them anew
+				if (item.strayed && error.response?.status >= 500) {
+					item.folder = null
+				}
 				if (!signal.aborted) {
 					Object.assign(item, { status: 'failed', error: errorMessage(error) })
 				}
@@ -561,13 +585,23 @@ export const useUploadsStore = defineStore('uploads', {
 			}
 		},
 		/**
+		 * @param {object} item - an upload
+		 * @param {string} name - what its file is to be called in the folder
+		 */
+		rename(item, name) {
+			item.renamed = name
+			item.target = `${folderOf(item.target)}/${encodeURIComponent(name)}`
+			// Its chunks, where it has some, were sent for another name
+			item.strayed = Boolean(item.folder)
+		},
+		/**
 		 * @param {object} item - an upload this tab sends, or sent until it stopped
 		 * @param {boolean} left - whether this tab goes away, so another may go on with it at once
 		 */
 		remember(item, left = false) {
-			const { name, size, lastModified, type, target, projectId, assetId, folder, loaded, status } = item
+			const { name, renamed, size, lastModified, type, target, projectId, assetId, stackedOn, folder, loaded, status } = item
 			// Status and speed too, so the other tabs show it just as this one does
-			const shared = { name, size, lastModified, type, target, projectId, assetId, folder, loaded, status, speed: this.speed }
+			const shared = { name, renamed, size, lastModified, type, target, projectId, assetId, stackedOn, folder, loaded, status, speed: this.speed }
 			write(RECORD + target, { ...shared, seen: Date.now(), left })
 		},
 		/**

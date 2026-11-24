@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { browserEnv, chunkPlan, current, etagOf, HEARTBEAT, parseChunks, sameFile, sentElsewhere, uploadFile } from './upload.js'
+import { browserEnv, chunkPlan, current, etagOf, goesOn, HEARTBEAT, parseChunks, sameFile, sentElsewhere, uploadFile } from './upload.js'
 
 /**
  * Nextcloud's WebDAV, as far as an upload sees it: files by URL, upload
  * folders with numbered chunks, and a MOVE of .file that joins them.
  *
- * @param {{failChunk?: number, offlineOnce?: boolean, lostMove?: boolean}} trouble - what goes wrong once
+ * @param {{failChunk?: number, offlineOnce?: boolean, lostMove?: boolean, lostPut?: boolean}} trouble - what goes wrong once
  */
 function fakeDav(trouble = {}) {
 	const files = new Map()
@@ -24,7 +24,7 @@ function fakeDav(trouble = {}) {
 		}
 		if (method === 'PROPFIND') {
 			if (files.has(url)) {
-				return { data: '<d:multistatus><d:response><d:propstat><d:prop><oc:fileid>43</oc:fileid></d:prop></d:propstat></d:response></d:multistatus>' }
+				return { data: `<d:multistatus><d:response><d:propstat><d:prop><oc:fileid>43</oc:fileid><d:getcontentlength>${files.get(url).size}</d:getcontentlength></d:prop></d:propstat></d:response></d:multistatus>` }
 			}
 			const chunks = folders.get(url)
 			return chunks
@@ -52,6 +52,10 @@ function fakeDav(trouble = {}) {
 				return fail(412)
 			}
 			files.set(url, data)
+			if (trouble.lostPut) {
+				delete trouble.lostPut
+				return fail(undefined)
+			}
 			return { headers: { 'oc-fileid': '00000042ocabc', etag: '"5f3e"' } }
 		}
 		if (method === 'MOVE') {
@@ -99,6 +103,13 @@ describe('chunks', () => {
 	it('knows the same file again by name, size and modification time', () => {
 		expect(sameFile({ name: 'cut.mov', size: 25, lastModified: 1000 }, file(25))).toBe(true)
 		expect(sameFile({ name: 'cut.mov', size: 24, lastModified: 1000 }, file(25))).toBe(false)
+	})
+
+	it('goes on with it in its folder only, also under the name its upload took there', () => {
+		const stopped = { status: 'interrupted', name: 'cut.mov', size: 25, lastModified: 1000, target: `${UPLOADS}/Cut/cut_v2.mov` }
+		expect(goesOn(stopped, `${UPLOADS}/Cut`, file(25))).toBe(true)
+		expect(goesOn(stopped, `${UPLOADS}/Cut/sub`, file(25))).toBe(false)
+		expect(goesOn({ ...stopped, status: 'uploading' }, `${UPLOADS}/Cut`, file(25))).toBe(false)
 	})
 })
 
@@ -180,6 +191,64 @@ describe('an upload', () => {
 			return dav.request(config)
 		}
 		await expect(uploadFile({ request: racing, file: file(25), target: TARGET, uploadsUrl: UPLOADS, chunkSize: 10, env: dav.env })).rejects.toMatchObject({ response: { status: 412 } })
+	})
+
+	// The names a new Version may take, as the store gives them
+	const numbered = () => {
+		let number = 1
+		return async () => TARGET.replace('cut.mov', `cut_v${++number}.mov`)
+	}
+
+	it('takes the first free name instead of a taken one, where it may, and leaves the others alone', async () => {
+		const dav = fakeDav()
+		dav.files.set(TARGET, new Blob(['old'])).set(TARGET.replace('cut', 'cut_v2'), new Blob(['older']))
+		expect(await uploadFile({ request: dav.request, file: file(5), target: TARGET, onTaken: numbered(), uploadsUrl: UPLOADS, chunkSize: 10, env: dav.env })).toBe(42)
+		expect(dav.log).toEqual(['HEAD ana/Cut/cut.mov', 'HEAD ana/Cut/cut_v2.mov', 'HEAD ana/Cut/cut_v3.mov', 'PUT ana/Cut/cut_v3.mov'])
+		expect([...dav.files.values()].map((blob) => blob.size)).toEqual([3, 5, 5])
+	})
+
+	it('moves the chunks it sent to the next free name when another file took its own meanwhile', async () => {
+		const dav = fakeDav()
+		let raced = false
+		const racing = (config) => {
+			if (config.method === 'MOVE' && !raced) {
+				raced = true
+				dav.files.set(TARGET, new Blob(['someone else']))
+			}
+			return dav.request(config)
+		}
+		expect(await uploadFile({ request: racing, file: file(25), target: TARGET, onTaken: numbered(), uploadsUrl: UPLOADS, chunkSize: 10, env: dav.env })).toBe(43)
+		expect(dav.log.filter((line) => line.startsWith('PUT'))).toHaveLength(3)
+		expect(await dav.files.get(TARGET).text()).toBe('someone else')
+		expect(await bytes(dav.files.get(TARGET.replace('cut', 'cut_v2')))).toEqual(await bytes(file(25)))
+	})
+
+	it('sends a small file again under the next free name when another file took its own meanwhile', async () => {
+		const dav = fakeDav()
+		let raced = false
+		const racing = (config) => {
+			if (config.method === 'PUT' && !raced) {
+				raced = true
+				dav.files.set(TARGET, new Blob(['someone else']))
+			}
+			return dav.request(config)
+		}
+		await uploadFile({ request: racing, file: file(5), target: TARGET, onTaken: numbered(), uploadsUrl: UPLOADS, chunkSize: 10, env: dav.env })
+		expect(dav.files.get(TARGET.replace('cut', 'cut_v2')).size).toBe(5)
+		expect(await dav.files.get(TARGET).text()).toBe('someone else')
+	})
+
+	it('does not take its own file for another one when the answer to it was lost', async () => {
+		const dav = fakeDav({ lostPut: true })
+		expect(await uploadFile({ request: dav.request, file: file(5), target: TARGET, onTaken: numbered(), uploadsUrl: UPLOADS, chunkSize: 10, env: dav.env })).toBe(43)
+		expect([...dav.files.keys()]).toEqual([TARGET])
+	})
+
+	it('finds the file its tab did not live to see joined, rather than sending it again under another name', async () => {
+		const dav = fakeDav()
+		dav.files.set(TARGET, file(25))
+		expect(await uploadFile({ request: dav.request, file: file(25), target: TARGET, onTaken: numbered(), uploadsUrl: UPLOADS, chunkSize: 10, folder: `${UPLOADS}/deliver-gone`, env: dav.env })).toBe(43)
+		expect(dav.log.filter((line) => /^(PUT|MOVE)/.test(line))).toEqual([])
 	})
 
 	it('stops waiting for the network when it is cancelled', async () => {
