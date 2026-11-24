@@ -2041,13 +2041,13 @@ test.describe('Comparing sound', () => {
 		await page.getByRole('button', { name: 'Pause (Space)' }).click()
 	})
 
-	test('switching ten times while both play seeks neither side, the heard sound runs on in real time, and the sides stay within milliseconds', async () => {
+	test('switching ten times while both play seeks neither side, the heard sound runs on with the output, and the sides stay within milliseconds', async () => {
 		await page.goto(`/apps/deliver/compare/${mix[1].id}/${mix[0].id}`)
 		const videos = page.locator('.deliver-compare video')
 		await expect(videos.first()).toHaveJSProperty('readyState', 4)
 		await page.getByRole('button', { name: 'Play (Space)' }).click()
 		await page.waitForTimeout(1500)
-		// On every animation frame: both times, whose sound is heard, and every seek; a switch every 400 ms
+		// On every animation frame: both times, the clock of the output they play on, whose sound is heard, and every seek; a switch every 400 ms
 		const run = await page.evaluate(() => new Promise((resolve) => {
 			const [a, b] = document.querySelectorAll('.deliver-compare video')
 			const halves = document.querySelectorAll('.deliver-compare__sound')
@@ -2063,8 +2063,9 @@ test.describe('Comparing sound', () => {
 				const first = read()
 				await null
 				const now = performance.now()
+				const output = a.deliverGain.context
 				const side = halves[0].getAttribute('aria-checked') === 'true' ? 'a' : 'b'
-				samples.push({ now, a: a.currentTime, b: b.currentTime, apart: Math.min(first, read()), side })
+				samples.push({ ahead: (side === 'a' ? a : b).currentTime - output.currentTime, running: output.state === 'running', apart: Math.min(first, read()), side })
 				if (now - start > (switches + 1) * 400 && switches < 10) {
 					switches++
 					halves[switches % 2].click()
@@ -2081,16 +2082,16 @@ test.describe('Comparing sound', () => {
 		expect(run.playing).toBe(true)
 		expect(run.seeks).toBe(0)
 		expect(new Set(run.samples.map((sample) => sample.side)).size).toBe(2)
-		const position = (sample) => sample.side === 'a' ? sample.a : sample.b
-		for (const [at, sample] of run.samples.entries()) {
-			// Without an offset the sides stand on the same second
+		// Without an offset the sides stand on the same second
+		for (const sample of run.samples) {
 			expect(sample.apart).toBeLessThan(0.01)
-			if (at > 0) {
-				const before = run.samples[at - 1]
-				// The heard sound goes on with the clock across every switch; a reading of a media element's time is off by a few ms
-				expect(Math.abs((position(sample) - position(before)) - (sample.now - before.now) / 1000)).toBeLessThan(0.015)
-			}
 		}
+		// The heard sound goes on with the output across every switch, ahead of its clock by the same on every frame. Not the
+		// wall's clock: headless Chrome's stand-in for a sound card drops a buffer when the machine is late with it
+		expect(run.samples.length).toBeGreaterThan(50)
+		expect(run.samples.every((sample) => sample.running)).toBe(true)
+		const ahead = run.samples.map((sample) => sample.ahead)
+		expect(Math.max(...ahead) - Math.min(...ahead)).toBeLessThan(0.015)
 	})
 
 	test('on a page\'s first Play the sides are in step from the first second on, video and audio alike', async () => {
