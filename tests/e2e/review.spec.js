@@ -2409,6 +2409,76 @@ test.describe('Uploads whose name is taken', () => {
 		await (await chooser).setFiles({ name: 'master.wav', mimeType: 'audio/wav', buffer: other })
 		await expect.poll(async () => (await versions()).find((names) => names.length === 4)?.[0][0]).toBe('master.wav')
 	})
+
+	test('an upload is renamed in its row, with the keyboard, and told why a name does not do', async () => {
+		await page.getByRole('button', { name: 'Upload', exact: true }).click()
+		const uploads = page.getByRole('dialog', { name: 'Uploads' })
+		await uploads.locator('input[type=file][multiple]').setInputFiles({ name: 'mix.wav', mimeType: 'audio/wav', buffer: other })
+		const field = uploads.getByLabel('New name')
+		await expect(field).toHaveValue('mix (2).wav')
+		await expect(uploads.locator('.deliver-uploads__status--error')).toHaveText('A file with this name is already in the folder.')
+		// The name without its extension is selected, so typing replaces it alone
+		await expect(field).toBeFocused()
+		expect(await field.evaluate((input) => input.value.slice(input.selectionStart, input.selectionEnd))).toBe('mix (2)')
+
+		// Escape leaves the upload refused, and the dialog open
+		await page.keyboard.press('Escape')
+		await expect(field).toHaveCount(0)
+		await expect(uploads.getByRole('button', { name: 'Rename…' })).toBeFocused()
+		await page.keyboard.press('Enter')
+		await expect(field).toBeFocused()
+
+		const form = uploads.locator('.deliver-upload-rename')
+		for (const [name, why] of [['mix.mp3', 'Keep the extension .wav.'], ['a/b.wav', '"/" is not allowed in a filename.'], ['mix.wav', 'A file with this name is already in the folder.']]) {
+			await field.fill(name)
+			await page.keyboard.press('Enter')
+			await expect(form).toContainText(why)
+		}
+		await field.fill('other mix.wav')
+		await expect(form).not.toContainText('already in the folder')
+		await page.keyboard.press('Enter')
+		await expect(uploads.getByText('Open', { exact: true })).toBeVisible()
+		await expect(uploads.locator('.deliver-uploads__name')).toHaveText('other mix.wav')
+		expect((await versions()).flat().map(([name]) => name).sort()).toEqual(['mix.wav', 'other mix.wav'])
+		expect((await api.fetch(`${dav}/mix.wav`, { method: 'HEAD' })).headers()['content-length']).toBe(String(readFileSync(MIX).length))
+	})
+
+	test('an upload dropped on the Project is renamed in the card in the corner', async () => {
+		await page.evaluate((bytes) => {
+			const files = new DataTransfer()
+			files.items.add(new File([new Uint8Array(bytes)], 'mix.wav', { type: 'audio/wav' }))
+			document.querySelector('.deliver-project').dispatchEvent(new DragEvent('drop', { dataTransfer: files, bubbles: true, cancelable: true }))
+		}, [...other])
+		const corner = page.locator('.deliver-uploads-card')
+		await expect(corner.getByLabel('New name')).toHaveValue('mix (2).wav')
+		// Whoever is typing elsewhere is not interrupted
+		await expect(corner.getByLabel('New name')).not.toBeFocused()
+		await corner.getByRole('button', { name: 'Rename and upload' }).click()
+		await expect.poll(async () => (await versions()).flat().map(([name]) => name).sort()).toEqual(['mix (2).wav', 'mix.wav'])
+		await expect(corner.getByLabel('New name')).toHaveCount(0)
+	})
+
+	test('an upload is renamed on a phone, by touch, or cancelled', async () => {
+		await context.close()
+		context = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		page = await context.newPage()
+		await login(page)
+		await page.goto(`/apps/deliver/projects/${projectId}`)
+		await page.getByRole('button', { name: 'Upload', exact: true }).tap()
+		const uploads = page.getByRole('dialog', { name: 'Uploads' })
+		await uploads.locator('input[type=file][multiple]').setInputFiles([
+			{ name: 'mix.wav', mimeType: 'audio/wav', buffer: other },
+			{ name: 'mix.wav', mimeType: 'audio/wav', buffer: other },
+		])
+		const fields = uploads.getByLabel('New name')
+		await expect(fields).toHaveCount(2)
+		await uploads.getByRole('button', { name: 'Cancel the upload of mix.wav' }).last().tap()
+		await expect(fields).toHaveCount(1)
+		expect(await uploads.locator('.deliver-uploads').evaluate((element) => element.scrollWidth - element.clientWidth)).toBe(0)
+		await uploads.getByRole('button', { name: 'Rename and upload' }).tap()
+		await expect(uploads.getByText('Open', { exact: true })).toBeVisible()
+		expect((await versions()).flat().map(([name]) => name).sort()).toEqual(['mix (2).wav', 'mix.wav'])
+	})
 })
 
 test.describe('Uploads without ffmpeg', () => {
@@ -2487,6 +2557,55 @@ test.describe('Uploads without ffmpeg', () => {
 			await expect(uploads.getByText('cancelled.wav')).toHaveCount(0)
 		} finally {
 			await api.dispose()
+			await context.close()
+		}
+	})
+
+	test('a renamed upload keeps what this browser made of it', async () => {
+		const browser = await chromium.connectOverCDP(CDP)
+		const context = await browser.newContext({ baseURL: BROWSER_URL })
+		const page = await context.newPage()
+		try {
+			await page.addInitScript(() => {
+				window.decoders = 0
+				for (const kind of ['AudioDecoder', 'VideoDecoder']) {
+					window[kind] = class extends window[kind] {
+						constructor(init) {
+							super(init)
+							window.decoders++
+						}
+					}
+				}
+			})
+			const decoders = () => page.evaluate(() => window.decoders)
+			await login(page)
+			await page.goto(`/apps/deliver/projects/${projectId}`)
+			await page.getByRole('button', { name: 'Upload', exact: true }).click()
+			const uploads = page.getByRole('dialog', { name: 'Uploads' })
+			const picker = uploads.locator('input[type=file][multiple]')
+			const opened = uploads.getByText('Open', { exact: true })
+			for (const [index, file] of [
+				{ name: 'song.ogg', mimeType: 'audio/ogg', buffer: readFileSync(LONG_MIX) },
+				{ name: 'again.webm', mimeType: 'video/webm', buffer: readFileSync(CLIP) },
+			].entries()) {
+				// The Waveform of the one; the pass and the Thumbnail Strip of the other
+				const [first, second] = [[1, 2], [4, 6]][index]
+				await picker.setInputFiles(file)
+				await expect(opened).toHaveCount(2 * index + 1)
+				await expect(uploads.locator('.deliver-uploads__made')).toHaveCount(first)
+
+				const before = await decoders()
+				await picker.setInputFiles(file)
+				await expect(uploads.getByLabel('New name')).toBeVisible()
+				// It is made while the name is asked for
+				await expect.poll(decoders).toBeGreaterThan(before)
+				const made = await decoders()
+				await uploads.getByRole('button', { name: 'Rename and upload' }).click()
+				await expect(opened).toHaveCount(2 * index + 2)
+				await expect(uploads.locator('.deliver-uploads__made')).toHaveCount(second)
+				expect(await decoders()).toBe(made)
+			}
+		} finally {
 			await context.close()
 		}
 	})

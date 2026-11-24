@@ -1,5 +1,6 @@
 {
 	"translations": {
+		"\"{segment}\" is not allowed in a filename.": "„{segment}“ ist in Dateinamen nicht erlaubt.",
 		"%s commented on %s": "%s hat %s kommentiert",
 		"%s invites you to a review": "%s lädt dich zu einem Review ein",
 		"%s replied to your Comment": "%s hat auf deinen Kommentar geantwortet",
@@ -141,6 +142,7 @@
 		"Loading Project…": "Projekt wird geladen …",
 		"Loading Version…": "Version wird geladen …",
 		"Loading…": "Wird geladen …",
+		"New name": "Neuer Name",
 		"Protect files with Comments against deleting and renaming": "Dateien mit Kommentaren gegen Löschen und Umbenennen sichern",
 		"Loop": "Wiederholen",
 		"Loop the Range": "Bereich wiederholen",
@@ -258,6 +260,7 @@
 		"Remove {name}": "{name} entfernen",
 		"Remove {name}?": "{name} entfernen?",
 		"Rename": "Umbenennen",
+		"Rename and upload": "Umbenennen und hochladen",
 		"Rename file": "Datei umbenennen",
 		"Rename…": "Umbenennen …",
 		"Replies to my Comments": "Antworten auf meine Kommentare",
@@ -322,6 +325,7 @@
 		"The whole Project, with every Asset that joins it": "Das ganze Projekt, mit jedem Asset, das dazukommt",
 		"Their Personal Link through it stops working. They stay on their other links, and their Comments stay theirs.": "Der Persönliche Link darüber funktioniert dann nicht mehr. Die Person bleibt auf ihren anderen Links, und ihre Kommentare bleiben ihre.",
 		"Their Personal Links stop working and they leave the list. Their Comments stay theirs.": "Die persönlichen Links funktionieren dann nicht mehr, und die Person verschwindet aus der Liste. Die Kommentare bleiben erhalten.",
+		"This name is not allowed.": "Dieser Name ist nicht erlaubt.",
 		"This Nextcloud sends no email, so Reviewers are not mailed when someone replies to them.": "Diese Nextcloud verschickt keine E-Mails, daher bekommen Reviewer keine Mail, wenn jemand ihnen antwortet.",
 		"This Version has Comments, so replacing its file needs a confirmation.": "Diese Version hat Kommentare, daher braucht das Ersetzen ihrer Datei eine Bestätigung.",
 		"This browser cannot play this file. Open it in another browser, such as Chrome or Firefox.": "Dieser Browser kann diese Datei nicht abspielen. Öffne sie in einem anderen Browser, etwa Chrome oder Firefox.",

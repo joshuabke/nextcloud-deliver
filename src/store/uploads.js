@@ -9,6 +9,7 @@ import { atUpload, lightest, passOf } from '../lib/proxyPlan.js'
 import { refusal } from '../lib/unsupported.js'
 import { browserEnv, current, folderOf, goesOn, HEARTBEAT, retrying, sameFile, uploadFile } from '../lib/upload.js'
 import { ACTIVE, mergeBoard, totals } from '../lib/uploadBoard.js'
+import { freeName } from '../lib/uploadName.js'
 import { busy, settled } from '../lib/uploadStatus.js'
 import { versionNames } from '../lib/versionName.js'
 import { useProjectsStore } from './projects.js'
@@ -185,6 +186,9 @@ export const useUploadsStore = defineStore('uploads', {
 					target,
 					// The name its file got in the folder, where that is not its own
 					renamed: null,
+					// Its name was taken, so its row asks for another one and suggests a free one
+					taken: false,
+					suggestion: null,
 					projectId,
 					assetId,
 					// A Version of the Stack it goes on, to read the next number from
@@ -229,8 +233,36 @@ export const useUploadsStore = defineStore('uploads', {
 		 * @param {object} item - a failed upload
 		 */
 		retry(item) {
-			Object.assign(item, { status: 'waiting', error: null })
+			Object.assign(item, { status: 'waiting', error: null, taken: false })
 			this.pump()
+		},
+		/**
+		 * Sends an upload whose name was taken under another one
+		 *
+		 * @param {object} item - the upload
+		 * @param {string} name - what its file is to be called
+		 * @return {Promise<boolean>} false when that name is taken too
+		 */
+		async sendAs(item, name) {
+			if (await this.taken(item, name)) {
+				return false
+			}
+			// Cancelled or tried again meanwhile, it is not this name's any more
+			if (item.taken && this.items.includes(item)) {
+				this.rename(item, name)
+				this.retry(item)
+			}
+			return true
+		},
+		/**
+		 * @param {object} item - an upload
+		 * @param {string} name - what its file might be called
+		 * @return {Promise<boolean>} whether its folder has a file of that name, or another upload is to make one
+		 */
+		async taken(item, name) {
+			const target = `${folderOf(item.target)}/${encodeURIComponent(name)}`
+			return this.sending.some((each) => each !== item && each.target === target)
+				|| axios.head(target).then(() => true, () => false)
 		},
 		/**
 		 * Stops an upload and throws away what the server has of it. Once every
@@ -271,6 +303,8 @@ export const useUploadsStore = defineStore('uploads', {
 		 * @param {object[]} gone - uploads to take off the list, here and in the other tabs
 		 */
 		drop(gone) {
+			// A refused one may still be making its Proxy
+			gone.filter((item) => item.status === 'failed' && item.proxying).forEach((item) => dropProxy(item.proxying, item.proxy, item.proxyController))
 			gone.filter((item) => item.version).forEach((item) => write(DONE + item.version.id, null))
 			this.items = this.items.filter((item) => !gone.includes(item))
 		},
@@ -424,15 +458,22 @@ export const useUploadsStore = defineStore('uploads', {
 			} catch (error) {
 				// Cancelled or failed, it is nobody's to show elsewhere; a retry here records it again
 				this.forget(item)
-				// Its Proxy has no Version to go to; a retry makes it again
-				item.proxying && dropProxy(item.proxying, item.proxy, item.proxyController)
-				Object.assign(item, { proxy: null, proxying: null })
+				// A taken name is asked for again in its row; what this browser makes meanwhile goes on
+				const taken = !signal.aborted && !item.fileId && error.response?.status === 412
+				if (taken) {
+					clearInterval(beat)
+					item.suggestion = await freeName(item.renamed ?? item.name, (name) => this.taken(item, name))
+				} else {
+					// Its Proxy has no Version to go to; a retry makes it again
+					item.proxying && dropProxy(item.proxying, item.proxy, item.proxyController)
+					Object.assign(item, { proxy: null, proxying: null })
+				}
 				// An object store joins the chunks only under the name they were sent for: another try sends them anew
 				if (item.strayed && error.response?.status >= 500) {
 					item.folder = null
 				}
 				if (!signal.aborted) {
-					Object.assign(item, { status: 'failed', error: errorMessage(error) })
+					Object.assign(item, { status: 'failed', error: errorMessage(error), taken })
 				}
 			} finally {
 				clearInterval(beat)

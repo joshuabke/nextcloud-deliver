@@ -10,6 +10,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcProgressBar from '@nextcloud/vue/components/NcProgressBar'
+import UploadRename from './UploadRename.vue'
 import { n, t } from '../lib/l10n.js'
 import { processingFailed, processingOf, settled, statusOf, timeLeft } from '../lib/uploadStatus.js'
 import { hasFfmpeg, useUploadsStore } from '../store/uploads.js'
@@ -203,6 +204,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 							{{ line.label }}
 						</span>
 					</div>
+					<UploadRename v-if="item.taken" :item="item" focus />
 					<ul v-if="processingOf(item).some((line) => !line.done)" class="deliver-uploads__processing">
 						<li v-for="line in processingOf(item).filter((each) => !each.done)" :key="line.kind">
 							<span>{{ line.label }}</span>
@@ -266,6 +268,12 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 				<NcIconSvgWrapper :svg="closeIcon" />
 			</template>
 		</NcButton>
+		<!-- A refused name is settled right here too, one upload after the other -->
+		<div v-for="item in store.items.filter((each) => each.taken).slice(0, 1)" :key="item.id" class="deliver-uploads-card__refused">
+			<span class="deliver-uploads-card__text" :title="item.renamed ?? item.name">{{ item.renamed ?? item.name }}</span>
+			<span class="deliver-uploads__status--error">{{ item.error }}</span>
+			<UploadRename :item="item" />
+		</div>
 		<NcProgressBar v-if="store.sending.length" class="deliver-uploads-card__progress" :value="store.totals.percent" />
 	</div>
 	<input
@@ -439,6 +447,15 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.deliver-uploads-card__refused {
+	display: flex;
+	flex: 1 0 100%;
+	flex-direction: column;
+	gap: var(--default-grid-baseline);
+	min-width: 0;
+	padding: var(--default-grid-baseline) calc(2 * var(--default-grid-baseline)) calc(2 * var(--default-grid-baseline));
 }
 
 .deliver-uploads-card__progress {
