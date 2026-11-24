@@ -507,7 +507,8 @@ function onDragStart(event) {
 		return
 	}
 	event.currentTarget.setPointerCapture(event.pointerId)
-	const mark = markAt(event)
+	// A second finger on a circle during a drag does not open it
+	const mark = dragging.value ? null : markAt(event)
 	pressed = mark && { id: event.pointerId, x: event.clientX, y: event.clientY, mark }
 	if (!mark) {
 		pressedAt = frameAt(event)
