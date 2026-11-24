@@ -1377,6 +1377,13 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	touch-action: none;
 }
 
+/* The half of a circle at either end that stands beyond the bar; no higher than the circle, or it takes touches from the buttons */
+.deliver-player__timeline::before {
+	content: '';
+	position: absolute;
+	inset: max(0px, 50% - 10px) -10px;
+}
+
 /* On a phone the bar is taller for a finger, and the playhead has a knob to take hold of */
 .deliver-player--mobile .deliver-player__timeline {
 	height: 32px;

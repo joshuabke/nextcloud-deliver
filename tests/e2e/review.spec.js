@@ -870,6 +870,26 @@ test.describe('Review view', () => {
 		await page.keyboard.press('k')
 	})
 
+	test('a click on a Comment in the list pauses on its Frame', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		// The Compare test stacked a newer Version on the Asset; only the newest takes Comments
+		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
+		const newest = Math.max(...project.ocs.data.assets[0].versions.map((each) => each.id))
+		const commented = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${newest}/comments?format=json`, { data: { inFrame: 50, body: 'stop here' } })
+		expect(commented.ok()).toBe(true)
+		await page.goto(`/apps/deliver/versions/${newest}`)
+		const video = page.locator('video.deliver-player__video')
+		await expect(video).toHaveJSProperty('readyState', 4)
+		await page.getByRole('button', { name: /^Play \(/ }).click()
+		await expect.poll(() => video.evaluate((element) => element.paused)).toBe(false)
+		await page.locator('.deliver-comment').filter({ hasText: 'stop here' }).locator('.deliver-comment__anchor').click()
+		await expect.poll(() => video.evaluate((element) => element.paused)).toBe(true)
+		expect(await video.evaluate((element) => element.currentTime)).toBeCloseTo(2, 1)
+		const id = (await commented.json()).ocs.data.id
+		expect((await api.delete(`/ocs/v2.php/apps/deliver/api/v1/comments/${id}?format=json`)).ok()).toBe(true)
+		await api.dispose()
+	})
+
 	test('close Comments share a circle with their count, and the bar grows under a mouse and takes a finger up to its edges', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
@@ -910,6 +930,12 @@ test.describe('Review view', () => {
 			await expect.poll(frame).toBe(85)
 			await touchPage.waitForTimeout(300)
 			await expect(touchPage.locator('.deliver-player__track')).toHaveCSS('height', '6px')
+		}
+		// The half of a circle beyond either end is the bar's too
+		const ends = await touchPage.locator('.deliver-player__timeline').boundingBox()
+		for (const [x, at] of [[ends.x + ends.width + 8, 99], [ends.x - 8, 0]]) {
+			await touchPage.touchscreen.tap(x, ends.y + ends.height / 2)
+			await expect.poll(frame).toBe(at)
 		}
 		// Above it the picture keeps its own
 		const bar = await touchPage.locator('.deliver-player__timeline').boundingBox()

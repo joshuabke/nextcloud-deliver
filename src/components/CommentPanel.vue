@@ -81,7 +81,7 @@ const threads = computed(() => {
 const list = ref(null)
 
 /**
- * Brings a Comment into view and marks it for a moment, for a tap on its marker
+ * Brings a Comment into view and marks it for a moment, for a jump to it
  *
  * @param {number} id - the Comment
  */
@@ -336,7 +336,7 @@ function claim() {
 	padding: var(--default-grid-baseline) calc(3 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline));
 }
 
-/* The Comment whose marker was tapped */
+/* The Comment jumped to */
 .deliver-comments__list :deep(.deliver-comment--revealed) {
 	border-color: var(--color-primary-element);
 }
