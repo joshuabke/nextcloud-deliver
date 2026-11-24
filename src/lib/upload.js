@@ -175,7 +175,7 @@ export async function retrying(attempt, { signal, online, untilOnline, sleep, on
 export async function uploadFile({ request, file, target, onTaken = null, uploadsUrl, chunkSize, folder = null, onFolder = () => {}, onProgress = () => {}, onEtag = () => {}, env }) {
 	const { signal } = env
 	const send = (config) => retrying(() => request({ ...config, signal }), env)
-	const taken = () => send({ method: 'HEAD', url: target }).then(() => true, (error) => {
+	const taken = () => request({ method: 'HEAD', url: target, signal }).then(() => true, (error) => {
 		if (signal?.aborted) {
 			throw error
 		}
@@ -190,64 +190,51 @@ export async function uploadFile({ request, file, target, onTaken = null, upload
 			target = await onTaken()
 		}
 	}
-	// The step that makes the file. One whose answer is lost (a proxy giving up while the server joins a large file) may
-	// have worked all the same: the name was free before, so a file of this size there now is this one. Sent again, it
-	// would find its name taken or its folder gone. An answer the server did give otherwise stands: a 412 means another
-	// file took the name meanwhile, and that is not this one.
+	// The step that makes the file, under the next free name where another file took its own meanwhile. After a lost
+	// answer a taken name may well be this very file, which nothing proves: refused then, neither adopted nor sent twice
 	const finish = async (step) => {
 		let lost = false
-		const attempt = async () => {
-			try {
-				const response = await request({ ...step(), signal })
-				onEtag(etagOf(response))
-				return fileIdOf(response)
-			} catch (error) {
-				lost ||= error.response?.status === undefined || error.response.status >= 500
-				const arrived = lost && !signal?.aborted ? await fileIdAt(request, target, signal, file.size) : null
-				if (arrived) {
-					return arrived
-				}
-				throw error
-			}
-		}
+		const attempt = () => step().catch((error) => {
+			lost ||= error.response?.status === undefined || error.response.status >= 500
+			throw error
+		})
 		for (;;) {
 			try {
 				return await retrying(attempt, env)
 			} catch (error) {
 				const refused = target
-				if (error.response?.status !== 412 || !onTaken) {
+				if (error.response?.status !== 412 || !onTaken || lost) {
 					throw error
 				}
 				await findName()
 				if (target === refused) {
 					throw error
 				}
-				lost = false
 			}
 		}
 	}
 	if (!chunkSize || file.size <= chunkSize) {
 		await findName()
-		return finish(() => ({
+		const response = await finish(() => request({
 			method: 'PUT',
 			url: target,
 			data: file,
 			headers: { 'Content-Type': file.type || 'application/octet-stream', 'If-None-Match': '*' },
 			onUploadProgress: (event) => onProgress(event.loaded),
+			signal,
 		}))
+		onEtag(etagOf(response))
+		return fileIdOf(response)
 	}
 	// The chunks the server still has from before; none when their folder is gone
 	let have = new Map()
-	let joined = null
 	if (folder) {
-		have = await request({ method: 'PROPFIND', url: folder, headers: { Depth: '1' }, signal }).then((response) => parseChunks(response.data), async (error) => {
+		have = await request({ method: 'PROPFIND', url: folder, headers: { Depth: '1' }, signal }).then((response) => parseChunks(response.data), () => null)
+		if (have === null) {
 			folder = null
-			// Joined, but nobody heard: its tab was gone, or the answer lost
-			joined = error.response?.status === 404 ? await fileIdAt(request, target, signal, file.size) : null
-			return new Map()
-		})
-		if (joined) {
-			return joined
+			have = new Map()
+			// Joined, perhaps, though nobody heard: a file under its name may be this very one, so it is refused as ever
+			onTaken = null
 		}
 	}
 	await findName()
@@ -273,25 +260,37 @@ export async function uploadFile({ request, file, target, onTaken = null, upload
 		done += chunk.end - chunk.start
 		onProgress(done)
 	}
-	return finish(() => ({ method: 'MOVE', url: `${folder}/.file`, headers: { ...headers, Destination: target, Overwrite: 'F' } }))
+	// A MOVE whose answer is lost (a proxy giving up while the server joins a large file) may have worked all the same:
+	// the name was free before, so a file there now is this one. Sent again, the MOVE would find its folder gone.
+	// An answer the server did give stands: a 412 means another file took the name meanwhile, and that is not this one.
+	return finish(async () => {
+		try {
+			const moved = await request({ method: 'MOVE', url: `${folder}/.file`, headers: { ...headers, Destination: target, Overwrite: 'F' }, signal })
+			onEtag(etagOf(moved))
+			return fileIdOf(moved)
+		} catch (error) {
+			const answered = error.response?.status !== undefined && error.response.status < 500
+			const arrived = signal?.aborted || answered ? null : await fileIdAt(request, target, signal)
+			if (arrived) {
+				return arrived
+			}
+			throw error
+		}
+	})
 }
 
 /**
  * @param {(config: object) => Promise<object>} request - axios, or a fake of it
  * @param {string} url - WebDAV URL of a file or folder
  * @param {AbortSignal} [signal] - ends the request
- * @param {?number} [size] - the size in bytes the file must have
- * @return {Promise<?number>} its file id, or null when there is nothing, or a file of another size
+ * @return {Promise<?number>} its file id, or null when there is nothing
  */
-export function fileIdAt(request, url, signal, size = null) {
+export function fileIdAt(request, url, signal) {
 	return request({
 		method: 'PROPFIND',
 		url,
 		headers: { Depth: '0' },
-		data: '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><d:prop><oc:fileid/><d:getcontentlength/></d:prop></d:propfind>',
+		data: '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><d:prop><oc:fileid/></d:prop></d:propfind>',
 		signal,
-	}).then(({ data }) => {
-		const length = data.match(/<(?:\w+:)?getcontentlength>(\d+)</)?.[1]
-		return size !== null && Number(length) !== size ? null : Number(data.match(/<(?:\w+:)?fileid>(\d+)</)?.[1]) || null
-	}, () => null)
+	}).then((response) => Number(response.data.match(/<(?:\w+:)?fileid>(\d+)</)?.[1]) || null, () => null)
 }

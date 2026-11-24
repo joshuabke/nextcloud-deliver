@@ -24,7 +24,7 @@ function fakeDav(trouble = {}) {
 		}
 		if (method === 'PROPFIND') {
 			if (files.has(url)) {
-				return { data: `<d:multistatus><d:response><d:propstat><d:prop><oc:fileid>43</oc:fileid><d:getcontentlength>${files.get(url).size}</d:getcontentlength></d:prop></d:propstat></d:response></d:multistatus>` }
+				return { data: '<d:multistatus><d:response><d:propstat><d:prop><oc:fileid>43</oc:fileid></d:prop></d:propstat></d:response></d:multistatus>' }
 			}
 			const chunks = folders.get(url)
 			return chunks
@@ -238,17 +238,35 @@ describe('an upload', () => {
 		expect(await dav.files.get(TARGET).text()).toBe('someone else')
 	})
 
-	it('does not take its own file for another one when the answer to it was lost', async () => {
-		const dav = fakeDav({ lostPut: true })
-		expect(await uploadFile({ request: dav.request, file: file(5), target: TARGET, onTaken: numbered(), uploadsUrl: UPLOADS, chunkSize: 10, env: dav.env })).toBe(43)
-		expect([...dav.files.keys()]).toEqual([TARGET])
+	it('refuses a name taken after a lost answer, neither adopting a file of the same size nor sending its own twice', async () => {
+		// Its own file, which arrived though the answer did not, and another one of the same size that came meanwhile
+		for (const theirs of [null, new File(['other'], 'cut.mov')]) {
+			const dav = fakeDav({ lostPut: true })
+			const meanwhile = (config) => dav.request(config).finally(() => {
+				if (theirs && config.method === 'PUT') {
+					dav.files.set(TARGET, theirs)
+				}
+			})
+			await expect(uploadFile({ request: meanwhile, file: file(5), target: TARGET, onTaken: numbered(), uploadsUrl: UPLOADS, chunkSize: 10, env: dav.env })).rejects.toMatchObject({ response: { status: 412 } })
+			expect([...dav.files.keys()]).toEqual([TARGET])
+		}
 	})
 
-	it('finds the file its tab did not live to see joined, rather than sending it again under another name', async () => {
+	it('refuses a taken name when its chunk folder is gone, neither adopting a file of the same size nor sending its own twice', async () => {
 		const dav = fakeDav()
-		dav.files.set(TARGET, file(25))
-		expect(await uploadFile({ request: dav.request, file: file(25), target: TARGET, onTaken: numbered(), uploadsUrl: UPLOADS, chunkSize: 10, folder: `${UPLOADS}/deliver-gone`, env: dav.env })).toBe(43)
+		dav.files.set(TARGET, new Blob([new Uint8Array(25)]))
+		await expect(uploadFile({ request: dav.request, file: file(25), target: TARGET, onTaken: numbered(), uploadsUrl: UPLOADS, chunkSize: 10, folder: `${UPLOADS}/deliver-gone`, env: dav.env })).rejects.toMatchObject({ response: { status: 412 } })
 		expect(dav.log.filter((line) => /^(PUT|MOVE)/.test(line))).toEqual([])
+	})
+
+	it('keeps going under the next name with the chunks the server has, after a reload', async () => {
+		const dav = fakeDav()
+		const folder = `${UPLOADS}/deliver-x`
+		dav.folders.set(folder, new Map([[1, file(25).slice(0, 10)], [2, file(25).slice(10, 20)]]))
+		dav.files.set(TARGET, new Blob(['old']))
+		expect(await uploadFile({ request: dav.request, file: file(25), target: TARGET, onTaken: numbered(), uploadsUrl: UPLOADS, chunkSize: 10, folder, env: dav.env })).toBe(43)
+		expect(dav.log.filter((line) => line.startsWith('PUT'))).toEqual(['PUT ana/deliver-x/3'])
+		expect(await bytes(dav.files.get(TARGET.replace('cut', 'cut_v2')))).toEqual(await bytes(file(25)))
 	})
 
 	it('stops waiting for the network when it is cancelled', async () => {
