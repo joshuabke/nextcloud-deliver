@@ -192,7 +192,7 @@ function play() {
 
 /** Both from the same Frame, at once */
 function startBoth() {
-	together(() => {
+	together(elements(), () => {
 		seekTo(frame.value)
 		return Promise.all([videoA.value?.play(), videoB.value?.play()])
 	}).catch((error) => {
