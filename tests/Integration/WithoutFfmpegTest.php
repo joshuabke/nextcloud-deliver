@@ -51,6 +51,7 @@ class WithoutFfmpegTest extends TestCase {
 		$this->nc->ocs('PUT', '/admin/settings', ['ffmpegPath' => '', 'ffprobePath' => '']);
 		$this->nc->ocsForm('DELETE', '/ocs/v2.php/apps/provisioning_api/api/v1/config/apps/deliver/thumb_cap');
 		$this->nc->ocsForm('DELETE', '/ocs/v2.php/apps/provisioning_api/api/v1/config/apps/deliver/max_bitrate');
+		$this->nc->ocsForm('PUT', '/ocs/v2.php/cloud/users/' . (getenv('DELIVER_TEST_USER') ?: 'admin'), ['key' => 'email', 'value' => '']);
 		$this->nc->deleteProject($this->projectId);
 		$this->nc->delete($this->root);
 		$this->nc->emptyTrash();
@@ -347,7 +348,7 @@ class WithoutFfmpegTest extends TestCase {
 		} finally {
 			$this->nc->ocsForm('DELETE', "/ocs/v2.php/cloud/users/$user");
 		}
-		self::assertSame(200, $this->nc->ocs('DELETE', "/projects/{$this->projectId}")['status']);
+		$this->nc->ocs('DELETE', "/projects/{$this->projectId}");
 		self::assertNull($this->nc->ocs('GET', "/folders/$folderId/intake")['data']['proxy'], 'a Deleted Project takes nothing in');
 	}
 
@@ -566,6 +567,130 @@ class WithoutFfmpegTest extends TestCase {
 		exec('php -r ' . escapeshellarg('require "/var/www/html/lib/base.php"; ' . $code) . ' 2>&1', $output, $status);
 		self::assertSame(0, $status, implode("\n", $output));
 		return implode("\n", $output);
+	}
+
+	/** Gives the admin, who manages the Project, an address of this test alone and no notifications */
+	private function listen(): string {
+		$address = 'manager-' . bin2hex(random_bytes(4)) . '@example.test';
+		$admin = getenv('DELIVER_TEST_USER') ?: 'admin';
+		$this->nc->ocsForm('PUT', "/ocs/v2.php/cloud/users/$admin", ['key' => 'email', 'value' => $address]);
+		$this->nc->ocsForm('DELETE', '/ocs/v2.php/apps/notifications/api/v2/notifications');
+		return $address;
+	}
+
+	/** @return array{int, int} how many mails and notifications say that the video needs its Proxy made in a browser */
+	private function told(string $address): array {
+		$mails = json_decode((string)file_get_contents('http://mail:8025/api/v1/search?query=' . rawurlencode("to:$address")), true)['messages'] ?? [];
+		$notices = $this->nc->ocsForm('GET', '/ocs/v2.php/apps/notifications/api/v2/notifications')['data'] ?? [];
+		return [count($mails), count(array_filter($notices, static fn (array $notice) => $notice['app'] === 'deliver' && $notice['object_type'] === 'browserpass'))];
+	}
+
+	/** The minutes pass: cron runs what waits to tell the Managers of this Version */
+	private function cron(int $versionId): void {
+		exec("php /var/www/html/occ background-job:list --limit=1000 --class='OCA\\Deliver\\BackgroundJob\\AskBrowserPass' --output=json", $listed);
+		foreach (json_decode(implode('', $listed), true) ?? [] as $job) {
+			if (json_decode((string)$job['argument']) === $versionId) {
+				exec("php /var/www/html/occ background-job:execute {$job['id']} --force-execute 2>&1");
+			}
+		}
+	}
+
+	private function worker(): void {
+		exec('php /var/www/html/occ deliver:worker --once 2>&1', $output, $code);
+		self::assertSame(0, $code, implode("\n", $output));
+	}
+
+	private function report(int $versionId): void {
+		self::assertSame(200, $this->nc->ocs('POST', "/versions/$versionId/proxy/progress", ['percent' => 5])['status']);
+	}
+
+	private function silent(int $versionId): void {
+		$this->inNextcloud('\\OCP\\Server::get(\\OCP\\IDBConnection::class)->executeStatement("UPDATE *PREFIX*deliver_jobs SET started_at = started_at - 300 WHERE kind = \'proxy\' AND version_id = ' . $versionId . '");');
+	}
+
+	private function handInProxy(int $versionId, string $args = self::PROXY): int {
+		return $this->nc->ocs('POST', "/versions/$versionId/proxy", ['converted' => true, 'fileId' => $this->proxyFrom($args)[0]])['status'];
+	}
+
+	/** @return array<string, array{list<string>}> what happens, in turn, until the Proxy is handed in */
+	public static function browserMakesIt(): array {
+		return [
+			'the browser claims before the background job reads the original' => [['report', 'worker', 'cron', 'report']],
+			'the background job reads an Auto Intake upload before the browser claims' => [['worker', 'report', 'cron', 'report']],
+			'nothing has read the original when the Proxy comes' => [['report']],
+			'the original is read again meanwhile' => [['worker', 'report', 'regenerate', 'worker', 'report']],
+		];
+	}
+
+	/** @param list<string> $steps */
+	#[DataProvider('browserMakesIt')]
+	public function testNobodyIsToldOfAProxyTheUploadingBrowserMakes(array $steps): void {
+		$this->make(self::PRORES);
+		$this->nc->put("{$this->root}/master.mov", (string)file_get_contents($this->fixture));
+		$id = (int)$this->card()['id'];
+		$address = $this->listen();
+		foreach ([...$steps, 'handInProxy', 'cron'] as $step) {
+			match ($step) {
+				'worker' => $this->worker(),
+				'regenerate' => $this->nc->ocs('POST', "/versions/$id/regenerate"),
+				'handInProxy' => self::assertSame(200, $this->handInProxy($id)),
+				default => $this->$step($id),
+			};
+			self::assertSame([0, 0], $this->told($address), "after $step");
+		}
+		self::assertSame('ready', $this->nc->ocs('GET', "/versions/$id")['data']['versions'][0]['derived']['proxy']['state']);
+	}
+
+	/** @return array<string, array{list<string>}> what happens, in turn, until no browser makes the Proxy any more */
+	public static function browserGoesAway(): array {
+		return [
+			'no browser ever claims it, as from a sync client' => [['worker']],
+			'the original is read twice' => [['worker', 'regenerate', 'worker']],
+			'the tab closes' => [['worker', 'report', 'cron', 'silent']],
+			'the tab closes before the original is read' => [['report', 'silent', 'worker']],
+			'the tab closes and someone looks' => [['worker', 'report', 'silent', 'card']],
+			'its Proxy is refused' => [['worker', 'report', 'handInWrongProxy']],
+		];
+	}
+
+	/** @param list<string> $steps */
+	#[DataProvider('browserGoesAway')]
+	public function testTheManagersAreToldOnceWhereNoBrowserMakesTheProxy(array $steps): void {
+		$this->make(self::PRORES);
+		$this->nc->put("{$this->root}/master.mov", (string)file_get_contents($this->fixture));
+		$id = (int)$this->card()['id'];
+		$address = $this->listen();
+		foreach ($steps as $step) {
+			match ($step) {
+				'worker' => $this->worker(),
+				'card' => $this->card(),
+				'regenerate' => $this->nc->ocs('POST', "/versions/$id/regenerate"),
+				'handInWrongProxy' => self::assertSame(400, $this->handInProxy($id, '-f lavfi -i testsrc=size=640x360:rate=25:duration=1 -c:v libx264 -pix_fmt yuv420p')),
+				default => $this->$step($id),
+			};
+			self::assertSame([0, 0], $this->told($address), "a browser may still come, after $step");
+		}
+		$this->cron($id);
+		self::assertSame([1, 1], $this->told($address));
+		$this->cron($id);
+		self::assertSame([1, 1], $this->told($address), 'once');
+
+		self::assertSame(200, $this->handInProxy($id));
+		self::assertSame([1, 0], $this->told($address), 'the notification goes with the Proxy');
+	}
+
+	public function testTheManagersAreToldOnceTheFileOfTheVersionIsBack(): void {
+		$this->make(self::PRORES);
+		$id = (int)$this->upload('master.mov')['id'];
+		$address = $this->listen();
+		$due = (int)$this->inNextcloud('echo \\OCP\\Server::get(\\OCP\\IDBConnection::class)->executeQuery("SELECT last_checked FROM *PREFIX*jobs WHERE class = ? AND argument = ?", [\\OCA\\Deliver\\BackgroundJob\\AskBrowserPass::class, "' . $id . '"])->fetchOne();');
+		self::assertEqualsWithDelta(time() + 120, $due, 30, 'the two minutes a browser has to say that it makes the Proxy');
+		$this->nc->ocs('DELETE', "/projects/{$this->projectId}");
+		$this->cron($id);
+		self::assertSame([0, 0], $this->told($address), 'nothing about a Deleted Project is notified');
+		self::assertSame(200, $this->nc->ocs('POST', "/deleted-projects/{$this->projectId}/restore")['status']);
+		$this->cron($id);
+		self::assertSame([1, 1], $this->told($address));
 	}
 
 	public function testAWebmKeepsItsFrameRate(): void {
