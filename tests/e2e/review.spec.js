@@ -2057,10 +2057,14 @@ test.describe('Comparing sound', () => {
 			const samples = []
 			const start = performance.now()
 			let switches = 0
-			const tick = () => {
+			const read = () => Math.abs(b.currentTime - a.currentTime)
+			const tick = async () => {
+				// The sides read twice, as on a page's first Play below
+				const first = read()
+				await null
 				const now = performance.now()
 				const side = halves[0].getAttribute('aria-checked') === 'true' ? 'a' : 'b'
-				samples.push({ now, a: a.currentTime, b: b.currentTime, side })
+				samples.push({ now, a: a.currentTime, b: b.currentTime, apart: Math.min(first, read()), side })
 				if (now - start > (switches + 1) * 400 && switches < 10) {
 					switches++
 					halves[switches % 2].click()
@@ -2080,7 +2084,7 @@ test.describe('Comparing sound', () => {
 		const position = (sample) => sample.side === 'a' ? sample.a : sample.b
 		for (const [at, sample] of run.samples.entries()) {
 			// Without an offset the sides stand on the same second
-			expect(Math.abs(sample.b - sample.a)).toBeLessThan(0.01)
+			expect(sample.apart).toBeLessThan(0.01)
 			if (at > 0) {
 				const before = run.samples[at - 1]
 				// The heard sound goes on with the clock across every switch; a reading of a media element's time is off by a few ms
@@ -2108,8 +2112,12 @@ test.describe('Comparing sound', () => {
 				const [a, b] = document.querySelectorAll('.deliver-compare video')
 				const found = []
 				const start = performance.now()
-				const tick = () => {
-					found.push(Math.abs(b.currentTime - a.currentTime))
+				const read = () => Math.abs(b.currentTime - a.currentTime)
+				const tick = async () => {
+					// Read twice: the output may take a buffer (10 ms) between the readings of A and B, and is past it on the second
+					const first = read()
+					await null
+					found.push(Math.min(first, read()))
 					if (performance.now() - start < 1500) {
 						requestAnimationFrame(tick)
 					} else {
