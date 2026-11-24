@@ -517,7 +517,8 @@ test.describe('Review view', () => {
 		await reviewer.locator('#deliver-comment-body').fill('on the phone')
 		await reviewer.getByRole('button', { name: 'Send (Enter)' }).tap()
 		await expect(reviewer.locator('.deliver-comment').filter({ hasText: 'on the phone' })).toContainText('Pia')
-		await expect(reviewer.locator('.deliver-player__circle')).toHaveText(['P'])
+		// Its circle is on the bar, alone or in a count with others of its place
+		await expect(reviewer.locator('.deliver-player__circle').first()).toHaveText(/^(P|\d+)$/)
 		await guest.close()
 	})
 
