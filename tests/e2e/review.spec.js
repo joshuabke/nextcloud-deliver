@@ -2054,6 +2054,12 @@ test.describe('Comparing sound', () => {
 			let seeks = 0
 			a.addEventListener('seeking', () => seeks++)
 			b.addEventListener('seeking', () => seeks++)
+			// What the app may not do to the output: suspend it or keep it waiting for sound
+			const output = a.deliverGain.context
+			let states = 0
+			output.addEventListener('statechange', () => states++)
+			const underrun = () => output.playbackStats?.underrunDuration
+			const before = underrun()
 			const samples = []
 			const start = performance.now()
 			let switches = 0
@@ -2063,10 +2069,9 @@ test.describe('Comparing sound', () => {
 				const first = read()
 				await null
 				const now = performance.now()
-				const output = a.deliverGain.context
 				const side = halves[0].getAttribute('aria-checked') === 'true' ? 'a' : 'b'
 				const clock = output.currentTime
-				samples.push({ behind: clock - now / 1000, ahead: (side === 'a' ? a : b).currentTime - clock, running: output.state === 'running', apart: Math.min(first, read()), side })
+				samples.push({ ahead: (side === 'a' ? a : b).currentTime - clock, running: output.state === 'running', apart: Math.min(first, read()), side })
 				if (now - start > (switches + 1) * 400 && switches < 10) {
 					switches++
 					halves[switches % 2].click()
@@ -2074,7 +2079,7 @@ test.describe('Comparing sound', () => {
 				if (now - start < 4600) {
 					requestAnimationFrame(tick)
 				} else {
-					resolve({ seeks, samples, playing: !a.paused && !b.paused })
+					resolve({ seeks, samples, states, underrun: [before, underrun()], playing: !a.paused && !b.paused })
 				}
 			}
 			requestAnimationFrame(tick)
@@ -2093,9 +2098,11 @@ test.describe('Comparing sound', () => {
 		expect(run.samples.every((sample) => sample.running)).toBe(true)
 		const ahead = run.samples.map((sample) => sample.ahead)
 		expect(Math.max(...ahead) - Math.min(...ahead)).toBeLessThan(0.015)
-		// And the output with the wall's clock, as loosely as a few dropped buffers need: the app may not hold it up
-		const behind = run.samples.map((sample) => sample.behind)
-		expect(Math.max(...behind) - Math.min(...behind)).toBeLessThan(0.06)
+		// And the app does not hold up the output: never suspended, and no more of its time without sound than the few buffers
+		// a loaded machine is late with (AudioContext.playbackStats, Chrome only, brought up to date once a second)
+		expect(run.states).toBe(0)
+		expect(run.underrun, 'the browser has no AudioContext.playbackStats to tell a held up output by').toEqual([expect.any(Number), expect.any(Number)])
+		expect(run.underrun[1] - run.underrun[0]).toBeLessThan(0.1)
 	})
 
 	test('on a page\'s first Play the sides are in step from the first second on, video and audio alike', async () => {
