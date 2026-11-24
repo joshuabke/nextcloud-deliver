@@ -467,7 +467,7 @@ test.describe('Review view', () => {
 		const right = { x: stage.x + stage.width * 0.85, y: stage.y + stage.height / 2 }
 		await page.touchscreen.tap(right.x, right.y)
 		await page.touchscreen.tap(right.x, right.y)
-		await expect(page.locator('.deliver-player__flash')).toContainText('+5')
+		await expect(page.locator('.deliver-player__flash')).toContainText('+10')
 		await page.waitForTimeout(700)
 		await page.touchscreen.tap(stage.x + stage.width / 2, right.y)
 		await expect(page.locator('.deliver-player--fullscreen')).toHaveCount(1)
@@ -1231,10 +1231,10 @@ test.describe('Audio review', () => {
 		expect(await centre()).toBe(765)
 		await expect.poll(width).toBeGreaterThan(30 / 360 * 100 + 0.1)
 
-		// A click a quarter of the stage to the right goes 15 seconds on and keeps playing
+		// A click in the strip, a quarter of the stage to the right, goes 15 seconds on and keeps playing
 		const box = await canvas.boundingBox()
 		const before = await time()
-		await canvas.click({ position: { x: box.width * 0.75, y: box.height / 2 } })
+		await canvas.click({ position: { x: box.width * 0.75, y: box.height - 20 } })
 		expect(await time() - before).toBeGreaterThan(14)
 		expect(await time() - before).toBeLessThan(17)
 		expect(await audio.evaluate((element) => element.paused)).toBe(false)
@@ -1326,7 +1326,7 @@ test.describe('Audio review', () => {
 		await page.setViewportSize({ width: 1280, height: 720 })
 	})
 
-	test('after a click the wave glides to the new place within half a second, and jumps under reduced motion', async () => {
+	test('after a click in the strip the wave glides to the new place within half a second, and jumps under reduced motion', async () => {
 		await page.goto(`/apps/deliver/versions/${versionId}`)
 		const canvas = page.locator('.deliver-wave canvas')
 		await expect(canvas).toBeVisible()
@@ -1352,7 +1352,7 @@ test.describe('Audio review', () => {
 			}
 			requestAnimationFrame(frame)
 		}))
-		const quarterOn = { position: { x: box.width * 0.75, y: box.height / 2 } }
+		const quarterOn = { position: { x: box.width * 0.75, y: box.height - 20 } }
 
 		let recording = record()
 		await canvas.click(quarterOn)
@@ -1440,7 +1440,7 @@ test.describe('Audio review', () => {
 		}
 		expect(held.at(-1).drawn).toBeCloseTo(held.at(-1).sound, 2)
 
-		// A click 40 px right of the playhead while a glide runs goes to what is drawn under it, not beside it
+		// A click in the strip 40 px right of the playhead while a glide runs goes to what is drawn under it, not beside it
 		await goTo(100)
 		const box = await canvas.boundingBox()
 		// Two clicks in the page itself, two frames apart, so the second surely comes while the first one's glide runs
@@ -1448,7 +1448,7 @@ test.describe('Audio review', () => {
 			const audio = document.querySelector('video.deliver-player__video')
 			const box = element.getBoundingClientRect()
 			const click = (x) => {
-				const at = { clientX: box.left + x, clientY: box.top + box.height / 2, pointerId: 7, pointerType: 'mouse', button: 0, bubbles: true }
+				const at = { clientX: box.left + x, clientY: box.bottom - 20, pointerId: 7, pointerType: 'mouse', button: 0, bubbles: true }
 				element.dispatchEvent(new PointerEvent('pointerdown', at))
 				element.dispatchEvent(new PointerEvent('pointerup', at))
 			}
@@ -1592,9 +1592,9 @@ test.describe('Audio review', () => {
 			await expect.poll(() => canvas.evaluate((element) => element.drawnAt)).toBeCloseTo(seconds + 0.0005, 2)
 		}
 		const send = () => page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
-		const quarterOn = { position: { x: box.width * 0.75, y: box.height / 2 } }
+		const quarterOn = { position: { x: box.width * 0.75, y: box.height - 20 } }
 
-		// A click a quarter of the stage on seeks 15 seconds on, and C comments there
+		// A click in the strip a quarter of the stage on seeks 15 seconds on, and C comments there
 		await commentOnQuarter(page, canvas, quarterOn)
 		await expect(field).toBeFocused()
 		await expect(anchor).toHaveText('0:15.000')
@@ -1611,12 +1611,12 @@ test.describe('Audio review', () => {
 		await expect(anchor).toHaveText('0:55.000')
 		await field.fill('')
 		await expect(anchor).toHaveText('1:40.000')
-		// A click on the wave, which seeks, lets go too
+		// A click in the strip, which seeks, lets go too
 		await commentOnQuarter(page, canvas, quarterOn)
 		await expect(anchor).toHaveText('1:55.000')
 		// Once the wave has glided there: a click lands on what is drawn under it
 		await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - document.querySelector('video.deliver-player__video').currentTime))).toBeLessThan(0.01)
-		await canvas.click({ position: { x: box.width * 0.25, y: box.height / 2 } })
+		await canvas.click({ position: { x: box.width * 0.25, y: box.height - 20 } })
 		await expect(anchor).toHaveText('1:40.000')
 		await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - document.querySelector('video.deliver-player__video').currentTime))).toBeLessThan(0.01)
 
@@ -1678,6 +1678,13 @@ test.describe('Audio review', () => {
 		await page.locator('.deliver-review__title').click()
 		await page.keyboard.press('Escape')
 		await expect(card).toHaveCount(0)
+		// A double click on the wave whose first click closed the card skips nothing
+		await openFirst()
+		await expect(card).toBeVisible()
+		const closing = await audio.evaluate((element) => element.currentTime)
+		await canvas.dblclick({ position: { x: box.width * 0.95, y: box.height / 4 } })
+		await expect(card).toHaveCount(0)
+		expect(await audio.evaluate((element) => element.currentTime)).toBe(closing)
 	})
 
 	test('with the Comment list hidden, a Comment on audio is written at the Waveform and the list stays hidden', async () => {
@@ -1694,11 +1701,13 @@ test.describe('Audio review', () => {
 		const list = page.locator('.deliver-layout__panel')
 		await expect(list).toBeHidden()
 		const box = await canvas.boundingBox()
-		const quarterOn = { position: { x: box.width * 0.75, y: box.height / 2 } }
+		const quarterOn = { position: { x: box.width * 0.75, y: box.height - 20 } }
 		const popup = page.getByRole('dialog', { name: 'New Comment' })
 		const field = popup.locator('#deliver-comment-body-inline')
 
-		// A double click only seeks: no field opens
+		// A double click opens no field
+		await canvas.dblclick({ position: { x: box.width * 0.75, y: box.height / 2 } })
+		await expect(popup).toHaveCount(0)
 		await canvas.dblclick(quarterOn)
 		await expect(popup).toHaveCount(0)
 		await audio.evaluate((element) => {
@@ -1762,7 +1771,7 @@ test.describe('Audio review', () => {
 			await page.getByRole('button', { name: 'Hide Comments' }).click()
 		}
 		const box = await canvas.boundingBox()
-		const quarterOn = { position: { x: box.width * 0.75, y: box.height / 2 } }
+		const quarterOn = { position: { x: box.width * 0.75, y: box.height - 20 } }
 		const popup = page.getByRole('dialog', { name: 'New Comment' })
 		const field = popup.locator('#deliver-comment-body-inline')
 		const anchor = popup.locator('.deliver-comments__anchor')
@@ -1901,6 +1910,172 @@ test.describe('Audio review', () => {
 		await field.pressSequentially('x')
 		await expect.poll(() => video.evaluate((element) => element.paused)).toBe(true)
 		await field.fill('')
+	})
+
+	test('by mouse a click on the wave does not seek and a double click skips ten seconds; the strip under it seeks and shows a dashed line first', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		expect((await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${versionId}/comments?format=json`, { data: { inFrame: 330000, body: 'in the strip' } })).ok()).toBe(true)
+		await api.dispose()
+		// Without the glide a click lands on the wave where it will rest
+		await page.emulateMedia({ reducedMotion: 'reduce' })
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		const canvas = page.locator('.deliver-wave canvas')
+		await expect(canvas).toBeVisible()
+		const audio = page.locator('video.deliver-player__video')
+		await expect(audio).toHaveJSProperty('readyState', 4)
+		const box = await canvas.boundingBox()
+		const strip = box.height - 20
+		const time = () => audio.evaluate((element) => element.currentTime)
+		const goTo = async (seconds) => {
+			await audio.evaluate((element, at) => {
+				element.currentTime = at
+			}, seconds)
+			await expect.poll(() => canvas.evaluate((element) => element.drawnAt)).toBeCloseTo(seconds + 0.0005, 2)
+		}
+		// Of the 16 px above the loudest bar at this place, how many are drawn on: 8 of a dashed line
+		const line = (x) => canvas.evaluate((element, at) => {
+			const ratio = element.width / element.clientWidth
+			const data = element.getContext('2d').getImageData(Math.round(at * ratio), Math.round(36 * ratio), 1, Math.round(16 * ratio)).data
+			return data.filter((value, index) => index % 4 === 3 && value > 0).length / ratio
+		}, x)
+		const cursor = () => page.locator('.deliver-wave').evaluate((element) => getComputedStyle(element).cursor)
+		const hover = (x, y) => page.mouse.move(box.x + x, box.y + y)
+		const card = page.getByRole('dialog', { name: /^Comment #/ })
+
+		for (const zoom of ['1 min', 'Whole']) {
+			const whole = zoom === 'Whole'
+			await page.getByRole('button', { name: zoom, exact: true }).click()
+			await goTo(20)
+			const start = await time()
+			// On the wave a click goes nowhere; a double click skips ten seconds on the thirds, nothing in the middle
+			await canvas.click({ position: { x: box.width * 0.85, y: box.height / 2 } })
+			await page.waitForTimeout(400)
+			expect(await time()).toBe(start)
+			await canvas.dblclick({ position: { x: box.width * 0.45, y: box.height / 2 } })
+			await page.waitForTimeout(400)
+			expect(await time()).toBe(start)
+			await canvas.dblclick({ position: { x: box.width * 0.85, y: box.height / 2 } })
+			await expect.poll(time).toBeCloseTo(start + 10, 1)
+			await expect(page.locator('.deliver-player__flash')).toContainText('+10')
+			await canvas.dblclick({ position: { x: box.width * 0.1, y: box.height / 2 } })
+			await expect.poll(time).toBeCloseTo(start, 1)
+
+			// Hovering the strip shows where a click goes; off it there is no line
+			const x = Math.round(box.width * 0.75)
+			await hover(x, box.height / 2)
+			expect(await line(x)).toBe(0)
+			await hover(x, strip)
+			await expect.poll(() => line(x)).toBe(8)
+			expect(await cursor()).toBe('pointer')
+			await hover(x + 30, strip)
+			await expect.poll(() => line(x + 30)).toBe(8)
+			expect(await line(x)).toBe(0)
+			await hover(x, box.height / 2)
+			await expect.poll(() => line(x + 30)).toBe(0)
+			expect(await cursor()).toBe('grab')
+			await hover(x, strip)
+			await expect.poll(() => line(x)).toBe(8)
+			await hover(x, box.height + 60)
+			await expect.poll(() => line(x)).toBe(0)
+
+			// A click there seeks, and two quick ones seek twice
+			await canvas.dblclick({ position: { x, y: strip } })
+			await expect.poll(time).toBeCloseTo(whole ? 270 : start + 30, 0)
+			await goTo(20)
+
+			// A drag that begins there drags, without the line
+			await hover(x, strip)
+			await page.mouse.down()
+			await page.mouse.move(box.x + x - 40, box.y + strip)
+			await page.mouse.move(box.x + box.width / 2, box.y + strip)
+			await page.waitForTimeout(100)
+			for (const at of [x, x - 40, Math.round(box.width / 2) + 5]) {
+				expect(await line(at)).toBe(0)
+			}
+			expect(await time()).toBeCloseTo(whole ? 180 : 35, 0)
+			await page.mouse.up()
+
+			// Over a circle there is no line, but a click opens it
+			await goTo(330)
+			const circle = whole ? Math.round(box.width * 330 / 360) : Math.round(box.width / 2)
+			await hover(circle + 8, strip)
+			await page.waitForTimeout(100)
+			expect(await line(circle + 8)).toBe(0)
+			expect(await cursor()).toBe('pointer')
+			await hover(circle + 40, strip)
+			await expect.poll(() => line(circle + 40)).toBe(8)
+			await page.mouse.click(box.x + circle + 4, box.y + strip)
+			await expect(card).toContainText('in the strip')
+			expect(await time()).toBeCloseTo(330, 1)
+			await page.keyboard.press('Escape')
+			await expect(card).toHaveCount(0)
+		}
+
+		// With the card open a click in the strip beside the circles goes where the line says, and closes it; on the wave it only closes
+		await page.getByRole('button', { name: '1 min' }).click()
+		for (const inStrip of [true, false]) {
+			await goTo(330)
+			await page.mouse.click(box.x + box.width / 2 + 4, box.y + strip)
+			await expect(card).toContainText('in the strip')
+			const x = Math.round(box.width * 0.6)
+			await hover(x, inStrip ? strip : 60)
+			await expect.poll(() => line(x)).toBe(inStrip ? 8 : 0)
+			await page.mouse.click(box.x + x, box.y + (inStrip ? strip : 60))
+			await expect(card).toHaveCount(0)
+			await expect.poll(time).toBeCloseTo(inStrip ? 336 : 330, 0)
+		}
+		// Pressed on the wave and lifted in the strip the mouse goes nowhere, so there is no line
+		await goTo(20)
+		await hover(600, 100)
+		await page.mouse.down()
+		await hover(600, strip)
+		await page.waitForTimeout(100)
+		expect(await line(600)).toBe(0)
+		await page.mouse.up()
+		expect(await time()).toBeCloseTo(20, 1)
+		await expect.poll(() => line(600)).toBe(8)
+		// A stage resized under the resting mouse, now on the wave, keeps no line
+		await page.setViewportSize({ width: 1280, height: 900 })
+		await page.waitForTimeout(300)
+		expect(await line(600)).toBe(0)
+		await page.setViewportSize({ width: 1280, height: 720 })
+		await expect.poll(async () => (await canvas.boundingBox()).height).toBe(box.height)
+
+		// Before the start of the piece a click goes to the start, and the line shows it there
+		await page.getByRole('button', { name: '1 min' }).click()
+		await goTo(20)
+		const first = Math.round(box.width / 2 - 20 * box.width / 60)
+		await hover(first - 40, strip)
+		await expect.poll(() => line(first)).toBe(8)
+		expect(await line(first - 40)).toBe(0)
+		// While it plays on under it, the line stays at the mouse
+		await page.getByRole('button', { name: 'Play (Space)' }).click()
+		await hover(200, strip)
+		await expect.poll(time).toBeGreaterThan(22)
+		expect(await line(200)).toBe(8)
+		await page.getByRole('button', { name: 'Pause (Space)' }).click()
+		// Standing, the mouse over the wave or still in the strip draws nothing again
+		await page.waitForTimeout(300)
+		const draws = await canvas.evaluate(async (element) => {
+			const clear = CanvasRenderingContext2D.prototype.clearRect
+			let count = 0
+			CanvasRenderingContext2D.prototype.clearRect = function(...args) {
+				count++
+				return clear.apply(this, args)
+			}
+			const box = element.getBoundingClientRect()
+			const counts = []
+			for (const [x, y] of [[100, 100], [120, 100], [200, box.height - 20], [200, box.height - 10], [200, 100]]) {
+				element.dispatchEvent(new PointerEvent('pointermove', { clientX: box.left + x, clientY: box.top + y, pointerId: 7, pointerType: 'mouse', bubbles: true }))
+				await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+				counts.push(count)
+			}
+			CanvasRenderingContext2D.prototype.clearRect = clear
+			return counts
+		})
+		// No line, no line, a line, the same line, no line
+		expect(draws).toEqual([0, 0, 1, 1, 2])
+		await page.emulateMedia({ reducedMotion: null })
 	})
 
 	test('on a phone held sideways with the list closed, the field opens as a sheet and sends from there', async () => {
@@ -2066,6 +2241,37 @@ test.describe('Audio review', () => {
 		await sheet.getByRole('button', { name: 'Close' }).tap()
 		await expect(sheet).toHaveCount(0)
 		await expect(field).toBeFocused()
+		// A single tap on the wave seeks nowhere; a double tap on its right third skips ten seconds, in the middle nothing
+		const time = () => member.locator('video.deliver-player__video').evaluate((element) => element.currentTime)
+		const tapAt = async (at) => {
+			await fingers('touchStart', [[at, y]])
+			await fingers('touchEnd', [])
+		}
+		const start = await time()
+		// A first tap that lets go of the empty field skips nothing either
+		await fingers('touchStart', [[box.x + box.width * 0.75, y]])
+		await member.waitForTimeout(700)
+		await fingers('touchEnd', [])
+		await expect(anchor).toHaveText('0:15.000')
+		await tapAt(box.x + box.width * 0.85)
+		await tapAt(box.x + box.width * 0.85)
+		await member.waitForTimeout(500)
+		await expect(anchor).toHaveText('0:00.000')
+		expect(await time()).toBe(start)
+		await tapAt(box.x + box.width * 0.85)
+		await member.waitForTimeout(500)
+		expect(await time()).toBe(start)
+		await tapAt(box.x + box.width * 0.5)
+		await tapAt(box.x + box.width * 0.5)
+		await member.waitForTimeout(500)
+		expect(await time()).toBe(start)
+		await tapAt(box.x + box.width * 0.85)
+		await tapAt(box.x + box.width * 0.85)
+		await expect.poll(time).toBeCloseTo(start + 10, 0)
+		await expect(member.locator('.deliver-player__flash')).toContainText('+10')
+		await tapAt(box.x + box.width * 0.1)
+		await tapAt(box.x + box.width * 0.1)
+		await expect.poll(time).toBeCloseTo(start, 0)
 		// A long press on playing audio stops it
 		await member.getByRole('button', { name: 'Play', exact: true }).tap()
 		await expect.poll(() => member.locator('video.deliver-player__video').evaluate((element) => element.paused)).toBe(false)
@@ -2091,9 +2297,10 @@ test.describe('Audio review', () => {
 		await expect(card).toContainText('and a reply')
 		await expect(card.locator('textarea')).toHaveCount(0)
 		await expect(card.getByRole('button', { name: 'Go to' })).toBeVisible()
-		// A click elsewhere seeks but opens no field
+		// A click elsewhere in the strip seeks but opens no field
 		await card.getByRole('button', { name: 'Close' }).click()
-		await wave.click({ position: { x: stage.width * 0.75, y: stage.height / 2 } })
+		await wave.click({ position: { x: stage.width * 0.75, y: stage.height - 20 } })
+		await expect.poll(() => reviewer.locator('video.deliver-player__video').evaluate((element) => element.currentTime)).toBeCloseTo(11.25, 0)
 		await expect(reviewer.locator('#deliver-comment-body')).toHaveCount(0)
 		await visitor.close()
 	})
@@ -2193,7 +2400,12 @@ test.describe('Comparing sound', () => {
 
 		// A click on a wave seeks and keeps playing; the player then has the focus, and Tab switches
 		const box = await canvas.boundingBox()
+		const sought = videos.first().evaluate((video) => new Promise((resolve) => video.addEventListener('seeking', () => resolve(true), { once: true })))
 		await canvas.click({ position: { x: box.width * 0.6, y: box.height * 0.6 } })
+		expect(await sought).toBe(true)
+		// Lanes have no strip: at their foot the mouse shows no place to go to
+		await canvas.hover({ position: { x: box.width * 0.6, y: box.height - 5 } })
+		expect(await page.locator('.deliver-wave').evaluate((element) => element.style.cursor)).toBe('')
 		expect(await videos.first().evaluate((video) => video.paused)).toBe(false)
 		await page.keyboard.press('Tab')
 		await expect.poll(() => heard(videos)).toEqual([false, true])
@@ -2781,7 +2993,7 @@ async function login(page) {
 }
 
 /**
- * A click a quarter of the stage on seeks there, and C comments where it went
+ * A click in the strip a quarter of the stage on seeks there, and C comments where it went
  * once the wave has glided: a click lands on what is drawn
  *
  * @param {import('@playwright/test').Page} page - the Review view

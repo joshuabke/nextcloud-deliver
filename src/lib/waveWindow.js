@@ -38,30 +38,15 @@ export function stepsFor(duration) {
 	return [...STEPS.filter((step) => step < duration), duration]
 }
 
-/** Room before and after the whole piece, in px, as the bar under the stage has it: their circles stand one above the other */
-export const INSET = 12
-
-/**
- * @param {number} span - the seconds wanted across the stage
- * @param {number} duration - the length of the piece
- * @param {number} width - the stage's width, in px
- * @param {number} inset - the room before and after the whole piece, in px
- * @return {number} the seconds across the stage, the room's included
- */
-export function acrossOf(span, duration, width, inset) {
-	return isWhole(span, duration) ? duration * width / Math.max(1, width - 2 * inset) : span
-}
-
 /**
  * @param {number} seconds - where the playhead stands
  * @param {number} span - the seconds across the stage
  * @param {number} duration - the length of the piece
- * @param {number} [margin] - the seconds of room before and after the whole piece, as acrossOf makes it
  * @return {{start: number, end: number}} the seconds at the left and right edge; before 0 and after the end there is no wave
  */
-export function windowAt(seconds, span, duration, margin = 0) {
+export function windowAt(seconds, span, duration) {
 	if (isWhole(span, duration)) {
-		return { start: 0 - margin, end: duration + margin }
+		return { start: 0, end: duration }
 	}
 	return { start: seconds - span / 2, end: seconds + span / 2 }
 }
@@ -97,12 +82,11 @@ export function secondsAt(x, view, width, duration) {
  * @param {number} drag.span - the seconds across the stage
  * @param {number} drag.width - the stage's width, in px
  * @param {number} drag.duration - the length of the piece
- * @param {number} [drag.margin] - as for windowAt
  * @return {number} the seconds the playhead stands at now
  */
-export function dragged({ from, dx, x, span, width, duration, margin = 0 }) {
+export function dragged({ from, dx, x, span, width, duration }) {
 	if (isWhole(span, duration)) {
-		return secondsAt(x, windowAt(from, span, duration, margin), width, duration)
+		return secondsAt(x, { start: 0, end: duration }, width, duration)
 	}
 	return Math.min(duration, Math.max(0, from - dx / width * span))
 }
@@ -132,13 +116,13 @@ export function wheelZoom(span, deltaY, deltaMode, duration) {
  * @param {number} seconds - where the playhead stands
  * @param {number} deltaX - the wheel's sideways delta; to the right goes later
  * @param {number} deltaMode - as WheelEvent has it
- * @param {number} across - the seconds across the stage, as acrossOf gives it
+ * @param {number} span - the seconds across the stage
  * @param {number} width - the stage's width, in px
  * @param {number} duration - the length of the piece
  * @return {number} the seconds the playhead stands at after it
  */
-export function wheelSeek(seconds, deltaX, deltaMode, across, width, duration) {
-	return Math.min(duration, Math.max(0, seconds + wheelPixels(deltaX, deltaMode, width) / width * across))
+export function wheelSeek(seconds, deltaX, deltaMode, span, width, duration) {
+	return Math.min(duration, Math.max(0, seconds + wheelPixels(deltaX, deltaMode, width) / width * Math.min(span, duration)))
 }
 
 /**
@@ -244,12 +228,11 @@ export function barGrid(across, pixels, ratio, rate = 1) {
  * @param {number} across - the seconds across the stage
  * @param {number} pixels - the stage's width, in device pixels
  * @param {boolean} whole - whether the stage shows the whole piece
- * @param {number} [inset] - the room before the whole piece, in device pixels
  * @return {{head: number, offset: number}} the playhead's column on the stage, and the window's left edge from the start of the piece
  */
-export function pixelPlace(at, across, pixels, whole, inset = 0) {
+export function pixelPlace(at, across, pixels, whole) {
 	const time = Math.round(at / across * pixels)
-	return whole ? { head: time + inset, offset: 0 - inset } : { head: Math.floor(pixels / 2), offset: time - Math.floor(pixels / 2) }
+	return whole ? { head: time, offset: 0 } : { head: Math.floor(pixels / 2), offset: time - Math.floor(pixels / 2) }
 }
 
 /**
@@ -382,11 +365,11 @@ export function overviewWindow(seconds, span, duration) {
 	return { left: from / duration * 100, width: Math.max(0, to - from) / duration * 100 }
 }
 
-/** A Comment's circle, on the wave and above the bar, across, in px (story 181) */
+/** A Comment's circle on the wave, across, in px; on the bar it is a little smaller (story 181) */
 export const CIRCLE = 24
 
 /**
- * The Comments' circles, on the wave at its zoom and above the bar. Comments
+ * The Comments' circles, on the wave at its zoom and on the bar. Comments
  * within a circle's width of the first of them share one circle with their
  * count at its place, so no circle ever covers another.
  *
@@ -409,21 +392,23 @@ export function circlesOf(comments, perFrame) {
 }
 
 /**
- * How a circle looks, on the wave and above the bar: its author's initials in
+ * How a circle looks, on the wave and on the bar: its author's initials in
  * their avatar's colour, a count neutral; resolved ones paler, a selected one ringed.
  *
  * @param {{comment?: object, cluster?: object[]}} circle - as circlesOf gives it
  * @param {Array<?number>} selected - the Comments selected or open
- * @return {{text: string, fill: string, line: string, pale: boolean}} its text, its colour over black and its edge's
+ * @return {{text: string, fill: string, line: string, pale: boolean, ringed: boolean}} its text, its colour over black and its edge's
  */
 export function circleLook({ comment, cluster }, selected) {
 	const each = cluster ?? [comment]
 	const rgb = cluster ? '255, 255, 255' : avatarRgb(comment.author)
+	const ringed = each.some((one) => selected.includes(one.id))
 	return {
 		text: cluster ? String(cluster.length) : initials(comment.author.name),
 		fill: `rgba(${rgb}, ${cluster ? 0.18 : 0.3})`,
-		line: each.some((one) => selected.includes(one.id)) ? '#fff' : `rgba(${rgb}, ${cluster ? 0.6 : 1})`,
+		line: ringed ? '#fff' : `rgba(${rgb}, ${cluster ? 0.6 : 1})`,
 		pale: each.every((one) => one.resolved),
+		ringed,
 	}
 }
 

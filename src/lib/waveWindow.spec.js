@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { acrossOf, barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, circleLook, circlesOf, clampSpan, DEFAULT_SPAN, dragged, easeOut, GLIDE_MS, glided, glideStart, INSET, isWhole, laneBands, loudestOf, MOTION_PER_PITCH, overviewWindow, pinchSpan, pixelPlace, readSpan, retarget, secondsAt, shiftPixels, spreadSpan, steadied, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan, xAt } from './waveWindow.js'
+import { barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, circleLook, circlesOf, clampSpan, DEFAULT_SPAN, dragged, easeOut, GLIDE_MS, glided, glideStart, isWhole, laneBands, loudestOf, MOTION_PER_PITCH, overviewWindow, pinchSpan, pixelPlace, readSpan, retarget, secondsAt, shiftPixels, spreadSpan, steadied, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan, xAt } from './waveWindow.js'
 
 describe('the window of the scrolling Waveform', () => {
 	it('centres the playhead, the wave left empty before the start and after the end', () => {
@@ -186,7 +186,7 @@ describe('the window on the overview bar', () => {
 	})
 })
 
-describe('the Comments on the scrolling Waveform and above the bar', () => {
+describe('the Comments on the scrolling Waveform and on the bar', () => {
 	const comment = (id, inFrame) => ({ id, inFrame })
 	const xs = (circles) => circles.map((circle) => circle.comment ? [circle.comment.id, circle.x] : [circle.cluster.map((each) => each.id), circle.x])
 
@@ -205,33 +205,14 @@ describe('the Comments on the scrolling Waveform and above the bar', () => {
 		expect(circles.flatMap((circle) => circle.cluster ?? [circle.comment])).toHaveLength(59)
 	})
 
-	it('stand above the bar, which is inset, at their moment on the whole Waveform', () => {
-		const [width, duration, perSecond] = [393, 360, 1000]
-		const across = acrossOf(duration, duration, width, INSET)
-		const { offset } = pixelPlace(0, across, width, true, INSET)
-		const comments = [comment(1, 0), comment(2, 152000), comment(3, 360000)]
-		const wave = comments.map((each) => each.inFrame * width / across / perSecond - offset)
-		const bar = circlesOf(comments, (width - 2 * INSET) / duration / perSecond).map((circle) => INSET + circle.x)
-		wave.forEach((x, at) => expect(x).toBeCloseTo(bar[at], 6))
-		// The wave starts and ends with the bar, and a click there is their moment
-		expect(wave[0]).toBe(INSET)
-		expect(wave[2]).toBeCloseTo(width - INSET, 6)
-		const view = windowAt(0, duration, duration, INSET / width * across)
-		expect(secondsAt(wave[1], view, width, duration)).toBeCloseTo(152, 6)
-		expect(dragged({ from: 0, dx: 0, x: wave[1], span: duration, width, duration, margin: INSET / width * across })).toBeCloseTo(152, 6)
-		// A swipe along the wave takes the playhead as far
-		expect(wheelSeek(0, wave[1] - wave[0], 0, across, width, duration)).toBeCloseTo(152, 6)
-		expect(acrossOf(60, duration, width, INSET)).toBe(60)
-	})
-
 	it('look alike wherever they show: initials in the author\'s colour, a neutral count, paler resolved, ringed selected', () => {
 		const by = (id, resolved = false) => ({ id, resolved, author: { type: 'user', id: 'kim', name: 'Kim Berg' } })
 		const one = circleLook({ comment: by(1) }, [null])
 		expect(one).toMatchObject({ text: 'KB', pale: false })
 		expect(one.fill.replace(', 0.3)', ', 1)')).toBe(one.line)
 		expect(circleLook({ comment: by(1, true) }, [1])).toMatchObject({ line: '#fff', pale: true })
-		expect(circleLook({ cluster: [by(1, true), by(2)] }, [])).toEqual({ text: '2', fill: 'rgba(255, 255, 255, 0.18)', line: 'rgba(255, 255, 255, 0.6)', pale: false })
-		expect(circleLook({ cluster: [by(1, true), by(2, true)] }, [2])).toMatchObject({ line: '#fff', pale: true })
+		expect(circleLook({ cluster: [by(1, true), by(2)] }, [])).toEqual({ text: '2', fill: 'rgba(255, 255, 255, 0.18)', line: 'rgba(255, 255, 255, 0.6)', pale: false, ringed: false })
+		expect(circleLook({ cluster: [by(1, true), by(2, true)] }, [2])).toMatchObject({ line: '#fff', pale: true, ringed: true })
 	})
 
 	it('hit the circle whose centre is nearest, by mouse and by finger', () => {

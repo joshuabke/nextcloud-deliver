@@ -2,11 +2,11 @@
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import WaveformCard from './WaveformCard.vue'
-import { HOLD_MS, TAP_SLOP } from '../lib/gestures.js'
+import { HOLD_MS, TAP_SLOP, waveTap } from '../lib/gestures.js'
 import { avatarRgb } from '../lib/initials.js'
 import { t } from '../lib/l10n.js'
 import { fpsValue, timeToFrame } from '../lib/timecode.js'
-import { acrossOf, barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, circleLook, circlesOf, clampSpan, dragged, glided, glideStart, INSET, isWhole, laneBands, loudestOf, pinchSpan, pixelPlace, retarget, secondsAt, shiftPixels, spreadSpan, steadied, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan } from '../lib/waveWindow.js'
+import { barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, circleLook, circlesOf, clampSpan, dragged, glided, glideStart, isWhole, laneBands, loudestOf, pinchSpan, pixelPlace, retarget, secondsAt, shiftPixels, spreadSpan, steadied, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan } from '../lib/waveWindow.js'
 import { useCommentsStore } from '../store/comments.js'
 
 // The Waveform of an audio Version on the stage (story 180): a window of it,
@@ -50,10 +50,12 @@ const props = defineProps({
 
 /**
  * seek: a Frame to go to, keeping the playback state; hold and release: a drag holds playback and lets it go on;
- * comment: a Frame to comment on; jump: a Comment to go to; closeComposer: the field at the Waveform is closed from here
+ * skip: a double tap or, off the lanes, a double click, -1 back or 1 on; comment: a Frame to comment on; jump: a Comment to go to; closeComposer: the field at the Waveform is closed from here
  */
-const emit = defineEmits(['seek', 'hold', 'release', 'comment', 'jump', 'closeComposer', 'pick'])
+const emit = defineEmits(['seek', 'hold', 'release', 'comment', 'jump', 'closeComposer', 'pick', 'skip'])
 
+/** Room below the wave for the Comments' circles (none on lanes), in px: the strip where a mouse click seeks */
+const BOTTOM = props.lanes ? 8 : 40
 /** Between two lanes, in px */
 const LANE_GAP = 8
 /** A lane that is not heard */
@@ -83,10 +85,6 @@ const steps = computed(() => stepsFor(duration.value))
 const TOP = computed(() => props.lanes && steps.value.length < 2 ? 12 : 40)
 const shown = computed(() => clampSpan(span.value, duration.value))
 const lastFrame = computed(() => Math.max(0, props.durationFrames - 1))
-/** Whether the Comments have their lane under the wave: not over the whole piece, where the bar's row right below shows the same, nor on lanes */
-const circled = computed(() => !props.lanes && !isWhole(shown.value, duration.value))
-/** Room below the wave, for the circles' lane where there is one, in px */
-const BOTTOM = computed(() => circled.value ? 40 : 8)
 
 /** The canvas in CSS px, in device pixels, and the device pixels to a CSS px */
 let size = { width: 0, height: 0 }
@@ -106,6 +104,10 @@ let drawnAt = null
 let last = null
 /** What the last frame drew while playing: currentTime moves in coarse steps, so the drawing runs on between them */
 let steady = null
+/** Where the mouse hovers in the strip, from the stage's top left corner, in px; null elsewhere */
+let mouse = null
+/** The dashed line drawn last, in device pixels from the left edge; null for none */
+let lineDrawn = null
 
 /**
  * What only changes with the zoom, the width or the Comments, worked out
@@ -134,29 +136,19 @@ const shownLanes = computed(() => props.lanes ?? [{ waveform: props.waveform, sh
 /** Lanes share one scale, the loudest of them; the one Waveform has its own */
 const loudest = computed(() => props.lanes ? loudestOf(props.lanes.map((lane) => lane.waveform)) : null)
 
-/** Room before and after the whole piece, in px, as the bar has it; Compare's bar has none */
-const inset = props.lanes ? 0 : INSET
-
-/**
- * @return {number} the seconds across the stage: the span, or the whole piece with the room around it; never read off a sliding window
- */
-const across = () => acrossOf(shown.value, duration.value, size.width, inset)
-
-/**
- * @return {number} the seconds of room before and after the whole piece
- */
-const margin = () => inset / size.width * across()
+/** The seconds across the stage: the span, or the whole piece; never read off a sliding window */
+const across = computed(() => isWhole(shown.value, duration.value) ? duration.value : shown.value)
 
 /**
  * @return {number} px per Frame at this zoom
  */
-const perFrame = () => size.width / across() / fpsValue(props.fps)
+const perFrame = () => size.width / across.value / fpsValue(props.fps)
 
 /**
  * @return {Array<{comment: object, x: number}|{cluster: object[], x: number}>} the circles, from the start of the piece
  */
 function circles() {
-	return circled.value ? keep('circles', [props.comments, across(), size.width], () => circlesOf(props.comments, perFrame())) : []
+	return keep('circles', [props.comments, across.value, size.width], () => circlesOf(props.comments, perFrame()))
 }
 
 /** Where a drag has taken the playhead, until it lets go */
@@ -185,7 +177,7 @@ function frameOf(seconds) {
  * @return {{head: number, offset: number}} the playhead's column and the window's left edge, in whole device pixels
  */
 function placeAt(at) {
-	return pixelPlace(at, across(), pixels.width, isWhole(shown.value, duration.value), Math.round(inset * ratio))
+	return pixelPlace(at, across.value, pixels.width, isWhole(shown.value, duration.value))
 }
 
 /**
@@ -215,17 +207,17 @@ function draw() {
 	const { head, offset } = placeAt(at)
 	if (isWhole(shown.value, duration.value)) {
 		// The wave stands: it is drawn once, the played part laid over it up to the playhead
-		const layers = keep('layers', [TOP.value, shownLanes.value, props.marked, props.comments, pixels.width, pixels.height, colors.played, props.pending], () => ({
+		const layers = keep('layers', [TOP.value, shownLanes.value, props.marked, props.comments, pixels.width, pixels.height, colors.played, store.selected, card.value?.id, props.pending], () => ({
 			rest: layer((each) => {
 				each.setTransform(ratio, 0, 0, ratio, 0, 0)
-				drawSpans(each, offset / ratio)
+				drawSpans(each, 0)
 				each.setTransform(1, 0, 0, 1, 0, 0)
-				drawBars(each, offset, -Infinity)
+				drawBars(each, 0, -Infinity)
 			}),
-			played: layer((each) => drawBars(each, offset, Infinity)),
+			played: layer((each) => drawBars(each, 0, Infinity)),
 			top: layer((each) => {
 				each.setTransform(ratio, 0, 0, ratio, 0, 0)
-				drawTop(each, offset / ratio)
+				drawTop(each, 0)
 			}),
 		}))
 		context.drawImage(layers.rest, 0, 0)
@@ -234,6 +226,7 @@ function draw() {
 		}
 		drawHead(context, head)
 		context.drawImage(layers.top, 0, 0)
+		drawLine(context)
 		return
 	}
 	context.setTransform(ratio, 0, 0, ratio, 0, 0)
@@ -243,6 +236,7 @@ function draw() {
 	drawHead(context, head)
 	context.setTransform(ratio, 0, 0, ratio, 0, 0)
 	drawTop(context, offset / ratio)
+	drawLine(context)
 }
 
 /**
@@ -296,13 +290,13 @@ function drawSpans(context, offset) {
  */
 function drawBars(context, offset, head) {
 	// Over the whole piece the wave stands; scrolling, it moves at the playback rate
-	const grid = barGrid(across(), pixels.width, ratio, isWhole(shown.value, duration.value) ? 0 : props.media?.playbackRate || 1)
-	const bands = laneBands(shownLanes.value.length, pixels.height, Math.round(TOP.value * ratio), Math.round(BOTTOM.value * ratio), Math.round(LANE_GAP * ratio))
+	const grid = barGrid(across.value, pixels.width, ratio, isWhole(shown.value, duration.value) ? 0 : props.media?.playbackRate || 1)
+	const bands = laneBands(shownLanes.value.length, pixels.height, Math.round(TOP.value * ratio), Math.round(BOTTOM * ratio), Math.round(LANE_GAP * ratio))
 	shownLanes.value.forEach((lane, index) => {
 		if (lane.waveform) {
 			const levels = keep('bars' + index, [lane.waveform, grid.seconds, loudest.value], () => bars(lane.waveform, grid.seconds, loudest.value))
 			// A lane ahead of the playhead stands that much to the left, on whole pixels too
-			drawLane(context, levels, grid, bands[index], offset + shiftPixels(lane.shift, across(), pixels.width), head, lane.audible ? colors : SUBDUED)
+			drawLane(context, levels, grid, bands[index], offset + shiftPixels(lane.shift, across.value, pixels.width), head, lane.audible ? colors : SUBDUED)
 		}
 	})
 }
@@ -345,8 +339,27 @@ function drawHead(context, head) {
 	const width = Math.max(2, Math.round(2 * ratio))
 	const top = Math.round(waveTop.value * ratio)
 	context.fillStyle = '#fff'
-	const bottom = circled.value ? Math.round((BOTTOM.value - 4) * ratio) : 0
+	const bottom = props.lanes ? 0 : Math.round((BOTTOM - 4) * ratio)
 	context.fillRect(head - Math.floor(width / 2), top, width, pixels.height - bottom - top)
+}
+
+/**
+ * Where the mouse hovers in the strip, a dashed line at the place a click goes, on whole device pixels
+ *
+ * @param {CanvasRenderingContext2D} context - where to draw
+ */
+function drawLine(context) {
+	lineDrawn = lineAt()
+	if (lineDrawn === null) {
+		return
+	}
+	const width = Math.max(1, Math.round(ratio))
+	const dash = Math.round(4 * ratio)
+	context.setTransform(1, 0, 0, 1, 0, 0)
+	context.fillStyle = 'rgba(255, 255, 255, 0.8)'
+	for (let y = Math.round(waveTop.value * ratio); y < pixels.height; y += 2 * dash) {
+		context.fillRect(lineDrawn - Math.floor(width / 2), y, width, dash)
+	}
 }
 
 /**
@@ -356,14 +369,14 @@ function drawHead(context, head) {
  * @param {number} offset - the window's left edge, in px from the start of the piece
  */
 function drawTop(context, offset) {
-	drawCircles(context, circles(), offset, size.height - BOTTOM.value / 2)
+	drawCircles(context, circles(), offset, size.height - BOTTOM / 2)
 	if (props.pending) {
 		drawPending(context, props.pending, perFrame(), offset, size.height)
 	}
 }
 
 /**
- * The place the Comment being written goes: a line over the wave, its Range tinted, and an open circle on the lane, or over the whole piece at the wave's foot
+ * The place the Comment being written goes: a line over the wave, its Range tinted, and an open circle on the lane
  *
  * @param {CanvasRenderingContext2D} context - the canvas
  * @param {{inFrame: number, outFrame: ?number}} pending - the place
@@ -373,17 +386,15 @@ function drawTop(context, offset) {
  */
 function drawPending(context, pending, scale, offset, height) {
 	const x = pending.inFrame * scale - offset
-	const foot = height - BOTTOM.value
-	const y = height - Math.max(BOTTOM.value, CIRCLE + 4) / 2
 	context.fillStyle = colors.played
 	if (pending.outFrame !== null) {
 		context.globalAlpha = 0.25
-		context.fillRect(x, waveTop.value, (pending.outFrame + 1) * scale - offset - x, foot - waveTop.value)
+		context.fillRect(x, waveTop.value, (pending.outFrame + 1) * scale - offset - x, height - waveTop.value - BOTTOM)
 		context.globalAlpha = 1
 	}
-	context.fillRect(x - 1, waveTop.value, 2, foot - waveTop.value)
+	context.fillRect(x - 1, waveTop.value, 2, height - waveTop.value - BOTTOM)
 	context.beginPath()
-	context.arc(x, y, CIRCLE / 2 - 1, 0, 2 * Math.PI)
+	context.arc(x, height - BOTTOM / 2, CIRCLE / 2 - 1, 0, 2 * Math.PI)
 	context.fillStyle = '#000'
 	context.fill()
 	context.strokeStyle = colors.played
@@ -391,7 +402,7 @@ function drawPending(context, pending, scale, offset, height) {
 	context.stroke()
 	context.setLineDash([])
 	context.fillStyle = colors.played
-	context.fillText('+', x, y + 0.5)
+	context.fillText('+', x, height - BOTTOM / 2 + 0.5)
 }
 
 /**
@@ -440,7 +451,7 @@ function schedule() {
 
 /**
  * The seconds to draw: where the playhead is, or on the way there after a
- * seek that was no drag (a click on the wave or the bar, a skip, a jump to a
+ * seek that was no drag (a click in the strip or on the bar, a skip, a jump to a
  * Comment). The sound is there at once; only the drawing glides, from where
  * it stood but never from further than a window away (N13). A seek shows as
  * the playhead standing elsewhere than playing on from the last frame would
@@ -461,7 +472,7 @@ function drawn() {
 		const expected = last.at + (props.playing ? (time - last.time) / 1000 * (props.media?.playbackRate || 1) : 0)
 		if (Math.abs(at - expected) > SEEK_GAP) {
 			const running = glide && glide.span === shown.value && glided(glide, time, at) !== null
-			glide = running ? retarget(glide, at, across()) : { from: glideStart(drawnAt, at, across()), at: time, span: shown.value }
+			glide = running ? retarget(glide, at, across.value) : { from: glideStart(drawnAt, at, across.value), at: time, span: shown.value }
 		}
 	}
 	last = { at, time }
@@ -517,6 +528,9 @@ function measure() {
 		rest: colors.rest,
 	}
 	kept = {}
+	// The mouse rests elsewhere on the stage now; its next move says where
+	mouse = null
+	host.value.style.cursor = ''
 	draw()
 }
 
@@ -582,6 +596,14 @@ let press = null
 /** Two fingers: their distance and the span when they came down */
 let pinch = null
 
+/** When the place pinned for a Comment was last let go, on the clock of pointer events */
+let placeLetGoAt = -1
+watch(() => props.pending, (now, was) => {
+	if (was && !now) {
+		placeLetGoAt = performance.now()
+	}
+}, { flush: 'sync' })
+
 /** The stage's left edge, read once a pointer comes down */
 let left = 0
 
@@ -628,7 +650,7 @@ function onDown(event) {
 		pinch = { distance: spread(), span: shown.value }
 		return
 	}
-	press = { id: event.pointerId, x: event.clientX, y: event.clientY, from: onScreen(), moved: false, long: false }
+	press = { id: event.pointerId, x: event.clientX, y: event.clientY, from: onScreen(), moved: false, long: false, strip: inStrip(event), down: event.timeStamp }
 	// A finger or a pen resting on a circle opens its card, as a tap does; elsewhere, where one may comment, the Comment field for that place
 	if (event.pointerType !== 'mouse') {
 		const at = press
@@ -651,7 +673,7 @@ function onDown(event) {
  * @return {number} the Frame there
  */
 function frameAtX(x) {
-	return frameOf(secondsAt(x, windowAt(onScreen(), shown.value, duration.value, margin()), size.width, duration.value))
+	return frameOf(secondsAt(x, windowAt(onScreen(), shown.value, duration.value), size.width, duration.value))
 }
 
 /**
@@ -669,8 +691,38 @@ function onScreen() {
  */
 function hit(clientX, clientY, pointerType) {
 	const box = host.value.getBoundingClientRect()
-	const x = clientX - box.left + offsetAt(onScreen())
-	return circleAt(circles(), x, clientY - box.top - (size.height - BOTTOM.value / 2), pointerType === 'mouse' ? CIRCLE / 2 : CIRCLE)
+	return circleUnder(clientX - box.left, clientY - box.top, pointerType === 'mouse' ? CIRCLE / 2 : CIRCLE)
+}
+
+/**
+ * @param {number} x - a place on the stage, from its left edge
+ * @param {number} y - from its top edge
+ * @param {number} reach - how far from a centre still hits, in px
+ * @return {object|null} the circle there, the nearest
+ */
+function circleUnder(x, y, reach) {
+	return circleAt(circles(), x + offsetAt(onScreen()), y - (size.height - BOTTOM / 2), reach)
+}
+
+/**
+ * @param {PointerEvent} event - a pointer on the stage
+ * @return {boolean} whether it is in the strip under the wave, which lanes do not have
+ */
+function inStrip(event) {
+	const y = event.clientY - host.value.getBoundingClientRect().top
+	return !props.lanes && y >= size.height - BOTTOM && y <= size.height
+}
+
+/**
+ * @return {number|null} where the dashed line goes, in device pixels from the left edge: at the mouse, but within the
+ * piece, as the click is; none while the mouse is nowhere a click goes (onHover), or over a circle, whose card a click opens
+ */
+function lineAt() {
+	if (!mouse || circleUnder(mouse.x, mouse.y, CIRCLE / 2)) {
+		return null
+	}
+	const offset = offsetAt(onScreen())
+	return Math.round(Math.min(perFrame() * props.durationFrames - offset, Math.max(-offset, mouse.x)) * ratio)
 }
 
 /**
@@ -700,7 +752,7 @@ function onMove(event) {
 		emit('hold')
 	}
 	if (press.moved) {
-		dragAt = dragged({ from: press.from, dx, x: xOf(event), span: shown.value, width: size.width, duration: duration.value, margin: margin() })
+		dragAt = dragged({ from: press.from, dx, x: xOf(event), span: shown.value, width: size.width, duration: duration.value })
 		emit('seek', frameOf(dragAt))
 		schedule()
 	}
@@ -715,7 +767,7 @@ function endDrag() {
 }
 
 /**
- * @param {PointerEvent} event - a pointer lifts, or the browser takes it for scrolling the page
+ * @param {PointerEvent} event - a pointer lifts, or the browser takes it away
  */
 function onUp(event) {
 	if (!pointers.delete(event.pointerId)) {
@@ -740,29 +792,59 @@ function onUp(event) {
 	press = null
 }
 
+/** When the last plain tap or click lifted, for a double tap or a double click */
+let lastTapAt = null
+
 /**
- * A click or a tap: on a circle it opens the Comment's card; with a card
- * open it only closes it; elsewhere it only seeks, and playback goes on as it was
+ * A click or a tap: on a circle it opens the Comment's card. A mouse click
+ * in the strip, and anywhere on lanes, seeks, playback going on as it was,
+ * and closes an open card. Elsewhere nothing seeks: with a card open it only
+ * closes it, else a double tap or a double click skips (story 104)
  *
  * @param {PointerEvent} event - the pointer lifts where it came down
  */
 function tap(event) {
 	const circle = hit(event.clientX, event.clientY, event.pointerType)
-	if (circle) {
+	const { action, side } = waveTap({
+		circle: !!circle,
+		card: !!card.value,
+		seeks: event.pointerType === 'mouse' && (!!props.lanes || (press.strip && inStrip(event))),
+		// An empty field is let go by the touch or click itself; one with text stays, and its tap counts
+		field: placeLetGoAt >= press.down,
+		since: lastTapAt === null ? null : event.timeStamp - lastTapAt,
+		x: xOf(event),
+		width: size.width,
+	})
+	lastTapAt = action === 'first' ? event.timeStamp : null
+	if (action === 'open') {
 		openCircle(circle, xOf(event))
-	} else if (card.value) {
+	} else if (action === 'close') {
 		card.value = null
-	} else {
+	} else if (action === 'seek') {
+		card.value = null
 		emit('seek', frameAtX(xOf(event)))
+	} else if (action === 'skip' && side) {
+		emit('skip', side)
 	}
 }
 
 /**
- * @param {PointerEvent} event - the mouse moves over the stage
+ * The mouse in the strip gets a pointer and the dashed line; over the card and the buttons, by touch, and while a press
+ * that began on the wave, a drag or a pinch is under way, there is none
+ *
+ * @param {PointerEvent} event - a pointer comes down, moves, lifts or leaves
  */
 function onHover(event) {
-	if (event.pointerType === 'mouse' && press === null) {
-		host.value.style.cursor = hit(event.clientX, event.clientY, 'mouse') ? 'pointer' : ''
+	const over = event.type !== 'pointerleave' && event.pointerType === 'mouse' && (event.target === canvas.value || event.target === host.value)
+	if (over && !(press && (press.moved || !press.strip)) && !pinch && inStrip(event)) {
+		const box = host.value.getBoundingClientRect()
+		mouse = { x: event.clientX - box.left, y: event.clientY - box.top }
+	} else {
+		mouse = null
+	}
+	host.value.style.cursor = mouse ? 'pointer' : ''
+	if (lineAt() !== lineDrawn) {
+		schedule()
 	}
 }
 
@@ -790,7 +872,7 @@ function openCircle(circle, x) {
 }
 
 /**
- * Opens a Comment's card at its circle, on the wave or above the bar, and selects it in the list too; opening does not seek
+ * Opens a Comment's card at its circle, on the wave or on the bar, and selects it in the list too; opening does not seek
  *
  * @param {object} comment - the Comment
  * @param {number} x - where it was hit, from the stage's left edge
@@ -804,8 +886,6 @@ function open(comment, x, siblings) {
 	card.value = { id: comment.id, left: Math.min(size.width - CARD_HALF - 8, Math.max(CARD_HALF + 8, x)), siblings }
 	store.selected = comment.id
 }
-
-defineExpose({ open })
 
 /**
  * @param {object} comment - another Comment of the same place
@@ -837,7 +917,7 @@ function onWheel(event) {
 	}
 	if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
 		event.preventDefault()
-		const target = frameOf(wheelSeek(now(), event.deltaX, event.deltaMode, across(), size.width, duration.value))
+		const target = frameOf(wheelSeek(now(), event.deltaX, event.deltaMode, shown.value, size.width, duration.value))
 		// A swipe against the start or the end moves nothing, and must not keep the next seek from gliding
 		if (target !== frameOf(now())) {
 			following = true
@@ -875,10 +955,11 @@ function label(step) {
 	<div
 		ref="host"
 		class="deliver-wave"
-		@pointerdown="onDown"
+		@pointerdown="onDown($event); onHover($event)"
 		@pointermove="onMove($event); onHover($event)"
-		@pointerup="onUp"
+		@pointerup="onUp($event); onHover($event)"
 		@pointercancel="onUp"
+		@pointerleave="onHover"
 		@wheel="onWheel"
 		@contextmenu.prevent>
 		<canvas ref="canvas" class="deliver-wave__canvas" aria-hidden="true" />
@@ -898,7 +979,7 @@ function label(step) {
 				{{ label(step) }}
 			</button>
 		</div>
-		<!-- Each lane's name; a tap on it plays its sound, a tap on its wave seeks as anywhere -->
+		<!-- Each lane's name; a tap on it plays its sound, a click on its wave seeks as anywhere -->
 		<button
 			v-for="(lane, index) in lanes ?? []"
 			:key="index"
@@ -943,8 +1024,8 @@ function label(step) {
 	position: absolute;
 	inset: 0;
 	cursor: grab;
-	/* A finger dragging sideways moves through time, upright it scrolls the page; two fingers zoom the wave, not the page */
-	touch-action: pan-y;
+	/* The stage takes every touch: with pan-y, iOS Safari cancels a sideways drag (pointercancel) as soon as the finger drifts about 10 px upright, and the wave stops following */
+	touch-action: none;
 }
 
 .deliver-wave:active {
