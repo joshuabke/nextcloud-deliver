@@ -45,6 +45,9 @@ describe('upload status', () => {
 		const making = { ...done(derived({ proxy: 'running', thumbs: 'none' })), proxy: { progress: 40, state: 'running' } }
 		expect(processingOf(making).map(({ kind, text }) => [kind, text])).toEqual([['browserProxy', 'Encoding 40 %']])
 		expect(settled(making)).toBe(false)
+		// Made while the file goes up or its name is asked for, it waits for the Version
+		const waiting = { status: 'failed', error: 'taken', version: null, proxy: { progress: 99, state: 'made' } }
+		expect(processingOf(waiting).map(({ text, done }) => [text, done])).toEqual([['Done', true]])
 		const uploading = { ...done(derived({ proxy: 'none' })), proxy: { progress: 10, state: 'uploading' } }
 		expect(processingOf(uploading)[0].text).toBe('Upload 10 %')
 		expect(processingOf(uploading)[0].label).toBe('Proxy')

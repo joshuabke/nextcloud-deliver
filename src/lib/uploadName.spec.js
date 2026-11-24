@@ -27,6 +27,19 @@ describe('a free name for an upload', () => {
 		expect(await freeName('mix', folder())).toBe('mix (2)')
 	})
 
+	it('fits into Nextcloud\'s 250 bytes, at the cost of the stem and never of the extension', async () => {
+		const bytes = (name) => new TextEncoder().encode(name).length
+		const long = await freeName(`${'a'.repeat(244)}.wav`, folder())
+		expect(long).toBe(`${'a'.repeat(242)} (2).wav`)
+		expect(bytes(long)).toBe(250)
+		// Three bytes each, and an emoji of four, none of them cut in half
+		for (const stem of ['音'.repeat(82), '🎵'.repeat(61)]) {
+			const name = await freeName(`${stem}.wav`, folder())
+			expect(bytes(name)).toBeLessThanOrEqual(250)
+			expect(name).toMatch(/^[音🎵]+ \(2\)\.wav$/u)
+		}
+	})
+
 	it('ends where every name is taken, as a server answering anything with a page does', async () => {
 		let asked = 0
 		const always = async () => {
@@ -52,6 +65,12 @@ describe('a name typed for an upload', () => {
 			expect(nameProblem(name, 'mix.mp3', validate)).toBe('Keep the extension .mp3.')
 		}
 		expect(nameProblem('', 'mix', validate)).not.toBeNull()
+	})
+
+	it('has room for 250 bytes, whatever the characters', () => {
+		expect(nameProblem(`${'a'.repeat(246)}.mp3`, 'mix.mp3', validate)).toBeNull()
+		expect(nameProblem(`${'a'.repeat(247)}.mp3`, 'mix.mp3', validate)).toBe('This name is too long.')
+		expect(nameProblem(`${'音'.repeat(83)}.mp3`, 'mix.mp3', validate)).toBe('This name is too long.')
 	})
 
 	it('has only what Nextcloud allows, named where it does not', () => {

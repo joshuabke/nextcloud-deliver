@@ -1,5 +1,6 @@
 {
 	"translations": {
+		"\"{name}\" is already in the folder.": "„{name}“ gibt es in dem Ordner schon.",
 		"\"{segment}\" is not allowed in a filename.": "„{segment}“ ist in Dateinamen nicht erlaubt.",
 		"%s commented on %s": "%s hat %s kommentiert",
 		"%s invites you to a review": "%s lädt Sie zu einem Review ein",
@@ -142,7 +143,7 @@
 		"Loading Project…": "Projekt wird geladen …",
 		"Loading Version…": "Version wird geladen …",
 		"Loading…": "Wird geladen …",
-		"New name": "Neuer Name",
+		"New name for {name}": "Neuer Name für {name}",
 		"Protect files with Comments against deleting and renaming": "Dateien mit Kommentaren gegen Löschen und Umbenennen sichern",
 		"Loop": "Wiederholen",
 		"Loop the Range": "Bereich wiederholen",
@@ -326,6 +327,7 @@
 		"Their Personal Link through it stops working. They stay on their other links, and their Comments stay theirs.": "Der Persönliche Link darüber funktioniert dann nicht mehr. Die Person bleibt auf ihren anderen Links, und ihre Kommentare bleiben ihre.",
 		"Their Personal Links stop working and they leave the list. Their Comments stay theirs.": "Die persönlichen Links funktionieren dann nicht mehr, und die Person verschwindet aus der Liste. Die Kommentare bleiben erhalten.",
 		"This name is not allowed.": "Dieser Name ist nicht erlaubt.",
+		"This name is too long.": "Dieser Name ist zu lang.",
 		"This Nextcloud sends no email, so Reviewers are not mailed when someone replies to them.": "Diese Nextcloud verschickt keine E-Mails, daher bekommen Reviewer keine Mail, wenn jemand ihnen antwortet.",
 		"This Version has Comments, so replacing its file needs a confirmation.": "Diese Version hat Kommentare, daher braucht das Ersetzen ihrer Datei eine Bestätigung.",
 		"This browser cannot play this file. Open it in another browser, such as Chrome or Firefox.": "Dieser Browser kann diese Datei nicht abspielen. Öffnen Sie sie in einem anderen Browser, etwa Chrome oder Firefox.",

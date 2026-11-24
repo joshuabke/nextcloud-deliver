@@ -174,7 +174,7 @@ export async function retrying(attempt, { signal, online, untilOnline, sleep, on
  * @param {(loaded: number) => void} options.onProgress - gets the bytes uploaded so far
  * @param {(etag: ?string) => void} [options.onEtag] - gets the ETag of the content the server took, so what is measured of it can be bound to it
  * @param {object} options.env - signal, online, untilOnline, sleep and onPause, as retrying takes them
- * @return {Promise<number>} the Nextcloud file id of the upload
+ * @return {Promise<number>} the Nextcloud file id of the upload; fails with `unsure` where a file under its name may be this very upload
  */
 export async function uploadFile({ request, file, target, onTaken = null, uploadsUrl, chunkSize, folder = null, onFolder = () => {}, onProgress = () => {}, onEtag = () => {}, env }) {
 	const { signal } = env
@@ -185,11 +185,13 @@ export async function uploadFile({ request, file, target, onTaken = null, upload
 		}
 		return false
 	})
+	// Whether an upload that stopped has no chunks left: joined, perhaps, though nobody heard
+	let gone = false
 	// Ask first, so a taken name is refused now rather than after the whole upload
 	const findName = async () => {
 		for (let tries = 0; await taken(); tries++) {
 			if (!onTaken || tries >= NAMES) {
-				throw Object.assign(new Error('taken'), { response: { status: 412 } })
+				throw Object.assign(new Error('taken'), { response: { status: 412 }, unsure: gone })
 			}
 			target = await onTaken()
 		}
@@ -207,6 +209,7 @@ export async function uploadFile({ request, file, target, onTaken = null, upload
 				return await retrying(attempt, env)
 			} catch (error) {
 				const refused = target
+				error.unsure = lost
 				if (error.response?.status !== 412 || !onTaken || lost) {
 					throw error
 				}
@@ -237,7 +240,8 @@ export async function uploadFile({ request, file, target, onTaken = null, upload
 		if (have === null) {
 			folder = null
 			have = new Map()
-			// Joined, perhaps, though nobody heard: a file under its name may be this very one, so it is refused as ever
+			gone = true
+			// A file under its name may be this very one, so it is refused as ever
 			onTaken = null
 		}
 	}

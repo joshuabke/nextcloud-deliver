@@ -5,7 +5,7 @@ import closeIcon from '@mdi/svg/svg/close.svg?raw'
 import uploadIcon from '@mdi/svg/svg/tray-arrow-up.svg?raw'
 import { formatFileSize } from '@nextcloud/files'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
@@ -43,6 +43,22 @@ const summary = computed(() => {
 		return t('deliver', 'Something failed')
 	}
 	return t('deliver', 'All done')
+})
+
+/** The first upload that asks for another name, which the card shows */
+const refused = computed(() => store.items.find((item) => item.taken))
+
+/** What the minimised card has to say */
+const said = computed(() => [summary.value, refused.value?.renamed ?? refused.value?.name, refused.value?.error].filter(Boolean).join('. '))
+
+/** The fields of the dialog that ask for another name */
+const renames = ref([])
+// Opened, the dialog goes to the first of them; one that appears later takes the focus from nobody
+watch(() => store.expanded, async (expanded) => {
+	await nextTick()
+	if (expanded) {
+		renames.value[0]?.enter()
+	}
 })
 
 /**
@@ -146,7 +162,11 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 				</template>
 			</p>
 			<ul v-if="store.items.length" class="deliver-uploads__list">
-				<li v-for="item in store.items" :key="item.id" class="deliver-uploads__item">
+				<li
+					v-for="item in store.items"
+					:key="item.id"
+					class="deliver-uploads__item"
+					tabindex="-1">
 					<div class="deliver-uploads__row">
 						<span class="deliver-uploads__name" :title="item.renamed ?? item.name">{{ item.renamed ?? item.name }}</span>
 						<span class="deliver-uploads__size">{{ formatFileSize(item.size) }}</span>
@@ -191,6 +211,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 						:value="Math.floor(item.loaded / Math.max(1, item.size) * 100)" />
 					<div class="deliver-uploads__row">
 						<span
+							:id="`deliver-upload-reason-${item.id}`"
 							class="deliver-uploads__status"
 							:class="{ 'deliver-uploads__status--error': item.status === 'failed' || processingFailed(item) || (item.status === 'interrupted' && item.error) }">
 							{{ item.status === 'interrupted' && item.error ? item.error : statusOf(item) }}
@@ -204,7 +225,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 							{{ line.label }}
 						</span>
 					</div>
-					<UploadRename v-if="item.taken" :item="item" focus />
+					<UploadRename v-if="item.taken" ref="renames" :item="item" />
 					<ul v-if="processingOf(item).some((line) => !line.done)" class="deliver-uploads__processing">
 						<li v-for="line in processingOf(item).filter((each) => !each.done)" :key="line.kind">
 							<span>{{ line.label }}</span>
@@ -253,7 +274,8 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 		v-else-if="store.items.length"
 		class="deliver-uploads-card"
 		:class="{ 'deliver-uploads-card--bar': isMobile }"
-		role="status">
+		tabindex="-1">
+		<span class="hidden-visually" role="status">{{ said }}</span>
 		<button type="button" class="deliver-uploads-card__open" @click="store.expanded = true">
 			<NcIconSvgWrapper :svg="store.sending.length ? uploadIcon : doneIcon" :size="20" />
 			<span class="deliver-uploads-card__text">{{ summary }}</span>
@@ -269,10 +291,10 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 			</template>
 		</NcButton>
 		<!-- A refused name is settled right here too, one upload after the other -->
-		<div v-for="item in store.items.filter((each) => each.taken).slice(0, 1)" :key="item.id" class="deliver-uploads-card__refused">
-			<span class="deliver-uploads-card__text" :title="item.renamed ?? item.name">{{ item.renamed ?? item.name }}</span>
-			<span class="deliver-uploads__status--error">{{ item.error }}</span>
-			<UploadRename :item="item" />
+		<div v-if="refused" :key="refused.id" class="deliver-uploads-card__refused">
+			<span class="deliver-uploads-card__text" :title="refused.renamed ?? refused.name">{{ refused.renamed ?? refused.name }}</span>
+			<span :id="`deliver-upload-reason-${refused.id}`" class="deliver-uploads__status--error">{{ refused.error }}</span>
+			<UploadRename :item="refused" />
 		</div>
 		<NcProgressBar v-if="store.sending.length" class="deliver-uploads-card__progress" :value="store.totals.percent" />
 	</div>

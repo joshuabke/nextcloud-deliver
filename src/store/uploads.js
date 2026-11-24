@@ -188,7 +188,9 @@ export const useUploadsStore = defineStore('uploads', {
 					target,
 					// The name its file got in the folder, where that is not its own
 					renamed: null,
-					// Its name was taken, so its row asks for another one and suggests a free one
+					// Whether a file under its name may be this very upload, whose answer was lost
+					unsure: false,
+					// Its name was taken or not allowed, so its row asks for another one and suggests a free one
 					taken: false,
 					suggestion: null,
 					projectId,
@@ -243,10 +245,18 @@ export const useUploadsStore = defineStore('uploads', {
 		 *
 		 * @param {object} item - the upload
 		 * @param {string} name - what its file is to be called
+		 * @param {AbortSignal} signal - leaves it refused after all
 		 * @return {Promise<boolean>} false when that name is taken too
 		 */
-		async sendAs(item, name) {
-			if (await this.taken(item, name)) {
+		async sendAs(item, name, signal) {
+			const taken = await this.taken(item, name)
+			if (signal.aborted) {
+				return true
+			}
+			if (taken) {
+				if (item.suggestion === name) {
+					item.suggestion = await this.suggest(item, name)
+				}
 				return false
 			}
 			// Cancelled or tried again meanwhile, it is not this name's any more
@@ -255,6 +265,15 @@ export const useUploadsStore = defineStore('uploads', {
 				this.retry(item)
 			}
 			return true
+		},
+		/**
+		 * @param {object} item - an upload whose name is taken
+		 * @param {string} name - that name
+		 * @return {Promise<string>} a free one, which no other refused upload is offered either
+		 */
+		suggest(item, name) {
+			return freeName(name, async (each) => this.items.some((other) => other !== item && other.taken && folderOf(other.target) === folderOf(item.target) && other.suggestion === each)
+				|| this.taken(item, each))
 		},
 		/**
 		 * @param {object} item - an upload
@@ -381,6 +400,12 @@ export const useUploadsStore = defineStore('uploads', {
 				item.proxy = {}
 				item.proxyController = new AbortController()
 				item.proxying = convertInTurn(item.file, proxySettings, want, item.proxy, item.proxyController.signal)
+				const { proxy } = item
+				item.proxying.then((made) => {
+					if (made && proxy.state === 'running' && item.status !== 'done') {
+						proxy.state = 'made'
+					}
+				})
 			}
 			// Without ffmpeg the browser makes the Waveform while the file goes up (story 137); a WAV's is read on the server
 			if (!hasFfmpeg && item.type.startsWith('audio/') && !/\.(wav|bwf)$/i.test(item.name) && !item.decoding) {
@@ -459,11 +484,15 @@ export const useUploadsStore = defineStore('uploads', {
 			} catch (error) {
 				// Cancelled or failed, it is nobody's to show elsewhere; a retry here records it again
 				this.forget(item)
-				// A taken name is asked for again in its row; what this browser makes meanwhile goes on
-				const taken = !signal.aborted && !item.fileId && error.response?.status === 412
+				// Once an answer was lost, a file under its name may be this very upload, so no other name is offered
+				item.unsure ||= error.unsure
+				// Nextcloud does not take the name it was given here
+				const refused = error.response?.status === 400 && Boolean(item.renamed)
+				// Another name is asked for in its row; what this browser makes meanwhile goes on
+				const taken = !signal.aborted && !item.fileId && !item.unsure && (error.response?.status === 412 || refused)
 				if (taken) {
 					clearInterval(beat)
-					item.suggestion = await freeName(item.renamed ?? item.name, (name) => this.taken(item, name))
+					item.suggestion = await this.suggest(item, refused ? item.name : item.renamed ?? item.name)
 				} else {
 					// Its Proxy has no Version to go to; a retry makes it again
 					item.proxying && dropProxy(item.proxying, item.proxy, item.proxyController)
@@ -474,7 +503,7 @@ export const useUploadsStore = defineStore('uploads', {
 					item.folder = null
 				}
 				if (!signal.aborted) {
-					Object.assign(item, { status: 'failed', error: errorMessage(error), taken })
+					Object.assign(item, { status: 'failed', error: refused ? t('deliver', 'This name is not allowed.') : errorMessage(error), taken })
 				}
 			} finally {
 				clearInterval(beat)
@@ -524,6 +553,10 @@ export const useUploadsStore = defineStore('uploads', {
 		async handInPass(item, asset) {
 			if (!item.proxying) {
 				return
+			}
+			// Made before there was a Version, it goes up now
+			if (item.proxy.state === 'made') {
+				item.proxy.state = 'running'
 			}
 			// The server takes no derived media from a Member without Manage on the Version
 			if (!await handInPass(asset.versionId, item.proxying, item.proxy, item.proxyController)) {

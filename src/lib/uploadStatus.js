@@ -133,6 +133,8 @@ export function proxyPhase(proxy) {
 		running: [t('deliver', 'Encoding {percent} %', { percent: proxy.progress }), timeLeft(encodingEta(proxy))].filter(Boolean).join(' · '),
 		uploading: t('deliver', 'Upload {percent} %', { percent: proxy.progress }),
 		handing: t('deliver', 'Finishing on the server'),
+		// Made, but there is no Version yet to hand it in for: a name is asked for, or the file still goes up
+		made: t('deliver', 'Done'),
 		ready: t('deliver', 'Done'),
 		// Taken over by a Proxy by hand or ffmpeg, or stopped on purpose
 		stopped: t('deliver', 'Stopped'),
@@ -181,7 +183,7 @@ export function processingOf(item) {
 			kind: 'browserProxy',
 			label: passLabel(item.proxy),
 			text: proxyPhase(item.proxy),
-			done: item.proxy.state === 'ready',
+			done: ['made', 'ready'].includes(item.proxy.state),
 		})
 	}
 	const derived = item.version?.derived

@@ -284,6 +284,17 @@ describe('an upload', () => {
 		expect(await bytes(dav.files.get(TARGET.replace('cut', 'cut_v2')))).toEqual(await bytes(file(25)))
 	})
 
+	it('says where a taken name may be this very upload, whose answer was lost or whose chunk folder is gone', async () => {
+		const refused = async (dav, options = {}) => uploadFile({ request: dav.request, file: file(5), target: TARGET, uploadsUrl: UPLOADS, chunkSize: 10, env: dav.env, ...options }).catch((error) => [error.response?.status, Boolean(error.unsure)])
+		expect(await refused(fakeDav({ lostPut: true }))).toEqual([412, true])
+		const taken = fakeDav()
+		taken.files.set(TARGET, new Blob(['old']))
+		expect(await refused(taken)).toEqual([412, false])
+		expect(await refused(taken, { file: file(25), folder: `${UPLOADS}/deliver-gone` })).toEqual([412, true])
+		// Every attempt lost: whether it arrived is not known either
+		expect(await refused(fakeDav(), { request: ({ method }) => Promise.reject(Object.assign(new Error('lost'), method === 'HEAD' ? { response: { status: 404 } } : {})) })).toEqual([undefined, true])
+	})
+
 	it('joins the chunks under another name once it is renamed, and sends none again', async () => {
 		const dav = fakeDav()
 		let folder = null
