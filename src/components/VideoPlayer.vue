@@ -1733,6 +1733,9 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	--deliver-marker-back: rgba(0, 0, 0, 0.55);
 	position: absolute;
 	top: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 	min-height: 0;
 	width: 20px;
 	height: 20px;
@@ -1742,7 +1745,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	border-radius: 50%;
 	background: linear-gradient(var(--deliver-marker-fill) 0 0) var(--deliver-marker-back) !important;
 	color: #fff;
-	font: bold 9px/16px sans-serif;
+	font: bold 9px/1 sans-serif;
 	text-shadow: 0 0 2px #000;
 	pointer-events: none;
 	transform: translate(-50%, -50%);
