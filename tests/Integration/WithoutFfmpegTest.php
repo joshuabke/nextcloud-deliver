@@ -348,7 +348,7 @@ class WithoutFfmpegTest extends TestCase {
 		} finally {
 			$this->nc->ocsForm('DELETE', "/ocs/v2.php/cloud/users/$user");
 		}
-		$this->nc->ocs('DELETE', "/projects/{$this->projectId}");
+		self::assertSame(200, $this->nc->ocs('DELETE', "/projects/{$this->projectId}")['status']);
 		self::assertNull($this->nc->ocs('GET', "/folders/$folderId/intake")['data']['proxy'], 'a Deleted Project takes nothing in');
 	}
 
@@ -604,8 +604,8 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertSame(200, $this->nc->ocs('POST', "/versions/$versionId/proxy/progress", ['percent' => 5])['status']);
 	}
 
-	private function silent(int $versionId): void {
-		$this->inNextcloud('\\OCP\\Server::get(\\OCP\\IDBConnection::class)->executeStatement("UPDATE *PREFIX*deliver_jobs SET started_at = started_at - 300 WHERE kind = \'proxy\' AND version_id = ' . $versionId . '");');
+	private function silent(int $versionId, int $seconds = 300): void {
+		$this->inNextcloud('\\OCP\\Server::get(\\OCP\\IDBConnection::class)->executeStatement("UPDATE *PREFIX*deliver_jobs SET started_at = started_at - ' . $seconds . ' WHERE kind = \'proxy\' AND version_id = ' . $versionId . '");');
 	}
 
 	private function handInProxy(int $versionId, string $args = self::PROXY): int {
@@ -679,13 +679,54 @@ class WithoutFfmpegTest extends TestCase {
 		self::assertSame([1, 0], $this->told($address), 'the notification goes with the Proxy');
 	}
 
+	public function testNobodyIsToldWhileTheServerTakesTheProxyUnlessItsRequestDied(): void {
+		$this->make(self::PRORES);
+		$id = (int)$this->upload('master.mov')['id'];
+		$address = $this->listen();
+		$this->report($id);
+		$upload = $this->proxyFrom(self::PROXY)[0];
+
+		// The server reads the original while it takes the Proxy: a pipe nobody writes into is storage that takes its time
+		$user = getenv('DELIVER_TEST_USER') ?: 'admin';
+		$original = trim($this->inNextcloud('echo \\OCP\\Server::get(\\OCP\\IConfig::class)->getSystemValueString("datadirectory");')) . "/$user/files/{$this->root}/master.mov";
+		rename($original, $this->fixture . '-held');
+		posix_mkfifo($original, 0600);
+		$handIn = proc_open([
+			'curl', '-s', '-o', '/dev/null', '-u', "$user:" . (getenv('DELIVER_TEST_PASSWORD') ?: 'adminadmin123'), '-H', 'OCS-APIRequest: true', '-H', 'Content-Type: application/json',
+			'-d', json_encode(['converted' => true, 'fileId' => $upload]), (getenv('DELIVER_TEST_URL') ?: 'http://localhost') . "/ocs/v2.php/apps/deliver/api/v1/versions/$id/proxy",
+		], [], $pipes);
+		self::assertIsResource($handIn);
+		try {
+			// Opens once the request reads
+			for ($until = time() + 30, $pipe = false; $pipe === false && time() < $until; usleep(100000)) {
+				$pipe = @fopen($original, 'wn');
+			}
+			self::assertIsResource($pipe, 'the hand-in reads the original');
+
+			$this->silent($id);
+			$this->cron($id);
+			self::assertSame([0, 0], $this->told($address), 'no browser reports while the server takes its Proxy');
+			self::assertSame('running', $this->nc->ocs('GET', "/versions/$id")['data']['versions'][0]['derived']['proxy']['state']);
+
+			// A request that takes longer than an hour has died
+			$this->silent($id, 3600);
+			$this->cron($id);
+			self::assertSame([1, 1], $this->told($address));
+		} finally {
+			is_resource($pipe) ? fclose($pipe) : proc_terminate($handIn);
+			proc_close($handIn);
+			unlink($original);
+			rename($this->fixture . '-held', $original);
+		}
+	}
+
 	public function testTheManagersAreToldOnceTheFileOfTheVersionIsBack(): void {
 		$this->make(self::PRORES);
 		$id = (int)$this->upload('master.mov')['id'];
 		$address = $this->listen();
 		$due = (int)$this->inNextcloud('echo \\OCP\\Server::get(\\OCP\\IDBConnection::class)->executeQuery("SELECT last_checked FROM *PREFIX*jobs WHERE class = ? AND argument = ?", [\\OCA\\Deliver\\BackgroundJob\\AskBrowserPass::class, "' . $id . '"])->fetchOne();');
 		self::assertEqualsWithDelta(time() + 120, $due, 30, 'the two minutes a browser has to say that it makes the Proxy');
-		$this->nc->ocs('DELETE', "/projects/{$this->projectId}");
+		self::assertSame(200, $this->nc->ocs('DELETE', "/projects/{$this->projectId}")['status']);
 		$this->cron($id);
 		self::assertSame([0, 0], $this->told($address), 'nothing about a Deleted Project is notified');
 		self::assertSame(200, $this->nc->ocs('POST', "/deleted-projects/{$this->projectId}/restore")['status']);

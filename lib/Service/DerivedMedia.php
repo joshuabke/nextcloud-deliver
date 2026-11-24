@@ -122,6 +122,13 @@ class DerivedMedia {
 
 	/** Seconds after the last report of a browser making a Proxy, when its tab counts as closed */
 	public const BROWSER_LAPSE = 120;
+	/**
+	 * Seconds the request that takes a browser's Proxy has, in which that
+	 * browser does not report: copying a master from slow storage tells nobody
+	 * how far it is. A request that fails gives up the rest at once; one killed
+	 * cannot, so it counts as dead after the hour Nextcloud gives a request.
+	 */
+	private const HAND_IN_LAPSE = 3600;
 	/** Seconds until asking for a Proxy is looked at again, where nobody can be asked now */
 	public const ASK_LATER = 3600;
 
@@ -995,7 +1002,8 @@ class DerivedMedia {
 			throw new ProjectConflictException('The server makes this Proxy');
 		}
 		$job->setProgress(max(0, min(99, $percent)));
-		$job->setStartedAt($this->time->getTime());
+		// Another tab's report does not shorten the time a hand-in has
+		$job->setStartedAt(max($this->time->getTime(), (int)$job->getStartedAt()));
 		$this->jobs->update($job);
 		$version->setProxyState(self::STATE_RUNNING);
 		$version->setDerivedError(null);
@@ -1077,9 +1085,32 @@ class DerivedMedia {
 	 * @throws InvalidRequestException the upload is no Proxy of this Version
 	 */
 	public function acceptProxy(Version $version, File $original, File $upload, bool $converted = false): void {
-		if ($converted) {
-			$this->assertBrowserProxy($version);
+		if (!$converted) {
+			$this->takeProxy($version, $original, $upload, false);
+			return;
 		}
+		$this->assertBrowserProxy($version);
+		$claim = $this->jobs->findPending($version->getId(), Job::KIND_PROXY);
+		if ($claim?->getClaimedBy() !== Job::BROWSER) {
+			$claim = null;
+		}
+		if ($claim !== null) {
+			$claim->setStartedAt($this->time->getTime() + self::HAND_IN_LAPSE - self::BROWSER_LAPSE);
+			$this->jobs->update($claim);
+		}
+		try {
+			$this->takeProxy($version, $original, $upload, true);
+		} finally {
+			// Where it was not taken, as while the original is being read, its browser reports again or lapses as ever
+			if ($claim !== null) {
+				$claim->setStartedAt($this->time->getTime());
+				$this->jobs->update($claim);
+			}
+		}
+	}
+
+	/** Checks and stores a Proxy handed in (acceptProxy) */
+	private function takeProxy(Version $version, File $original, File $upload, bool $converted): void {
 		$source = $this->probe->localPath($original);
 		$candidate = $this->probe->localPath($upload);
 		if ($source === null || $candidate === null) {
@@ -1102,7 +1133,7 @@ class DerivedMedia {
 			throw new InvalidRequestException($error);
 		}
 		// First: a job of the server running meanwhile looks before it writes, and finds itself withdrawn.
-		// A browser's goes last, so that the Proxy still lapses should this request die
+		// A browser's goes last, so that the Proxy still lapses should this request die (HAND_IN_LAPSE)
 		$browsers = $job?->getClaimedBy() === Job::BROWSER;
 		if ($job !== null && !$browsers) {
 			$this->jobs->delete($job);
@@ -1139,7 +1170,10 @@ class DerivedMedia {
 	 */
 	public function askBrowserPass(int $versionId): ?int {
 		$version = $this->versions->find($versionId);
-		if ($version === null || !$this->withoutFfmpeg()) {
+		// What the web server last found: looking now would put cron's PATH in its place (Ffmpeg::probe)
+		$this->withoutFfmpegNow ??= !$this->ffmpeg->available();
+		// One written again is asked for once it is read
+		if ($version === null || !$this->withoutFfmpeg() || $version->getProxyState() === self::STATE_READY || $version->getPlayable() === null) {
 			return null;
 		}
 		$this->lapse($version);
@@ -1151,7 +1185,6 @@ class DerivedMedia {
 		if ($file === null || $version->getState() !== Version::STATE_READY || $this->projects->isDeleted($version->getProjectId())) {
 			return self::ASK_LATER;
 		}
-		// Written again meanwhile, it is asked for once it is read
 		if ($this->proxyFromBrowser($version, (int)$file->getSize())) {
 			$this->browserPassMail->needed($version, $this->notifications->browserPassNeeded($version));
 		}
