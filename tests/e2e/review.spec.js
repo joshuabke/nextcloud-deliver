@@ -2281,23 +2281,24 @@ test.describe('Comparing sound', () => {
 		await expect(page.getByRole('button', { name: 'Loop the Range' })).toHaveAttribute('aria-pressed', 'true')
 
 		// Whose sound plays on every animation frame, cut into passes where the time jumps back; where a pass starts is read
-		// as A starts playing, as the next frame may come late, and from every frame, less what the output's clock went on since
-		// then, so that a jump right after it counts
+		// as the time jumps back or A starts playing, as the next frame may come late, and from every frame, less what the
+		// output's clock went on since then, so that a jump right after it counts
 		const passes = await page.evaluate(() => new Promise((resolve) => {
 			const [a, b] = document.querySelectorAll('.deliver-compare video')
 			const found = []
 			let last = Infinity
+			const clock = () => a.deliverGain?.context.currentTime
 			const cut = () => {
 				const time = a.currentTime
 				if (time < last - 0.3) {
-					found.push({ from: time, to: time, heard: new Set() })
+					found.push({ from: time, to: time, heard: new Set(), at: a.paused ? undefined : clock() })
 				}
 				last = time
 				return time
 			}
 			a.addEventListener('playing', () => {
 				cut()
-				found.at(-1).at ??= a.deliverGain.context.currentTime
+				found.at(-1).at ??= clock()
 			})
 			const tick = () => {
 				const time = cut()
@@ -2308,7 +2309,7 @@ test.describe('Comparing sound', () => {
 					pass.to = time
 					pass.heard.add(heard)
 					if (pass.at) {
-						pass.from = Math.max(pass.from, time - (a.deliverGain.context.currentTime - pass.at))
+						pass.from = Math.max(pass.from, time - (clock() - pass.at))
 					}
 				}
 				if (found.length > 3) {
