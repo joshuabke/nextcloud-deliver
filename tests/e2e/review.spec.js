@@ -2155,7 +2155,12 @@ test.describe('Audio review', () => {
 			await target.getByRole('button', { name: zoom, exact: true }).click()
 		}
 		const timeOf = (target) => target.locator('video.deliver-player__video').evaluate((element) => element.currentTime)
-		const circleOf = (target) => target.locator('.deliver-player__circle').filter({ hasText: '2' })
+		// The circle at 90 s, a quarter on: other cases leave Comments too, in counts of their own
+		const circleOf = async (target) => {
+			const circles = target.locator('.deliver-player__circle')
+			await expect(circles.first()).toBeVisible()
+			return circles.nth(await circles.evaluateAll((all) => all.findIndex((each) => Math.abs(parseFloat(each.style.left) - each.parentElement.clientWidth / 4) < 1)))
+		}
 		const card = (target) => target.getByRole('dialog', { name: /^Comment #/ })
 		const canvas = page.locator('.deliver-wave canvas')
 
@@ -2193,8 +2198,9 @@ test.describe('Audio review', () => {
 		// Zoomed in the bar has it too, translucent until the list selects it, and a click or a drag on it is the bar's
 		await page.getByRole('button', { name: '1 min', exact: true }).click()
 		expect((await canvas.boundingBox()).height).toBe(stage.height)
-		await expect(circleOf(page)).toBeVisible()
-		const back = () => circleOf(page).evaluate((element) => getComputedStyle(element).backgroundColor)
+		const circle = await circleOf(page)
+		await expect(circle).toHaveText('2')
+		const back = () => circle.evaluate((element) => getComputedStyle(element).backgroundColor)
 		expect(await back()).toMatch(/rgba\(0, 0, 0, 0\.\d+\)/)
 		await page.mouse.click(row.x + 6, row.y)
 		await expect.poll(() => timeOf(page)).toBeCloseTo(90 + 6 / under.width * 360, 0)
@@ -2206,15 +2212,14 @@ test.describe('Audio review', () => {
 		await expect(card(page)).toHaveCount(0)
 		await expect(page.locator('.deliver-comment--selected')).toHaveCount(0)
 		await page.locator('.deliver-comment').filter({ hasText: 'close by' }).locator('.deliver-comment__anchor').click()
-		await expect(circleOf(page)).toHaveClass(/--ringed/)
+		await expect(circle).toHaveClass(/--ringed/)
 		await expect.poll(back).toBe('rgb(0, 0, 0)')
 
 		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: { width: 852, height: 393 } })
 		const member = await phone.newPage()
 		await login(member)
 		await open(member, '1 min')
-		await expect(circleOf(member)).toBeVisible()
-		const at = await circleOf(member).boundingBox()
+		const at = await (await circleOf(member)).boundingBox()
 		const touch = await phone.newCDPSession(member)
 		const y = at.y + at.height / 2
 		await member.touchscreen.tap(at.x + at.width / 2, y)
