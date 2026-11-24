@@ -70,7 +70,7 @@ export const useCommentsStore = defineStore('comments', {
 				replies: state.comments.filter((reply) => reply.parentId === comment.id),
 			})),
 		/**
-		 * @return {Map<number, number>} Comment id → its place in the order Comments were written, as the list and the markers number them
+		 * @return {Map<number, number>} Comment id → its place in the order Comments were written, as the list and the cards number them
 		 */
 		numbers() {
 			return new Map([...this.threads]

@@ -872,7 +872,7 @@ function openCircle(circle, x) {
 }
 
 /**
- * Opens a Comment's card at its circle, on the wave or on the bar, and selects it in the list too; opening does not seek
+ * Opens a Comment's card at its circle, and selects it in the list too; the circle does not seek
  *
  * @param {object} comment - the Comment
  * @param {number} x - where it was hit, from the stage's left edge
@@ -886,8 +886,6 @@ function open(comment, x, siblings) {
 	card.value = { id: comment.id, left: Math.min(size.width - CARD_HALF - 8, Math.max(CARD_HALF + 8, x)), siblings }
 	store.selected = comment.id
 }
-
-defineExpose({ open })
 
 /**
  * @param {object} comment - another Comment of the same place

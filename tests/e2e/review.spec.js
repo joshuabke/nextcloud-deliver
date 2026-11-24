@@ -253,7 +253,7 @@ test.describe('Review view', () => {
 
 		// Frame stepping is exact: five steps at 25 fps land on 00:00:00:05; C brings hidden Comments back
 		await page.getByRole('button', { name: 'Hide Comments' }).click()
-		await expect(page.locator('.deliver-player__marker')).toHaveCount(0)
+		await expect(page.locator('.deliver-player__circle')).toHaveCount(0)
 		const height = (await page.locator('.deliver-player__stage').boundingBox()).height
 		// Focus the page without touching the player
 		await page.locator('.deliver-review__title').click()
@@ -271,19 +271,19 @@ test.describe('Review view', () => {
 		const first = page.locator('.deliver-comment').first()
 		await expect(first).toContainText('sound starts too early')
 		// No row of its own: the Comment takes nothing from the picture
-		await expect(page.locator('.deliver-player__marker')).toBeVisible()
+		await expect(page.locator('.deliver-player__circle')).toBeVisible()
 		expect((await page.locator('.deliver-player__stage').boundingBox()).height).toBe(height)
 		await expect(first.locator('.deliver-comment__time')).not.toBeEmpty()
 		await expect(page.locator('.deliver-comment__anchor').first()).toHaveText('00:00:00:05')
 		// Its author's initials, on the bar, which lies between the picture and the buttons with nothing beside it
-		await expect(page.locator('.deliver-player__marker')).toHaveText('D')
-		const [marker, under, above, buttons] = await Promise.all(['marker', 'timeline', 'stage', 'controls'].map((each) => page.locator(`.deliver-player__${each}`).boundingBox()))
-		expect(marker.y + marker.height / 2).toBeCloseTo(under.y + under.height / 2, 0)
-		expect(marker.x + marker.width / 2).toBeCloseTo(under.x + under.width * 5 / 100, 0)
+		await expect(page.locator('.deliver-player__circle')).toHaveText('D')
+		const [circle, under, above, buttons] = await Promise.all(['circle', 'timeline', 'stage', 'controls'].map((each) => page.locator(`.deliver-player__${each}`).boundingBox()))
+		expect(circle.y + circle.height / 2).toBeCloseTo(under.y + under.height / 2, 0)
+		expect(circle.x + circle.width / 2).toBeCloseTo(under.x + under.width * 5 / 100, 0)
 		expect(under.y).toBeCloseTo(above.y + above.height, 0)
 		expect(buttons.y).toBeCloseTo(under.y + under.height, 0)
-		expect(marker.y).toBeGreaterThanOrEqual(above.y + above.height - 2)
-		expect(marker.y + marker.height).toBeLessThanOrEqual((await page.getByRole('button', { name: 'Play (Space)' }).boundingBox()).y)
+		expect(circle.y).toBeGreaterThanOrEqual(above.y + above.height - 2)
+		expect(circle.y + circle.height).toBeLessThanOrEqual((await page.getByRole('button', { name: 'Play (Space)' }).boundingBox()).y)
 
 		// A Range, set with I and O
 		// Focus the page without touching the player
@@ -298,7 +298,7 @@ test.describe('Review view', () => {
 		await page.locator('#deliver-comment-body').fill('shorten this passage')
 		await page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
 		// Both start on the same Frame: one circle with their count
-		await expect(page.locator('.deliver-player__marker')).toHaveText('2')
+		await expect(page.locator('.deliver-player__circle')).toHaveText('2')
 
 		// Resolving hides it from the unresolved filter, a Reply stays with its parent
 		await page.locator('.deliver-comment').first().getByRole('button', { name: 'Mark as resolved' }).click()
@@ -517,15 +517,7 @@ test.describe('Review view', () => {
 		await reviewer.locator('#deliver-comment-body').fill('on the phone')
 		await reviewer.getByRole('button', { name: 'Send (Enter)' }).tap()
 		await expect(reviewer.locator('.deliver-comment').filter({ hasText: 'on the phone' })).toContainText('Pia')
-		// A tap on its marker opens the Comment on the picture
-		await reviewer.locator('.deliver-player__marker[aria-label^="Pia"]').tap({ force: true })
-		await expect(reviewer.locator('.deliver-player__peek--tapped')).toContainText('on the phone')
-		// A tap on the picture then only closes it
-		await reviewer.waitForTimeout(700)
-		await reviewer.locator('.deliver-player__stage').tap({ position: { x: 40, y: 40 } })
-		await expect(reviewer.locator('.deliver-player__peek')).toHaveCount(0)
-		await reviewer.waitForTimeout(700)
-		await expect(reviewer.locator('.deliver-player--fullscreen')).toHaveCount(0)
+		await expect(reviewer.locator('.deliver-player__circle')).toHaveText(['P'])
 		await guest.close()
 	})
 
@@ -877,104 +869,25 @@ test.describe('Review view', () => {
 		await page.keyboard.press('k')
 	})
 
-	test('a click on a Comment\'s marker pauses', async ({ playwright }) => {
-		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
-		// The Compare test stacked a newer Version on the Asset; only the newest takes Comments
-		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
-		const newest = Math.max(...project.ocs.data.assets[0].versions.map((each) => each.id))
-		const commented = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${newest}/comments?format=json`, { data: { inFrame: 50, body: 'stop here' } })
-		expect(commented.ok()).toBe(true)
-		await api.dispose()
-		await page.goto(`/apps/deliver/versions/${newest}`)
-		const video = page.locator('video.deliver-player__video')
-		await expect(video).toHaveJSProperty('readyState', 4)
-		await page.getByRole('button', { name: /^Play \(/ }).click()
-		await expect.poll(() => video.evaluate((element) => element.paused)).toBe(false)
-		await page.locator('.deliver-player__marker').first().click({ force: true })
-		await expect.poll(() => video.evaluate((element) => element.paused)).toBe(true)
-		expect(await video.evaluate((element) => element.currentTime)).toBeCloseTo(2, 1)
-	})
-
-	test('close Comments share a marker with their count: each press takes the next, a double tap or click goes to the one that showed', async ({ playwright }) => {
+	test('close Comments share a circle with their count, and the bar grows under a mouse and takes a finger up to its edges', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
 		const newest = Math.max(...project.ocs.data.assets[0].versions.map((each) => each.id))
 		const ids = []
-		for (const inFrame of [85, 86, 87]) {
+		for (const inFrame of [60, 85, 86, 87]) {
 			const made = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${newest}/comments?format=json`, { data: { inFrame, body: `at ${inFrame}` } })
 			ids.push((await made.json()).ocs.data.id)
 		}
 		await page.goto(`/apps/deliver/versions/${newest}`)
-		const video = page.locator('video.deliver-player__video')
-		await expect(video).toHaveJSProperty('readyState', 4)
-		const frameOf = (target) => target.evaluate((element) => Math.floor(element.currentTime * 25 + 0.001))
-		const marker = page.locator('.deliver-player__marker[aria-label*=": at 8"]')
-		await expect(marker).toHaveAttribute('aria-label', /^1 of 3, .*: at 85$/)
-		// The mouse shows the first and steps on with every click; the wrap comes back to it (forced: the bar takes the pointer for its circles)
-		await marker.hover({ force: true })
-		await expect(page.locator('.deliver-player__peek')).toContainText('1 of 3')
-		for (const frame of [85, 86, 87, 85, 86]) {
-			await marker.click({ force: true })
-			await expect.poll(() => frameOf(video)).toBe(frame)
-			await page.waitForTimeout(400)
-		}
-		// A double click does not step on: the second press takes the one that showed before the first
-		await expect(page.locator('.deliver-player__peek')).toContainText('2 of 3')
-		await marker.dblclick({ force: true })
-		await expect(page.locator('.deliver-player__peek')).toContainText('2 of 3')
-		await expect.poll(() => frameOf(video)).toBe(86)
-		await page.mouse.move(0, 0)
-		await expect(page.locator('.deliver-player__peek')).toHaveCount(0)
-		// The keyboard too: the Tab key shows the first, Enter goes there and then on
-		await page.locator('.deliver-layout__bar h2').click()
-		await marker.focus()
-		await expect(page.locator('.deliver-player__peek')).toHaveCount(0)
-		await page.keyboard.press('Shift+Tab')
-		await page.keyboard.press('Tab')
-		await expect(marker).toBeFocused()
-		await expect(page.locator('.deliver-player__peek')).toContainText('1 of 3')
-		await page.keyboard.press('Enter')
-		await expect.poll(() => frameOf(video)).toBe(85)
-		await page.keyboard.press('Enter')
-		await expect.poll(() => frameOf(video)).toBe(86)
-		await expect(marker).toHaveAttribute('aria-label', /^2 of 3, .*: at 86$/)
-
-		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
-		const touchPage = await phone.newPage()
-		await login(touchPage)
-		await touchPage.goto(`/apps/deliver/versions/${newest}`)
-		const touchVideo = touchPage.locator('video.deliver-player__video')
-		await expect(touchVideo).toHaveJSProperty('readyState', 4)
-		const card = touchPage.locator('.deliver-player__peek--tapped')
-		// A finger on the circle opens the card without seeking
-		const box = await touchPage.locator('.deliver-player__marker[aria-label*=": at 8"]').boundingBox()
-		const tap = (beside = 0) => touchPage.touchscreen.tap(box.x + box.width / 2 - beside, box.y + box.height / 2)
-		await tap(6)
-		await expect(card).toContainText('at 85')
-		expect(await touchVideo.evaluate((element) => element.currentTime)).toBe(0)
-		await touchPage.waitForTimeout(700)
-		await tap()
-		await expect(card).toContainText('2 of 3')
-		await touchPage.waitForTimeout(700)
-		await tap()
-		await tap()
-		await expect(card).toContainText('2 of 3')
-		await expect(card).toContainText('at 86')
-		await expect.poll(() => frameOf(touchVideo)).toBe(86)
-		// It reaches no further than it is drawn: beside, above and below it the bar seeks
-		const bar = await touchPage.locator('.deliver-player__timeline').boundingBox()
-		const tapAt = async (x, y) => {
-			await touchPage.reload()
-			await expect(touchVideo).toHaveJSProperty('readyState', 4)
-			await expect(touchPage.locator('.deliver-player__marker[aria-label*=": at 8"]')).toBeVisible()
-			await touchPage.touchscreen.tap(box.x + box.width / 2 + x, y)
-		}
-		for (const [x, y, frame] of [[-18, 16, 85 - 18 / bar.width * 100], [0, 2, 85], [0, bar.height - 2, 85]]) {
-			await tapAt(x, bar.y + y)
-			await expect.poll(() => frameOf(touchVideo)).toBeGreaterThan(frame - 2)
-			expect(await frameOf(touchVideo)).toBeLessThan(frame + 2)
-			await expect(card).toHaveCount(0)
-		}
+		await expect(page.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
+		const count = page.locator('.deliver-player__circle').filter({ hasText: '3' })
+		await expect(count).toHaveCount(1)
+		// Selected in the list, its circle is ringed; nothing of it is for the keyboard or a screen reader, as the list is
+		await page.locator('.deliver-comment').filter({ hasText: 'at 60' }).locator('.deliver-comment__anchor').click()
+		await expect(page.locator('.deliver-player__circle--ringed')).toHaveCount(1)
+		await expect(count).not.toHaveClass(/--ringed/)
+		await expect(page.locator('.deliver-player__scrubber').locator('button, [tabindex], [role]')).toHaveCount(0)
+		await expect(page.locator('.deliver-player__circles')).toHaveAttribute('aria-hidden', 'true')
 		// The bar grows under a mouse, on a narrow window too, not under a finger
 		await page.setViewportSize({ width: 900, height: 800 })
 		await page.locator('.deliver-player__timeline').hover()
@@ -982,10 +895,25 @@ test.describe('Review view', () => {
 		const [knob, track] = await Promise.all(['.deliver-player__timeline', '.deliver-player__track'].map((each) => page.locator(each).boundingBox()))
 		expect(track.y + track.height / 2).toBeCloseTo(knob.y + knob.height / 2, 0)
 		await page.setViewportSize({ width: 1280, height: 720 })
-		await expect(touchPage.locator('.deliver-player__track')).toHaveCSS('height', '6px')
-		await tapAt(0, bar.y - 4)
+
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const touchPage = await phone.newPage()
+		await login(touchPage)
+		const video = touchPage.locator('video.deliver-player__video')
+		const frame = () => video.evaluate((element) => Math.floor(element.currentTime * 25 + 0.001))
+		for (const edge of ['top', 'bottom']) {
+			await touchPage.goto(`/apps/deliver/versions/${newest}`)
+			await expect(video).toHaveJSProperty('readyState', 4)
+			const bar = await touchPage.locator('.deliver-player__timeline').boundingBox()
+			await touchPage.touchscreen.tap(bar.x + bar.width * 0.855, bar.y + (edge === 'top' ? 2 : bar.height - 2))
+			await expect.poll(frame).toBe(85)
+			await touchPage.waitForTimeout(300)
+			await expect(touchPage.locator('.deliver-player__track')).toHaveCSS('height', '6px')
+		}
+		// Above it the picture keeps its own
+		const bar = await touchPage.locator('.deliver-player__timeline').boundingBox()
+		await touchPage.touchscreen.tap(bar.x + bar.width * 0.3, bar.y - 4)
 		await expect(touchPage.locator('.deliver-player--fullscreen, .deliver-player--filling')).toHaveCount(1)
-		await expect(card).toHaveCount(0)
 		await phone.close()
 		for (const id of ids) {
 			expect((await api.delete(`/ocs/v2.php/apps/deliver/api/v1/comments/${id}?format=json`)).ok()).toBe(true)
@@ -993,20 +921,21 @@ test.describe('Review view', () => {
 		await api.dispose()
 	})
 
-	test('a press on a Comment\'s circle that does not move opens it, one that moves drags the playhead, by mouse and by finger', async ({ playwright }) => {
+	test('a press on a Comment\'s circle seeks and drags as anywhere on the bar, by mouse, finger and pen, and opens nothing', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
 		const newest = Math.max(...project.ocs.data.assets[0].versions.map((each) => each.id))
-		const made = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${newest}/comments?format=json`, { data: { inFrame: 30, body: 'drag me' } })
+		const made = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${newest}/comments?format=json`, { data: { inFrame: 30, body: 'look at me' } })
 		const id = (await made.json()).ocs.data.id
 		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
 		const touchPage = await phone.newPage()
 		await login(touchPage)
-		const cdp = await phone.newCDPSession(touchPage)
+		const touch = await phone.newCDPSession(touchPage)
+		const cdp = await context.newCDPSession(page)
 		const finger = (x, y) => ({
-			down: () => cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] }),
-			move: (dx) => cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + dx, y }] }),
-			up: () => cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }),
+			down: () => touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] }),
+			move: (dx) => touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + dx, y }] }),
+			up: () => touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }),
 		})
 		const mouse = (x, y) => ({
 			down: async () => {
@@ -1016,35 +945,54 @@ test.describe('Review view', () => {
 			move: (dx) => page.mouse.move(x + dx, y),
 			up: () => page.mouse.up(),
 		})
+		const pen = (x, y) => {
+			const send = (type, at, buttons) => cdp.send('Input.dispatchMouseEvent', { type, x: at, y, button: 'left', buttons, clickCount: 1, pointerType: 'pen' })
+			let at = x
+			return {
+				down: () => send('mousePressed', x, 1),
+				move: (dx) => {
+					at = x + dx
+					return send('mouseMoved', at, 1)
+				},
+				up: () => send('mouseReleased', at, 0),
+			}
+		}
 
-		for (const [target, pointer] of [[page, mouse], [touchPage, finger]]) {
+		for (const [target, pointer] of [[page, mouse], [touchPage, finger], [page, pen]]) {
 			await target.goto(`/apps/deliver/versions/${newest}`)
 			const video = target.locator('video.deliver-player__video')
 			await expect(video).toHaveJSProperty('readyState', 4)
 			const frame = () => video.evaluate((element) => Math.floor(element.currentTime * 25 + 0.001))
 			const paused = () => video.evaluate((element) => element.paused)
 			const bar = await target.locator('.deliver-player__timeline').boundingBox()
-			const box = await target.locator('.deliver-player__marker[aria-label$="drag me"]').boundingBox()
-			// A little off its middle, a Frame of its own
-			const x = box.x + box.width / 2 - 5
+			const circle = target.locator('.deliver-player__circle').filter({ hasText: 'D' })
+			const box = await circle.boundingBox()
+			expect(box.x + box.width / 2).toBeCloseTo(bar.x + bar.width * 0.3, 0)
+			// Off its middle, a Frame of its own
+			const x = box.x + box.width / 2 - 6
 			const { down, move, up } = pointer(x, box.y + box.height / 2)
 			const at = (px) => Math.floor((px - bar.x) / bar.width * 100)
-			const peek = target.locator('.deliver-player__peek')
-			const shown = target.locator('.deliver-player__hover')
+			const opened = target.locator('[role="dialog"], .deliver-comment--selected')
 
-			// Within the slop it does not seek but opens
+			// Pressed it is there at once, under the pointer, not at the Comment; the playback state stays
 			await down()
-			await move(6)
-			await target.waitForTimeout(150)
-			expect(await frame()).toBe(0)
+			await expect.poll(frame).toBe(at(x))
 			await up()
-			await expect(peek).toContainText('drag me')
-			await expect.poll(frame).toBe(target === page ? 30 : 0)
-			await target.reload()
-			await expect(video).toHaveJSProperty('readyState', 4)
-			await expect(target.locator('.deliver-player__marker[aria-label$="drag me"]')).toBeVisible()
+			await target.waitForTimeout(400)
+			expect(await frame()).toBe(at(x))
+			expect(await paused()).toBe(true)
+			await expect(opened).toHaveCount(0)
+			await expect(circle).not.toHaveClass(/--ringed/)
+			// Twice in a row is twice a seek
+			await down()
+			await up()
+			await down()
+			await up()
+			await target.waitForTimeout(400)
+			expect(await frame()).toBe(at(x))
+			await expect(opened).toHaveCount(0)
 
-			// Past it the playhead goes along, with the Frame over the pointer and no card, and playback held
+			// Playing, a click goes on playing; a drag holds playback and shows the Frame over the pointer
 			await target.getByRole('button', { name: /^Play/ }).first().click()
 			await expect.poll(paused).toBe(false)
 			await down()
@@ -1052,45 +1000,23 @@ test.describe('Review view', () => {
 			await move(120)
 			await expect.poll(frame).toBe(at(x + 120))
 			expect(await paused()).toBe(true)
-			await expect(shown).toBeVisible()
-			await expect(peek).toHaveCount(0)
-			// Back on the circle and let go, it is where the pointer is, still no click
+			await expect(target.locator('.deliver-player__hover')).toBeVisible()
 			await move(0)
-			await target.getByRole('button', { name: /^Pause|^Play/ }).first().waitFor()
 			await expect.poll(frame).toBe(at(x))
 			await up()
 			await expect.poll(paused).toBe(false)
-			await expect(target.locator('.deliver-player__peek--tapped')).toHaveCount(0)
-			await target.waitForTimeout(400)
+			await expect(opened).toHaveCount(0)
+			await down()
+			await up()
+			await target.waitForTimeout(200)
 			expect(await paused()).toBe(false)
-			expect(await frame()).toBeGreaterThanOrEqual(at(x))
 		}
-		// A click counts again after a drag
-		await page.locator('.deliver-player__marker[aria-label$="drag me"]').click({ force: true })
-		await expect.poll(() => page.locator('video.deliver-player__video').evaluate((element) => element.currentTime)).toBeCloseTo(1.2, 1)
-		// On a desktop the circle stands 2 px over the bar, and opens there too, where it is drawn and only there
-		const bar = await page.locator('.deliver-player__timeline').boundingBox()
-		const drawn = await page.locator('.deliver-player__marker[aria-label$="drag me"]').boundingBox()
-		const [x, y] = [drawn.x + drawn.width / 2, drawn.y + drawn.height / 2]
-		const video = page.locator('video.deliver-player__video')
-		const playing = () => video.evaluate((element) => !element.paused)
-		expect(drawn.height).toBeGreaterThan(bar.height)
-		for (const dy of [-9, 9]) {
-			await page.goto(`/apps/deliver/versions/${newest}`)
-			await expect(video).toHaveJSProperty('readyState', 4)
-			await expect(page.locator('.deliver-player__marker[aria-label$="drag me"]')).toBeVisible()
-			await page.mouse.click(x, y + dy)
-			await expect.poll(() => video.evaluate((element) => element.currentTime)).toBeCloseTo(1.22, 1)
-			expect(await playing()).toBe(false)
-			// Beside it at that height nothing seeks: above is the picture's, below nobody's
-			await page.goto(`/apps/deliver/versions/${newest}`)
-			await expect(video).toHaveJSProperty('readyState', 4)
-			await expect(page.locator('.deliver-player__marker[aria-label$="drag me"]')).toBeVisible()
-			await page.mouse.click(x + 8, y + dy)
-			await expect.poll(playing).toBe(dy < 0)
-			expect(await video.evaluate((element) => element.currentTime)).toBeLessThan(0.8)
-			await page.mouse.move(0, 0)
-		}
+		// The mouse shows the Frame's time over a circle as beside it
+		const box = await page.locator('.deliver-player__circle').filter({ hasText: 'D' }).boundingBox()
+		await page.mouse.move(0, 0)
+		await expect(page.locator('.deliver-player__hover')).toBeHidden()
+		await page.mouse.move(box.x + box.width / 2 + 0.5, box.y + box.height / 2)
+		await expect(page.locator('.deliver-player__hover-time')).toHaveText('00:00:01:05')
 		await phone.close()
 		expect((await api.delete(`/ocs/v2.php/apps/deliver/api/v1/comments/${id}?format=json`)).ok()).toBe(true)
 		await api.dispose()
@@ -2218,7 +2144,7 @@ test.describe('Audio review', () => {
 		await phone.close()
 	})
 
-	test('over the whole piece the Comments are on the wave only, zoomed in on the bar too, where a press opens the wave\'s card, by mouse, keyboard and finger', async ({ playwright }) => {
+	test('over the whole piece the Comments are on the wave only, zoomed in on the bar too, where a press seeks and opens nothing', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		const ids = []
 		const open = async (target, zoom) => {
@@ -2228,133 +2154,70 @@ test.describe('Audio review', () => {
 			await target.getByRole('button', { name: zoom, exact: true }).click()
 		}
 		const timeOf = (target) => target.locator('video.deliver-player__video').evaluate((element) => element.currentTime)
-		const markerOf = (target) => target.locator('.deliver-player__marker[aria-label*="on the bar"]')
+		const circleOf = (target) => target.locator('.deliver-player__circle').filter({ hasText: '2' })
 		const card = (target) => target.getByRole('dialog', { name: /^Comment #/ })
-		const peek = page.locator('.deliver-player__peek')
 		const canvas = page.locator('.deliver-wave canvas')
-		const bar = page.locator('.deliver-player__timeline')
+
 		// The wave is as high with Comments as without, at every zoom
 		await page.route('**/versions/*/comments*', (route) => route.fulfill({ json: { ocs: { meta: { status: 'ok', statuscode: 200 }, data: { comments: [], manages: true, overwrittenAt: null, canComment: true, canApprove: false } } } }))
 		await open(page, 'Whole')
 		const heights = [(await canvas.boundingBox()).height]
 		await page.getByRole('button', { name: '1 min', exact: true }).click()
 		heights.push((await canvas.boundingBox()).height)
-		await expect(page.locator('.deliver-player__marker')).toHaveCount(0)
+		await expect(page.locator('.deliver-player__circle')).toHaveCount(0)
 		await page.unroute('**/versions/*/comments*')
 		for (const [inFrame, body] of [[90000, 'on the bar'], [90100, 'close by']]) {
 			const made = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${versionId}/comments?format=json`, { data: { inFrame, body } })
 			ids.push((await made.json()).ocs.data.id)
 		}
 		await open(page, 'Whole')
-		const marker = markerOf(page)
-		await expect(marker).toHaveText('2')
+		await expect(page.locator('.deliver-comment').filter({ hasText: 'on the bar' })).toBeVisible()
 		const stage = await canvas.boundingBox()
-		const under = await bar.boundingBox()
+		const under = await page.locator('.deliver-player__timeline').boundingBox()
 		expect([stage.height, stage.height]).toEqual(heights)
 		expect(under.y).toBeCloseTo(stage.y + stage.height, 0)
 
-		// Over the whole the circle is on the wave's lane, and the bar at its place only seeks
+		// Over the whole the circle is on the wave's lane, where it opens, and none is on the bar
 		expect(await canvas.evaluate((element) => {
 			const ratio = element.width / element.clientWidth
 			const data = element.getContext('2d').getImageData(Math.round((element.clientWidth / 4 + 8) * ratio), element.height - Math.round(20 * ratio), 1, 1).data
 			return data[3]
 		})).toBe(255)
-		await page.mouse.click(under.x + under.width / 4, under.y + under.height / 2)
+		await expect(page.locator('.deliver-player__circle')).toHaveCount(0)
+		const row = { x: under.x + under.width / 4, y: under.y + under.height / 2 }
+		await page.mouse.click(row.x, row.y)
 		await expect.poll(() => timeOf(page)).toBeCloseTo(90, 0)
-		await expect(peek).toHaveCount(0)
 		await expect(card(page)).toHaveCount(0)
-		// The keyboard still reaches it there, and it shows while it has the focus
-		await expect(marker).toHaveCSS('clip-path', 'inset(50%)')
-		await marker.focus()
-		await page.keyboard.press('Shift+Tab')
-		await page.keyboard.press('Tab')
-		await expect(marker).toBeFocused()
-		await expect(marker).toHaveCSS('clip-path', 'none')
-		await expect(peek).toContainText('1 of 2')
-		await page.keyboard.press('Enter')
-		await expect(card(page)).toContainText('on the bar')
-		// Escape hands the focus back, without the small card
-		await page.keyboard.press('Escape')
-		await expect(card(page)).toHaveCount(0)
-		await expect(marker).toBeFocused()
-		await page.waitForTimeout(200)
-		await expect(peek).toHaveCount(0)
 
-		// Zoomed in the bar has it too
+		// Zoomed in the bar has it too, translucent until the list selects it, and a click or a drag on it is the bar's
 		await page.getByRole('button', { name: '1 min', exact: true }).click()
 		expect((await canvas.boundingBox()).height).toBe(stage.height)
-		// Translucent, until the mouse is over it
-		const back = () => marker.evaluate((element) => getComputedStyle(element).backgroundColor)
-		await open(page, '1 min')
-		await page.mouse.move(0, 0)
-		await expect.poll(back).toMatch(/rgba\(0, 0, 0, 0\.\d+\)/)
-		await marker.hover({ force: true })
-		await expect.poll(back).toBe('rgb(0, 0, 0)')
-		await expect(peek).toContainText('1 of 2')
-		// In place of the Frame's time, which is beside it
-		await expect(page.locator('.deliver-player__hover')).toBeHidden()
-		await page.mouse.move(under.x + under.width / 4 + 14, under.y + under.height / 2)
-		await expect(peek).toHaveCount(0)
-		await expect(page.locator('.deliver-player__hover')).toBeVisible()
-		await marker.click({ force: true })
-		await expect(card(page)).toContainText('on the bar')
-		await expect(card(page).getByPlaceholder('Write a Reply')).toBeVisible()
-		await expect.poll(() => timeOf(page)).toBeCloseTo(90, 1)
-		// The mouse's small card is gone, the list selected, and the circle ringed
-		await expect(peek).toHaveCount(0)
-		await expect(page.locator('.deliver-comment--selected')).toContainText('on the bar')
-		await expect(marker).toHaveAttribute('style', /--deliver-marker-line: #fff/)
-		await expect(marker).toHaveClass(/--opaque/)
-		// The card steps through the count, and a double click goes to the one it shows
-		await card(page).getByRole('button', { name: 'Next Comment' }).click()
-		await expect(card(page)).toContainText('close by')
-		await page.locator('.deliver-player__marker[aria-label^="2 of 2"]').dblclick({ force: true })
-		await expect(card(page)).toContainText('close by')
-		await expect.poll(() => timeOf(page)).toBeCloseTo(90.1, 2)
-		await page.keyboard.press('Escape')
-		await expect(card(page)).toHaveCount(0)
-		await page.locator('.deliver-player__marker[aria-label^="2 of 2"]').focus()
-		await page.keyboard.press('Enter')
-		await expect(card(page)).toContainText('close by')
-		await page.keyboard.press('Escape')
-		// A drag from it moves the wave and opens nothing
-		await page.mouse.move(under.x + under.width / 4, under.y + under.height / 2)
+		await expect(circleOf(page)).toBeVisible()
+		const back = () => circleOf(page).evaluate((element) => getComputedStyle(element).backgroundColor)
+		expect(await back()).toMatch(/rgba\(0, 0, 0, 0\.\d+\)/)
+		await page.mouse.click(row.x + 6, row.y)
+		await expect.poll(() => timeOf(page)).toBeCloseTo(90 + 6 / under.width * 360, 0)
 		await page.mouse.down()
-		await page.mouse.move(under.x + under.width / 2, under.y + under.height / 2, { steps: 4 })
+		await page.mouse.move(under.x + under.width / 2, row.y, { steps: 4 })
 		await expect.poll(() => timeOf(page)).toBeCloseTo(180, 0)
 		await page.mouse.up()
 		await page.waitForTimeout(400)
 		await expect(card(page)).toHaveCount(0)
-		expect(await timeOf(page)).toBeCloseTo(180, 0)
+		await expect(page.locator('.deliver-comment--selected')).toHaveCount(0)
+		await page.locator('.deliver-comment').filter({ hasText: 'close by' }).locator('.deliver-comment__anchor').click()
+		await expect(circleOf(page)).toHaveClass(/--ringed/)
+		await expect.poll(back).toBe('rgb(0, 0, 0)')
 
 		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: { width: 852, height: 393 } })
 		const member = await phone.newPage()
 		await login(member)
-		await open(member, 'Whole')
-		await expect(markerOf(member)).toHaveText('2')
-		const row = await member.locator('.deliver-player__timeline').boundingBox()
-		await member.touchscreen.tap(row.x + row.width / 4, row.y + row.height / 2)
-		await expect.poll(() => timeOf(member)).toBeCloseTo(90, 0)
-		await member.waitForTimeout(400)
-		await expect(card(member)).toHaveCount(0)
 		await open(member, '1 min')
-		await expect(markerOf(member)).toHaveText('2')
-		// A tap reads and answers without seeking; a double tap goes there, though the sheet would cover the bar
-		const at = await markerOf(member).boundingBox()
-		const tap = () => member.touchscreen.tap(at.x + at.width / 2, at.y + at.height / 2)
-		await tap()
-		await expect(card(member)).toContainText('on the bar')
-		expect(await timeOf(member)).toBe(0)
-		await card(member).getByRole('button', { name: 'Close' }).tap()
-		await tap()
-		await tap()
-		await expect.poll(() => timeOf(member)).toBeCloseTo(90, 1)
-		await member.waitForTimeout(400)
-		await expect(card(member)).toHaveCount(0)
-		// A finger dragging right after a tap on it moves the wave, and no sheet comes up meanwhile
+		await expect(circleOf(member)).toBeVisible()
+		const at = await circleOf(member).boundingBox()
 		const touch = await phone.newCDPSession(member)
 		const y = at.y + at.height / 2
-		await tap()
+		await member.touchscreen.tap(at.x + at.width / 2, y)
+		await expect.poll(() => timeOf(member)).toBeCloseTo(90, 0)
 		await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: at.x + at.width / 2, y }] })
 		for (const x of [at.x + 60, at.x + 160, at.x + 260]) {
 			await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y }] })
