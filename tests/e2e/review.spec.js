@@ -2065,7 +2065,8 @@ test.describe('Comparing sound', () => {
 				const now = performance.now()
 				const output = a.deliverGain.context
 				const side = halves[0].getAttribute('aria-checked') === 'true' ? 'a' : 'b'
-				samples.push({ ahead: (side === 'a' ? a : b).currentTime - output.currentTime, running: output.state === 'running', apart: Math.min(first, read()), side })
+				const clock = output.currentTime
+				samples.push({ behind: clock - now / 1000, ahead: (side === 'a' ? a : b).currentTime - clock, running: output.state === 'running', apart: Math.min(first, read()), side })
 				if (now - start > (switches + 1) * 400 && switches < 10) {
 					switches++
 					halves[switches % 2].click()
@@ -2092,6 +2093,9 @@ test.describe('Comparing sound', () => {
 		expect(run.samples.every((sample) => sample.running)).toBe(true)
 		const ahead = run.samples.map((sample) => sample.ahead)
 		expect(Math.max(...ahead) - Math.min(...ahead)).toBeLessThan(0.015)
+		// And the output with the wall's clock, as loosely as a few dropped buffers need: the app may not hold it up
+		const behind = run.samples.map((sample) => sample.behind)
+		expect(Math.max(...behind) - Math.min(...behind)).toBeLessThan(0.06)
 	})
 
 	test('on a page\'s first Play the sides are in step from the first second on, video and audio alike', async () => {
