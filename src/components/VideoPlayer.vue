@@ -517,7 +517,7 @@ function onDragStart(event) {
 }
 
 /**
- * The circles leave the pointer to the bar, as Chrome would move a tap beside a button onto it
+ * The circles' buttons leave the pointer to the bar, as Chrome would move a tap beside a button onto it
  *
  * @param {PointerEvent} event - a pointer on the bar
  * @return {object|null} the circle drawn there
@@ -532,6 +532,8 @@ function markAt(event) {
  */
 function startDrag(event) {
 	dragging.value = true
+	// A sheet still waiting for a second tap would come up over the bar
+	clearTimeout(cardTimer)
 	follow(event)
 }
 
@@ -1171,19 +1173,24 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 						:style="{ left: leftOf(each) + '%', width: widthOf(each) + '%' }" />
 				</div>
 				<!-- A circle per Comment, centred on its Frame, as on the Waveform; close ones are one with their count; hovering shows the Comment -->
-				<button
+				<span
 					v-for="mark in marks"
 					:key="mark.key"
-					type="button"
-					class="deliver-player__marker"
-					:class="{ 'deliver-player__marker--resolved': mark.pale, 'deliver-player__marker--opaque': mark.ringed || hovered === mark.key, 'deliver-player__marker--unseen': whole }"
-					:style="{ left: mark.x + 'px', '--deliver-marker-fill': mark.fill, '--deliver-marker-line': mark.line }"
-					:aria-label="mark.label"
-					@keyup.tab="showPeek(mark, shownOf(mark))"
-					@blur="peek?.tapped || (peek = null)"
-					@click="openMarker(mark, $event.timeStamp)">
-					{{ mark.text }}
-				</button>
+					class="deliver-player__place"
+					:class="{ 'deliver-player__place--unseen': whole }"
+					:style="{ left: mark.x + 'px' }">
+					<button
+						type="button"
+						class="deliver-player__marker"
+						:class="{ 'deliver-player__marker--resolved': mark.pale, 'deliver-player__marker--opaque': mark.ringed || hovered === mark.key }"
+						:style="{ '--deliver-marker-fill': mark.fill, '--deliver-marker-line': mark.line }"
+						:aria-label="mark.label"
+						@keyup.tab="showPeek(mark, shownOf(mark))"
+						@blur="peek?.tapped || (peek = null)"
+						@click.stop="openMarker(mark, $event.timeStamp)">
+						{{ mark.text }}
+					</button>
+				</span>
 				<!-- Over the circles; while a finger drags, the playhead follows it -->
 				<div class="deliver-player__playhead" :style="{ left: dragging && hover ? hover.left + 'px' : progress + '%' }" />
 				<div v-show="hover" class="deliver-player__hover" :style="{ left: (hover?.left ?? 0) + 'px' }">
@@ -1583,13 +1590,6 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	touch-action: none;
 }
 
-/* The half of a circle at either end that stands beyond the bar */
-.deliver-player__timeline::before {
-	content: '';
-	position: absolute;
-	inset: 0 -10px;
-}
-
 /* On a phone the bar is taller for a finger, and the playhead has a knob to take hold of */
 .deliver-player--mobile .deliver-player__timeline {
 	height: 32px;
@@ -1728,28 +1728,51 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
  * A circle as the Waveform draws it (circleLook, drawCircles), but the bar shows through, and takes the pointer (markAt).
  * 20 px (BAR_CIRCLE): it stands only 2 px over a desktop's bar, short of the buttons below and the picture's captions, and
  * leaves a finger 6 px of a phone's bar above and below; two are 24 px apart at least. The resets keep Nextcloud's button
- * style away.
+ * style away. The place is round, so that the bar has the pointer wherever the circle is drawn, beyond its own edges too,
+ * and nowhere else.
  */
-.deliver-player__marker {
-	--deliver-marker-back: rgba(0, 0, 0, 0.55);
+.deliver-player__place {
 	position: absolute;
 	top: 50%;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	min-height: 0;
 	width: 20px;
 	height: 20px;
+	border-radius: 50%;
+	transform: translate(-50%, -50%);
+}
+
+/* The stage shows it already; the keyboard still reaches it, and sees it then */
+.deliver-player__place--unseen {
+	pointer-events: none;
+}
+
+.deliver-player__place--unseen .deliver-player__marker:not(:focus-visible) {
+	clip-path: inset(50%);
+}
+
+.deliver-player__marker {
+	--deliver-marker-back: rgba(0, 0, 0, 0.55);
+	display: flex;
+	/* The initials' baseline is that of the strut before them */
+	align-items: baseline;
+	justify-content: center;
+	min-height: 0;
+	width: 100%;
+	height: 100%;
 	margin: 0 !important;
 	padding: 0;
 	border: 2px solid var(--deliver-marker-line);
 	border-radius: 50%;
 	background: linear-gradient(var(--deliver-marker-fill) 0 0) var(--deliver-marker-back) !important;
 	color: #fff;
-	font: bold 9px/1 sans-serif;
+	font: bold 9px/0 sans-serif;
 	text-shadow: 0 0 2px #000;
 	pointer-events: none;
-	transform: translate(-50%, -50%);
+}
+
+/* Half of the room inside the ring and half a capital's height: the capitals stand in the middle, whatever the font */
+.deliver-player__marker::before {
+	content: '';
+	height: calc(8px + 0.5cap);
 }
 
 .deliver-player__marker--resolved {
@@ -1766,11 +1789,6 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 .deliver-player__marker:focus-visible {
 	outline: 2px solid #fff;
 	outline-offset: 1px;
-}
-
-/* The stage shows it already; the keyboard still reaches it, and sees it then */
-.deliver-player__marker--unseen:not(:focus-visible) {
-	clip-path: inset(50%);
 }
 
 /* The Comment under the pointer, as a card over the bar */

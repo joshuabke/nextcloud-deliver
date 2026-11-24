@@ -1068,6 +1068,29 @@ test.describe('Review view', () => {
 		// A click counts again after a drag
 		await page.locator('.deliver-player__marker[aria-label$="drag me"]').click({ force: true })
 		await expect.poll(() => page.locator('video.deliver-player__video').evaluate((element) => element.currentTime)).toBeCloseTo(1.2, 1)
+		// On a desktop the circle stands 2 px over the bar, and opens there too, where it is drawn and only there
+		const bar = await page.locator('.deliver-player__timeline').boundingBox()
+		const drawn = await page.locator('.deliver-player__marker[aria-label$="drag me"]').boundingBox()
+		const [x, y] = [drawn.x + drawn.width / 2, drawn.y + drawn.height / 2]
+		const video = page.locator('video.deliver-player__video')
+		const playing = () => video.evaluate((element) => !element.paused)
+		expect(drawn.height).toBeGreaterThan(bar.height)
+		for (const dy of [-9, 9]) {
+			await page.goto(`/apps/deliver/versions/${newest}`)
+			await expect(video).toHaveJSProperty('readyState', 4)
+			await expect(page.locator('.deliver-player__marker[aria-label$="drag me"]')).toBeVisible()
+			await page.mouse.click(x, y + dy)
+			await expect.poll(() => video.evaluate((element) => element.currentTime)).toBeCloseTo(1.22, 1)
+			expect(await playing()).toBe(false)
+			// Beside it at that height nothing seeks: above is the picture's, below nobody's
+			await page.goto(`/apps/deliver/versions/${newest}`)
+			await expect(video).toHaveJSProperty('readyState', 4)
+			await expect(page.locator('.deliver-player__marker[aria-label$="drag me"]')).toBeVisible()
+			await page.mouse.click(x + 8, y + dy)
+			await expect.poll(playing).toBe(dy < 0)
+			expect(await video.evaluate((element) => element.currentTime)).toBeLessThan(0.8)
+			await page.mouse.move(0, 0)
+		}
 		await phone.close()
 		expect((await api.delete(`/ocs/v2.php/apps/deliver/api/v1/comments/${id}?format=json`)).ok()).toBe(true)
 		await api.dispose()
@@ -2328,9 +2351,10 @@ test.describe('Audio review', () => {
 		await expect.poll(() => timeOf(member)).toBeCloseTo(90, 1)
 		await member.waitForTimeout(400)
 		await expect(card(member)).toHaveCount(0)
-		// A finger dragging from it moves the wave
+		// A finger dragging right after a tap on it moves the wave, and no sheet comes up meanwhile
 		const touch = await phone.newCDPSession(member)
 		const y = at.y + at.height / 2
+		await tap()
 		await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: at.x + at.width / 2, y }] })
 		for (const x of [at.x + 60, at.x + 160, at.x + 260]) {
 			await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y }] })
