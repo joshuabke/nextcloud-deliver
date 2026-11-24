@@ -43,7 +43,7 @@ import { SKIP_SECONDS, skipFrames } from '../lib/skip.js'
 import { formatAt, fpsValue, frameToTime, modesFor, stepOf, timeToFrame } from '../lib/timecode.js'
 import { watermarkTile } from '../lib/watermark.js'
 import { fetchWaveform, overview } from '../lib/waveform.js'
-import { circleLook, circlesOf, isWhole, overviewWindow, readSpan } from '../lib/waveWindow.js'
+import { BAR_CIRCLE, circleAt, circleLook, circlesOf, isWhole, overviewWindow, readSpan } from '../lib/waveWindow.js'
 import { useCommentsStore } from '../store/comments.js'
 
 /** The drawing being made for the next Comment */
@@ -126,6 +126,8 @@ const hover = ref(null)
 const scrubber = ref(null)
 /** Whether a mouse is over the bar: a tap's :hover would stay */
 const pointed = ref(false)
+/** The circle on the bar under the mouse, by its key */
+const hovered = ref(null)
 /** The Comment whose card shows over the bar, its circle, and where; tapped: a finger opened it, pressed: its circle was pressed on it */
 const peek = ref(null)
 /** The stage's Waveform, and a Comment's card about to open there */
@@ -380,7 +382,7 @@ function onHover(event) {
 	}
 	const at = frameAt(event)
 	const box = event.currentTarget.getBoundingClientRect()
-	hover.value = { frame: at, left: event.clientX - box.left, tile: tileFor(at) }
+	hover.value = { frame: at, left: Math.min(box.width, Math.max(0, event.clientX - box.left)), tile: tileFor(at) }
 	peekFrame(at)
 }
 
@@ -474,11 +476,8 @@ function release() {
 
 /** The Frame a press on the bar came down on; null for one on a circle */
 let pressedAt = null
-/** The pointer down on a circle, {id, x, y}, until it lifts (the circle opens) or moves past the slop: a drag as from the bar */
-let pressedMarker = null
-/** Whether the last press on a circle was a finger's or a pen's, and whether it became a drag, whose click does not count */
-let tappedMarker = false
-let draggedMarker = false
+/** A press on a circle, {id, x, y, mark}: it opens the circle as it lifts, unless it moved past the slop and became a drag */
+let pressed = null
 
 const live = liveSeek((target) => {
 	const element = video.value
@@ -489,6 +488,9 @@ const live = liveSeek((target) => {
 	element.currentTime = time
 	return true
 })
+
+/** Chrome hands a touch near a button, the controls right under the bar, to it, unless what is touched answers a click itself */
+function keepTouch() {}
 
 /**
  * Pressing on the bar takes the playhead there, and it follows the pointer
@@ -504,16 +506,24 @@ function onDragStart(event) {
 	if (!durationFrames.value || (event.pointerType === 'mouse' && event.button !== 0)) {
 		return
 	}
-	const marker = event.target.closest('.deliver-player__marker')
-	if (!marker) {
+	event.currentTarget.setPointerCapture(event.pointerId)
+	const mark = markAt(event)
+	pressed = mark && { id: event.pointerId, x: event.clientX, y: event.clientY, mark }
+	if (!mark) {
 		pressedAt = frameAt(event)
 		startDrag(event)
-		return
 	}
-	tappedMarker = event.pointerType !== 'mouse'
-	draggedMarker = false
-	pressedMarker = { id: event.pointerId, x: event.clientX, y: event.clientY }
-	marker.setPointerCapture(event.pointerId)
+}
+
+/**
+ * The circles leave the pointer to the bar, as Chrome would move a tap beside a button onto it
+ *
+ * @param {PointerEvent} event - a pointer on the bar
+ * @return {object|null} the circle drawn there
+ */
+function markAt(event) {
+	const box = event.currentTarget.getBoundingClientRect()
+	return whole.value ? null : circleAt(marks.value, event.clientX - box.left, event.clientY - box.top - box.height / 2, BAR_CIRCLE / 2)
 }
 
 /**
@@ -521,7 +531,6 @@ function onDragStart(event) {
  */
 function startDrag(event) {
 	dragging.value = true
-	event.currentTarget.setPointerCapture(event.pointerId)
 	follow(event)
 }
 
@@ -552,22 +561,39 @@ function follow(event) {
  * @param {PointerEvent} event - the pointer moves
  */
 function onPointerMove(event) {
-	if (pressedMarker?.id === event.pointerId) {
-		if (Math.hypot(event.clientX - pressedMarker.x, event.clientY - pressedMarker.y) > TAP_SLOP) {
-			pressedMarker = null
-			draggedMarker = true
+	if (pressed?.id === event.pointerId) {
+		if (Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) > TAP_SLOP) {
+			pressed = null
 			pressedAt = null
+			hovered.value = null
 			peek.value = null
 			startDrag(event)
 		}
 	} else if (dragging.value) {
 		follow(event)
 	} else if (event.pointerType === 'mouse') {
-		if (event.target.closest('.deliver-player__marker')) {
-			leaveBar()
-		} else {
+		hoverMark(markAt(event))
+		if (hovered.value === null) {
 			follow(event)
+		} else {
+			leaveBar()
 		}
+	}
+}
+
+/**
+ * @param {object|null} mark - the circle the mouse is over now; its card shows as the mouse comes to it
+ */
+function hoverMark(mark) {
+	const key = mark?.key ?? null
+	if (key === hovered.value) {
+		return
+	}
+	hovered.value = key
+	if (mark) {
+		showPeek(mark, shownOf(mark))
+	} else if (!peek.value?.tapped) {
+		peek.value = null
 	}
 }
 
@@ -577,8 +603,12 @@ function onPointerMove(event) {
  * @param {PointerEvent} event - the pointer lets go or is taken away
  */
 function onDragEnd(event) {
-	if (pressedMarker?.id === event.pointerId) {
-		pressedMarker = null
+	if (pressed?.id === event.pointerId) {
+		const { mark } = pressed
+		pressed = null
+		if (event.type === 'pointerup') {
+			openMarker(mark, event.timeStamp, event.pointerType)
+		}
 	}
 	if (!dragging.value) {
 		return
@@ -607,20 +637,17 @@ let lastPress = { key: null, at: 0, comment: null }
  * instead, where a count steps through its Comments with the card's buttons.
  *
  * @param {object} mark - the marker
- * @param {MouseEvent} event - the click
+ * @param {number} at - when, on the clock of events
+ * @param {string} [pointerType] - what pressed it; none for Enter or a screen reader, which press single
  */
-function openMarker(mark, event) {
-	// Enter has no detail: it is neither a tap nor the click that ends a drag, and held or pressed quickly no double one
-	if (event.detail > 0 && draggedMarker) {
-		return
-	}
-	const tapped = event.detail > 0 && tappedMarker
-	const again = event.detail > 0 && lastPress.key === mark.key && event.timeStamp - lastPress.at < DOUBLE_TAP_MS
+function openMarker(mark, at, pointerType = '') {
+	const tapped = pointerType !== '' && pointerType !== 'mouse'
+	const again = pointerType !== '' && lastPress.key === mark.key && at - lastPress.at < DOUBLE_TAP_MS
 	const each = mark.cluster ?? [mark.comment]
 	const before = shownOf(mark)
 	const steps = peek.value?.pressed && peek.value.comment.id === before.id
 	const comment = again ? lastPress.comment : each[(each.indexOf(before) + (steps ? 1 : 0)) % each.length]
-	lastPress = again ? { key: null, at: 0, comment: null } : { key: mark.key, at: event.timeStamp, comment: before }
+	lastPress = again ? { key: null, at: 0, comment: null } : { key: mark.key, at, comment: before }
 	if (!tapped || again) {
 		emit('jump', comment)
 	}
@@ -656,6 +683,7 @@ function leaveBar() {
 /** The pointer left the bar */
 function leaveScrubber() {
 	leaveBar()
+	hovered.value = null
 	// A card opened by a tap stays until it is tapped away
 	if (!peek.value?.tapped) {
 		peek.value = null
@@ -1114,7 +1142,8 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 				@pointerdown="onDragStart"
 				@pointermove="onPointerMove"
 				@pointerup="onDragEnd"
-				@pointercancel="onDragEnd">
+				@pointercancel="onDragEnd"
+				@click="keepTouch">
 				<svg
 					v-if="peaks.length && !version.audioOnly"
 					class="deliver-player__waveform"
@@ -1146,14 +1175,12 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 					:key="mark.key"
 					type="button"
 					class="deliver-player__marker"
-					:class="{ 'deliver-player__marker--resolved': mark.pale, 'deliver-player__marker--ringed': mark.ringed, 'deliver-player__marker--unseen': whole }"
+					:class="{ 'deliver-player__marker--resolved': mark.pale, 'deliver-player__marker--opaque': mark.ringed || hovered === mark.key, 'deliver-player__marker--unseen': whole }"
 					:style="{ left: mark.x + 'px', '--deliver-marker-fill': mark.fill, '--deliver-marker-line': mark.line }"
 					:aria-label="mark.label"
-					@pointerenter="$event.pointerType === 'mouse' && showPeek(mark, shownOf(mark))"
-					@pointerleave="$event.pointerType === 'mouse' && (peek = null)"
 					@keyup.tab="showPeek(mark, shownOf(mark))"
 					@blur="peek?.tapped || (peek = null)"
-					@click="openMarker(mark, $event)">
+					@click="openMarker(mark, $event.timeStamp)">
 					{{ mark.text }}
 				</button>
 				<!-- Over the circles; while a finger drags, the playhead follows it -->
@@ -1555,6 +1582,13 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	touch-action: none;
 }
 
+/* The half of a circle at either end that stands beyond the bar */
+.deliver-player__timeline::before {
+	content: '';
+	position: absolute;
+	inset: 0 -10px;
+}
+
 /* On a phone the bar is taller for a finger, and the playhead has a knob to take hold of */
 .deliver-player--mobile .deliver-player__timeline {
 	height: 32px;
@@ -1690,9 +1724,10 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 }
 
 /*
- * A circle as the Waveform draws it (circleLook, drawCircles), but the bar shows through. 20 px: it stands only 2 px over
- * a desktop's bar, short of the buttons below and the picture's captions, and leaves a finger 6 px of a phone's bar above
- * and below; two are 24 px apart at least. The resets keep Nextcloud's button style away.
+ * A circle as the Waveform draws it (circleLook, drawCircles), but the bar shows through, and takes the pointer (markAt).
+ * 20 px (BAR_CIRCLE): it stands only 2 px over a desktop's bar, short of the buttons below and the picture's captions, and
+ * leaves a finger 6 px of a phone's bar above and below; two are 24 px apart at least. The resets keep Nextcloud's button
+ * style away.
  */
 .deliver-player__marker {
 	--deliver-marker-back: rgba(0, 0, 0, 0.55);
@@ -1709,7 +1744,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	color: #fff;
 	font: bold 9px/16px sans-serif;
 	text-shadow: 0 0 2px #000;
-	cursor: pointer;
+	pointer-events: none;
 	transform: translate(-50%, -50%);
 }
 
@@ -1717,9 +1752,8 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	opacity: 0.45;
 }
 
-.deliver-player__marker--ringed,
-.deliver-player__marker:focus-visible,
-.deliver-player__scrubber--pointed .deliver-player__marker:hover {
+.deliver-player__marker--opaque,
+.deliver-player__marker:focus-visible {
 	--deliver-marker-back: #000;
 	border-color: #fff;
 	opacity: 1;
@@ -1733,7 +1767,6 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 /* The stage shows it already; the keyboard still reaches it, and sees it then */
 .deliver-player__marker--unseen:not(:focus-visible) {
 	clip-path: inset(50%);
-	pointer-events: none;
 }
 
 /* The Comment under the pointer, as a card over the bar */

@@ -887,6 +887,8 @@ function open(comment, x, siblings) {
 	store.selected = comment.id
 }
 
+defineExpose({ open })
+
 /**
  * @param {object} comment - another Comment of the same place
  */

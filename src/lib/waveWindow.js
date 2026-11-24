@@ -365,8 +365,10 @@ export function overviewWindow(seconds, span, duration) {
 	return { left: from / duration * 100, width: Math.max(0, to - from) / duration * 100 }
 }
 
-/** A Comment's circle on the wave, across, in px; on the bar it is a little smaller (story 181) */
+/** A Comment's circle on the wave, across, in px (story 181) */
 export const CIRCLE = 24
+/** And on the bar, as its CSS draws it */
+export const BAR_CIRCLE = 20
 
 /**
  * The Comments' circles, on the wave at its zoom and on the bar. Comments
