@@ -1838,6 +1838,7 @@ test.describe('Audio review', () => {
 		}, x)
 		const cursor = () => page.locator('.deliver-wave').evaluate((element) => getComputedStyle(element).cursor)
 		const hover = (x, y) => page.mouse.move(box.x + x, box.y + y)
+		const card = page.getByRole('dialog', { name: /^Comment #/ })
 
 		for (const zoom of ['1 min', 'Whole']) {
 			const whole = zoom === 'Whole'
@@ -1902,12 +1903,41 @@ test.describe('Audio review', () => {
 			await hover(circle + 40, strip)
 			await expect.poll(() => line(circle + 40)).toBe(8)
 			await page.mouse.click(box.x + circle + 4, box.y + strip)
-			const card = page.getByRole('dialog', { name: /^Comment #/ })
 			await expect(card).toContainText('in the strip')
 			expect(await time()).toBeCloseTo(330, 1)
 			await page.keyboard.press('Escape')
 			await expect(card).toHaveCount(0)
 		}
+
+		// With the card open a click in the strip beside the circles goes where the line says, and closes it; on the wave it only closes
+		await page.getByRole('button', { name: '1 min' }).click()
+		for (const inStrip of [true, false]) {
+			await goTo(330)
+			await page.mouse.click(box.x + box.width / 2 + 4, box.y + strip)
+			await expect(card).toContainText('in the strip')
+			const x = Math.round(box.width * 0.6)
+			await hover(x, inStrip ? strip : 60)
+			await expect.poll(() => line(x)).toBe(inStrip ? 8 : 0)
+			await page.mouse.click(box.x + x, box.y + (inStrip ? strip : 60))
+			await expect(card).toHaveCount(0)
+			await expect.poll(time).toBeCloseTo(inStrip ? 336 : 330, 0)
+		}
+		// Pressed on the wave and lifted in the strip the mouse goes nowhere, so there is no line
+		await goTo(20)
+		await hover(600, 100)
+		await page.mouse.down()
+		await hover(600, strip)
+		await page.waitForTimeout(100)
+		expect(await line(600)).toBe(0)
+		await page.mouse.up()
+		expect(await time()).toBeCloseTo(20, 1)
+		await expect.poll(() => line(600)).toBe(8)
+		// A stage resized under the resting mouse, now on the wave, keeps no line
+		await page.setViewportSize({ width: 1280, height: 900 })
+		await page.waitForTimeout(300)
+		expect(await line(600)).toBe(0)
+		await page.setViewportSize({ width: 1280, height: 720 })
+		await expect.poll(async () => (await canvas.boundingBox()).height).toBe(box.height)
 
 		// Before the start of the piece a click goes to the start, and the line shows it there
 		await page.getByRole('button', { name: '1 min' }).click()

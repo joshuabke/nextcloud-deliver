@@ -469,7 +469,7 @@ function schedule() {
 
 /**
  * The seconds to draw: where the playhead is, or on the way there after a
- * seek that was no drag (a click on the wave or the bar, a skip, a jump to a
+ * seek that was no drag (a click in the strip or on the bar, a skip, a jump to a
  * Comment). The sound is there at once; only the drawing glides, from where
  * it stood but never from further than a window away (N13). A seek shows as
  * the playhead standing elsewhere than playing on from the last frame would
@@ -546,6 +546,9 @@ function measure() {
 		rest: colors.rest,
 	}
 	kept = {}
+	// The mouse rests elsewhere on the stage now; its next move says where
+	mouse = null
+	host.value.style.cursor = ''
 	draw()
 }
 
@@ -730,10 +733,10 @@ function inStrip(event) {
 
 /**
  * @return {number|null} where the dashed line goes, in device pixels from the left edge: at the mouse, but within the
- * piece, as the click is; none off the strip, over a circle (whose card a click opens) and during a drag or a pinch
+ * piece, as the click is; none while the mouse is nowhere a click goes (onHover), or over a circle, whose card a click opens
  */
 function lineAt() {
-	if (!mouse || press?.moved || pinch || circleUnder(mouse.x, mouse.y, CIRCLE / 2)) {
+	if (!mouse || circleUnder(mouse.x, mouse.y, CIRCLE / 2)) {
 		return null
 	}
 	const offset = offsetAt(onScreen())
@@ -811,10 +814,10 @@ function onUp(event) {
 let lastTapAt = null
 
 /**
- * A click or a tap: on a circle it opens the Comment's card; with a card
- * open it only closes it. A mouse click in the strip, and anywhere on
- * lanes, seeks, playback going on as it was. Elsewhere nothing seeks, but a
- * double tap or a double click skips (story 104)
+ * A click or a tap: on a circle it opens the Comment's card. A mouse click
+ * in the strip, and anywhere on lanes, seeks, playback going on as it was,
+ * and closes an open card. Elsewhere nothing seeks: with a card open it only
+ * closes it, else a double tap or a double click skips (story 104)
  *
  * @param {PointerEvent} event - the pointer lifts where it came down
  */
@@ -836,6 +839,7 @@ function tap(event) {
 	} else if (action === 'close') {
 		card.value = null
 	} else if (action === 'seek') {
+		card.value = null
 		emit('seek', frameAtX(xOf(event)))
 	} else if (action === 'skip' && side) {
 		emit('skip', side)
@@ -843,13 +847,14 @@ function tap(event) {
 }
 
 /**
- * The mouse in the strip gets a pointer and the dashed line; over the card and the buttons, and by touch, there is none
+ * The mouse in the strip gets a pointer and the dashed line; over the card and the buttons, by touch, and while a press
+ * that began on the wave, a drag or a pinch is under way, there is none
  *
  * @param {PointerEvent} event - a pointer comes down, moves, lifts or leaves
  */
 function onHover(event) {
 	const over = event.type !== 'pointerleave' && event.pointerType === 'mouse' && (event.target === canvas.value || event.target === host.value)
-	if (over && !press?.moved && !pinch && inStrip(event)) {
+	if (over && !(press && (press.moved || !press.strip)) && !pinch && inStrip(event)) {
 		const box = host.value.getBoundingClientRect()
 		mouse = { x: event.clientX - box.left, y: event.clientY - box.top }
 	} else {
