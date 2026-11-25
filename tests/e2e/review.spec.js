@@ -2041,26 +2041,40 @@ test.describe('Comparing sound', () => {
 		await page.getByRole('button', { name: 'Pause (Space)' }).click()
 	})
 
-	test('switching ten times while both play seeks neither side, the heard sound runs on in real time, and the sides stay within milliseconds', async () => {
+	test('switching ten times while both play seeks neither side, the heard sound runs on with the output, and the sides stay within milliseconds', async () => {
 		await page.goto(`/apps/deliver/compare/${mix[1].id}/${mix[0].id}`)
 		const videos = page.locator('.deliver-compare video')
 		await expect(videos.first()).toHaveJSProperty('readyState', 4)
 		await page.getByRole('button', { name: 'Play (Space)' }).click()
 		await page.waitForTimeout(1500)
-		// On every animation frame: both times, whose sound is heard, and every seek; a switch every 400 ms
+		// On every animation frame: both times, the clock of the output they play on, whose sound is heard, and every seek; a switch every 400 ms
 		const run = await page.evaluate(() => new Promise((resolve) => {
 			const [a, b] = document.querySelectorAll('.deliver-compare video')
 			const halves = document.querySelectorAll('.deliver-compare__sound')
 			let seeks = 0
 			a.addEventListener('seeking', () => seeks++)
 			b.addEventListener('seeking', () => seeks++)
+			// What the app may not do to the output: suspend it or keep it waiting for sound
+			const output = a.deliverGain.context
+			let states = 0
+			output.addEventListener('statechange', () => states++)
+			const underrun = () => output.playbackStats?.underrunDuration
+			const before = underrun()
 			const samples = []
 			const start = performance.now()
 			let switches = 0
-			const tick = () => {
+			const side = () => halves[0].getAttribute('aria-checked') === 'true' ? 'a' : 'b'
+			const read = () => {
+				const clock = output.currentTime
+				return { ahead: (side() === 'a' ? a : b).currentTime - clock, apart: Math.abs(b.currentTime - a.currentTime) }
+			}
+			const tick = async () => {
+				// Read twice, as on a page's first Play below; held up after the clock, a reading is too far ahead, never behind
+				const first = read()
+				await null
+				const second = read()
 				const now = performance.now()
-				const side = halves[0].getAttribute('aria-checked') === 'true' ? 'a' : 'b'
-				samples.push({ now, a: a.currentTime, b: b.currentTime, side })
+				samples.push({ ahead: Math.min(first.ahead, second.ahead), apart: Math.min(first.apart, second.apart), running: output.state === 'running', side: side() })
 				if (now - start > (switches + 1) * 400 && switches < 10) {
 					switches++
 					halves[switches % 2].click()
@@ -2068,7 +2082,7 @@ test.describe('Comparing sound', () => {
 				if (now - start < 4600) {
 					requestAnimationFrame(tick)
 				} else {
-					resolve({ seeks, samples, playing: !a.paused && !b.paused })
+					resolve({ seeks, samples, states, underrun: [before, underrun()], playing: !a.paused && !b.paused })
 				}
 			}
 			requestAnimationFrame(tick)
@@ -2077,16 +2091,21 @@ test.describe('Comparing sound', () => {
 		expect(run.playing).toBe(true)
 		expect(run.seeks).toBe(0)
 		expect(new Set(run.samples.map((sample) => sample.side)).size).toBe(2)
-		const position = (sample) => sample.side === 'a' ? sample.a : sample.b
-		for (const [at, sample] of run.samples.entries()) {
-			// Without an offset the sides stand on the same second
-			expect(Math.abs(sample.b - sample.a)).toBeLessThan(0.01)
-			if (at > 0) {
-				const before = run.samples[at - 1]
-				// The heard sound goes on with the clock across every switch; a reading of a media element's time is off by a few ms
-				expect(Math.abs((position(sample) - position(before)) - (sample.now - before.now) / 1000)).toBeLessThan(0.015)
-			}
+		// Without an offset the sides stand on the same second
+		for (const sample of run.samples) {
+			expect(sample.apart).toBeLessThan(0.01)
 		}
+		// The heard sound goes on with the output across every switch, ahead of its clock by the same on every frame. Not the
+		// wall's clock: headless Chrome's stand-in for a sound card drops a buffer when the machine is late with it
+		expect(run.samples.length).toBeGreaterThan(50)
+		expect(run.samples.every((sample) => sample.running)).toBe(true)
+		const ahead = run.samples.map((sample) => sample.ahead)
+		expect(Math.max(...ahead) - Math.min(...ahead)).toBeLessThan(0.015)
+		// And the app does not hold up the output: never suspended, and no more of its time without sound than the few buffers
+		// a loaded machine is late with (AudioContext.playbackStats, Chrome only, brought up to date once a second)
+		expect(run.states).toBe(0)
+		expect(run.underrun, 'the browser has no AudioContext.playbackStats to tell a held up output by').toEqual([expect.any(Number), expect.any(Number)])
+		expect(run.underrun[1] - run.underrun[0]).toBeLessThan(0.1)
 	})
 
 	test('on a page\'s first Play the sides are in step from the first second on, video and audio alike', async () => {
@@ -2108,8 +2127,12 @@ test.describe('Comparing sound', () => {
 				const [a, b] = document.querySelectorAll('.deliver-compare video')
 				const found = []
 				const start = performance.now()
-				const tick = () => {
-					found.push(Math.abs(b.currentTime - a.currentTime))
+				const read = () => Math.abs(b.currentTime - a.currentTime)
+				const tick = async () => {
+					// Read twice: the output may take a buffer (10 ms) between the readings of A and B, and is past it on the second
+					const first = read()
+					await null
+					found.push(Math.min(first, read()))
 					if (performance.now() - start < 1500) {
 						requestAnimationFrame(tick)
 					} else {
@@ -2267,24 +2290,41 @@ test.describe('Comparing sound', () => {
 		// Alternating loops
 		await expect(page.getByRole('button', { name: 'Loop the Range' })).toHaveAttribute('aria-pressed', 'true')
 
-		// Whose sound plays on every animation frame, cut into passes where the time jumps back
+		// Whose sound plays on every animation frame, cut into passes where the time jumps back; where a pass starts is read
+		// as A starts playing, as the next frame may come late, and from every frame, less what the output's clock went on since
+		// the pass was sought (the frame before the time jumps back, or A starting to play), so that a jump right after it counts
 		const passes = await page.evaluate(() => new Promise((resolve) => {
 			const [a, b] = document.querySelectorAll('.deliver-compare video')
 			const found = []
 			let last = Infinity
-			const tick = () => {
+			let sought
+			const clock = () => a.deliverGain?.context.currentTime
+			const cut = () => {
 				const time = a.currentTime
-				const gain = (video) => video.deliverGain && !video.muted ? video.deliverGain.gain.value > 0.5 : !video.muted
-				const heard = gain(a) ? (gain(b) ? 'both' : 'a') : (gain(b) ? 'b' : 'none')
 				if (time < last - 0.3) {
-					found.push({ from: time, to: time, heard: new Set() })
+					found.push({ from: sought && !a.seeking ? time - (clock() - sought) : time, to: time, heard: new Set(), at: sought })
 				}
 				last = time
+				return time
+			}
+			a.addEventListener('playing', () => {
+				cut()
+				found.at(-1).at ??= clock()
+			})
+			const tick = () => {
+				const time = cut()
+				const gain = (video) => video.deliverGain && !video.muted ? video.deliverGain.gain.value > 0.5 : !video.muted
+				const heard = gain(a) ? (gain(b) ? 'both' : 'a') : (gain(b) ? 'b' : 'none')
 				const pass = found.at(-1)
 				if (pass && !a.paused) {
 					pass.to = time
 					pass.heard.add(heard)
+					if (pass.at) {
+						pass.from = Math.max(pass.from, time - (clock() - pass.at))
+					}
 				}
+				// The player seeks for the next pass in this very frame
+				sought = a.paused ? undefined : clock()
 				if (found.length > 3) {
 					resolve(found.slice(0, 3).map((each) => ({ ...each, heard: [...each.heard] })))
 				} else {
