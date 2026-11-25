@@ -2449,6 +2449,95 @@ test.describe('Skipping ten seconds', () => {
 	})
 })
 
+test.describe('Uploads whose name is taken', () => {
+	let api
+	let dav
+	let projectId
+	let browser
+	let context
+	let page
+
+	test.beforeAll(async ({ playwright }) => {
+		await testUser(playwright)
+	})
+
+	// A Folder Project with one mix in it, open in the Project view
+	test.beforeEach(async ({ playwright }) => {
+		api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		dav = `/remote.php/dav/files/${USER}/deliver-e2e-${randomBytes(4).toString('hex')}`
+		expect((await api.fetch(dav, { method: 'MKCOL' })).status()).toBe(201)
+		const created = await api.post('/ocs/v2.php/apps/deliver/api/v1/projects?format=json', { data: { folderId: await fileId(api, dav), autoIntake: true } })
+		projectId = (await created.json()).ocs.data.id
+		expect((await api.fetch(`${dav}/mix.wav`, { method: 'PUT', data: readFileSync(MIX) })).status()).toBe(201)
+		browser = await chromium.connectOverCDP(CDP)
+		context = await browser.newContext({ baseURL: BROWSER_URL })
+		page = await context.newPage()
+		await login(page)
+		await page.goto(`/apps/deliver/projects/${projectId}`)
+	})
+
+	test.afterEach(async () => {
+		await context?.close()
+		await browser?.close()
+		await api.delete(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)
+		await api.fetch(dav, { method: 'DELETE' })
+		await api.dispose()
+	})
+
+	const assets = async () => (await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()).ocs.data.assets
+	const versions = async () => (await assets()).map((asset) => asset.versions.map((version) => [version.name, version.number, version.autoStacked]))
+	// Another file than the one there, which must stay as it is
+	const other = Buffer.concat([readFileSync(MIX), Buffer.alloc(2)])
+
+	test('a new Version gets its number in its name, wherever it is uploaded, and replaces nothing', async () => {
+		// Another upload, interrupted, that was on its way to the name this one takes
+		const interrupted = await page.evaluate((target) => {
+			const record = { name: 'elsewhere.wav', size: 1, lastModified: 1, type: 'audio/wav', target, projectId: null, assetId: 1, folder: '/remote.php/dav/uploads/none', loaded: 0, status: 'uploading', seen: Date.now(), left: true }
+			localStorage.setItem(`deliver.upload:${target}`, JSON.stringify(record))
+			return `deliver.upload:${target}`
+		}, `${BROWSER_URL}${dav}/mix_v2.wav`)
+		await card(page, 'mix').click({ button: 'right' })
+		let chooser = page.waitForEvent('filechooser')
+		await page.getByRole('menuitem', { name: 'Upload a new Version' }).click()
+		await (await chooser).setFiles({ name: 'mix.wav', mimeType: 'audio/wav', buffer: other })
+		// The Member's own choice, so nothing to undo, though Auto Intake goes by the name
+		await expect.poll(versions).toEqual([[['mix_v2.wav', 2, false], ['mix.wav', 1, false]]])
+		expect((await api.fetch(`${dav}/mix.wav`, { method: 'HEAD' })).headers()['content-length']).toBe(String(readFileSync(MIX).length))
+		await page.locator('.deliver-uploads-card__open').click()
+		const uploads = page.getByRole('dialog', { name: 'Uploads' })
+		await expect(uploads.locator('.deliver-uploads__name', { hasText: 'mix_v2.wav' })).toHaveCount(1)
+		expect(await page.evaluate((key) => localStorage.getItem(key), interrupted)).not.toBeNull()
+		await page.keyboard.press('Escape')
+
+		// The next number is taken by a file outside the Stack, so the one after it
+		expect((await api.fetch(`${dav}/mix_v3.wav`, { method: 'PUT', data: 'not a Version', headers: { 'If-None-Match': '*' } })).status()).toBe(201)
+		const stray = (await assets()).find((asset) => asset.versions.some((version) => version.name === 'mix_v3.wav'))
+		const strayed = stray.versions.find((version) => version.name === 'mix_v3.wav')
+		if (stray.versions.length > 1) {
+			expect((await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${strayed.id}/unstack?format=json`)).ok()).toBe(true)
+		}
+		await page.reload()
+		const stack = page.locator('.deliver-card', { hasText: 'V2' })
+		await stack.click({ button: 'right' })
+		await page.getByRole('menuitem', { name: 'Manage Versions' }).click()
+		await expect(page.locator('.deliver-stack')).toBeVisible()
+		await page.evaluate((bytes) => {
+			const files = new DataTransfer()
+			files.items.add(new File([new Uint8Array(bytes)], 'mix_v2.wav', { type: 'audio/wav' }))
+			document.querySelector('.deliver-stack').dispatchEvent(new DragEvent('drop', { dataTransfer: files, bubbles: true, cancelable: true }))
+		}, [...other])
+		await expect.poll(async () => (await versions()).find((names) => names.length === 3)?.[0][0]).toBe('mix_v4.wav')
+
+		// The button in the Review view, where a name that is free stays as it is
+		const newest = (await assets()).find((asset) => asset.versions.length === 3).versions[0]
+		await page.goto(`/apps/deliver/versions/${newest.id}`)
+		chooser = page.waitForEvent('filechooser')
+		await page.getByRole('button', { name: 'New Version' }).click()
+		await (await chooser).setFiles({ name: 'master.wav', mimeType: 'audio/wav', buffer: other })
+		await expect.poll(async () => (await versions()).find((names) => names.length === 4)?.[0][0]).toBe('master.wav')
+	})
+})
+
 test.describe('Uploads without ffmpeg', () => {
 	let admin
 	let projectId

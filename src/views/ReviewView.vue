@@ -34,7 +34,7 @@ import { listOutOfSight, usePanelOpen } from '../composables/panel.js'
 import { useReview } from '../composables/review.js'
 import { folderOrder, uploadFolder } from '../lib/folders.js'
 import { t } from '../lib/l10n.js'
-import { acceptFor, stackKind } from '../lib/media.js'
+import { acceptFor } from '../lib/media.js'
 import { fpsValue } from '../lib/timecode.js'
 import { decodeWaveform } from '../lib/waveform.js'
 import { useCommentsStore } from '../store/comments.js'
@@ -169,7 +169,7 @@ function upload(event) {
 		folderUrl: folderUrl.value,
 		projectId: context.value.project.id,
 		assetId: context.value.asset.id,
-		kind: stackKind(context.value.versions),
+		versions: context.value.versions,
 		onDone: (versionId) => {
 			if (props.id === from && router.currentRoute.value.path === `/versions/${from}`) {
 				router.push(`/versions/${versionId}`)
