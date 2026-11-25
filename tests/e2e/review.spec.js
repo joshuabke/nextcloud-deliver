@@ -557,10 +557,28 @@ test.describe('Review view', () => {
 		await page.touchscreen.tap(right.x, right.y)
 		await expect(page.locator('.deliver-player__flash')).toContainText('+10')
 		await page.waitForTimeout(700)
-		await page.touchscreen.tap(stage.x + stage.width / 2, right.y)
-		await expect(page.locator('.deliver-player--fullscreen')).toHaveCount(1)
-		// The menu shows in the browser's own fullscreen too
+		// A tap beside the open menu only closes it, and the first of two makes no double tap
 		const settings = page.getByRole('button', { name: 'Playback settings' })
+		const tapBesideMenu = async (fullscreen) => {
+			await settings.tap()
+			await expect(page.getByRole('menuitem', { name: 'One Frame back' })).toBeVisible()
+			await page.touchscreen.tap(10, right.y)
+			await expect(page.getByRole('menuitem', { name: 'One Frame back' })).toBeHidden()
+			await page.waitForTimeout(700)
+			await expect(page.locator('.deliver-player--fullscreen')).toHaveCount(fullscreen)
+		}
+		await tapBesideMenu(0)
+		await settings.tap()
+		await expect(page.getByRole('menuitem', { name: 'One Frame back' })).toBeVisible()
+		const standing = await page.locator('.deliver-player__time').textContent()
+		await page.touchscreen.tap(10, right.y)
+		await page.touchscreen.tap(10, right.y)
+		// The second is a tap of its own
+		await expect(page.locator('.deliver-player--fullscreen')).toHaveCount(1)
+		await expect(page.locator('.deliver-player__time')).toHaveText(standing)
+		// The menu shows in the browser's own fullscreen too
+		expect(await page.evaluate(() => document.fullscreenElement !== null)).toBe(true)
+		await tapBesideMenu(1)
 		await settings.tap()
 		const before = await page.locator('.deliver-player__time').textContent()
 		await page.getByRole('menuitem', { name: 'One Frame back' }).tap()
@@ -569,6 +587,13 @@ test.describe('Review view', () => {
 		await expect(page.getByRole('menuitem', { name: 'One Frame back' })).toBeHidden()
 		await page.waitForTimeout(700)
 		await page.touchscreen.tap(stage.x + stage.width / 2, right.y)
+		await expect(page.locator('.deliver-player--fullscreen')).toHaveCount(0)
+		// Nor does it leave fullscreen where the player fills the window
+		await page.evaluate(() => Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: false }))
+		await page.getByRole('button', { name: 'Fullscreen', exact: true }).tap()
+		await expect(page.locator('.deliver-player--filling')).toHaveCount(1)
+		await tapBesideMenu(1)
+		await page.getByRole('button', { name: 'Leave fullscreen' }).tap()
 		await expect(page.locator('.deliver-player--fullscreen')).toHaveCount(0)
 
 		// Sideways, the picture fills the window and the list opens beside it
