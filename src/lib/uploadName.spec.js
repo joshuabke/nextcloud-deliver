@@ -1,0 +1,90 @@
+import { describe, expect, it } from 'vitest'
+import { freeName, nameProblem, nameRefused } from './uploadName.js'
+
+/**
+ * Nextcloud's own check, as far as it goes here
+ *
+ * @param {string} name - a filename
+ */
+function validate(name) {
+	const segment = name.match(/[/?]/)?.[0]
+	if (segment) {
+		throw Object.assign(new Error('invalid'), { segment })
+	}
+}
+
+/**
+ * @param {...string} names - files of the folder
+ * @return {(name: string) => Promise<boolean>} whether one is there
+ */
+const folder = (...names) => async (name) => names.includes(name)
+
+describe('a free name for an upload', () => {
+	it('is the first one free, counted from 2, with the extension as it was', async () => {
+		expect(await freeName('mix.mp3', folder('mix.mp3'))).toBe('mix (2).mp3')
+		expect(await freeName('mix.MP3', folder('mix.MP3', 'mix (2).MP3', 'mix (3).MP3'))).toBe('mix (4).MP3')
+		expect(await freeName('cut.final.mov', folder())).toBe('cut.final (2).mov')
+		expect(await freeName('mix', folder())).toBe('mix (2)')
+	})
+
+	it('fits into Nextcloud\'s 250 bytes, at the cost of the stem and never of the extension', async () => {
+		const bytes = (name) => new TextEncoder().encode(name).length
+		const long = await freeName(`${'a'.repeat(244)}.wav`, folder())
+		expect(long).toBe(`${'a'.repeat(242)} (2).wav`)
+		expect(bytes(long)).toBe(250)
+		// Three bytes each, and an emoji of four, none of them cut in half
+		for (const stem of ['音'.repeat(82), '🎵'.repeat(61)]) {
+			const name = await freeName(`${stem}.wav`, folder())
+			expect(bytes(name)).toBeLessThanOrEqual(250)
+			expect(name).toMatch(/^[音🎵]+ \(2\)\.wav$/u)
+		}
+	})
+
+	it('ends where every name is taken, as a server answering anything with a page does', async () => {
+		let asked = 0
+		const always = async () => {
+			if (++asked > 1000) {
+				throw new Error('never ends')
+			}
+			return true
+		}
+		expect(await freeName('mix.mp3', always)).toMatch(/^mix \(\d+\)\.mp3$/)
+		expect(asked).toBeLessThan(200)
+	})
+
+	it('counts on where the name is counted already', async () => {
+		expect(await freeName('mix (2).mp3', folder('mix (2).mp3'))).toBe('mix (3).mp3')
+	})
+})
+
+describe('a name the server refuses', () => {
+	it('is one the upload was given here, and only while its file is not up', () => {
+		expect(nameRefused({ renamed: 'mix_v2.wav', fileId: null }, 400)).toBe(true)
+		expect(nameRefused({ renamed: null, fileId: null }, 400)).toBe(false)
+		expect(nameRefused({ renamed: 'mix_v2.wav', fileId: null }, 403)).toBe(false)
+		// Up already, it is the Version that was refused, with a reason of its own
+		expect(nameRefused({ renamed: 'mix_v2.wav', fileId: 42 }, 400)).toBe(false)
+	})
+})
+
+describe('a name typed for an upload', () => {
+	it('keeps the extension', () => {
+		expect(nameProblem('other.mp3', 'mix.mp3', validate)).toBeNull()
+		expect(nameProblem('other.MP3', 'mix.mp3', validate)).toBeNull()
+		for (const name of ['other.wav', 'other', '', '.mp3', ' .mp3']) {
+			expect(nameProblem(name, 'mix.mp3', validate)).toBe('Keep the extension .mp3.')
+		}
+		expect(nameProblem('', 'mix', validate)).not.toBeNull()
+	})
+
+	it('has room for 250 bytes, whatever the characters', () => {
+		expect(nameProblem(`${'a'.repeat(246)}.mp3`, 'mix.mp3', validate)).toBeNull()
+		expect(nameProblem(`${'a'.repeat(247)}.mp3`, 'mix.mp3', validate)).toBe('This name is too long.')
+		expect(nameProblem(`${'音'.repeat(83)}.mp3`, 'mix.mp3', validate)).toBe('This name is too long.')
+	})
+
+	it('has only what Nextcloud allows, named where it does not', () => {
+		expect(nameProblem('a/b.mp3', 'mix.mp3', validate)).toContain('"/"')
+		expect(nameProblem('why?.mp3', 'mix.mp3', validate)).toContain('"?"')
+	})
+})
