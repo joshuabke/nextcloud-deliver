@@ -167,7 +167,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-/* At the wave, over the circles, as the marker's card over the bar but grown up */
+/* At the wave, over the circles */
 .deliver-wave-card {
 	position: absolute;
 	bottom: calc(40px + 4px);

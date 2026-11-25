@@ -1,13 +1,12 @@
 <script setup>
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
-import { usernameToColor } from '@nextcloud/vue/functions/usernameToColor'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import WaveformCard from './WaveformCard.vue'
-import { HOLD_MS, TAP_SLOP } from '../lib/gestures.js'
-import { avatarSeed, initials } from '../lib/initials.js'
+import { HOLD_MS, TAP_SLOP, waveTap } from '../lib/gestures.js'
+import { avatarRgb } from '../lib/initials.js'
 import { t } from '../lib/l10n.js'
 import { fpsValue, timeToFrame } from '../lib/timecode.js'
-import { barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, clampSpan, dragged, glided, glideStart, isWhole, laneBands, loudestOf, pinchSpan, pixelPlace, retarget, secondsAt, shiftPixels, spreadSpan, stack, steadied, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan } from '../lib/waveWindow.js'
+import { barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, circleLook, circlesOf, clampSpan, dragged, glided, glideStart, isWhole, laneBands, loudestOf, pinchSpan, pixelPlace, retarget, secondsAt, shiftPixels, spreadSpan, steadied, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan } from '../lib/waveWindow.js'
 import { useCommentsStore } from '../store/comments.js'
 
 // The Waveform of an audio Version on the stage (story 180): a window of it,
@@ -51,11 +50,11 @@ const props = defineProps({
 
 /**
  * seek: a Frame to go to, keeping the playback state; hold and release: a drag holds playback and lets it go on;
- * comment: a Frame to comment on; jump: a Comment to go to; closeComposer: the field at the Waveform is closed from here
+ * skip: a double tap or, off the lanes, a double click, -1 back or 1 on; comment: a Frame to comment on; jump: a Comment to go to; closeComposer: the field at the Waveform is closed from here
  */
-const emit = defineEmits(['seek', 'hold', 'release', 'comment', 'jump', 'closeComposer', 'pick'])
+const emit = defineEmits(['seek', 'hold', 'release', 'comment', 'jump', 'closeComposer', 'pick', 'skip'])
 
-/** Room below the wave for the Comments' circles (none on lanes), in px */
+/** Room below the wave for the Comments' circles (none on lanes), in px: the strip where a mouse click seeks */
 const BOTTOM = props.lanes ? 8 : 40
 /** Between two lanes, in px */
 const LANE_GAP = 8
@@ -105,6 +104,10 @@ let drawnAt = null
 let last = null
 /** What the last frame drew while playing: currentTime moves in coarse steps, so the drawing runs on between them */
 let steady = null
+/** Where the mouse hovers in the strip, from the stage's top left corner, in px; null elsewhere */
+let mouse = null
+/** The dashed line drawn last, in device pixels from the left edge; null for none */
+let lineDrawn = null
 
 /**
  * What only changes with the zoom, the width or the Comments, worked out
@@ -128,22 +131,6 @@ function keep(name, key, make) {
 	return kept[name].value
 }
 
-/** Each author's colour, as their avatar has it */
-const tints = new Map()
-
-/**
- * @param {object} author - a Comment's author
- * @return {string} the rgb of their avatar
- */
-function tint(author) {
-	const seed = avatarSeed(author)
-	if (!tints.has(seed)) {
-		const { r, g, b } = usernameToColor(seed)
-		tints.set(seed, `${r}, ${g}, ${b}`)
-	}
-	return tints.get(seed)
-}
-
 /** The Waveforms drawn: Compare's lanes, or the one, heard */
 const shownLanes = computed(() => props.lanes ?? [{ waveform: props.waveform, shift: 0, audible: true }])
 /** Lanes share one scale, the loudest of them; the one Waveform has its own */
@@ -161,7 +148,7 @@ const perFrame = () => size.width / across.value / fpsValue(props.fps)
  * @return {Array<{comment: object, x: number}|{cluster: object[], x: number}>} the circles, from the start of the piece
  */
 function circles() {
-	return keep('circles', [props.comments, across.value, size.width], () => stack(props.comments, perFrame()))
+	return keep('circles', [props.comments, across.value, size.width], () => circlesOf(props.comments, perFrame()))
 }
 
 /** Where a drag has taken the playhead, until it lets go */
@@ -239,6 +226,7 @@ function draw() {
 		}
 		drawHead(context, head)
 		context.drawImage(layers.top, 0, 0)
+		drawLine(context)
 		return
 	}
 	context.setTransform(ratio, 0, 0, ratio, 0, 0)
@@ -248,6 +236,7 @@ function draw() {
 	drawHead(context, head)
 	context.setTransform(ratio, 0, 0, ratio, 0, 0)
 	drawTop(context, offset / ratio)
+	drawLine(context)
 }
 
 /**
@@ -278,7 +267,7 @@ function drawSpans(context, offset) {
 			const from = comment.inFrame * scale - offset
 			const to = (comment.outFrame + 1) * scale - offset
 			if (to > 0 && from < size.width) {
-				context.fillStyle = `rgba(${tint(comment.author)}, ${comment.resolved ? 0.1 : 0.22})`
+				context.fillStyle = `rgba(${avatarRgb(comment.author)}, ${comment.resolved ? 0.1 : 0.22})`
 				context.fillRect(from, waveTop.value, to - from, size.height - waveTop.value)
 			}
 		}
@@ -341,7 +330,7 @@ function drawLane(context, levels, grid, band, offset, head, tints) {
 }
 
 /**
- * The playhead, under the zoom buttons, on whole device pixels
+ * The playhead, from under the zoom buttons down to the lane of the circles, on whole device pixels: no circle covers it
  *
  * @param {CanvasRenderingContext2D} context - where to draw, untransformed
  * @param {number} head - its x, in device pixels
@@ -350,7 +339,27 @@ function drawHead(context, head) {
 	const width = Math.max(2, Math.round(2 * ratio))
 	const top = Math.round(waveTop.value * ratio)
 	context.fillStyle = '#fff'
-	context.fillRect(head - Math.floor(width / 2), top, width, pixels.height - top)
+	const bottom = props.lanes ? 0 : Math.round((BOTTOM - 4) * ratio)
+	context.fillRect(head - Math.floor(width / 2), top, width, pixels.height - bottom - top)
+}
+
+/**
+ * Where the mouse hovers in the strip, a dashed line at the place a click goes, on whole device pixels
+ *
+ * @param {CanvasRenderingContext2D} context - where to draw
+ */
+function drawLine(context) {
+	lineDrawn = lineAt()
+	if (lineDrawn === null) {
+		return
+	}
+	const width = Math.max(1, Math.round(ratio))
+	const dash = Math.round(4 * ratio)
+	context.setTransform(1, 0, 0, 1, 0, 0)
+	context.fillStyle = 'rgba(255, 255, 255, 0.8)'
+	for (let y = Math.round(waveTop.value * ratio); y < pixels.height; y += 2 * dash) {
+		context.fillRect(lineDrawn - Math.floor(width / 2), y, width, dash)
+	}
 }
 
 /**
@@ -397,8 +406,7 @@ function drawPending(context, pending, scale, offset, height) {
 }
 
 /**
- * The Comments as their authors' initials in circles, in their avatars' colour, resolved ones paler;
- * a place with more of them one neutral circle with their count
+ * The Comments' circles, as circleLook has them
  *
  * @param {CanvasRenderingContext2D} context - the canvas
  * @param {Array<{comment: object, x: number}|{cluster: object[], x: number}>} list - the circles
@@ -411,24 +419,23 @@ function drawCircles(context, list, offset, y) {
 	context.textAlign = 'center'
 	context.textBaseline = 'middle'
 	context.lineWidth = 2
-	for (const { comment, cluster, x: at } of list) {
-		const x = at - offset
+	for (const circle of list) {
+		const x = circle.x - offset
 		if (x < -radius || x > size.width + radius) {
 			continue
 		}
-		const rgb = comment ? tint(comment.author) : '255, 255, 255'
-		const ringed = comment ? comment.id === store.selected || comment.id === card.value?.id : cluster.some((each) => each.id === store.selected)
-		context.globalAlpha = comment?.resolved ? 0.45 : 1
+		const look = circleLook(circle, [store.selected, card.value?.id])
+		context.globalAlpha = look.pale ? 0.45 : 1
 		context.beginPath()
 		context.arc(x, y, radius - 1, 0, 2 * Math.PI)
 		context.fillStyle = '#000'
 		context.fill()
-		context.fillStyle = comment ? `rgba(${rgb}, 0.3)` : 'rgba(255, 255, 255, 0.18)'
+		context.fillStyle = look.fill
 		context.fill()
-		context.strokeStyle = ringed ? '#fff' : comment ? `rgb(${rgb})` : 'rgba(255, 255, 255, 0.6)'
+		context.strokeStyle = look.line
 		context.stroke()
 		context.fillStyle = '#fff'
-		context.fillText(comment ? initials(comment.author.name) : String(cluster.length), x, y + 0.5)
+		context.fillText(look.text, x, y + 0.5)
 	}
 	context.globalAlpha = 1
 }
@@ -444,7 +451,7 @@ function schedule() {
 
 /**
  * The seconds to draw: where the playhead is, or on the way there after a
- * seek that was no drag (a click on the wave or the bar, a skip, a jump to a
+ * seek that was no drag (a click in the strip or on the bar, a skip, a jump to a
  * Comment). The sound is there at once; only the drawing glides, from where
  * it stood but never from further than a window away (N13). A seek shows as
  * the playhead standing elsewhere than playing on from the last frame would
@@ -521,6 +528,9 @@ function measure() {
 		rest: colors.rest,
 	}
 	kept = {}
+	// The mouse rests elsewhere on the stage now; its next move says where
+	mouse = null
+	host.value.style.cursor = ''
 	draw()
 }
 
@@ -586,6 +596,14 @@ let press = null
 /** Two fingers: their distance and the span when they came down */
 let pinch = null
 
+/** When the place pinned for a Comment was last let go, on the clock of pointer events */
+let placeLetGoAt = -1
+watch(() => props.pending, (now, was) => {
+	if (was && !now) {
+		placeLetGoAt = performance.now()
+	}
+}, { flush: 'sync' })
+
 /** The stage's left edge, read once a pointer comes down */
 let left = 0
 
@@ -632,7 +650,7 @@ function onDown(event) {
 		pinch = { distance: spread(), span: shown.value }
 		return
 	}
-	press = { id: event.pointerId, x: event.clientX, y: event.clientY, from: onScreen(), moved: false, long: false }
+	press = { id: event.pointerId, x: event.clientX, y: event.clientY, from: onScreen(), moved: false, long: false, strip: inStrip(event), down: event.timeStamp }
 	// A finger or a pen resting on a circle opens its card, as a tap does; elsewhere, where one may comment, the Comment field for that place
 	if (event.pointerType !== 'mouse') {
 		const at = press
@@ -673,8 +691,38 @@ function onScreen() {
  */
 function hit(clientX, clientY, pointerType) {
 	const box = host.value.getBoundingClientRect()
-	const x = clientX - box.left + offsetAt(onScreen())
-	return circleAt(circles(), x, clientY - box.top - (size.height - BOTTOM / 2), pointerType === 'mouse' ? CIRCLE / 2 : CIRCLE)
+	return circleUnder(clientX - box.left, clientY - box.top, pointerType === 'mouse' ? CIRCLE / 2 : CIRCLE)
+}
+
+/**
+ * @param {number} x - a place on the stage, from its left edge
+ * @param {number} y - from its top edge
+ * @param {number} reach - how far from a centre still hits, in px
+ * @return {object|null} the circle there, the nearest
+ */
+function circleUnder(x, y, reach) {
+	return circleAt(circles(), x + offsetAt(onScreen()), y - (size.height - BOTTOM / 2), reach)
+}
+
+/**
+ * @param {PointerEvent} event - a pointer on the stage
+ * @return {boolean} whether it is in the strip under the wave, which lanes do not have
+ */
+function inStrip(event) {
+	const y = event.clientY - host.value.getBoundingClientRect().top
+	return !props.lanes && y >= size.height - BOTTOM && y <= size.height
+}
+
+/**
+ * @return {number|null} where the dashed line goes, in device pixels from the left edge: at the mouse, but within the
+ * piece, as the click is; none while the mouse is nowhere a click goes (onHover), or over a circle, whose card a click opens
+ */
+function lineAt() {
+	if (!mouse || circleUnder(mouse.x, mouse.y, CIRCLE / 2)) {
+		return null
+	}
+	const offset = offsetAt(onScreen())
+	return Math.round(Math.min(perFrame() * props.durationFrames - offset, Math.max(-offset, mouse.x)) * ratio)
 }
 
 /**
@@ -719,7 +767,7 @@ function endDrag() {
 }
 
 /**
- * @param {PointerEvent} event - a pointer lifts, or the browser takes it for scrolling the page
+ * @param {PointerEvent} event - a pointer lifts, or the browser takes it away
  */
 function onUp(event) {
 	if (!pointers.delete(event.pointerId)) {
@@ -744,29 +792,59 @@ function onUp(event) {
 	press = null
 }
 
+/** When the last plain tap or click lifted, for a double tap or a double click */
+let lastTapAt = null
+
 /**
- * A click or a tap: on a circle it opens the Comment's card; with a card
- * open it only closes it; elsewhere it only seeks, and playback goes on as it was
+ * A click or a tap: on a circle it opens the Comment's card. A mouse click
+ * in the strip, and anywhere on lanes, seeks, playback going on as it was,
+ * and closes an open card. Elsewhere nothing seeks: with a card open it only
+ * closes it, else a double tap or a double click skips (story 104)
  *
  * @param {PointerEvent} event - the pointer lifts where it came down
  */
 function tap(event) {
 	const circle = hit(event.clientX, event.clientY, event.pointerType)
-	if (circle) {
+	const { action, side } = waveTap({
+		circle: !!circle,
+		card: !!card.value,
+		seeks: event.pointerType === 'mouse' && (!!props.lanes || (press.strip && inStrip(event))),
+		// An empty field is let go by the touch or click itself; one with text stays, and its tap counts
+		field: placeLetGoAt >= press.down,
+		since: lastTapAt === null ? null : event.timeStamp - lastTapAt,
+		x: xOf(event),
+		width: size.width,
+	})
+	lastTapAt = action === 'first' ? event.timeStamp : null
+	if (action === 'open') {
 		openCircle(circle, xOf(event))
-	} else if (card.value) {
+	} else if (action === 'close') {
 		card.value = null
-	} else {
+	} else if (action === 'seek') {
+		card.value = null
 		emit('seek', frameAtX(xOf(event)))
+	} else if (action === 'skip' && side) {
+		emit('skip', side)
 	}
 }
 
 /**
- * @param {PointerEvent} event - the mouse moves over the stage
+ * The mouse in the strip gets a pointer and the dashed line; over the card and the buttons, by touch, and while a press
+ * that began on the wave, a drag or a pinch is under way, there is none
+ *
+ * @param {PointerEvent} event - a pointer comes down, moves, lifts or leaves
  */
 function onHover(event) {
-	if (event.pointerType === 'mouse' && press === null) {
-		host.value.style.cursor = hit(event.clientX, event.clientY, 'mouse') ? 'pointer' : ''
+	const over = event.type !== 'pointerleave' && event.pointerType === 'mouse' && (event.target === canvas.value || event.target === host.value)
+	if (over && !(press && (press.moved || !press.strip)) && !pinch && inStrip(event)) {
+		const box = host.value.getBoundingClientRect()
+		mouse = { x: event.clientX - box.left, y: event.clientY - box.top }
+	} else {
+		mouse = null
+	}
+	host.value.style.cursor = mouse ? 'pointer' : ''
+	if (lineAt() !== lineDrawn) {
+		schedule()
 	}
 }
 
@@ -877,10 +955,11 @@ function label(step) {
 	<div
 		ref="host"
 		class="deliver-wave"
-		@pointerdown="onDown"
+		@pointerdown="onDown($event); onHover($event)"
 		@pointermove="onMove($event); onHover($event)"
-		@pointerup="onUp"
+		@pointerup="onUp($event); onHover($event)"
 		@pointercancel="onUp"
+		@pointerleave="onHover"
 		@wheel="onWheel"
 		@contextmenu.prevent>
 		<canvas ref="canvas" class="deliver-wave__canvas" aria-hidden="true" />
@@ -900,7 +979,7 @@ function label(step) {
 				{{ label(step) }}
 			</button>
 		</div>
-		<!-- Each lane's name; a tap on it plays its sound, a tap on its wave seeks as anywhere -->
+		<!-- Each lane's name; a tap on it plays its sound, a click on its wave seeks as anywhere -->
 		<button
 			v-for="(lane, index) in lanes ?? []"
 			:key="index"
@@ -945,8 +1024,8 @@ function label(step) {
 	position: absolute;
 	inset: 0;
 	cursor: grab;
-	/* A finger dragging sideways moves through time, upright it scrolls the page; two fingers zoom the wave, not the page */
-	touch-action: pan-y;
+	/* The stage takes every touch: with pan-y, iOS Safari cancels a sideways drag (pointercancel) as soon as the finger drifts about 10 px upright, and the wave stops following */
+	touch-action: none;
 }
 
 .deliver-wave:active {

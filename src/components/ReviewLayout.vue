@@ -330,16 +330,21 @@ body.deliver-review footer {
 	display: none;
 }
 
-/* Halfway: a 16:9 picture at full width with its timeline and controls (102 px), the list below */
+/* Halfway: a 16:9 picture at full width with its timeline and controls (74 px; Compare keeps its own room), the list below */
 .deliver-layout--upright.deliver-layout--middle .deliver-layout__main {
+	--deliver-player-foot: 74px;
 	flex: none;
-	height: calc(56.25vw + 102px);
+	height: calc(56.25vw + var(--deliver-player-foot));
 }
 
-/* Compare's controls keep the room they had on a narrow phone; only the player's are one row. Keyed on Compare, not on the missing player: while the next Asset loads no player is mounted, and the list would jump */
+/* Compare's markers and controls need more; 136.5 px where its controls wrap. Keyed on Compare, not on the missing player: while the next Asset loads no player is mounted, and the list would jump */
+.deliver-layout--upright.deliver-layout--middle .deliver-layout__main:has(.deliver-compare) {
+	--deliver-player-foot: 102px;
+}
+
 @media (max-width: 440px) {
 	.deliver-layout--upright.deliver-layout--middle .deliver-layout__main:has(.deliver-compare) {
-		height: calc(56.25vw + 136.5px);
+		--deliver-player-foot: 136.5px;
 	}
 }
 

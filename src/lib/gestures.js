@@ -33,6 +33,30 @@ export function tapSide(x, width) {
 }
 
 /**
+ * What a tap or a mouse click on the scrolling Waveform does. A circle opens; where it seeks (a mouse in the strip
+ * under the wave or on Compare's lanes), it seeks every time, an open card closing too. Elsewhere it never seeks: an open card
+ * or an empty Comment field it just closed is all it closes, and one that follows a plain one within DOUBLE_TAP_MS skips to the side it hit (0 in the middle).
+ *
+ * @param {{circle: boolean, card: boolean, seeks?: boolean, field?: boolean, since: number|null, x: number, width: number}} tap - what it hit, an open card, whether it seeks there, ms since the last plain tap (null if none), where
+ * @return {{action: 'open'|'close'|'seek'|'skip'|'first', side: number}} 'first' waits for a second tap
+ */
+export function waveTap({ circle, card, seeks = false, field = false, since, x, width }) {
+	if (circle) {
+		return { action: 'open', side: 0 }
+	}
+	if (seeks) {
+		return { action: 'seek', side: 0 }
+	}
+	if (card || field) {
+		return { action: 'close', side: 0 }
+	}
+	if (since !== null && since < DOUBLE_TAP_MS) {
+		return { action: 'skip', side: tapSide(x, width) }
+	}
+	return { action: 'first', side: 0 }
+}
+
+/**
  * Keeps a zoomed picture covering its frame: never smaller than itself,
  * never pulled so far that an edge shows inside.
  *

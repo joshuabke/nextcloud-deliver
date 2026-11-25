@@ -1,3 +1,5 @@
+import { avatarRgb, initials } from './initials.js'
+
 /**
  * The geometry of the scrolling Waveform on the audio stage (story 180): a
  * window of the piece, seconds wide, with the playhead fixed in its centre,
@@ -365,50 +367,57 @@ export function overviewWindow(seconds, span, duration) {
 
 /** A Comment's circle on the wave, across, in px (story 181) */
 export const CIRCLE = 24
-/** How far a circle in a stack sits from the one under it, in px */
-export const STACK_STEP = 7
-/** The most circles one place stacks; more there become one circle with their count */
-export const STACK_MAX = 3
 
 /**
- * The Comments' circles at this zoom. Comments within a circle's width of
- * the first of them share a place: up to three each sit at their Frame,
- * moved a little right of the one before where they would cover it, the later
- * on top; more become one circle with their count at the place.
+ * The Comments' circles, on the wave at its zoom and on the bar. Comments
+ * within a circle's width of the first of them share one circle with their
+ * count at its place, so no circle ever covers another.
  *
  * @param {Array<{id: number, inFrame: number}>} comments - the top-level Comments
- * @param {number} perFrame - px per Frame at this zoom
- * @return {Array<{comment: object, x: number}|{cluster: object[], x: number}>} in drawing order, x in px from the start of the piece
+ * @param {number} perFrame - px per Frame
+ * @return {Array<{comment: object, x: number}|{cluster: object[], x: number}>} from left to right, x in px from the start of the piece
  */
-export function stack(comments, perFrame) {
+export function circlesOf(comments, perFrame) {
 	const places = []
 	for (const comment of [...comments].sort((a, b) => a.inFrame - b.inFrame || a.id - b.id)) {
-		const at = comment.inFrame * perFrame
+		const x = comment.inFrame * perFrame
 		const place = places.at(-1)
-		if (place && at - place.x < CIRCLE) {
+		if (place && x - place.x < CIRCLE) {
 			place.comments.push(comment)
 		} else {
-			places.push({ x: at, comments: [comment] })
+			places.push({ x, comments: [comment] })
 		}
 	}
-	return places.flatMap((place) => {
-		if (place.comments.length > STACK_MAX) {
-			return [{ cluster: place.comments, x: place.x }]
-		}
-		let before = -Infinity
-		return place.comments.map((comment) => {
-			before = Math.max(comment.inFrame * perFrame, before + STACK_STEP)
-			return { comment, x: before }
-		})
-	})
+	return places.map(({ x, comments: each }) => each.length > 1 ? { cluster: each, x } : { comment: each[0], x })
 }
 
 /**
- * @param {Array<{x: number}>} circles - as stack gives them
+ * How a circle looks, on the wave and on the bar: its author's initials in
+ * their avatar's colour, a count neutral; resolved ones paler, a selected one ringed.
+ *
+ * @param {{comment?: object, cluster?: object[]}} circle - as circlesOf gives it
+ * @param {Array<?number>} selected - the Comments selected or open
+ * @return {{text: string, fill: string, line: string, pale: boolean, ringed: boolean}} its text, its colour over black and its edge's
+ */
+export function circleLook({ comment, cluster }, selected) {
+	const each = cluster ?? [comment]
+	const rgb = cluster ? '255, 255, 255' : avatarRgb(comment.author)
+	const ringed = each.some((one) => selected.includes(one.id))
+	return {
+		text: cluster ? String(cluster.length) : initials(comment.author.name),
+		fill: `rgba(${rgb}, ${cluster ? 0.18 : 0.3})`,
+		line: ringed ? '#fff' : `rgba(${rgb}, ${cluster ? 0.6 : 1})`,
+		pale: each.every((one) => one.resolved),
+		ringed,
+	}
+}
+
+/**
+ * @param {Array<{x: number}>} circles - as circlesOf gives them
  * @param {number} x - the pointer, in px from the start of the piece
  * @param {number} dy - the pointer's distance from the circles' centre line, in px
  * @param {number} reach - how far from a centre still hits it; a finger's is wider than a mouse's
- * @return {object|null} the circle whose centre is nearest, within reach; of two as near, the one on top
+ * @return {object|null} the circle whose centre is nearest, within reach
  */
 export function circleAt(circles, x, dy, reach) {
 	let nearest = null
@@ -438,7 +447,7 @@ export function spreadSpan(cluster, perSecond, width, duration) {
 	const extent = (cluster.at(-1).inFrame - cluster[0].inFrame) / perSecond
 	let span = clampSpan(extent * 1.5, duration)
 	for (;;) {
-		if (stack(cluster, width / span / perSecond).every((circle) => circle.comment)) {
+		if (circlesOf(cluster, width / span / perSecond).every((circle) => circle.comment)) {
 			return span
 		}
 		if (span <= Math.min(STEPS[0], duration)) {

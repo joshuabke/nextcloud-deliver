@@ -1,10 +1,9 @@
 <script setup>
-import { usernameToColor } from '@nextcloud/vue/functions/usernameToColor'
 import { computed } from 'vue'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
-import { avatarSeed, initials } from '../lib/initials.js'
+import { avatarRgb, initials } from '../lib/initials.js'
 
-// Whoever wrote or decided something, in the colour of avatarSeed
+// Whoever wrote or decided something, in their colour (avatarRgb)
 const props = defineProps({
 	/** { type: user | reviewer | deleted, id, name } */
 	author: { type: Object, required: true },
@@ -13,10 +12,7 @@ const props = defineProps({
 	tooltip: { type: Boolean, default: false },
 })
 
-const rgb = computed(() => {
-	const { r, g, b } = usernameToColor(avatarSeed(props.author))
-	return `${r}, ${g}, ${b}`
-})
+const rgb = computed(() => avatarRgb(props.author))
 </script>
 
 <template>

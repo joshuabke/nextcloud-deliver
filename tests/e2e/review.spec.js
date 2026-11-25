@@ -253,6 +253,8 @@ test.describe('Review view', () => {
 
 		// Frame stepping is exact: five steps at 25 fps land on 00:00:00:05; C brings hidden Comments back
 		await page.getByRole('button', { name: 'Hide Comments' }).click()
+		await expect(page.locator('.deliver-player__circle')).toHaveCount(0)
+		const height = (await page.locator('.deliver-player__stage').boundingBox()).height
 		// Focus the page without touching the player
 		await page.locator('.deliver-review__title').click()
 		for (let i = 0; i < 5; i++) {
@@ -268,9 +270,20 @@ test.describe('Review view', () => {
 
 		const first = page.locator('.deliver-comment').first()
 		await expect(first).toContainText('sound starts too early')
+		// No row of its own: the Comment takes nothing from the picture
+		await expect(page.locator('.deliver-player__circle')).toBeVisible()
+		expect((await page.locator('.deliver-player__stage').boundingBox()).height).toBe(height)
 		await expect(first.locator('.deliver-comment__time')).not.toBeEmpty()
 		await expect(page.locator('.deliver-comment__anchor').first()).toHaveText('00:00:00:05')
-		await expect(page.locator('.deliver-player__marker')).toHaveCount(1)
+		// Its author's initials, on the bar, which lies between the picture and the buttons with nothing beside it
+		await expect(page.locator('.deliver-player__circle')).toHaveText('D')
+		const [circle, under, above, buttons] = await Promise.all(['circle', 'timeline', 'stage', 'controls'].map((each) => page.locator(`.deliver-player__${each}`).boundingBox()))
+		expect(circle.y + circle.height / 2).toBeCloseTo(under.y + under.height / 2, 0)
+		expect(circle.x + circle.width / 2).toBeCloseTo(under.x + under.width * 5 / 100, 0)
+		expect(under.y).toBeCloseTo(above.y + above.height, 0)
+		expect(buttons.y).toBeCloseTo(under.y + under.height, 0)
+		expect(circle.y).toBeGreaterThanOrEqual(above.y + above.height - 2)
+		expect(circle.y + circle.height).toBeLessThanOrEqual((await page.getByRole('button', { name: 'Play (Space)' }).boundingBox()).y)
 
 		// A Range, set with I and O
 		// Focus the page without touching the player
@@ -284,7 +297,8 @@ test.describe('Review view', () => {
 		await expect(page.locator('.deliver-comments__anchor')).toHaveText(/–/)
 		await page.locator('#deliver-comment-body').fill('shorten this passage')
 		await page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
-		await expect(page.locator('.deliver-player__marker')).toHaveCount(2)
+		// Both start on the same Frame: one circle with their count
+		await expect(page.locator('.deliver-player__circle')).toHaveText('2')
 
 		// Resolving hides it from the unresolved filter, a Reply stays with its parent
 		await page.locator('.deliver-comment').first().getByRole('button', { name: 'Mark as resolved' }).click()
@@ -462,15 +476,16 @@ test.describe('Review view', () => {
 		await expect(touchPage.locator('.deliver-player, .deliver-still')).toHaveCount(1)
 		await next()
 		await expect(touchPage.locator('.deliver-player, .deliver-still')).toHaveCount(0)
-		await expect(touchPage.locator('.deliver-player, .deliver-still')).toHaveCount(1)
+		await expect(touchPage.locator('.deliver-still')).toHaveCount(1)
 		const heights = await touchPage.evaluate(() => [...window.deliverHeights])
 		expect(heights).toEqual([Math.round(height * 10)])
 		await phone.close()
 
 		const cleanup = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		const left = await (await cleanup.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
-		for (const asset of left.ocs.data.assets.filter((each) => each.name !== 'clip')) {
-			await cleanup.delete(`/ocs/v2.php/apps/deliver/api/v1/assets/${asset.id}/files?format=json`)
+		for (const name of ['clip2', 'clip3']) {
+			const { id } = left.ocs.data.assets.find((asset) => asset.name === name)
+			expect((await cleanup.delete(`/ocs/v2.php/apps/deliver/api/v1/assets/${id}/files?format=json`)).ok()).toBe(true)
 		}
 		await cleanup.dispose()
 	})
@@ -506,7 +521,10 @@ test.describe('Review view', () => {
 		await grabber.tap()
 		await expect(page.locator('.deliver-layout--middle')).toHaveCount(1)
 		await expect(page.locator('.deliver-comments__head')).toBeVisible()
-		expect((await page.locator('.deliver-player__stage').boundingBox()).height).toBeCloseTo(390 * 9 / 16, 0)
+		for (const width of [360, 393, 430, 440, 460, 390]) {
+			await page.setViewportSize({ width, height: PHONE.viewport.height })
+			await expect.poll(async () => (await page.locator('.deliver-player__stage').boundingBox()).height).toBeCloseTo(width * 9 / 16, 1)
+		}
 		await grabber.tap()
 		await expect(page.locator('.deliver-layout--up')).toHaveCount(1)
 		// A stroke down goes back a level at a time
@@ -537,7 +555,7 @@ test.describe('Review view', () => {
 		const right = { x: stage.x + stage.width * 0.85, y: stage.y + stage.height / 2 }
 		await page.touchscreen.tap(right.x, right.y)
 		await page.touchscreen.tap(right.x, right.y)
-		await expect(page.locator('.deliver-player__flash')).toContainText('+5')
+		await expect(page.locator('.deliver-player__flash')).toContainText('+10')
 		await page.waitForTimeout(700)
 		await page.touchscreen.tap(stage.x + stage.width / 2, right.y)
 		await expect(page.locator('.deliver-player--fullscreen')).toHaveCount(1)
@@ -591,15 +609,8 @@ test.describe('Review view', () => {
 		await reviewer.locator('#deliver-comment-body').fill('on the phone')
 		await reviewer.getByRole('button', { name: 'Send (Enter)' }).tap()
 		await expect(reviewer.locator('.deliver-comment').filter({ hasText: 'on the phone' })).toContainText('Pia')
-		// A tap on its marker opens the Comment on the picture
-		await reviewer.locator('.deliver-player__marker[aria-label^="Pia"]').tap()
-		await expect(reviewer.locator('.deliver-player__peek--tapped')).toContainText('on the phone')
-		// A tap on the picture then only closes it
-		await reviewer.waitForTimeout(700)
-		await reviewer.locator('.deliver-player__stage').tap({ position: { x: 40, y: 40 } })
-		await expect(reviewer.locator('.deliver-player__peek')).toHaveCount(0)
-		await reviewer.waitForTimeout(700)
-		await expect(reviewer.locator('.deliver-player--fullscreen')).toHaveCount(0)
+		// Its circle is on the bar, alone or in a count with others of its place
+		await expect(reviewer.locator('.deliver-player__circle').first()).toHaveText(/^(P|\d+)$/)
 		await guest.close()
 	})
 
@@ -951,22 +962,195 @@ test.describe('Review view', () => {
 		await page.keyboard.press('k')
 	})
 
-	test('a click on a Comment\'s marker pauses', async ({ playwright }) => {
+	test('a click on a Comment in the list pauses on its Frame', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		// The Compare test stacked a newer Version on the Asset; only the newest takes Comments
 		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
 		const newest = Math.max(...project.ocs.data.assets[0].versions.map((each) => each.id))
 		const commented = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${newest}/comments?format=json`, { data: { inFrame: 50, body: 'stop here' } })
 		expect(commented.ok()).toBe(true)
-		await api.dispose()
 		await page.goto(`/apps/deliver/versions/${newest}`)
 		const video = page.locator('video.deliver-player__video')
 		await expect(video).toHaveJSProperty('readyState', 4)
 		await page.getByRole('button', { name: /^Play \(/ }).click()
 		await expect.poll(() => video.evaluate((element) => element.paused)).toBe(false)
-		await page.locator('.deliver-player__marker').first().click()
+		await page.locator('.deliver-comment').filter({ hasText: 'stop here' }).locator('.deliver-comment__anchor').click()
 		await expect.poll(() => video.evaluate((element) => element.paused)).toBe(true)
 		expect(await video.evaluate((element) => element.currentTime)).toBeCloseTo(2, 1)
+		const id = (await commented.json()).ocs.data.id
+		expect((await api.delete(`/ocs/v2.php/apps/deliver/api/v1/comments/${id}?format=json`)).ok()).toBe(true)
+		await api.dispose()
+	})
+
+	test('close Comments share a circle with their count, and the bar grows under a mouse and takes a finger up to its edges', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
+		const newest = Math.max(...project.ocs.data.assets[0].versions.map((each) => each.id))
+		const ids = []
+		for (const inFrame of [60, 85, 86, 87]) {
+			const made = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${newest}/comments?format=json`, { data: { inFrame, body: `at ${inFrame}` } })
+			ids.push((await made.json()).ocs.data.id)
+		}
+		await page.goto(`/apps/deliver/versions/${newest}`)
+		await expect(page.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
+		const count = page.locator('.deliver-player__circle').filter({ hasText: '3' })
+		await expect(count).toHaveCount(1)
+		// Selected in the list, its circle is ringed; nothing of it is for the keyboard or a screen reader, as the list is
+		await page.locator('.deliver-comment').filter({ hasText: 'at 60' }).locator('.deliver-comment__anchor').click()
+		await expect(page.locator('.deliver-player__circle--ringed')).toHaveCount(1)
+		await expect(count).not.toHaveClass(/--ringed/)
+		await expect(page.locator('.deliver-player__scrubber').locator('button, [tabindex], [role]')).toHaveCount(0)
+		await expect(page.locator('.deliver-player__circles')).toHaveAttribute('aria-hidden', 'true')
+		// The bar grows under a mouse, on a narrow window too, not under a finger
+		await page.setViewportSize({ width: 900, height: 800 })
+		await page.locator('.deliver-player__timeline').hover()
+		await expect(page.locator('.deliver-player__track')).toHaveCSS('height', '12px')
+		const [knob, track] = await Promise.all(['.deliver-player__timeline', '.deliver-player__track'].map((each) => page.locator(each).boundingBox()))
+		expect(track.y + track.height / 2).toBeCloseTo(knob.y + knob.height / 2, 0)
+		await page.setViewportSize({ width: 1280, height: 720 })
+
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const touchPage = await phone.newPage()
+		await login(touchPage)
+		const video = touchPage.locator('video.deliver-player__video')
+		const frame = () => video.evaluate((element) => Math.floor(element.currentTime * 25 + 0.001))
+		for (const edge of ['top', 'bottom']) {
+			await touchPage.goto(`/apps/deliver/versions/${newest}`)
+			await expect(video).toHaveJSProperty('readyState', 4)
+			const bar = await touchPage.locator('.deliver-player__timeline').boundingBox()
+			await touchPage.touchscreen.tap(bar.x + bar.width * 0.855, bar.y + (edge === 'top' ? 2 : bar.height - 2))
+			await expect.poll(frame).toBe(85)
+			await touchPage.waitForTimeout(300)
+			await expect(touchPage.locator('.deliver-player__track')).toHaveCSS('height', '6px')
+		}
+		// Its lower edge is the bar's over every control of the one row under it: it seeks, and none of them answers
+		const bottom = await touchPage.locator('.deliver-player__timeline').boundingBox()
+		const menu = touchPage.getByRole('button', { name: 'Playback settings' })
+		for (const control of [touchPage.getByRole('button', { name: 'Play', exact: true }), touchPage.locator('.deliver-player__time'), menu]) {
+			const box = await control.boundingBox()
+			const x = box.x + box.width / 2
+			await touchPage.touchscreen.tap(x, bottom.y + bottom.height - 1)
+			await expect.poll(frame).toBe(Math.floor((x - bottom.x) / bottom.width * 100))
+			await touchPage.waitForTimeout(300)
+			expect(await video.evaluate((element) => element.paused)).toBe(true)
+			await expect(menu).toHaveAttribute('aria-expanded', 'false')
+		}
+		// The half of a circle beyond either end is the bar's too
+		const ends = await touchPage.locator('.deliver-player__timeline').boundingBox()
+		for (const [x, at] of [[ends.x + ends.width + 8, 99], [ends.x - 8, 0]]) {
+			await touchPage.touchscreen.tap(x, ends.y + ends.height / 2)
+			await expect.poll(frame).toBe(at)
+		}
+		// Above it the picture keeps its own
+		const bar = await touchPage.locator('.deliver-player__timeline').boundingBox()
+		await touchPage.touchscreen.tap(bar.x + bar.width * 0.3, bar.y - 4)
+		await expect(touchPage.locator('.deliver-player--fullscreen, .deliver-player--filling')).toHaveCount(1)
+		await phone.close()
+		for (const id of ids) {
+			expect((await api.delete(`/ocs/v2.php/apps/deliver/api/v1/comments/${id}?format=json`)).ok()).toBe(true)
+		}
+		await api.dispose()
+	})
+
+	test('a press on a Comment\'s circle seeks and drags as anywhere on the bar, by mouse, finger and pen, and opens nothing', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
+		const newest = Math.max(...project.ocs.data.assets[0].versions.map((each) => each.id))
+		const made = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${newest}/comments?format=json`, { data: { inFrame: 30, body: 'look at me' } })
+		const id = (await made.json()).ocs.data.id
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const touchPage = await phone.newPage()
+		await login(touchPage)
+		const touch = await phone.newCDPSession(touchPage)
+		const cdp = await context.newCDPSession(page)
+		const finger = (x, y) => ({
+			down: () => touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] }),
+			move: (dx) => touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + dx, y }] }),
+			up: () => touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }),
+		})
+		const mouse = (x, y) => ({
+			down: async () => {
+				await page.mouse.move(x, y)
+				await page.mouse.down()
+			},
+			move: (dx) => page.mouse.move(x + dx, y),
+			up: () => page.mouse.up(),
+		})
+		const pen = (x, y) => {
+			const send = (type, at, buttons) => cdp.send('Input.dispatchMouseEvent', { type, x: at, y, button: 'left', buttons, clickCount: 1, pointerType: 'pen' })
+			let at = x
+			return {
+				down: () => send('mousePressed', x, 1),
+				move: (dx) => {
+					at = x + dx
+					return send('mouseMoved', at, 1)
+				},
+				up: () => send('mouseReleased', at, 0),
+			}
+		}
+
+		for (const [target, pointer] of [[page, mouse], [touchPage, finger], [page, pen]]) {
+			await target.goto(`/apps/deliver/versions/${newest}`)
+			const video = target.locator('video.deliver-player__video')
+			await expect(video).toHaveJSProperty('readyState', 4)
+			const frame = () => video.evaluate((element) => Math.floor(element.currentTime * 25 + 0.001))
+			const paused = () => video.evaluate((element) => element.paused)
+			const bar = await target.locator('.deliver-player__timeline').boundingBox()
+			const circle = target.locator('.deliver-player__circle').filter({ hasText: 'D' })
+			const box = await circle.boundingBox()
+			expect(box.x + box.width / 2).toBeCloseTo(bar.x + bar.width * 0.3, 0)
+			// Off its middle, a Frame of its own
+			const x = box.x + box.width / 2 - 6
+			const { down, move, up } = pointer(x, box.y + box.height / 2)
+			const at = (px) => Math.floor((px - bar.x) / bar.width * 100)
+			const opened = target.locator('[role="dialog"], .deliver-comment--selected')
+
+			// Pressed it is there at once, under the pointer, not at the Comment; the playback state stays
+			await down()
+			await expect.poll(frame).toBe(at(x))
+			await up()
+			await target.waitForTimeout(400)
+			expect(await frame()).toBe(at(x))
+			expect(await paused()).toBe(true)
+			await expect(opened).toHaveCount(0)
+			await expect(circle).not.toHaveClass(/--ringed/)
+			// Twice in a row is twice a seek
+			await down()
+			await up()
+			await down()
+			await up()
+			await target.waitForTimeout(400)
+			expect(await frame()).toBe(at(x))
+			await expect(opened).toHaveCount(0)
+
+			// Playing, a click goes on playing; a drag holds playback and shows the Frame over the pointer
+			await target.getByRole('button', { name: /^Play/ }).first().click()
+			await expect.poll(paused).toBe(false)
+			await down()
+			await move(40)
+			await move(120)
+			await expect.poll(frame).toBe(at(x + 120))
+			expect(await paused()).toBe(true)
+			await expect(target.locator('.deliver-player__hover')).toBeVisible()
+			await move(0)
+			await expect.poll(frame).toBe(at(x))
+			await up()
+			await expect.poll(paused).toBe(false)
+			await expect(opened).toHaveCount(0)
+			await down()
+			await up()
+			await target.waitForTimeout(200)
+			expect(await paused()).toBe(false)
+		}
+		// The mouse shows the Frame's time over a circle as beside it
+		const box = await page.locator('.deliver-player__circle').filter({ hasText: 'D' }).boundingBox()
+		await page.mouse.move(0, 0)
+		await expect(page.locator('.deliver-player__hover')).toBeHidden()
+		await page.mouse.move(box.x + box.width / 2 + 0.5, box.y + box.height / 2)
+		await expect(page.locator('.deliver-player__hover-time')).toHaveText('00:00:01:05')
+		await phone.close()
+		expect((await api.delete(`/ocs/v2.php/apps/deliver/api/v1/comments/${id}?format=json`)).ok()).toBe(true)
+		await api.dispose()
 	})
 
 	test('a finger on the timeline holds playback and resumes on lifting only if it played', async () => {
@@ -1197,7 +1381,7 @@ test.describe('Audio review', () => {
 		const time = () => audio.evaluate((element) => element.currentTime)
 		// The playhead is the white line down the middle of the stage
 		const centre = () => canvas.evaluate((element) => {
-			const pixel = element.getContext('2d').getImageData(Math.round(element.width / 2) - 1, element.height - 2, 1, 1).data
+			const pixel = element.getContext('2d').getImageData(Math.round(element.width / 2) - 1, element.height - Math.round(44 * element.width / element.clientWidth), 1, 1).data
 			return pixel[0] + pixel[1] + pixel[2]
 		})
 
@@ -1217,10 +1401,10 @@ test.describe('Audio review', () => {
 		expect(await centre()).toBe(765)
 		await expect.poll(width).toBeGreaterThan(30 / 360 * 100 + 0.1)
 
-		// A click a quarter of the stage to the right goes 15 seconds on and keeps playing
+		// A click in the strip, a quarter of the stage to the right, goes 15 seconds on and keeps playing
 		const box = await canvas.boundingBox()
 		const before = await time()
-		await canvas.click({ position: { x: box.width * 0.75, y: box.height / 2 } })
+		await canvas.click({ position: { x: box.width * 0.75, y: box.height - 20 } })
 		expect(await time() - before).toBeGreaterThan(14)
 		expect(await time() - before).toBeLessThan(17)
 		expect(await audio.evaluate((element) => element.paused)).toBe(false)
@@ -1312,7 +1496,7 @@ test.describe('Audio review', () => {
 		await page.setViewportSize({ width: 1280, height: 720 })
 	})
 
-	test('after a click the wave glides to the new place within half a second, and jumps under reduced motion', async () => {
+	test('after a click in the strip the wave glides to the new place within half a second, and jumps under reduced motion', async () => {
 		await page.goto(`/apps/deliver/versions/${versionId}`)
 		const canvas = page.locator('.deliver-wave canvas')
 		await expect(canvas).toBeVisible()
@@ -1338,7 +1522,7 @@ test.describe('Audio review', () => {
 			}
 			requestAnimationFrame(frame)
 		}))
-		const quarterOn = { position: { x: box.width * 0.75, y: box.height / 2 } }
+		const quarterOn = { position: { x: box.width * 0.75, y: box.height - 20 } }
 
 		let recording = record()
 		await canvas.click(quarterOn)
@@ -1426,7 +1610,7 @@ test.describe('Audio review', () => {
 		}
 		expect(held.at(-1).drawn).toBeCloseTo(held.at(-1).sound, 2)
 
-		// A click 40 px right of the playhead while a glide runs goes to what is drawn under it, not beside it
+		// A click in the strip 40 px right of the playhead while a glide runs goes to what is drawn under it, not beside it
 		await goTo(100)
 		const box = await canvas.boundingBox()
 		// Two clicks in the page itself, two frames apart, so the second surely comes while the first one's glide runs
@@ -1434,7 +1618,7 @@ test.describe('Audio review', () => {
 			const audio = document.querySelector('video.deliver-player__video')
 			const box = element.getBoundingClientRect()
 			const click = (x) => {
-				const at = { clientX: box.left + x, clientY: box.top + box.height / 2, pointerId: 7, pointerType: 'mouse', button: 0, bubbles: true }
+				const at = { clientX: box.left + x, clientY: box.bottom - 20, pointerId: 7, pointerType: 'mouse', button: 0, bubbles: true }
 				element.dispatchEvent(new PointerEvent('pointerdown', at))
 				element.dispatchEvent(new PointerEvent('pointerup', at))
 			}
@@ -1578,9 +1762,9 @@ test.describe('Audio review', () => {
 			await expect.poll(() => canvas.evaluate((element) => element.drawnAt)).toBeCloseTo(seconds + 0.0005, 2)
 		}
 		const send = () => page.locator('.deliver-comments__form button[title="Send (Enter)"]').click()
-		const quarterOn = { position: { x: box.width * 0.75, y: box.height / 2 } }
+		const quarterOn = { position: { x: box.width * 0.75, y: box.height - 20 } }
 
-		// A click a quarter of the stage on seeks 15 seconds on, and C comments there
+		// A click in the strip a quarter of the stage on seeks 15 seconds on, and C comments there
 		await commentOnQuarter(page, canvas, quarterOn)
 		await expect(field).toBeFocused()
 		await expect(anchor).toHaveText('0:15.000')
@@ -1597,12 +1781,12 @@ test.describe('Audio review', () => {
 		await expect(anchor).toHaveText('0:55.000')
 		await field.fill('')
 		await expect(anchor).toHaveText('1:40.000')
-		// A click on the wave, which seeks, lets go too
+		// A click in the strip, which seeks, lets go too
 		await commentOnQuarter(page, canvas, quarterOn)
 		await expect(anchor).toHaveText('1:55.000')
 		// Once the wave has glided there: a click lands on what is drawn under it
 		await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - document.querySelector('video.deliver-player__video').currentTime))).toBeLessThan(0.01)
-		await canvas.click({ position: { x: box.width * 0.25, y: box.height / 2 } })
+		await canvas.click({ position: { x: box.width * 0.25, y: box.height - 20 } })
 		await expect(anchor).toHaveText('1:40.000')
 		await expect.poll(() => canvas.evaluate((element) => Math.abs(element.drawnAt - document.querySelector('video.deliver-player__video').currentTime))).toBeLessThan(0.01)
 
@@ -1664,6 +1848,13 @@ test.describe('Audio review', () => {
 		await page.locator('.deliver-review__title').click()
 		await page.keyboard.press('Escape')
 		await expect(card).toHaveCount(0)
+		// A double click on the wave whose first click closed the card skips nothing
+		await openFirst()
+		await expect(card).toBeVisible()
+		const closing = await audio.evaluate((element) => element.currentTime)
+		await canvas.dblclick({ position: { x: box.width * 0.95, y: box.height / 4 } })
+		await expect(card).toHaveCount(0)
+		expect(await audio.evaluate((element) => element.currentTime)).toBe(closing)
 	})
 
 	test('with the Comment list hidden, a Comment on audio is written at the Waveform and the list stays hidden', async () => {
@@ -1680,11 +1871,13 @@ test.describe('Audio review', () => {
 		const list = page.locator('.deliver-layout__panel')
 		await expect(list).toBeHidden()
 		const box = await canvas.boundingBox()
-		const quarterOn = { position: { x: box.width * 0.75, y: box.height / 2 } }
+		const quarterOn = { position: { x: box.width * 0.75, y: box.height - 20 } }
 		const popup = page.getByRole('dialog', { name: 'New Comment' })
 		const field = popup.locator('#deliver-comment-body-inline')
 
-		// A double click only seeks: no field opens
+		// A double click opens no field
+		await canvas.dblclick({ position: { x: box.width * 0.75, y: box.height / 2 } })
+		await expect(popup).toHaveCount(0)
 		await canvas.dblclick(quarterOn)
 		await expect(popup).toHaveCount(0)
 		await audio.evaluate((element) => {
@@ -1748,7 +1941,7 @@ test.describe('Audio review', () => {
 			await page.getByRole('button', { name: 'Hide Comments' }).click()
 		}
 		const box = await canvas.boundingBox()
-		const quarterOn = { position: { x: box.width * 0.75, y: box.height / 2 } }
+		const quarterOn = { position: { x: box.width * 0.75, y: box.height - 20 } }
 		const popup = page.getByRole('dialog', { name: 'New Comment' })
 		const field = popup.locator('#deliver-comment-body-inline')
 		const anchor = popup.locator('.deliver-comments__anchor')
@@ -1889,6 +2082,172 @@ test.describe('Audio review', () => {
 		await field.fill('')
 	})
 
+	test('by mouse a click on the wave does not seek and a double click skips ten seconds; the strip under it seeks and shows a dashed line first', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		expect((await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${versionId}/comments?format=json`, { data: { inFrame: 330000, body: 'in the strip' } })).ok()).toBe(true)
+		await api.dispose()
+		// Without the glide a click lands on the wave where it will rest
+		await page.emulateMedia({ reducedMotion: 'reduce' })
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		const canvas = page.locator('.deliver-wave canvas')
+		await expect(canvas).toBeVisible()
+		const audio = page.locator('video.deliver-player__video')
+		await expect(audio).toHaveJSProperty('readyState', 4)
+		const box = await canvas.boundingBox()
+		const strip = box.height - 20
+		const time = () => audio.evaluate((element) => element.currentTime)
+		const goTo = async (seconds) => {
+			await audio.evaluate((element, at) => {
+				element.currentTime = at
+			}, seconds)
+			await expect.poll(() => canvas.evaluate((element) => element.drawnAt)).toBeCloseTo(seconds + 0.0005, 2)
+		}
+		// Of the 16 px above the loudest bar at this place, how many are drawn on: 8 of a dashed line
+		const line = (x) => canvas.evaluate((element, at) => {
+			const ratio = element.width / element.clientWidth
+			const data = element.getContext('2d').getImageData(Math.round(at * ratio), Math.round(36 * ratio), 1, Math.round(16 * ratio)).data
+			return data.filter((value, index) => index % 4 === 3 && value > 0).length / ratio
+		}, x)
+		const cursor = () => page.locator('.deliver-wave').evaluate((element) => getComputedStyle(element).cursor)
+		const hover = (x, y) => page.mouse.move(box.x + x, box.y + y)
+		const card = page.getByRole('dialog', { name: /^Comment #/ })
+
+		for (const zoom of ['1 min', 'Whole']) {
+			const whole = zoom === 'Whole'
+			await page.getByRole('button', { name: zoom, exact: true }).click()
+			await goTo(20)
+			const start = await time()
+			// On the wave a click goes nowhere; a double click skips ten seconds on the thirds, nothing in the middle
+			await canvas.click({ position: { x: box.width * 0.85, y: box.height / 2 } })
+			await page.waitForTimeout(400)
+			expect(await time()).toBe(start)
+			await canvas.dblclick({ position: { x: box.width * 0.45, y: box.height / 2 } })
+			await page.waitForTimeout(400)
+			expect(await time()).toBe(start)
+			await canvas.dblclick({ position: { x: box.width * 0.85, y: box.height / 2 } })
+			await expect.poll(time).toBeCloseTo(start + 10, 1)
+			await expect(page.locator('.deliver-player__flash')).toContainText('+10')
+			await canvas.dblclick({ position: { x: box.width * 0.1, y: box.height / 2 } })
+			await expect.poll(time).toBeCloseTo(start, 1)
+
+			// Hovering the strip shows where a click goes; off it there is no line
+			const x = Math.round(box.width * 0.75)
+			await hover(x, box.height / 2)
+			expect(await line(x)).toBe(0)
+			await hover(x, strip)
+			await expect.poll(() => line(x)).toBe(8)
+			expect(await cursor()).toBe('pointer')
+			await hover(x + 30, strip)
+			await expect.poll(() => line(x + 30)).toBe(8)
+			expect(await line(x)).toBe(0)
+			await hover(x, box.height / 2)
+			await expect.poll(() => line(x + 30)).toBe(0)
+			expect(await cursor()).toBe('grab')
+			await hover(x, strip)
+			await expect.poll(() => line(x)).toBe(8)
+			await hover(x, box.height + 60)
+			await expect.poll(() => line(x)).toBe(0)
+
+			// A click there seeks, and two quick ones seek twice
+			await canvas.dblclick({ position: { x, y: strip } })
+			await expect.poll(time).toBeCloseTo(whole ? 270 : start + 30, 0)
+			await goTo(20)
+
+			// A drag that begins there drags, without the line
+			await hover(x, strip)
+			await page.mouse.down()
+			await page.mouse.move(box.x + x - 40, box.y + strip)
+			await page.mouse.move(box.x + box.width / 2, box.y + strip)
+			await page.waitForTimeout(100)
+			for (const at of [x, x - 40, Math.round(box.width / 2) + 5]) {
+				expect(await line(at)).toBe(0)
+			}
+			expect(await time()).toBeCloseTo(whole ? 180 : 35, 0)
+			await page.mouse.up()
+
+			// Over a circle there is no line, but a click opens it
+			await goTo(330)
+			const circle = whole ? Math.round(box.width * 330 / 360) : Math.round(box.width / 2)
+			await hover(circle + 8, strip)
+			await page.waitForTimeout(100)
+			expect(await line(circle + 8)).toBe(0)
+			expect(await cursor()).toBe('pointer')
+			await hover(circle + 40, strip)
+			await expect.poll(() => line(circle + 40)).toBe(8)
+			await page.mouse.click(box.x + circle + 4, box.y + strip)
+			await expect(card).toContainText('in the strip')
+			expect(await time()).toBeCloseTo(330, 1)
+			await page.keyboard.press('Escape')
+			await expect(card).toHaveCount(0)
+		}
+
+		// With the card open a click in the strip beside the circles goes where the line says, and closes it; on the wave it only closes
+		await page.getByRole('button', { name: '1 min' }).click()
+		for (const inStrip of [true, false]) {
+			await goTo(330)
+			await page.mouse.click(box.x + box.width / 2 + 4, box.y + strip)
+			await expect(card).toContainText('in the strip')
+			const x = Math.round(box.width * 0.6)
+			await hover(x, inStrip ? strip : 60)
+			await expect.poll(() => line(x)).toBe(inStrip ? 8 : 0)
+			await page.mouse.click(box.x + x, box.y + (inStrip ? strip : 60))
+			await expect(card).toHaveCount(0)
+			await expect.poll(time).toBeCloseTo(inStrip ? 336 : 330, 0)
+		}
+		// Pressed on the wave and lifted in the strip the mouse goes nowhere, so there is no line
+		await goTo(20)
+		await hover(600, 100)
+		await page.mouse.down()
+		await hover(600, strip)
+		await page.waitForTimeout(100)
+		expect(await line(600)).toBe(0)
+		await page.mouse.up()
+		expect(await time()).toBeCloseTo(20, 1)
+		await expect.poll(() => line(600)).toBe(8)
+		// A stage resized under the resting mouse, now on the wave, keeps no line
+		await page.setViewportSize({ width: 1280, height: 900 })
+		await page.waitForTimeout(300)
+		expect(await line(600)).toBe(0)
+		await page.setViewportSize({ width: 1280, height: 720 })
+		await expect.poll(async () => (await canvas.boundingBox()).height).toBe(box.height)
+
+		// Before the start of the piece a click goes to the start, and the line shows it there
+		await page.getByRole('button', { name: '1 min' }).click()
+		await goTo(20)
+		const first = Math.round(box.width / 2 - 20 * box.width / 60)
+		await hover(first - 40, strip)
+		await expect.poll(() => line(first)).toBe(8)
+		expect(await line(first - 40)).toBe(0)
+		// While it plays on under it, the line stays at the mouse
+		await page.getByRole('button', { name: 'Play (Space)' }).click()
+		await hover(200, strip)
+		await expect.poll(time).toBeGreaterThan(22)
+		expect(await line(200)).toBe(8)
+		await page.getByRole('button', { name: 'Pause (Space)' }).click()
+		// Standing, the mouse over the wave or still in the strip draws nothing again
+		await page.waitForTimeout(300)
+		const draws = await canvas.evaluate(async (element) => {
+			const clear = CanvasRenderingContext2D.prototype.clearRect
+			let count = 0
+			CanvasRenderingContext2D.prototype.clearRect = function(...args) {
+				count++
+				return clear.apply(this, args)
+			}
+			const box = element.getBoundingClientRect()
+			const counts = []
+			for (const [x, y] of [[100, 100], [120, 100], [200, box.height - 20], [200, box.height - 10], [200, 100]]) {
+				element.dispatchEvent(new PointerEvent('pointermove', { clientX: box.left + x, clientY: box.top + y, pointerId: 7, pointerType: 'mouse', bubbles: true }))
+				await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+				counts.push(count)
+			}
+			CanvasRenderingContext2D.prototype.clearRect = clear
+			return counts
+		})
+		// No line, no line, a line, the same line, no line
+		expect(draws).toEqual([0, 0, 1, 1, 2])
+		await page.emulateMedia({ reducedMotion: null })
+	})
+
 	test('on a phone held sideways with the list closed, the field opens as a sheet and sends from there', async () => {
 		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: { width: 844, height: 390 } })
 		const member = await phone.newPage()
@@ -1914,6 +2273,100 @@ test.describe('Audio review', () => {
 		await expect(sheet).toHaveCount(0)
 		await expect(member.locator('.deliver-layout__panel')).toBeHidden()
 		await phone.close()
+	})
+
+	test('over the whole piece the Comments are on the wave only, zoomed in on the bar too, where a press seeks and opens nothing', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const ids = []
+		const open = async (target, zoom) => {
+			await target.goto(`/apps/deliver/versions/${versionId}`)
+			await expect(target.locator('.deliver-wave canvas')).toBeVisible()
+			await expect(target.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
+			await target.getByRole('button', { name: zoom, exact: true }).click()
+		}
+		const timeOf = (target) => target.locator('video.deliver-player__video').evaluate((element) => element.currentTime)
+		// The circle at 90 s, a quarter on: other cases leave Comments too, in counts of their own
+		const circleOf = async (target) => {
+			const circles = target.locator('.deliver-player__circle')
+			await expect(circles.first()).toBeVisible()
+			return circles.nth(await circles.evaluateAll((all) => all.findIndex((each) => Math.abs(parseFloat(each.style.left) - each.parentElement.clientWidth / 4) < 1)))
+		}
+		const card = (target) => target.getByRole('dialog', { name: /^Comment #/ })
+		const canvas = page.locator('.deliver-wave canvas')
+
+		// The wave is as high with Comments as without, at every zoom
+		await page.route('**/versions/*/comments*', (route) => route.fulfill({ json: { ocs: { meta: { status: 'ok', statuscode: 200 }, data: { comments: [], manages: true, overwrittenAt: null, canComment: true, canApprove: false } } } }))
+		await open(page, 'Whole')
+		const heights = [(await canvas.boundingBox()).height]
+		await page.getByRole('button', { name: '1 min', exact: true }).click()
+		heights.push((await canvas.boundingBox()).height)
+		await expect(page.locator('.deliver-player__circle')).toHaveCount(0)
+		await page.unroute('**/versions/*/comments*')
+		for (const [inFrame, body] of [[90000, 'on the bar'], [90100, 'close by']]) {
+			const made = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${versionId}/comments?format=json`, { data: { inFrame, body } })
+			ids.push((await made.json()).ocs.data.id)
+		}
+		await open(page, 'Whole')
+		await expect(page.locator('.deliver-comment').filter({ hasText: 'on the bar' })).toBeVisible()
+		const stage = await canvas.boundingBox()
+		const under = await page.locator('.deliver-player__timeline').boundingBox()
+		expect([stage.height, stage.height]).toEqual(heights)
+		expect(under.y).toBeCloseTo(stage.y + stage.height, 0)
+
+		// Over the whole the circle is on the wave's lane, where it opens, and none is on the bar
+		expect(await canvas.evaluate((element) => {
+			const ratio = element.width / element.clientWidth
+			const data = element.getContext('2d').getImageData(Math.round((element.clientWidth / 4 + 8) * ratio), element.height - Math.round(20 * ratio), 1, 1).data
+			return data[3]
+		})).toBe(255)
+		await expect(page.locator('.deliver-player__circle')).toHaveCount(0)
+		const row = { x: under.x + under.width / 4, y: under.y + under.height / 2 }
+		await page.mouse.click(row.x, row.y)
+		await expect.poll(() => timeOf(page)).toBeCloseTo(90, 0)
+		await expect(card(page)).toHaveCount(0)
+
+		// Zoomed in the bar has it too, translucent until the list selects it, and a click or a drag on it is the bar's
+		await page.getByRole('button', { name: '1 min', exact: true }).click()
+		expect((await canvas.boundingBox()).height).toBe(stage.height)
+		const circle = await circleOf(page)
+		await expect(circle).toHaveText('2')
+		const back = () => circle.evaluate((element) => getComputedStyle(element).backgroundColor)
+		expect(await back()).toMatch(/rgba\(0, 0, 0, 0\.\d+\)/)
+		await page.mouse.click(row.x + 6, row.y)
+		await expect.poll(() => timeOf(page)).toBeCloseTo(90 + 6 / under.width * 360, 0)
+		await page.mouse.down()
+		await page.mouse.move(under.x + under.width / 2, row.y, { steps: 4 })
+		await expect.poll(() => timeOf(page)).toBeCloseTo(180, 0)
+		await page.mouse.up()
+		await page.waitForTimeout(400)
+		await expect(card(page)).toHaveCount(0)
+		await expect(page.locator('.deliver-comment--selected')).toHaveCount(0)
+		await page.locator('.deliver-comment').filter({ hasText: 'close by' }).locator('.deliver-comment__anchor').click()
+		await expect(circle).toHaveClass(/--ringed/)
+		await expect.poll(back).toBe('rgb(0, 0, 0)')
+
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: { width: 852, height: 393 } })
+		const member = await phone.newPage()
+		await login(member)
+		await open(member, '1 min')
+		const at = await (await circleOf(member)).boundingBox()
+		const touch = await phone.newCDPSession(member)
+		const y = at.y + at.height / 2
+		await member.touchscreen.tap(at.x + at.width / 2, y)
+		await expect.poll(() => timeOf(member)).toBeCloseTo(90, 0)
+		await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: at.x + at.width / 2, y }] })
+		for (const x of [at.x + 60, at.x + 160, at.x + 260]) {
+			await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y }] })
+		}
+		await expect.poll(() => timeOf(member)).toBeGreaterThan(150)
+		await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+		await member.waitForTimeout(500)
+		await expect(card(member)).toHaveCount(0)
+		await phone.close()
+		for (const id of ids) {
+			expect((await api.delete(`/ocs/v2.php/apps/deliver/api/v1/comments/${id}?format=json`)).ok()).toBe(true)
+		}
+		await api.dispose()
 	})
 
 	test('on a phone a pinch only zooms, a long press comments, and the card hands the focus back; a Reviewer who may not comment reads the cards and writes nothing', async ({ playwright }) => {
@@ -1981,6 +2434,37 @@ test.describe('Audio review', () => {
 		await sheet.getByRole('button', { name: 'Close' }).tap()
 		await expect(sheet).toHaveCount(0)
 		await expect(field).toBeFocused()
+		// A single tap on the wave seeks nowhere; a double tap on its right third skips ten seconds, in the middle nothing
+		const time = () => member.locator('video.deliver-player__video').evaluate((element) => element.currentTime)
+		const tapAt = async (at) => {
+			await fingers('touchStart', [[at, y]])
+			await fingers('touchEnd', [])
+		}
+		const start = await time()
+		// A first tap that lets go of the empty field skips nothing either
+		await fingers('touchStart', [[box.x + box.width * 0.75, y]])
+		await member.waitForTimeout(700)
+		await fingers('touchEnd', [])
+		await expect(anchor).toHaveText('0:15.000')
+		await tapAt(box.x + box.width * 0.85)
+		await tapAt(box.x + box.width * 0.85)
+		await member.waitForTimeout(500)
+		await expect(anchor).toHaveText('0:00.000')
+		expect(await time()).toBe(start)
+		await tapAt(box.x + box.width * 0.85)
+		await member.waitForTimeout(500)
+		expect(await time()).toBe(start)
+		await tapAt(box.x + box.width * 0.5)
+		await tapAt(box.x + box.width * 0.5)
+		await member.waitForTimeout(500)
+		expect(await time()).toBe(start)
+		await tapAt(box.x + box.width * 0.85)
+		await tapAt(box.x + box.width * 0.85)
+		await expect.poll(time).toBeCloseTo(start + 10, 0)
+		await expect(member.locator('.deliver-player__flash')).toContainText('+10')
+		await tapAt(box.x + box.width * 0.1)
+		await tapAt(box.x + box.width * 0.1)
+		await expect.poll(time).toBeCloseTo(start, 0)
 		// A long press on playing audio stops it
 		await member.getByRole('button', { name: 'Play', exact: true }).tap()
 		await expect.poll(() => member.locator('video.deliver-player__video').evaluate((element) => element.paused)).toBe(false)
@@ -2006,9 +2490,10 @@ test.describe('Audio review', () => {
 		await expect(card).toContainText('and a reply')
 		await expect(card.locator('textarea')).toHaveCount(0)
 		await expect(card.getByRole('button', { name: 'Go to' })).toBeVisible()
-		// A click elsewhere seeks but opens no field
+		// A click elsewhere in the strip seeks but opens no field
 		await card.getByRole('button', { name: 'Close' }).click()
-		await wave.click({ position: { x: stage.width * 0.75, y: stage.height / 2 } })
+		await wave.click({ position: { x: stage.width * 0.75, y: stage.height - 20 } })
+		await expect.poll(() => reviewer.locator('video.deliver-player__video').evaluate((element) => element.currentTime)).toBeCloseTo(11.25, 0)
 		await expect(reviewer.locator('#deliver-comment-body')).toHaveCount(0)
 		await visitor.close()
 	})
@@ -2108,7 +2593,12 @@ test.describe('Comparing sound', () => {
 
 		// A click on a wave seeks and keeps playing; the player then has the focus, and Tab switches
 		const box = await canvas.boundingBox()
+		const sought = videos.first().evaluate((video) => new Promise((resolve) => video.addEventListener('seeking', () => resolve(true), { once: true })))
 		await canvas.click({ position: { x: box.width * 0.6, y: box.height * 0.6 } })
+		expect(await sought).toBe(true)
+		// Lanes have no strip: at their foot the mouse shows no place to go to
+		await canvas.hover({ position: { x: box.width * 0.6, y: box.height - 5 } })
+		expect(await page.locator('.deliver-wave').evaluate((element) => element.style.cursor)).toBe('')
 		expect(await videos.first().evaluate((video) => video.paused)).toBe(false)
 		await page.keyboard.press('Tab')
 		await expect.poll(() => heard(videos)).toEqual([false, true])
@@ -2129,26 +2619,40 @@ test.describe('Comparing sound', () => {
 		await page.getByRole('button', { name: 'Pause (Space)' }).click()
 	})
 
-	test('switching ten times while both play seeks neither side, the heard sound runs on in real time, and the sides stay within milliseconds', async () => {
+	test('switching ten times while both play seeks neither side, the heard sound runs on with the output, and the sides stay within milliseconds', async () => {
 		await page.goto(`/apps/deliver/compare/${mix[1].id}/${mix[0].id}`)
 		const videos = page.locator('.deliver-compare video')
 		await expect(videos.first()).toHaveJSProperty('readyState', 4)
 		await page.getByRole('button', { name: 'Play (Space)' }).click()
 		await page.waitForTimeout(1500)
-		// On every animation frame: both times, whose sound is heard, and every seek; a switch every 400 ms
+		// On every animation frame: both times, the clock of the output they play on, whose sound is heard, and every seek; a switch every 400 ms
 		const run = await page.evaluate(() => new Promise((resolve) => {
 			const [a, b] = document.querySelectorAll('.deliver-compare video')
 			const halves = document.querySelectorAll('.deliver-compare__sound')
 			let seeks = 0
 			a.addEventListener('seeking', () => seeks++)
 			b.addEventListener('seeking', () => seeks++)
+			// What the app may not do to the output: suspend it or keep it waiting for sound
+			const output = a.deliverGain.context
+			let states = 0
+			output.addEventListener('statechange', () => states++)
+			const underrun = () => output.playbackStats?.underrunDuration
+			const before = underrun()
 			const samples = []
 			const start = performance.now()
 			let switches = 0
-			const tick = () => {
+			const side = () => halves[0].getAttribute('aria-checked') === 'true' ? 'a' : 'b'
+			const read = () => {
+				const clock = output.currentTime
+				return { ahead: (side() === 'a' ? a : b).currentTime - clock, apart: Math.abs(b.currentTime - a.currentTime) }
+			}
+			const tick = async () => {
+				// Read twice, as on a page's first Play below; held up after the clock, a reading is too far ahead, never behind
+				const first = read()
+				await null
+				const second = read()
 				const now = performance.now()
-				const side = halves[0].getAttribute('aria-checked') === 'true' ? 'a' : 'b'
-				samples.push({ now, a: a.currentTime, b: b.currentTime, side })
+				samples.push({ ahead: Math.min(first.ahead, second.ahead), apart: Math.min(first.apart, second.apart), running: output.state === 'running', side: side() })
 				if (now - start > (switches + 1) * 400 && switches < 10) {
 					switches++
 					halves[switches % 2].click()
@@ -2156,7 +2660,7 @@ test.describe('Comparing sound', () => {
 				if (now - start < 4600) {
 					requestAnimationFrame(tick)
 				} else {
-					resolve({ seeks, samples, playing: !a.paused && !b.paused })
+					resolve({ seeks, samples, states, underrun: [before, underrun()], playing: !a.paused && !b.paused })
 				}
 			}
 			requestAnimationFrame(tick)
@@ -2165,16 +2669,21 @@ test.describe('Comparing sound', () => {
 		expect(run.playing).toBe(true)
 		expect(run.seeks).toBe(0)
 		expect(new Set(run.samples.map((sample) => sample.side)).size).toBe(2)
-		const position = (sample) => sample.side === 'a' ? sample.a : sample.b
-		for (const [at, sample] of run.samples.entries()) {
-			// Without an offset the sides stand on the same second
-			expect(Math.abs(sample.b - sample.a)).toBeLessThan(0.01)
-			if (at > 0) {
-				const before = run.samples[at - 1]
-				// The heard sound goes on with the clock across every switch; a reading of a media element's time is off by a few ms
-				expect(Math.abs((position(sample) - position(before)) - (sample.now - before.now) / 1000)).toBeLessThan(0.015)
-			}
+		// Without an offset the sides stand on the same second
+		for (const sample of run.samples) {
+			expect(sample.apart).toBeLessThan(0.01)
 		}
+		// The heard sound goes on with the output across every switch, ahead of its clock by the same on every frame. Not the
+		// wall's clock: headless Chrome's stand-in for a sound card drops a buffer when the machine is late with it
+		expect(run.samples.length).toBeGreaterThan(50)
+		expect(run.samples.every((sample) => sample.running)).toBe(true)
+		const ahead = run.samples.map((sample) => sample.ahead)
+		expect(Math.max(...ahead) - Math.min(...ahead)).toBeLessThan(0.015)
+		// And the app does not hold up the output: never suspended, and no more of its time without sound than the few buffers
+		// a loaded machine is late with (AudioContext.playbackStats, Chrome only, brought up to date once a second)
+		expect(run.states).toBe(0)
+		expect(run.underrun, 'the browser has no AudioContext.playbackStats to tell a held up output by').toEqual([expect.any(Number), expect.any(Number)])
+		expect(run.underrun[1] - run.underrun[0]).toBeLessThan(0.1)
 	})
 
 	test('on a page\'s first Play the sides are in step from the first second on, video and audio alike', async () => {
@@ -2196,8 +2705,12 @@ test.describe('Comparing sound', () => {
 				const [a, b] = document.querySelectorAll('.deliver-compare video')
 				const found = []
 				const start = performance.now()
-				const tick = () => {
-					found.push(Math.abs(b.currentTime - a.currentTime))
+				const read = () => Math.abs(b.currentTime - a.currentTime)
+				const tick = async () => {
+					// Read twice: the output may take a buffer (10 ms) between the readings of A and B, and is past it on the second
+					const first = read()
+					await null
+					found.push(Math.min(first, read()))
 					if (performance.now() - start < 1500) {
 						requestAnimationFrame(tick)
 					} else {
@@ -2210,6 +2723,86 @@ test.describe('Comparing sound', () => {
 			expect(await fresh.evaluate(() => window.seeks)).toEqual([1, 1])
 			await fresh.close()
 		}
+	})
+
+	test('the sides start as one although the second\'s play comes 50 ms after the first\'s', async () => {
+		const fresh = await context.newPage()
+		await fresh.addInitScript(() => {
+			const play = HTMLMediaElement.prototype.play
+			HTMLMediaElement.prototype.play = function() {
+				const late = this === document.querySelectorAll('.deliver-compare video')[1] ? 50 : 0
+				return new Promise((done) => setTimeout(done, late)).then(() => play.call(this))
+			}
+		})
+		await fresh.goto(`/apps/deliver/compare/${mix[1].id}/${mix[0].id}`)
+		const videos = fresh.locator('.deliver-compare video')
+		await expect(videos.first()).toHaveJSProperty('readyState', 4)
+		// The readings of the first 400 ms both play, before the side not heard would be put back
+		const apart = await fresh.evaluate(() => new Promise((resolve) => {
+			const [a, b] = document.querySelectorAll('.deliver-compare video')
+			const found = []
+			b.addEventListener('playing', () => {
+				const start = performance.now()
+				const tick = () => {
+					found.push(b.currentTime - a.currentTime)
+					if (performance.now() - start < 400) {
+						requestAnimationFrame(tick)
+					} else {
+						resolve(found)
+					}
+				}
+				tick()
+			}, { once: true })
+			document.querySelector('.deliver-compare__controls button[aria-label="Play (Space)"]').click()
+		}))
+		expect(Math.abs(apart.reduce((sum, each) => sum + each, 0) / apart.length)).toBeLessThan(0.005)
+		await fresh.close()
+	})
+
+	test('only a start from a stand cuts the output: a seek while playing and a loop\'s next pass leave no hole in what is heard', async () => {
+		const fresh = await context.newPage()
+		// Every cut of the way out of the graph, and whether a side was playing
+		await fresh.addInitScript(() => {
+			window.cuts = []
+			const disconnect = AudioNode.prototype.disconnect
+			AudioNode.prototype.disconnect = function(...args) {
+				window.cuts.push([...document.querySelectorAll('.deliver-compare video')].some((video) => !video.paused) ? 'playing' : 'standing')
+				return disconnect.apply(this, args)
+			}
+		})
+		await fresh.goto(`/apps/deliver/compare/${mix[1].id}/${mix[0].id}`)
+		const videos = fresh.locator('.deliver-compare video')
+		await expect(videos.first()).toHaveJSProperty('readyState', 4)
+		const bar = await fresh.locator('.deliver-compare__timeline').boundingBox()
+		const at = (share) => fresh.mouse.click(bar.x + bar.width * share, bar.y + bar.height / 2)
+		const time = () => videos.first().evaluate((video) => video.currentTime)
+
+		// A seek while playing
+		await fresh.getByRole('button', { name: 'Play (Space)' }).click()
+		await expect.poll(time).toBeGreaterThan(0.3)
+		await fresh.keyboard.press('Shift+ArrowRight')
+		await expect.poll(time).toBeGreaterThan(10)
+		await at(0.2)
+		await expect.poll(time).toBeLessThan(6)
+		expect(await videos.evaluateAll((all) => all.map((video) => video.paused))).toEqual([false, false])
+		await fresh.getByRole('button', { name: 'Pause (Space)' }).click()
+
+		// A looped Range, round twice
+		await at(0.25)
+		await fresh.keyboard.press('i')
+		await at(0.3)
+		await fresh.keyboard.press('o')
+		await at(0.25)
+		await fresh.getByRole('button', { name: 'Loop the Range' }).click()
+		await videos.first().evaluate((video) => {
+			window.seeks = 0
+			video.addEventListener('seeking', () => window.seeks++)
+		})
+		await fresh.getByRole('button', { name: 'Play (Space)' }).click()
+		// The start's own and one a pass
+		await expect.poll(() => fresh.evaluate(() => window.seeks)).toBeGreaterThan(2)
+		expect(await fresh.evaluate(() => window.cuts)).toEqual(['standing', 'standing'])
+		await fresh.close()
 	})
 
 	test('while the AudioContext is slow to start, one start waits at a time and a switch made meanwhile is the side heard', async () => {
@@ -2275,24 +2868,41 @@ test.describe('Comparing sound', () => {
 		// Alternating loops
 		await expect(page.getByRole('button', { name: 'Loop the Range' })).toHaveAttribute('aria-pressed', 'true')
 
-		// Whose sound plays on every animation frame, cut into passes where the time jumps back
+		// Whose sound plays on every animation frame, cut into passes where the time jumps back; where a pass starts is read
+		// as A starts playing, as the next frame may come late, and from every frame, less what the output's clock went on since
+		// the pass was sought (the frame before the time jumps back, or A starting to play), so that a jump right after it counts
 		const passes = await page.evaluate(() => new Promise((resolve) => {
 			const [a, b] = document.querySelectorAll('.deliver-compare video')
 			const found = []
 			let last = Infinity
-			const tick = () => {
+			let sought
+			const clock = () => a.deliverGain?.context.currentTime
+			const cut = () => {
 				const time = a.currentTime
-				const gain = (video) => video.deliverGain && !video.muted ? video.deliverGain.gain.value > 0.5 : !video.muted
-				const heard = gain(a) ? (gain(b) ? 'both' : 'a') : (gain(b) ? 'b' : 'none')
 				if (time < last - 0.3) {
-					found.push({ from: time, to: time, heard: new Set() })
+					found.push({ from: sought && !a.seeking ? time - (clock() - sought) : time, to: time, heard: new Set(), at: sought })
 				}
 				last = time
+				return time
+			}
+			a.addEventListener('playing', () => {
+				cut()
+				found.at(-1).at ??= clock()
+			})
+			const tick = () => {
+				const time = cut()
+				const gain = (video) => video.deliverGain && !video.muted ? video.deliverGain.gain.value > 0.5 : !video.muted
+				const heard = gain(a) ? (gain(b) ? 'both' : 'a') : (gain(b) ? 'b' : 'none')
 				const pass = found.at(-1)
 				if (pass && !a.paused) {
 					pass.to = time
 					pass.heard.add(heard)
+					if (pass.at) {
+						pass.from = Math.max(pass.from, time - (clock() - pass.at))
+					}
 				}
+				// The player seeks for the next pass in this very frame
+				sought = a.paused ? undefined : clock()
 				if (found.length > 3) {
 					resolve(found.slice(0, 3).map((each) => ({ ...each, heard: [...each.heard] })))
 				} else {
@@ -2414,6 +3024,95 @@ test.describe('Skipping ten seconds', () => {
 		await page.waitForTimeout(300)
 		expect(await time()).toBeLessThan(beforeBack - 9)
 		expect(await video.evaluate((element) => element.paused)).toBe(false)
+	})
+})
+
+test.describe('Uploads whose name is taken', () => {
+	let api
+	let dav
+	let projectId
+	let browser
+	let context
+	let page
+
+	test.beforeAll(async ({ playwright }) => {
+		await testUser(playwright)
+	})
+
+	// A Folder Project with one mix in it, open in the Project view
+	test.beforeEach(async ({ playwright }) => {
+		api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		dav = `/remote.php/dav/files/${USER}/deliver-e2e-${randomBytes(4).toString('hex')}`
+		expect((await api.fetch(dav, { method: 'MKCOL' })).status()).toBe(201)
+		const created = await api.post('/ocs/v2.php/apps/deliver/api/v1/projects?format=json', { data: { folderId: await fileId(api, dav), autoIntake: true } })
+		projectId = (await created.json()).ocs.data.id
+		expect((await api.fetch(`${dav}/mix.wav`, { method: 'PUT', data: readFileSync(MIX) })).status()).toBe(201)
+		browser = await chromium.connectOverCDP(CDP)
+		context = await browser.newContext({ baseURL: BROWSER_URL })
+		page = await context.newPage()
+		await login(page)
+		await page.goto(`/apps/deliver/projects/${projectId}`)
+	})
+
+	test.afterEach(async () => {
+		await context?.close()
+		await browser?.close()
+		await api.delete(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)
+		await api.fetch(dav, { method: 'DELETE' })
+		await api.dispose()
+	})
+
+	const assets = async () => (await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()).ocs.data.assets
+	const versions = async () => (await assets()).map((asset) => asset.versions.map((version) => [version.name, version.number, version.autoStacked]))
+	// Another file than the one there, which must stay as it is
+	const other = Buffer.concat([readFileSync(MIX), Buffer.alloc(2)])
+
+	test('a new Version gets its number in its name, wherever it is uploaded, and replaces nothing', async () => {
+		// Another upload, interrupted, that was on its way to the name this one takes
+		const interrupted = await page.evaluate((target) => {
+			const record = { name: 'elsewhere.wav', size: 1, lastModified: 1, type: 'audio/wav', target, projectId: null, assetId: 1, folder: '/remote.php/dav/uploads/none', loaded: 0, status: 'uploading', seen: Date.now(), left: true }
+			localStorage.setItem(`deliver.upload:${target}`, JSON.stringify(record))
+			return `deliver.upload:${target}`
+		}, `${BROWSER_URL}${dav}/mix_v2.wav`)
+		await card(page, 'mix').click({ button: 'right' })
+		let chooser = page.waitForEvent('filechooser')
+		await page.getByRole('menuitem', { name: 'Upload a new Version' }).click()
+		await (await chooser).setFiles({ name: 'mix.wav', mimeType: 'audio/wav', buffer: other })
+		// The Member's own choice, so nothing to undo, though Auto Intake goes by the name
+		await expect.poll(versions).toEqual([[['mix_v2.wav', 2, false], ['mix.wav', 1, false]]])
+		expect((await api.fetch(`${dav}/mix.wav`, { method: 'HEAD' })).headers()['content-length']).toBe(String(readFileSync(MIX).length))
+		await page.locator('.deliver-uploads-card__open').click()
+		const uploads = page.getByRole('dialog', { name: 'Uploads' })
+		await expect(uploads.locator('.deliver-uploads__name', { hasText: 'mix_v2.wav' })).toHaveCount(1)
+		expect(await page.evaluate((key) => localStorage.getItem(key), interrupted)).not.toBeNull()
+		await page.keyboard.press('Escape')
+
+		// The next number is taken by a file outside the Stack, so the one after it
+		expect((await api.fetch(`${dav}/mix_v3.wav`, { method: 'PUT', data: 'not a Version', headers: { 'If-None-Match': '*' } })).status()).toBe(201)
+		const stray = (await assets()).find((asset) => asset.versions.some((version) => version.name === 'mix_v3.wav'))
+		const strayed = stray.versions.find((version) => version.name === 'mix_v3.wav')
+		if (stray.versions.length > 1) {
+			expect((await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${strayed.id}/unstack?format=json`)).ok()).toBe(true)
+		}
+		await page.reload()
+		const stack = page.locator('.deliver-card', { hasText: 'V2' })
+		await stack.click({ button: 'right' })
+		await page.getByRole('menuitem', { name: 'Manage Versions' }).click()
+		await expect(page.locator('.deliver-stack')).toBeVisible()
+		await page.evaluate((bytes) => {
+			const files = new DataTransfer()
+			files.items.add(new File([new Uint8Array(bytes)], 'mix_v2.wav', { type: 'audio/wav' }))
+			document.querySelector('.deliver-stack').dispatchEvent(new DragEvent('drop', { dataTransfer: files, bubbles: true, cancelable: true }))
+		}, [...other])
+		await expect.poll(async () => (await versions()).find((names) => names.length === 3)?.[0][0]).toBe('mix_v4.wav')
+
+		// The button in the Review view, where a name that is free stays as it is
+		const newest = (await assets()).find((asset) => asset.versions.length === 3).versions[0]
+		await page.goto(`/apps/deliver/versions/${newest.id}`)
+		chooser = page.waitForEvent('filechooser')
+		await page.getByRole('button', { name: 'New Version' }).click()
+		await (await chooser).setFiles({ name: 'master.wav', mimeType: 'audio/wav', buffer: other })
+		await expect.poll(async () => (await versions()).find((names) => names.length === 4)?.[0][0]).toBe('master.wav')
 	})
 })
 
@@ -2696,7 +3395,7 @@ async function login(page) {
 }
 
 /**
- * A click a quarter of the stage on seeks there, and C comments where it went
+ * A click in the strip a quarter of the stage on seeks there, and C comments where it went
  * once the wave has glided: a click lands on what is drawn
  *
  * @param {import('@playwright/test').Page} page - the Review view
