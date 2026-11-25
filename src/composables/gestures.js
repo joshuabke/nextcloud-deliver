@@ -7,8 +7,8 @@ function noop() {}
 /**
  * Touch on the picture, as in the Frame.io app (story 104): a tap, a double
  * tap on the left or right third, a hold, a swipe sideways, two fingers to
- * zoom and, once zoomed, one to pan. Only fingers and pens count; the mouse
- * keeps its clicks.
+ * zoom and, once zoomed, one to pan. A tap that closes an open menu does only
+ * that. Only fingers and pens count; the mouse keeps its clicks.
  *
  * @param {object} handlers - what to do; a gesture without one does nothing
  * @param {() => void} [handlers.tap] - a single tap
@@ -64,7 +64,9 @@ export function useGestures({ tap = noop, doubleTap = noop, holdStart = noop, ho
 			start = null
 			return
 		}
-		start = { x: event.clientX, y: event.clientY, t: event.timeStamp, zoom: { ...zoom.value }, moved: false }
+		// An open menu closes after this, at the touchend or the click, long before the delayed tap
+		const closes = document.querySelector('.v-popper__popper--shown') !== null
+		start = { x: event.clientX, y: event.clientY, t: event.timeStamp, zoom: { ...zoom.value }, moved: false, closes }
 		holdTimer = setTimeout(() => {
 			holding = true
 			holdStart()
@@ -131,13 +133,16 @@ export function useGestures({ tap = noop, doubleTap = noop, holdStart = noop, ho
 			start = null
 			return
 		}
-		const { x, y, t, moved, zoom: before } = start
+		const { x, y, t, moved, closes, zoom: before } = start
 		start = null
 		if (moved) {
 			const step = before.scale === 1 ? swipeStep(event.clientX - x, event.clientY - y, event.timeStamp - t) : 0
 			if (step) {
 				swipe(step)
 			}
+			return
+		}
+		if (closes) {
 			return
 		}
 		const box = event.currentTarget.getBoundingClientRect()
