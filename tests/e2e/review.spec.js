@@ -420,6 +420,74 @@ test.describe('Review view', () => {
 
 		await page.getByRole('radio', { name: 'Wipe' }).click()
 		await expect(page.locator('.deliver-compare__handle')).toBeVisible()
+
+		// On a phone half the height of the sheet leaves Compare's controls, taller than the player's one row, their room
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const touchPage = await phone.newPage()
+		await login(touchPage)
+		await touchPage.goto(`/apps/deliver/compare/${stack[1].id}/${stack[0].id}`)
+		await touchPage.locator('.deliver-layout__grabber').tap()
+		await expect(touchPage.locator('.deliver-layout--middle')).toHaveCount(1)
+		expect((await touchPage.locator('.deliver-layout__main').boundingBox()).height).toBeCloseTo(390 * 9 / 16 + 136.5, 0)
+		await phone.close()
+	})
+
+	test('on a phone at half height the layout keeps its height through a step to the next Asset, loading or still', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const dav = `/remote.php/dav/files/${USER}/${folder}`
+		const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64')
+		expect((await api.fetch(`${dav}/clip2.webm`, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(201)
+		expect((await api.fetch(`${dav}/clip3.png`, { method: 'PUT', data: pixel })).status()).toBe(201)
+		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
+		await api.dispose()
+		const first = project.ocs.data.assets.find((asset) => asset.name === 'clip').versions[0].id
+
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const touchPage = await phone.newPage()
+		await login(touchPage)
+		// Each Asset's own load is held back, so that the stage stands empty for a while
+		await touchPage.route(/\/versions\/\d+(\?|$)/, async (route) => {
+			if (route.request().method() === 'GET' && route.request().resourceType() !== 'document') {
+				await new Promise((resolve) => setTimeout(resolve, 1500))
+			}
+			await route.fallback()
+		})
+		await touchPage.goto(`/apps/deliver/versions/${first}`)
+		await touchPage.locator('.deliver-layout__grabber').tap()
+		await expect(touchPage.locator('.deliver-layout--middle')).toHaveCount(1)
+		await expect(touchPage.locator('.deliver-player, .deliver-still')).toHaveCount(1)
+		const main = touchPage.locator('.deliver-layout__main')
+		const height = (await main.boundingBox()).height
+		// Sampled in the page, every frame, while the next Assets load and show
+		await touchPage.evaluate(() => {
+			window.deliverHeights = new Set()
+			const watch = () => {
+				window.deliverHeights.add(Math.round(document.querySelector('.deliver-layout__main').getBoundingClientRect().height * 10))
+				requestAnimationFrame(watch)
+			}
+			watch()
+		})
+		const next = async () => {
+			await touchPage.getByRole('button', { name: 'More' }).tap()
+			await touchPage.getByRole('menuitem', { name: 'Next Asset' }).tap()
+		}
+		await next()
+		await expect(touchPage.locator('.deliver-player, .deliver-still')).toHaveCount(0)
+		await expect(touchPage.locator('.deliver-player, .deliver-still')).toHaveCount(1)
+		await next()
+		await expect(touchPage.locator('.deliver-player, .deliver-still')).toHaveCount(0)
+		await expect(touchPage.locator('.deliver-still')).toHaveCount(1)
+		const heights = await touchPage.evaluate(() => [...window.deliverHeights])
+		expect(heights).toEqual([Math.round(height * 10)])
+		await phone.close()
+
+		const cleanup = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const left = await (await cleanup.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
+		for (const name of ['clip2', 'clip3']) {
+			const { id } = left.ocs.data.assets.find((asset) => asset.name === name)
+			expect((await cleanup.delete(`/ocs/v2.php/apps/deliver/api/v1/assets/${id}/files?format=json`)).ok()).toBe(true)
+		}
+		await cleanup.dispose()
 	})
 
 	test('on a phone: stacked, by touch, and a Reviewer comments on a Range', async ({ playwright }) => {
@@ -453,7 +521,10 @@ test.describe('Review view', () => {
 		await grabber.tap()
 		await expect(page.locator('.deliver-layout--middle')).toHaveCount(1)
 		await expect(page.locator('.deliver-comments__head')).toBeVisible()
-		expect((await page.locator('.deliver-player__stage').boundingBox()).height).toBeCloseTo(390 * 9 / 16, 0)
+		for (const width of [360, 393, 430, 440, 460, 390]) {
+			await page.setViewportSize({ width, height: PHONE.viewport.height })
+			await expect.poll(async () => (await page.locator('.deliver-player__stage').boundingBox()).height).toBeCloseTo(width * 9 / 16, 1)
+		}
 		await grabber.tap()
 		await expect(page.locator('.deliver-layout--up')).toHaveCount(1)
 		// A stroke down goes back a level at a time
@@ -465,6 +536,15 @@ test.describe('Review view', () => {
 			await page.mouse.up()
 			await expect(page.locator(`.deliver-layout--${level}`)).toHaveCount(1)
 		}
+
+		// The controls are one row: Play and the time with the length on the left, the rest on the right
+		const row = await page.locator('.deliver-player__controls').boundingBox()
+		for (const control of [page.getByRole('button', { name: 'Play', exact: true }), page.locator('.deliver-player__time'), page.getByRole('button', { name: 'Fullscreen', exact: true })]) {
+			const box = await control.boundingBox()
+			expect(box.y + box.height).toBeLessThanOrEqual(row.y + row.height)
+		}
+		expect(row.height).toBeLessThan(50)
+		await expect(page.locator('.deliver-player__time')).toHaveText('00:00:00:00 / 00:00:04:00')
 
 		// A tap on the timeline seeks and leaves no thumbnail behind
 		await page.locator('.deliver-player__timeline').tap()
@@ -479,6 +559,14 @@ test.describe('Review view', () => {
 		await page.waitForTimeout(700)
 		await page.touchscreen.tap(stage.x + stage.width / 2, right.y)
 		await expect(page.locator('.deliver-player--fullscreen')).toHaveCount(1)
+		// The menu shows in the browser's own fullscreen too
+		const settings = page.getByRole('button', { name: 'Playback settings' })
+		await settings.tap()
+		const before = await page.locator('.deliver-player__time').textContent()
+		await page.getByRole('menuitem', { name: 'One Frame back' }).tap()
+		await expect(page.locator('.deliver-player__time')).not.toHaveText(before)
+		await settings.tap()
+		await expect(page.getByRole('menuitem', { name: 'One Frame back' })).toBeHidden()
 		await page.waitForTimeout(700)
 		await page.touchscreen.tap(stage.x + stage.width / 2, right.y)
 		await expect(page.locator('.deliver-player--fullscreen')).toHaveCount(0)
@@ -508,9 +596,13 @@ test.describe('Review view', () => {
 		const options = reviewer.getByRole('button', { name: 'Comment options' })
 		await options.tap()
 		await reviewer.getByRole('menuitem', { name: 'Start a Range here' }).tap()
+		// Frame steps and skipping are in the player's menu, which stays open
+		await reviewer.getByRole('button', { name: 'Playback settings' }).tap()
+		await expect(reviewer.getByRole('menuitem', { name: 'Forward 10 seconds' })).toBeVisible()
 		for (let i = 0; i < 3; i++) {
-			await reviewer.getByRole('button', { name: 'One Frame forward' }).tap()
+			await reviewer.getByRole('menuitem', { name: 'One Frame forward' }).tap()
 		}
+		await reviewer.keyboard.press('Escape')
 		await options.tap()
 		await reviewer.getByRole('menuitem', { name: 'End the Range here' }).tap()
 		await expect(reviewer.locator('.deliver-comments__anchor')).toContainText('–')
@@ -930,6 +1022,18 @@ test.describe('Review view', () => {
 			await expect.poll(frame).toBe(85)
 			await touchPage.waitForTimeout(300)
 			await expect(touchPage.locator('.deliver-player__track')).toHaveCSS('height', '6px')
+		}
+		// Its lower edge is the bar's over every control of the one row under it: it seeks, and none of them answers
+		const bottom = await touchPage.locator('.deliver-player__timeline').boundingBox()
+		const menu = touchPage.getByRole('button', { name: 'Playback settings' })
+		for (const control of [touchPage.getByRole('button', { name: 'Play', exact: true }), touchPage.locator('.deliver-player__time'), menu]) {
+			const box = await control.boundingBox()
+			const x = box.x + box.width / 2
+			await touchPage.touchscreen.tap(x, bottom.y + bottom.height - 1)
+			await expect.poll(frame).toBe(Math.floor((x - bottom.x) / bottom.width * 100))
+			await touchPage.waitForTimeout(300)
+			expect(await video.evaluate((element) => element.paused)).toBe(true)
+			await expect(menu).toHaveAttribute('aria-expanded', 'false')
 		}
 		// The half of a circle beyond either end is the bar's too
 		const ends = await touchPage.locator('.deliver-player__timeline').boundingBox()

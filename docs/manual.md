@@ -63,6 +63,10 @@ A Review Link shows only the files whoever made it may share in Files. A file sh
 - Any other Project it made is deleted for good at once, since nobody else could restore it.
 - Its Comments, Approvals and Reactions elsewhere stay, by a Deleted user.
 
+## On a phone
+
+- For video and audio, Play stands under the bar beside the time and the length. Skipping ten seconds and single Frames are in the ⋯ menu in the same row; it stays open while you step.
+
 ## Reviewing audio
 
 - An audio Version plays on its Waveform, at first zoomed to one minute, the wave scrolling under the playhead in the middle. Drag the wave sideways to go through time; with a mouse, click in the strip under the wave, where the Comments stand, to go to a place: a dashed line shows it before you click, and an open Comment closes. A click on the wave itself does not seek, it only closes an open Comment; a double click on its left or right third skips ten seconds back or on. None of this stops playback: a drag holds it and lets it go on where you let go, except at the very end, where it stays.
