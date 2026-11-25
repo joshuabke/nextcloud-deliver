@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { stackSuggestions } from './suggestions.js'
-import { parseVersionName } from './versionName.js'
+import { nextNumber, parseVersionName, versionFileName, versionNames } from './versionName.js'
 
 describe('filename convention', () => {
 	it('reads what the server reads', () => {
@@ -8,6 +8,46 @@ describe('filename convention', () => {
 		expect(parseVersionName('final cut v12.mov')).toEqual({ base: 'final cut', number: 12 })
 		expect(parseVersionName('cut.mp4')).toBeNull()
 		expect(parseVersionName('cut_v0.mp4')).toBeNull()
+	})
+})
+
+describe('a new Version\'s file whose name is taken', () => {
+	it('gets its number appended, before the extension', () => {
+		expect(versionFileName('mix.mp3', 2)).toBe('mix_v2.mp3')
+		expect(versionFileName('mix.final.wav', 3)).toBe('mix.final_v3.wav')
+		expect(versionFileName('mix', 2)).toBe('mix_v2')
+		expect(versionFileName('v2.mp4', 3)).toBe('v2_v3.mp4')
+	})
+
+	it('gives up the version suffix it has, whose spelling stays', () => {
+		expect(versionFileName('mix_v2.mp3', 3)).toBe('mix_v3.mp3')
+		expect(versionFileName('final cut v12.mov', 13)).toBe('final cut v13.mov')
+		expect(versionFileName('cut-V03.mov', 4)).toBe('cut-V04.mov')
+	})
+
+	it('reads as that Version of the same name', () => {
+		for (const name of ['mix.mp3', 'mix_v1.mp3', 'mix v9.mp3', 'mix-v007.mp3']) {
+			expect(parseVersionName(versionFileName(name, 12))).toEqual({ base: 'mix', number: 12 })
+		}
+	})
+
+	it('counts as the server does: one above the highest, gaps and all', () => {
+		expect(nextNumber([{ number: 5 }, { number: 1 }])).toBe(6)
+		expect(nextNumber([])).toBe(1)
+	})
+
+	it('tries the number the server counts now, then the next ones, and asks only once', async () => {
+		let asked = 0
+		const next = versionNames('mix.mp3', async () => {
+			asked++
+			return [{ number: 3 }, { number: 1 }]
+		})
+		expect([await next(), await next(), await next(), asked]).toEqual(['mix_v4.mp3', 'mix_v5.mp3', 'mix_v6.mp3', 1])
+	})
+
+	it('still finds a name when the Version it asks by is gone', async () => {
+		const next = versionNames('mix.mp3', () => Promise.reject(new Error('404')))
+		expect([await next(), await next()]).toEqual(['mix_v2.mp3', 'mix_v3.mp3'])
 	})
 })
 

@@ -659,7 +659,7 @@ function uploadStacked(event) {
 	const file = event.target.files?.[0]
 	event.target.value = ''
 	if (file && stackOn.value) {
-		uploads.add([file], { folderUrl: davFolder(stackOn.value.path), projectId: project.value.id, assetId: stackOn.value.id, kind: stackKind(stackOn.value.versions) })
+		uploads.add([file], { folderUrl: davFolder(stackOn.value.path), projectId: project.value.id, assetId: stackOn.value.id, versions: stackOn.value.versions })
 	}
 }
 

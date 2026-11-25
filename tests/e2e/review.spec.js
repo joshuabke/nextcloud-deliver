@@ -2515,26 +2515,40 @@ test.describe('Comparing sound', () => {
 		await page.getByRole('button', { name: 'Pause (Space)' }).click()
 	})
 
-	test('switching ten times while both play seeks neither side, the heard sound runs on in real time, and the sides stay within milliseconds', async () => {
+	test('switching ten times while both play seeks neither side, the heard sound runs on with the output, and the sides stay within milliseconds', async () => {
 		await page.goto(`/apps/deliver/compare/${mix[1].id}/${mix[0].id}`)
 		const videos = page.locator('.deliver-compare video')
 		await expect(videos.first()).toHaveJSProperty('readyState', 4)
 		await page.getByRole('button', { name: 'Play (Space)' }).click()
 		await page.waitForTimeout(1500)
-		// On every animation frame: both times, whose sound is heard, and every seek; a switch every 400 ms
+		// On every animation frame: both times, the clock of the output they play on, whose sound is heard, and every seek; a switch every 400 ms
 		const run = await page.evaluate(() => new Promise((resolve) => {
 			const [a, b] = document.querySelectorAll('.deliver-compare video')
 			const halves = document.querySelectorAll('.deliver-compare__sound')
 			let seeks = 0
 			a.addEventListener('seeking', () => seeks++)
 			b.addEventListener('seeking', () => seeks++)
+			// What the app may not do to the output: suspend it or keep it waiting for sound
+			const output = a.deliverGain.context
+			let states = 0
+			output.addEventListener('statechange', () => states++)
+			const underrun = () => output.playbackStats?.underrunDuration
+			const before = underrun()
 			const samples = []
 			const start = performance.now()
 			let switches = 0
-			const tick = () => {
+			const side = () => halves[0].getAttribute('aria-checked') === 'true' ? 'a' : 'b'
+			const read = () => {
+				const clock = output.currentTime
+				return { ahead: (side() === 'a' ? a : b).currentTime - clock, apart: Math.abs(b.currentTime - a.currentTime) }
+			}
+			const tick = async () => {
+				// Read twice, as on a page's first Play below; held up after the clock, a reading is too far ahead, never behind
+				const first = read()
+				await null
+				const second = read()
 				const now = performance.now()
-				const side = halves[0].getAttribute('aria-checked') === 'true' ? 'a' : 'b'
-				samples.push({ now, a: a.currentTime, b: b.currentTime, side })
+				samples.push({ ahead: Math.min(first.ahead, second.ahead), apart: Math.min(first.apart, second.apart), running: output.state === 'running', side: side() })
 				if (now - start > (switches + 1) * 400 && switches < 10) {
 					switches++
 					halves[switches % 2].click()
@@ -2542,7 +2556,7 @@ test.describe('Comparing sound', () => {
 				if (now - start < 4600) {
 					requestAnimationFrame(tick)
 				} else {
-					resolve({ seeks, samples, playing: !a.paused && !b.paused })
+					resolve({ seeks, samples, states, underrun: [before, underrun()], playing: !a.paused && !b.paused })
 				}
 			}
 			requestAnimationFrame(tick)
@@ -2551,16 +2565,21 @@ test.describe('Comparing sound', () => {
 		expect(run.playing).toBe(true)
 		expect(run.seeks).toBe(0)
 		expect(new Set(run.samples.map((sample) => sample.side)).size).toBe(2)
-		const position = (sample) => sample.side === 'a' ? sample.a : sample.b
-		for (const [at, sample] of run.samples.entries()) {
-			// Without an offset the sides stand on the same second
-			expect(Math.abs(sample.b - sample.a)).toBeLessThan(0.01)
-			if (at > 0) {
-				const before = run.samples[at - 1]
-				// The heard sound goes on with the clock across every switch; a reading of a media element's time is off by a few ms
-				expect(Math.abs((position(sample) - position(before)) - (sample.now - before.now) / 1000)).toBeLessThan(0.015)
-			}
+		// Without an offset the sides stand on the same second
+		for (const sample of run.samples) {
+			expect(sample.apart).toBeLessThan(0.01)
 		}
+		// The heard sound goes on with the output across every switch, ahead of its clock by the same on every frame. Not the
+		// wall's clock: headless Chrome's stand-in for a sound card drops a buffer when the machine is late with it
+		expect(run.samples.length).toBeGreaterThan(50)
+		expect(run.samples.every((sample) => sample.running)).toBe(true)
+		const ahead = run.samples.map((sample) => sample.ahead)
+		expect(Math.max(...ahead) - Math.min(...ahead)).toBeLessThan(0.015)
+		// And the app does not hold up the output: never suspended, and no more of its time without sound than the few buffers
+		// a loaded machine is late with (AudioContext.playbackStats, Chrome only, brought up to date once a second)
+		expect(run.states).toBe(0)
+		expect(run.underrun, 'the browser has no AudioContext.playbackStats to tell a held up output by').toEqual([expect.any(Number), expect.any(Number)])
+		expect(run.underrun[1] - run.underrun[0]).toBeLessThan(0.1)
 	})
 
 	test('on a page\'s first Play the sides are in step from the first second on, video and audio alike', async () => {
@@ -2582,8 +2601,12 @@ test.describe('Comparing sound', () => {
 				const [a, b] = document.querySelectorAll('.deliver-compare video')
 				const found = []
 				const start = performance.now()
-				const tick = () => {
-					found.push(Math.abs(b.currentTime - a.currentTime))
+				const read = () => Math.abs(b.currentTime - a.currentTime)
+				const tick = async () => {
+					// Read twice: the output may take a buffer (10 ms) between the readings of A and B, and is past it on the second
+					const first = read()
+					await null
+					found.push(Math.min(first, read()))
 					if (performance.now() - start < 1500) {
 						requestAnimationFrame(tick)
 					} else {
@@ -2596,6 +2619,86 @@ test.describe('Comparing sound', () => {
 			expect(await fresh.evaluate(() => window.seeks)).toEqual([1, 1])
 			await fresh.close()
 		}
+	})
+
+	test('the sides start as one although the second\'s play comes 50 ms after the first\'s', async () => {
+		const fresh = await context.newPage()
+		await fresh.addInitScript(() => {
+			const play = HTMLMediaElement.prototype.play
+			HTMLMediaElement.prototype.play = function() {
+				const late = this === document.querySelectorAll('.deliver-compare video')[1] ? 50 : 0
+				return new Promise((done) => setTimeout(done, late)).then(() => play.call(this))
+			}
+		})
+		await fresh.goto(`/apps/deliver/compare/${mix[1].id}/${mix[0].id}`)
+		const videos = fresh.locator('.deliver-compare video')
+		await expect(videos.first()).toHaveJSProperty('readyState', 4)
+		// The readings of the first 400 ms both play, before the side not heard would be put back
+		const apart = await fresh.evaluate(() => new Promise((resolve) => {
+			const [a, b] = document.querySelectorAll('.deliver-compare video')
+			const found = []
+			b.addEventListener('playing', () => {
+				const start = performance.now()
+				const tick = () => {
+					found.push(b.currentTime - a.currentTime)
+					if (performance.now() - start < 400) {
+						requestAnimationFrame(tick)
+					} else {
+						resolve(found)
+					}
+				}
+				tick()
+			}, { once: true })
+			document.querySelector('.deliver-compare__controls button[aria-label="Play (Space)"]').click()
+		}))
+		expect(Math.abs(apart.reduce((sum, each) => sum + each, 0) / apart.length)).toBeLessThan(0.005)
+		await fresh.close()
+	})
+
+	test('only a start from a stand cuts the output: a seek while playing and a loop\'s next pass leave no hole in what is heard', async () => {
+		const fresh = await context.newPage()
+		// Every cut of the way out of the graph, and whether a side was playing
+		await fresh.addInitScript(() => {
+			window.cuts = []
+			const disconnect = AudioNode.prototype.disconnect
+			AudioNode.prototype.disconnect = function(...args) {
+				window.cuts.push([...document.querySelectorAll('.deliver-compare video')].some((video) => !video.paused) ? 'playing' : 'standing')
+				return disconnect.apply(this, args)
+			}
+		})
+		await fresh.goto(`/apps/deliver/compare/${mix[1].id}/${mix[0].id}`)
+		const videos = fresh.locator('.deliver-compare video')
+		await expect(videos.first()).toHaveJSProperty('readyState', 4)
+		const bar = await fresh.locator('.deliver-compare__timeline').boundingBox()
+		const at = (share) => fresh.mouse.click(bar.x + bar.width * share, bar.y + bar.height / 2)
+		const time = () => videos.first().evaluate((video) => video.currentTime)
+
+		// A seek while playing
+		await fresh.getByRole('button', { name: 'Play (Space)' }).click()
+		await expect.poll(time).toBeGreaterThan(0.3)
+		await fresh.keyboard.press('Shift+ArrowRight')
+		await expect.poll(time).toBeGreaterThan(10)
+		await at(0.2)
+		await expect.poll(time).toBeLessThan(6)
+		expect(await videos.evaluateAll((all) => all.map((video) => video.paused))).toEqual([false, false])
+		await fresh.getByRole('button', { name: 'Pause (Space)' }).click()
+
+		// A looped Range, round twice
+		await at(0.25)
+		await fresh.keyboard.press('i')
+		await at(0.3)
+		await fresh.keyboard.press('o')
+		await at(0.25)
+		await fresh.getByRole('button', { name: 'Loop the Range' }).click()
+		await videos.first().evaluate((video) => {
+			window.seeks = 0
+			video.addEventListener('seeking', () => window.seeks++)
+		})
+		await fresh.getByRole('button', { name: 'Play (Space)' }).click()
+		// The start's own and one a pass
+		await expect.poll(() => fresh.evaluate(() => window.seeks)).toBeGreaterThan(2)
+		expect(await fresh.evaluate(() => window.cuts)).toEqual(['standing', 'standing'])
+		await fresh.close()
 	})
 
 	test('while the AudioContext is slow to start, one start waits at a time and a switch made meanwhile is the side heard', async () => {
@@ -2661,24 +2764,41 @@ test.describe('Comparing sound', () => {
 		// Alternating loops
 		await expect(page.getByRole('button', { name: 'Loop the Range' })).toHaveAttribute('aria-pressed', 'true')
 
-		// Whose sound plays on every animation frame, cut into passes where the time jumps back
+		// Whose sound plays on every animation frame, cut into passes where the time jumps back; where a pass starts is read
+		// as A starts playing, as the next frame may come late, and from every frame, less what the output's clock went on since
+		// the pass was sought (the frame before the time jumps back, or A starting to play), so that a jump right after it counts
 		const passes = await page.evaluate(() => new Promise((resolve) => {
 			const [a, b] = document.querySelectorAll('.deliver-compare video')
 			const found = []
 			let last = Infinity
-			const tick = () => {
+			let sought
+			const clock = () => a.deliverGain?.context.currentTime
+			const cut = () => {
 				const time = a.currentTime
-				const gain = (video) => video.deliverGain && !video.muted ? video.deliverGain.gain.value > 0.5 : !video.muted
-				const heard = gain(a) ? (gain(b) ? 'both' : 'a') : (gain(b) ? 'b' : 'none')
 				if (time < last - 0.3) {
-					found.push({ from: time, to: time, heard: new Set() })
+					found.push({ from: sought && !a.seeking ? time - (clock() - sought) : time, to: time, heard: new Set(), at: sought })
 				}
 				last = time
+				return time
+			}
+			a.addEventListener('playing', () => {
+				cut()
+				found.at(-1).at ??= clock()
+			})
+			const tick = () => {
+				const time = cut()
+				const gain = (video) => video.deliverGain && !video.muted ? video.deliverGain.gain.value > 0.5 : !video.muted
+				const heard = gain(a) ? (gain(b) ? 'both' : 'a') : (gain(b) ? 'b' : 'none')
 				const pass = found.at(-1)
 				if (pass && !a.paused) {
 					pass.to = time
 					pass.heard.add(heard)
+					if (pass.at) {
+						pass.from = Math.max(pass.from, time - (clock() - pass.at))
+					}
 				}
+				// The player seeks for the next pass in this very frame
+				sought = a.paused ? undefined : clock()
 				if (found.length > 3) {
 					resolve(found.slice(0, 3).map((each) => ({ ...each, heard: [...each.heard] })))
 				} else {
@@ -2800,6 +2920,95 @@ test.describe('Skipping ten seconds', () => {
 		await page.waitForTimeout(300)
 		expect(await time()).toBeLessThan(beforeBack - 9)
 		expect(await video.evaluate((element) => element.paused)).toBe(false)
+	})
+})
+
+test.describe('Uploads whose name is taken', () => {
+	let api
+	let dav
+	let projectId
+	let browser
+	let context
+	let page
+
+	test.beforeAll(async ({ playwright }) => {
+		await testUser(playwright)
+	})
+
+	// A Folder Project with one mix in it, open in the Project view
+	test.beforeEach(async ({ playwright }) => {
+		api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		dav = `/remote.php/dav/files/${USER}/deliver-e2e-${randomBytes(4).toString('hex')}`
+		expect((await api.fetch(dav, { method: 'MKCOL' })).status()).toBe(201)
+		const created = await api.post('/ocs/v2.php/apps/deliver/api/v1/projects?format=json', { data: { folderId: await fileId(api, dav), autoIntake: true } })
+		projectId = (await created.json()).ocs.data.id
+		expect((await api.fetch(`${dav}/mix.wav`, { method: 'PUT', data: readFileSync(MIX) })).status()).toBe(201)
+		browser = await chromium.connectOverCDP(CDP)
+		context = await browser.newContext({ baseURL: BROWSER_URL })
+		page = await context.newPage()
+		await login(page)
+		await page.goto(`/apps/deliver/projects/${projectId}`)
+	})
+
+	test.afterEach(async () => {
+		await context?.close()
+		await browser?.close()
+		await api.delete(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)
+		await api.fetch(dav, { method: 'DELETE' })
+		await api.dispose()
+	})
+
+	const assets = async () => (await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()).ocs.data.assets
+	const versions = async () => (await assets()).map((asset) => asset.versions.map((version) => [version.name, version.number, version.autoStacked]))
+	// Another file than the one there, which must stay as it is
+	const other = Buffer.concat([readFileSync(MIX), Buffer.alloc(2)])
+
+	test('a new Version gets its number in its name, wherever it is uploaded, and replaces nothing', async () => {
+		// Another upload, interrupted, that was on its way to the name this one takes
+		const interrupted = await page.evaluate((target) => {
+			const record = { name: 'elsewhere.wav', size: 1, lastModified: 1, type: 'audio/wav', target, projectId: null, assetId: 1, folder: '/remote.php/dav/uploads/none', loaded: 0, status: 'uploading', seen: Date.now(), left: true }
+			localStorage.setItem(`deliver.upload:${target}`, JSON.stringify(record))
+			return `deliver.upload:${target}`
+		}, `${BROWSER_URL}${dav}/mix_v2.wav`)
+		await card(page, 'mix').click({ button: 'right' })
+		let chooser = page.waitForEvent('filechooser')
+		await page.getByRole('menuitem', { name: 'Upload a new Version' }).click()
+		await (await chooser).setFiles({ name: 'mix.wav', mimeType: 'audio/wav', buffer: other })
+		// The Member's own choice, so nothing to undo, though Auto Intake goes by the name
+		await expect.poll(versions).toEqual([[['mix_v2.wav', 2, false], ['mix.wav', 1, false]]])
+		expect((await api.fetch(`${dav}/mix.wav`, { method: 'HEAD' })).headers()['content-length']).toBe(String(readFileSync(MIX).length))
+		await page.locator('.deliver-uploads-card__open').click()
+		const uploads = page.getByRole('dialog', { name: 'Uploads' })
+		await expect(uploads.locator('.deliver-uploads__name', { hasText: 'mix_v2.wav' })).toHaveCount(1)
+		expect(await page.evaluate((key) => localStorage.getItem(key), interrupted)).not.toBeNull()
+		await page.keyboard.press('Escape')
+
+		// The next number is taken by a file outside the Stack, so the one after it
+		expect((await api.fetch(`${dav}/mix_v3.wav`, { method: 'PUT', data: 'not a Version', headers: { 'If-None-Match': '*' } })).status()).toBe(201)
+		const stray = (await assets()).find((asset) => asset.versions.some((version) => version.name === 'mix_v3.wav'))
+		const strayed = stray.versions.find((version) => version.name === 'mix_v3.wav')
+		if (stray.versions.length > 1) {
+			expect((await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${strayed.id}/unstack?format=json`)).ok()).toBe(true)
+		}
+		await page.reload()
+		const stack = page.locator('.deliver-card', { hasText: 'V2' })
+		await stack.click({ button: 'right' })
+		await page.getByRole('menuitem', { name: 'Manage Versions' }).click()
+		await expect(page.locator('.deliver-stack')).toBeVisible()
+		await page.evaluate((bytes) => {
+			const files = new DataTransfer()
+			files.items.add(new File([new Uint8Array(bytes)], 'mix_v2.wav', { type: 'audio/wav' }))
+			document.querySelector('.deliver-stack').dispatchEvent(new DragEvent('drop', { dataTransfer: files, bubbles: true, cancelable: true }))
+		}, [...other])
+		await expect.poll(async () => (await versions()).find((names) => names.length === 3)?.[0][0]).toBe('mix_v4.wav')
+
+		// The button in the Review view, where a name that is free stays as it is
+		const newest = (await assets()).find((asset) => asset.versions.length === 3).versions[0]
+		await page.goto(`/apps/deliver/versions/${newest.id}`)
+		chooser = page.waitForEvent('filechooser')
+		await page.getByRole('button', { name: 'New Version' }).click()
+		await (await chooser).setFiles({ name: 'master.wav', mimeType: 'audio/wav', buffer: other })
+		await expect.poll(async () => (await versions()).find((names) => names.length === 4)?.[0][0]).toBe('master.wav')
 	})
 })
 
