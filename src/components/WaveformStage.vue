@@ -1,13 +1,12 @@
 <script setup>
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
-import { usernameToColor } from '@nextcloud/vue/functions/usernameToColor'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import WaveformCard from './WaveformCard.vue'
 import { HOLD_MS, TAP_SLOP, waveTap } from '../lib/gestures.js'
-import { avatarSeed, initials } from '../lib/initials.js'
+import { avatarRgb } from '../lib/initials.js'
 import { t } from '../lib/l10n.js'
 import { fpsValue, timeToFrame } from '../lib/timecode.js'
-import { barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, clampSpan, dragged, glided, glideStart, isWhole, laneBands, loudestOf, pinchSpan, pixelPlace, retarget, secondsAt, shiftPixels, spreadSpan, stack, steadied, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan } from '../lib/waveWindow.js'
+import { barGrid, bars, barsShown, canvasPixels, CIRCLE, circleAt, circleLook, circlesOf, clampSpan, dragged, glided, glideStart, isWhole, laneBands, loudestOf, pinchSpan, pixelPlace, retarget, secondsAt, shiftPixels, spreadSpan, steadied, stepAt, stepsFor, wheelSeek, wheelZoom, windowAt, writeSpan } from '../lib/waveWindow.js'
 import { useCommentsStore } from '../store/comments.js'
 
 // The Waveform of an audio Version on the stage (story 180): a window of it,
@@ -132,22 +131,6 @@ function keep(name, key, make) {
 	return kept[name].value
 }
 
-/** Each author's colour, as their avatar has it */
-const tints = new Map()
-
-/**
- * @param {object} author - a Comment's author
- * @return {string} the rgb of their avatar
- */
-function tint(author) {
-	const seed = avatarSeed(author)
-	if (!tints.has(seed)) {
-		const { r, g, b } = usernameToColor(seed)
-		tints.set(seed, `${r}, ${g}, ${b}`)
-	}
-	return tints.get(seed)
-}
-
 /** The Waveforms drawn: Compare's lanes, or the one, heard */
 const shownLanes = computed(() => props.lanes ?? [{ waveform: props.waveform, shift: 0, audible: true }])
 /** Lanes share one scale, the loudest of them; the one Waveform has its own */
@@ -165,7 +148,7 @@ const perFrame = () => size.width / across.value / fpsValue(props.fps)
  * @return {Array<{comment: object, x: number}|{cluster: object[], x: number}>} the circles, from the start of the piece
  */
 function circles() {
-	return keep('circles', [props.comments, across.value, size.width], () => stack(props.comments, perFrame()))
+	return keep('circles', [props.comments, across.value, size.width], () => circlesOf(props.comments, perFrame()))
 }
 
 /** Where a drag has taken the playhead, until it lets go */
@@ -284,7 +267,7 @@ function drawSpans(context, offset) {
 			const from = comment.inFrame * scale - offset
 			const to = (comment.outFrame + 1) * scale - offset
 			if (to > 0 && from < size.width) {
-				context.fillStyle = `rgba(${tint(comment.author)}, ${comment.resolved ? 0.1 : 0.22})`
+				context.fillStyle = `rgba(${avatarRgb(comment.author)}, ${comment.resolved ? 0.1 : 0.22})`
 				context.fillRect(from, waveTop.value, to - from, size.height - waveTop.value)
 			}
 		}
@@ -347,7 +330,7 @@ function drawLane(context, levels, grid, band, offset, head, tints) {
 }
 
 /**
- * The playhead, under the zoom buttons, on whole device pixels
+ * The playhead, from under the zoom buttons down to the lane of the circles, on whole device pixels: no circle covers it
  *
  * @param {CanvasRenderingContext2D} context - where to draw, untransformed
  * @param {number} head - its x, in device pixels
@@ -356,7 +339,8 @@ function drawHead(context, head) {
 	const width = Math.max(2, Math.round(2 * ratio))
 	const top = Math.round(waveTop.value * ratio)
 	context.fillStyle = '#fff'
-	context.fillRect(head - Math.floor(width / 2), top, width, pixels.height - top)
+	const bottom = props.lanes ? 0 : Math.round((BOTTOM - 4) * ratio)
+	context.fillRect(head - Math.floor(width / 2), top, width, pixels.height - bottom - top)
 }
 
 /**
@@ -422,8 +406,7 @@ function drawPending(context, pending, scale, offset, height) {
 }
 
 /**
- * The Comments as their authors' initials in circles, in their avatars' colour, resolved ones paler;
- * a place with more of them one neutral circle with their count
+ * The Comments' circles, as circleLook has them
  *
  * @param {CanvasRenderingContext2D} context - the canvas
  * @param {Array<{comment: object, x: number}|{cluster: object[], x: number}>} list - the circles
@@ -436,24 +419,23 @@ function drawCircles(context, list, offset, y) {
 	context.textAlign = 'center'
 	context.textBaseline = 'middle'
 	context.lineWidth = 2
-	for (const { comment, cluster, x: at } of list) {
-		const x = at - offset
+	for (const circle of list) {
+		const x = circle.x - offset
 		if (x < -radius || x > size.width + radius) {
 			continue
 		}
-		const rgb = comment ? tint(comment.author) : '255, 255, 255'
-		const ringed = comment ? comment.id === store.selected || comment.id === card.value?.id : cluster.some((each) => each.id === store.selected)
-		context.globalAlpha = comment?.resolved ? 0.45 : 1
+		const look = circleLook(circle, [store.selected, card.value?.id])
+		context.globalAlpha = look.pale ? 0.45 : 1
 		context.beginPath()
 		context.arc(x, y, radius - 1, 0, 2 * Math.PI)
 		context.fillStyle = '#000'
 		context.fill()
-		context.fillStyle = comment ? `rgba(${rgb}, 0.3)` : 'rgba(255, 255, 255, 0.18)'
+		context.fillStyle = look.fill
 		context.fill()
-		context.strokeStyle = ringed ? '#fff' : comment ? `rgb(${rgb})` : 'rgba(255, 255, 255, 0.6)'
+		context.strokeStyle = look.line
 		context.stroke()
 		context.fillStyle = '#fff'
-		context.fillText(comment ? initials(comment.author.name) : String(cluster.length), x, y + 0.5)
+		context.fillText(look.text, x, y + 0.5)
 	}
 	context.globalAlpha = 1
 }

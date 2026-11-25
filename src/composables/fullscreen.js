@@ -2,7 +2,7 @@ import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 /**
- * Fullscreen for a player and everything on it: markers, Drawings and the
+ * Fullscreen for a player and everything on it: Comments' circles, Drawings and the
  * Watermark. The browser's own fullscreen where it takes any element; where
  * it does not (the iPhone's Safari takes only a bare video, which would drop
  * all of that), or without a tap to allow it, the player fills the window
