@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace OCA\Deliver\Service;
 
 use OCA\Deliver\AppInfo\Application;
+use OCA\Deliver\BackgroundJob\AskBrowserPass;
 use OCA\Deliver\Db\Job;
 use OCA\Deliver\Db\JobMapper;
+use OCA\Deliver\Db\ProjectMapper;
 use OCA\Deliver\Db\Version;
 use OCA\Deliver\Db\VersionMapper;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\BackgroundJob\IJobList;
 use OCP\Files\AppData\IAppDataFactory;
 use OCP\Files\File;
 use OCP\Files\IRootFolder;
@@ -119,6 +122,15 @@ class DerivedMedia {
 
 	/** Seconds after the last report of a browser making a Proxy, when its tab counts as closed */
 	public const BROWSER_LAPSE = 120;
+	/**
+	 * Seconds the request that takes a browser's Proxy has, in which that
+	 * browser does not report: copying a master from slow storage tells nobody
+	 * how far it is. A request that fails gives up the rest at once; one killed
+	 * cannot, so it counts as dead after the hour Nextcloud gives a request.
+	 */
+	private const HAND_IN_LAPSE = 3600;
+	/** Seconds until asking for a Proxy is looked at again, where nobody can be asked now */
+	public const ASK_LATER = 3600;
 
 	/** The Scrub Proxy: this wide at most, about this many kbit/s, and never above the ceiling in bit/s (#169) */
 	private const SCRUB_WIDTH = 320;
@@ -143,6 +155,8 @@ class DerivedMedia {
 		private LoggerInterface $logger,
 		private NotificationService $notifications,
 		private BrowserPassMail $browserPassMail,
+		private ProjectMapper $projects,
+		private IJobList $jobList,
 	) {
 	}
 
@@ -355,9 +369,10 @@ class DerivedMedia {
 				// The uploading browser may have measured its loudness before this ran (A9)
 				$this->addWavLoudness($version);
 			}
-			// Without ffmpeg nothing queues the Proxy: a browser has to make it (ADR 0019)
+			// Without ffmpeg nothing queues the Proxy: a browser has to make it (ADR 0019). The one that uploaded
+			// may be about to say that it does, or be handing it in right now, so nobody is asked yet (askBrowserPass)
 			if ($this->needsProxy($version, (int)filesize($path))) {
-				$this->askBrowserPass($version);
+				$this->jobList->scheduleAfter(AskBrowserPass::class, $this->time->getTime() + self::BROWSER_LAPSE, $version->getId());
 			}
 			return;
 		}
@@ -987,7 +1002,8 @@ class DerivedMedia {
 			throw new ProjectConflictException('The server makes this Proxy');
 		}
 		$job->setProgress(max(0, min(99, $percent)));
-		$job->setStartedAt($this->time->getTime());
+		// Another tab's report does not shorten the time a hand-in has
+		$job->setStartedAt(max($this->time->getTime(), (int)$job->getStartedAt()));
 		$this->jobs->update($job);
 		$version->setProxyState(self::STATE_RUNNING);
 		$version->setDerivedError(null);
@@ -1069,9 +1085,32 @@ class DerivedMedia {
 	 * @throws InvalidRequestException the upload is no Proxy of this Version
 	 */
 	public function acceptProxy(Version $version, File $original, File $upload, bool $converted = false): void {
-		if ($converted) {
-			$this->assertBrowserProxy($version);
+		if (!$converted) {
+			$this->takeProxy($version, $original, $upload, false);
+			return;
 		}
+		$this->assertBrowserProxy($version);
+		$claim = $this->jobs->findPending($version->getId(), Job::KIND_PROXY);
+		if ($claim?->getClaimedBy() !== Job::BROWSER) {
+			$claim = null;
+		}
+		if ($claim !== null) {
+			$claim->setStartedAt($this->time->getTime() + self::HAND_IN_LAPSE - self::BROWSER_LAPSE);
+			$this->jobs->update($claim);
+		}
+		try {
+			$this->takeProxy($version, $original, $upload, true);
+		} finally {
+			// Where it was not taken, as while the original is being read, its browser reports again or lapses as ever
+			if ($claim !== null) {
+				$claim->setStartedAt($this->time->getTime());
+				$this->jobs->update($claim);
+			}
+		}
+	}
+
+	/** Checks and stores a Proxy handed in (acceptProxy) */
+	private function takeProxy(Version $version, File $original, File $upload, bool $converted): void {
 		$source = $this->probe->localPath($original);
 		$candidate = $this->probe->localPath($upload);
 		if ($source === null || $candidate === null) {
@@ -1093,14 +1132,19 @@ class DerivedMedia {
 			}
 			throw new InvalidRequestException($error);
 		}
-		// First: a job of the server running meanwhile looks before it writes, and finds itself withdrawn
-		if ($job !== null) {
+		// First: a job of the server running meanwhile looks before it writes, and finds itself withdrawn.
+		// A browser's goes last, so that the Proxy still lapses should this request die (HAND_IN_LAPSE)
+		$browsers = $job?->getClaimedBy() === Job::BROWSER;
+		if ($job !== null && !$browsers) {
 			$this->jobs->delete($job);
 		}
 		$stream = $upload->fopen('r');
 		try {
 			$this->put($version, 'proxy', $stream);
 		} catch (\Throwable $e) {
+			if ($job !== null && $browsers) {
+				$this->jobs->delete($job);
+			}
 			$this->mark($version->getId(), Job::KIND_PROXY, self::STATE_FAILED, 'The Proxy could not be stored');
 			throw $e;
 		} finally {
@@ -1112,13 +1156,39 @@ class DerivedMedia {
 		$version->setProxyHandedIn(true);
 		$version->setProxyState(self::STATE_READY);
 		$this->versions->update($version);
+		if ($job !== null && $browsers) {
+			$this->jobs->delete($job);
+		}
 		$this->notifications->browserPassDone($version);
 	}
 
-	/** The Managers hear that a browser has to make the Proxy; the mail is optional, the notification is not (ADR 0019) */
-	private function askBrowserPass(Version $version): void {
-		$managers = $this->notifications->browserPassNeeded($version);
-		$this->browserPassMail->needed($version, $managers);
+	/**
+	 * The Managers hear that a browser has to make the Proxy, unless one is at
+	 * it or it is there; the mail is optional, the notification is not (ADR 0019)
+	 *
+	 * @return ?int seconds until this is to be looked at again, null when it is settled
+	 */
+	public function askBrowserPass(int $versionId): ?int {
+		$version = $this->versions->find($versionId);
+		// What the web server last found: looking now would put cron's PATH in its place (Ffmpeg::probe)
+		$this->withoutFfmpegNow ??= !$this->ffmpeg->available();
+		// One written again is asked for once it is read
+		if ($version === null || !$this->withoutFfmpeg() || $version->getProxyState() === self::STATE_READY || $version->getPlayable() === null) {
+			return null;
+		}
+		$this->lapse($version);
+		if ($version->getProxyState() === self::STATE_RUNNING) {
+			return self::BROWSER_LAPSE;
+		}
+		$file = $this->fileOf($version);
+		// Nothing to make a Proxy of for now, or a Deleted Project, about which nothing is notified (ADR 0015)
+		if ($file === null || $version->getState() !== Version::STATE_READY || $this->projects->isDeleted($version->getProjectId())) {
+			return self::ASK_LATER;
+		}
+		if ($this->proxyFromBrowser($version, (int)$file->getSize())) {
+			$this->browserPassMail->needed($version, $this->notifications->browserPassNeeded($version));
+		}
+		return null;
 	}
 
 	/**

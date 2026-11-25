@@ -9,7 +9,6 @@ import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { regenerateVersion, unstackVersion, updateVersion } from '../api.js'
 import { useBusy } from '../composables/busy.js'
 import { t } from '../lib/l10n.js'
-import { stackKind } from '../lib/media.js'
 import { previewUrl } from '../lib/preview.js'
 import { useUploadsStore } from '../store/uploads.js'
 
@@ -68,7 +67,7 @@ function drop(event) {
 	dragging.value = false
 	const file = event.dataTransfer?.files?.[0]
 	if (file) {
-		uploads.add([file], { folderUrl: props.folderUrl, assetId: props.assetId, kind: stackKind(props.versions) })
+		uploads.add([file], { folderUrl: props.folderUrl, assetId: props.assetId, versions: props.versions })
 	}
 }
 </script>
