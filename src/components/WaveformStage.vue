@@ -51,11 +51,11 @@ const props = defineProps({
 
 /**
  * seek: a Frame to go to, keeping the playback state; hold and release: a drag holds playback and lets it go on;
- * skip: a double tap by finger or pen, -1 back or 1 on; comment: a Frame to comment on; jump: a Comment to go to; closeComposer: the field at the Waveform is closed from here
+ * skip: a double tap or, off the lanes, a double click, -1 back or 1 on; comment: a Frame to comment on; jump: a Comment to go to; closeComposer: the field at the Waveform is closed from here
  */
 const emit = defineEmits(['seek', 'hold', 'release', 'comment', 'jump', 'closeComposer', 'pick', 'skip'])
 
-/** Room below the wave for the Comments' circles (none on lanes), in px */
+/** Room below the wave for the Comments' circles (none on lanes), in px: the strip where a mouse click seeks */
 const BOTTOM = props.lanes ? 8 : 40
 /** Between two lanes, in px */
 const LANE_GAP = 8
@@ -105,6 +105,10 @@ let drawnAt = null
 let last = null
 /** What the last frame drew while playing: currentTime moves in coarse steps, so the drawing runs on between them */
 let steady = null
+/** Where the mouse hovers in the strip, from the stage's top left corner, in px; null elsewhere */
+let mouse = null
+/** The dashed line drawn last, in device pixels from the left edge; null for none */
+let lineDrawn = null
 
 /**
  * What only changes with the zoom, the width or the Comments, worked out
@@ -239,6 +243,7 @@ function draw() {
 		}
 		drawHead(context, head)
 		context.drawImage(layers.top, 0, 0)
+		drawLine(context)
 		return
 	}
 	context.setTransform(ratio, 0, 0, ratio, 0, 0)
@@ -248,6 +253,7 @@ function draw() {
 	drawHead(context, head)
 	context.setTransform(ratio, 0, 0, ratio, 0, 0)
 	drawTop(context, offset / ratio)
+	drawLine(context)
 }
 
 /**
@@ -354,6 +360,25 @@ function drawHead(context, head) {
 }
 
 /**
+ * Where the mouse hovers in the strip, a dashed line at the place a click goes, on whole device pixels
+ *
+ * @param {CanvasRenderingContext2D} context - where to draw
+ */
+function drawLine(context) {
+	lineDrawn = lineAt()
+	if (lineDrawn === null) {
+		return
+	}
+	const width = Math.max(1, Math.round(ratio))
+	const dash = Math.round(4 * ratio)
+	context.setTransform(1, 0, 0, 1, 0, 0)
+	context.fillStyle = 'rgba(255, 255, 255, 0.8)'
+	for (let y = Math.round(waveTop.value * ratio); y < pixels.height; y += 2 * dash) {
+		context.fillRect(lineDrawn - Math.floor(width / 2), y, width, dash)
+	}
+}
+
+/**
  * The circles, and the place of the Comment being written
  *
  * @param {CanvasRenderingContext2D} context - where to draw
@@ -444,7 +469,7 @@ function schedule() {
 
 /**
  * The seconds to draw: where the playhead is, or on the way there after a
- * seek that was no drag (a click on the wave or the bar, a skip, a jump to a
+ * seek that was no drag (a click in the strip or on the bar, a skip, a jump to a
  * Comment). The sound is there at once; only the drawing glides, from where
  * it stood but never from further than a window away (N13). A seek shows as
  * the playhead standing elsewhere than playing on from the last frame would
@@ -521,6 +546,9 @@ function measure() {
 		rest: colors.rest,
 	}
 	kept = {}
+	// The mouse rests elsewhere on the stage now; its next move says where
+	mouse = null
+	host.value.style.cursor = ''
 	draw()
 }
 
@@ -640,7 +668,7 @@ function onDown(event) {
 		pinch = { distance: spread(), span: shown.value }
 		return
 	}
-	press = { id: event.pointerId, x: event.clientX, y: event.clientY, from: onScreen(), moved: false, long: false, down: event.timeStamp }
+	press = { id: event.pointerId, x: event.clientX, y: event.clientY, from: onScreen(), moved: false, long: false, strip: inStrip(event), down: event.timeStamp }
 	// A finger or a pen resting on a circle opens its card, as a tap does; elsewhere, where one may comment, the Comment field for that place
 	if (event.pointerType !== 'mouse') {
 		const at = press
@@ -681,8 +709,38 @@ function onScreen() {
  */
 function hit(clientX, clientY, pointerType) {
 	const box = host.value.getBoundingClientRect()
-	const x = clientX - box.left + offsetAt(onScreen())
-	return circleAt(circles(), x, clientY - box.top - (size.height - BOTTOM / 2), pointerType === 'mouse' ? CIRCLE / 2 : CIRCLE)
+	return circleUnder(clientX - box.left, clientY - box.top, pointerType === 'mouse' ? CIRCLE / 2 : CIRCLE)
+}
+
+/**
+ * @param {number} x - a place on the stage, from its left edge
+ * @param {number} y - from its top edge
+ * @param {number} reach - how far from a centre still hits, in px
+ * @return {object|null} the circle there, the nearest
+ */
+function circleUnder(x, y, reach) {
+	return circleAt(circles(), x + offsetAt(onScreen()), y - (size.height - BOTTOM / 2), reach)
+}
+
+/**
+ * @param {PointerEvent} event - a pointer on the stage
+ * @return {boolean} whether it is in the strip under the wave, which lanes do not have
+ */
+function inStrip(event) {
+	const y = event.clientY - host.value.getBoundingClientRect().top
+	return !props.lanes && y >= size.height - BOTTOM && y <= size.height
+}
+
+/**
+ * @return {number|null} where the dashed line goes, in device pixels from the left edge: at the mouse, but within the
+ * piece, as the click is; none while the mouse is nowhere a click goes (onHover), or over a circle, whose card a click opens
+ */
+function lineAt() {
+	if (!mouse || circleUnder(mouse.x, mouse.y, CIRCLE / 2)) {
+		return null
+	}
+	const offset = offsetAt(onScreen())
+	return Math.round(Math.min(perFrame() * props.durationFrames - offset, Math.max(-offset, mouse.x)) * ratio)
 }
 
 /**
@@ -752,32 +810,24 @@ function onUp(event) {
 	press = null
 }
 
-/** When the last plain tap by finger or pen lifted, for a double tap */
+/** When the last plain tap or click lifted, for a double tap or a double click */
 let lastTapAt = null
 
 /**
- * A click or a tap: on a circle it opens the Comment's card; with a card
- * open it only closes it. Otherwise a mouse click seeks, playback going on as it was;
- * a finger or pen does not seek, but a double tap skips (story 104)
+ * A click or a tap: on a circle it opens the Comment's card. A mouse click
+ * in the strip, and anywhere on lanes, seeks, playback going on as it was,
+ * and closes an open card. Elsewhere nothing seeks: with a card open it only
+ * closes it, else a double tap or a double click skips (story 104)
  *
  * @param {PointerEvent} event - the pointer lifts where it came down
  */
 function tap(event) {
 	const circle = hit(event.clientX, event.clientY, event.pointerType)
-	if (event.pointerType === 'mouse') {
-		if (circle) {
-			openCircle(circle, xOf(event))
-		} else if (card.value) {
-			card.value = null
-		} else {
-			emit('seek', frameAtX(xOf(event)))
-		}
-		return
-	}
 	const { action, side } = waveTap({
 		circle: !!circle,
 		card: !!card.value,
-		// An empty field is let go by the touch itself; one with text stays, and its tap counts
+		seeks: event.pointerType === 'mouse' && (!!props.lanes || (press.strip && inStrip(event))),
+		// An empty field is let go by the touch or click itself; one with text stays, and its tap counts
 		field: placeLetGoAt >= press.down,
 		since: lastTapAt === null ? null : event.timeStamp - lastTapAt,
 		x: xOf(event),
@@ -788,17 +838,31 @@ function tap(event) {
 		openCircle(circle, xOf(event))
 	} else if (action === 'close') {
 		card.value = null
+	} else if (action === 'seek') {
+		card.value = null
+		emit('seek', frameAtX(xOf(event)))
 	} else if (action === 'skip' && side) {
 		emit('skip', side)
 	}
 }
 
 /**
- * @param {PointerEvent} event - the mouse moves over the stage
+ * The mouse in the strip gets a pointer and the dashed line; over the card and the buttons, by touch, and while a press
+ * that began on the wave, a drag or a pinch is under way, there is none
+ *
+ * @param {PointerEvent} event - a pointer comes down, moves, lifts or leaves
  */
 function onHover(event) {
-	if (event.pointerType === 'mouse' && press === null) {
-		host.value.style.cursor = hit(event.clientX, event.clientY, 'mouse') ? 'pointer' : ''
+	const over = event.type !== 'pointerleave' && event.pointerType === 'mouse' && (event.target === canvas.value || event.target === host.value)
+	if (over && !(press && (press.moved || !press.strip)) && !pinch && inStrip(event)) {
+		const box = host.value.getBoundingClientRect()
+		mouse = { x: event.clientX - box.left, y: event.clientY - box.top }
+	} else {
+		mouse = null
+	}
+	host.value.style.cursor = mouse ? 'pointer' : ''
+	if (lineAt() !== lineDrawn) {
+		schedule()
 	}
 }
 
@@ -909,10 +973,11 @@ function label(step) {
 	<div
 		ref="host"
 		class="deliver-wave"
-		@pointerdown="onDown"
+		@pointerdown="onDown($event); onHover($event)"
 		@pointermove="onMove($event); onHover($event)"
-		@pointerup="onUp"
+		@pointerup="onUp($event); onHover($event)"
 		@pointercancel="onUp"
+		@pointerleave="onHover"
 		@wheel="onWheel"
 		@contextmenu.prevent>
 		<canvas ref="canvas" class="deliver-wave__canvas" aria-hidden="true" />

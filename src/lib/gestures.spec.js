@@ -35,4 +35,12 @@ describe('waveTap', () => {
 		expect(waveTap({ ...tap, since: 10, card: true }).action).toBe('close')
 		expect(waveTap({ ...tap, since: 10, field: true }).action).toBe('close')
 	})
+	it('seeks by mouse in the strip, twice for two quick clicks, an open card or not, but not on a circle', () => {
+		const click = { ...tap, seeks: true }
+		expect(waveTap(click).action).toBe('seek')
+		expect(waveTap({ ...click, since: 10 }).action).toBe('seek')
+		expect(waveTap({ ...click, field: true }).action).toBe('seek')
+		expect(waveTap({ ...click, circle: true }).action).toBe('open')
+		expect(waveTap({ ...click, card: true }).action).toBe('seek')
+	})
 })
