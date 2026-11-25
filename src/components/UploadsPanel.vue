@@ -147,7 +147,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 			<ul v-if="store.items.length" class="deliver-uploads__list">
 				<li v-for="item in store.items" :key="item.id" class="deliver-uploads__item">
 					<div class="deliver-uploads__row">
-						<span class="deliver-uploads__name" :title="item.name">{{ item.name }}</span>
+						<span class="deliver-uploads__name" :title="item.renamed ?? item.name">{{ item.renamed ?? item.name }}</span>
 						<span class="deliver-uploads__size">{{ formatFileSize(item.size) }}</span>
 						<NcButton
 							v-if="item.status === 'interrupted'"
@@ -177,7 +177,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 						<NcButton
 							v-if="!['done', 'finishing'].includes(item.status) && item.phase !== 'finishing'"
 							variant="tertiary"
-							:aria-label="t('deliver', 'Cancel the upload of {name}', { name: item.name })"
+							:aria-label="t('deliver', 'Cancel the upload of {name}', { name: item.renamed ?? item.name })"
 							:title="t('deliver', 'Cancel')"
 							@click="store.cancel(item)">
 							<template #icon>

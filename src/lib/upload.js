@@ -41,6 +41,9 @@ export function etagOf(response) {
 	return typeof etag === 'string' && etag !== '' ? etag.replace(/^(W\/)?"|"$/g, '') : null
 }
 
+/** So many taken names are walked past: a server that answers anything, with a login page say, has every one of them */
+const NAMES = 100
+
 /** Pauses between attempts after a server error, in seconds */
 const BACKOFF = [1, 2, 4, 8, 16]
 
@@ -79,6 +82,21 @@ export function parseChunks(xml) {
  * @return {boolean} whether it is the same file, so the upload goes on with it
  */
 export const sameFile = (record, file) => record.name === file.name && record.size === file.size && record.lastModified === file.lastModified
+
+/**
+ * @param {string} target - the WebDAV URL of a file
+ * @return {string} that of its folder
+ */
+export const folderOf = (target) => target.slice(0, target.lastIndexOf('/'))
+
+/**
+ * @param {{status: string, target: string, assetId: ?number, name: string, size: number, lastModified: number}} item - an upload
+ * @param {string} folderUrl - the WebDAV URL of a folder
+ * @param {?number} assetId - the Asset the file is to be a Version of
+ * @param {File} file - one picked or dropped for it
+ * @return {boolean} whether the upload stopped and goes on with this file, also under the name it took in the folder
+ */
+export const goesOn = (item, folderUrl, assetId, file) => item.status === 'interrupted' && folderOf(item.target) === folderUrl && item.assetId === assetId && sameFile(item, file)
 
 /** A tab touches the record of the upload it sends this often, in milliseconds */
 export const HEARTBEAT = 10 * 1000
@@ -141,12 +159,14 @@ export async function retrying(attempt, { signal, online, untilOnline, sleep, on
 /**
  * Puts a file into a folder of Files. It never replaces a file of the same
  * name: the name is checked first, and the last step refuses one that
- * appeared meanwhile.
+ * appeared meanwhile. Where onTaken names another target, the upload goes on
+ * there, with the chunks it sent.
  *
  * @param {object} options - what to upload, and how
  * @param {(config: object) => Promise<object>} options.request - axios, or a fake of it
  * @param {File} options.file - what to upload
  * @param {string} options.target - WebDAV URL the file gets
+ * @param {?() => Promise<string>} [options.onTaken] - gives the next WebDAV URL to try where the last one is taken, a new one each time; null refuses the file
  * @param {string} options.uploadsUrl - WebDAV URL of the user's upload folders
  * @param {number} options.chunkSize - the server's largest chunk; 0 sends the file in one piece
  * @param {?string} options.folder - the upload folder of an upload that stopped, to go on with
@@ -156,27 +176,57 @@ export async function retrying(attempt, { signal, online, untilOnline, sleep, on
  * @param {object} options.env - signal, online, untilOnline, sleep and onPause, as retrying takes them
  * @return {Promise<number>} the Nextcloud file id of the upload
  */
-export async function uploadFile({ request, file, target, uploadsUrl, chunkSize, folder = null, onFolder = () => {}, onProgress = () => {}, onEtag = () => {}, env }) {
+export async function uploadFile({ request, file, target, onTaken = null, uploadsUrl, chunkSize, folder = null, onFolder = () => {}, onProgress = () => {}, onEtag = () => {}, env }) {
 	const { signal } = env
 	const send = (config) => retrying(() => request({ ...config, signal }), env)
-	// Ask first, so a taken name is refused now rather than after the whole upload
-	const taken = await request({ method: 'HEAD', url: target, signal }).then(() => true, (error) => {
+	const taken = () => request({ method: 'HEAD', url: target, signal }).then(() => true, (error) => {
 		if (signal?.aborted) {
 			throw error
 		}
 		return false
 	})
-	if (taken) {
-		throw Object.assign(new Error('taken'), { response: { status: 412 } })
+	// Ask first, so a taken name is refused now rather than after the whole upload
+	const findName = async () => {
+		for (let tries = 0; await taken(); tries++) {
+			if (!onTaken || tries >= NAMES) {
+				throw Object.assign(new Error('taken'), { response: { status: 412 } })
+			}
+			target = await onTaken()
+		}
+	}
+	// The step that makes the file, under the next free name where another file took its own meanwhile. After a lost
+	// answer a taken name may well be this very file, which nothing proves: refused then, neither adopted nor sent twice
+	const finish = async (step) => {
+		let lost = false
+		const attempt = () => step().catch((error) => {
+			lost ||= error.response?.status === undefined || error.response.status >= 500
+			throw error
+		})
+		for (;;) {
+			try {
+				return await retrying(attempt, env)
+			} catch (error) {
+				const refused = target
+				if (error.response?.status !== 412 || !onTaken || lost) {
+					throw error
+				}
+				await findName()
+				if (target === refused) {
+					throw error
+				}
+			}
+		}
 	}
 	if (!chunkSize || file.size <= chunkSize) {
-		const response = await send({
+		await findName()
+		const response = await finish(() => request({
 			method: 'PUT',
 			url: target,
 			data: file,
 			headers: { 'Content-Type': file.type || 'application/octet-stream', 'If-None-Match': '*' },
 			onUploadProgress: (event) => onProgress(event.loaded),
-		})
+			signal,
+		}))
 		onEtag(etagOf(response))
 		return fileIdOf(response)
 	}
@@ -187,8 +237,11 @@ export async function uploadFile({ request, file, target, uploadsUrl, chunkSize,
 		if (have === null) {
 			folder = null
 			have = new Map()
+			// Joined, perhaps, though nobody heard: a file under its name may be this very one, so it is refused as ever
+			onTaken = null
 		}
 	}
+	await findName()
 	const headers = { Destination: target, 'OC-Total-Length': String(file.size) }
 	if (!folder) {
 		// No crypto.randomUUID: it needs a secure context, and an instance may run on plain http
@@ -214,9 +267,9 @@ export async function uploadFile({ request, file, target, uploadsUrl, chunkSize,
 	// A MOVE whose answer is lost (a proxy giving up while the server joins a large file) may have worked all the same:
 	// the name was free before, so a file there now is this one. Sent again, the MOVE would find its folder gone.
 	// An answer the server did give stands: a 412 means another file took the name meanwhile, and that is not this one.
-	return retrying(async () => {
+	return finish(async () => {
 		try {
-			const moved = await request({ method: 'MOVE', url: `${folder}/.file`, headers: { ...headers, Overwrite: 'F' }, signal })
+			const moved = await request({ method: 'MOVE', url: `${folder}/.file`, headers: { ...headers, Destination: target, Overwrite: 'F' }, signal })
 			onEtag(etagOf(moved))
 			return fileIdOf(moved)
 		} catch (error) {
@@ -227,7 +280,7 @@ export async function uploadFile({ request, file, target, uploadsUrl, chunkSize,
 			}
 			throw error
 		}
-	}, env)
+	})
 }
 
 /**

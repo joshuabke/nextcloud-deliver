@@ -87,6 +87,21 @@ class StackApiTest extends TestCase {
 		self::assertSame(['song.mp3'], array_column($this->stack('song'), 'name'), 'and stays as it was');
 	}
 
+	public function testAFileAutoIntakeStackedIsTheMembersChoiceOnceAddedToThatAsset(): void {
+		$this->put('cut.mp4');
+		$assetId = $this->assets()[0]['id'];
+		// As a new Version uploaded under its number arrives (story 17)
+		$this->put('cut_v2.mp4');
+		self::assertTrue($this->stack('cut')[0]['autoStacked']);
+
+		$added = $this->nc->ocs('POST', '/assets', ['fileId' => $this->nc->fileId("{$this->root}/cut_v2.mp4"), 'assetId' => $assetId]);
+		self::assertSame(201, $added['status'], json_encode($added['data']));
+		self::assertSame([['cut_v2.mp4', 2, false], ['cut.mp4', 1, false]], array_map(
+			static fn (array $version) => [$version['name'], $version['number'], $version['autoStacked']],
+			$this->stack('cut'),
+		), 'there is nothing to undo');
+	}
+
 	public function testAFileIsEnabledAsANewAssetWhateverItsName(): void {
 		$mixes = $this->nc->ocs('POST', '/projects', ['name' => 'Mixes'])['data']['id'];
 		$folder = "{$this->root}-mixes";

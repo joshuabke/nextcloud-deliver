@@ -16,7 +16,7 @@ export const MIRRORED = ['elsewhere', 'interrupted']
  * dialog that holds one, picking its file again, still holds the one listed.
  *
  * @param {object[]} items - the list now
- * @param {object[]} records - the uploads every tab sends, or sent until it stopped
+ * @param {Array<{key: string}>} records - the uploads every tab sends, or sent until it stopped, each with the key it is kept under
  * @param {Array<{versionId: number}>} done - finished uploads still shown
  * @param {number} now - the time
  * @param {() => number} newId - an id for an entry new to the list
@@ -24,13 +24,13 @@ export const MIRRORED = ['elsewhere', 'interrupted']
  */
 export function mergeBoard(items, records, done, now, newId) {
 	// This tab's own uploads, finished ones aside, are its own to show
-	const own = new Set(items.filter((item) => !MIRRORED.includes(item.status) && item.status !== 'done').map((item) => item.target))
+	const own = new Set(items.filter((item) => !MIRRORED.includes(item.status) && item.status !== 'done').map((item) => item.key))
 	const shown = new Map()
-	for (const record of records.filter((each) => !own.has(each.target))) {
+	for (const record of records.filter((each) => !own.has(each.key))) {
 		const live = sentElsewhere(record, now)
 		// A file sent in one piece cannot be gone on with once its tab is gone
 		if (live || record.folder) {
-			shown.set(record.target, { ...record, phase: live ? record.status : null, status: live ? 'elsewhere' : 'interrupted', loaded: live ? record.loaded ?? 0 : 0 })
+			shown.set(record.key, { ...record, phase: live ? record.status : null, status: live ? 'elsewhere' : 'interrupted', loaded: live ? record.loaded ?? 0 : 0 })
 		}
 	}
 	const versions = new Set(done.map((each) => each.versionId))
@@ -38,9 +38,9 @@ export function mergeBoard(items, records, done, now, newId) {
 	for (const item of items) {
 		if (MIRRORED.includes(item.status)) {
 			// Without a record it was finished or cancelled, or its tab went away with nothing to go on with
-			if (shown.has(item.target)) {
-				kept.push(Object.assign(item, shown.get(item.target), { id: item.id }))
-				shown.delete(item.target)
+			if (shown.has(item.key)) {
+				kept.push(Object.assign(item, shown.get(item.key), { id: item.id }))
+				shown.delete(item.key)
 			}
 		} else if (item.status !== 'done' || !item.version || versions.has(item.version.id)) {
 			// A finished one gone from the list was hidden in another tab

@@ -224,7 +224,8 @@ class StackService {
 			throw new NotFoundException('Asset not found');
 		}
 		if ($target->getId() === $version->getAssetId()) {
-			return $version;
+			// Where its name put it already, by a Member's choice now
+			return $this->acknowledge($version);
 		}
 		$leaving = $version->getAssetId();
 		$version->setAssetId($target->getId());
