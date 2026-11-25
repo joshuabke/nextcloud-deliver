@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clampZoom, swipeStep, tapSide } from './gestures.js'
+import { clampZoom, DOUBLE_TAP_MS, swipeStep, tapSide, waveTap } from './gestures.js'
 
 describe('gestures', () => {
 	it('reads a quick sideways stroke as a step to another Asset', () => {
@@ -18,5 +18,21 @@ describe('gestures', () => {
 		expect(clampZoom({ scale: 0.5, x: 30, y: 0 }, 400, 200)).toEqual({ scale: 1, x: 0, y: 0 })
 		expect(clampZoom({ scale: 2, x: 500, y: -500 }, 400, 200)).toEqual({ scale: 2, x: 200, y: -100 })
 		expect(clampZoom({ scale: 9, x: 0, y: 0 }, 400, 200).scale).toBe(4)
+	})
+})
+
+describe('waveTap', () => {
+	const tap = { circle: false, card: false, since: null, x: 290, width: 300 }
+	it('never seeks on a first tap, and skips to the side of a second one', () => {
+		expect(waveTap(tap)).toEqual({ action: 'first', side: 0 })
+		expect(waveTap({ ...tap, since: DOUBLE_TAP_MS - 1 })).toEqual({ action: 'skip', side: 1 })
+		expect(waveTap({ ...tap, since: 10, x: 10 })).toEqual({ action: 'skip', side: -1 })
+		expect(waveTap({ ...tap, since: 10, x: 150 }).side).toBe(0)
+		expect(waveTap({ ...tap, since: DOUBLE_TAP_MS })).toEqual({ action: 'first', side: 0 })
+	})
+	it('opens a circle or closes a card instead of skipping', () => {
+		expect(waveTap({ ...tap, since: 10, circle: true }).action).toBe('open')
+		expect(waveTap({ ...tap, since: 10, card: true }).action).toBe('close')
+		expect(waveTap({ ...tap, since: 10, field: true }).action).toBe('close')
 	})
 })

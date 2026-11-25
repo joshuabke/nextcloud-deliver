@@ -3,7 +3,7 @@ import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { usernameToColor } from '@nextcloud/vue/functions/usernameToColor'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import WaveformCard from './WaveformCard.vue'
-import { HOLD_MS, TAP_SLOP } from '../lib/gestures.js'
+import { HOLD_MS, TAP_SLOP, waveTap } from '../lib/gestures.js'
 import { avatarSeed, initials } from '../lib/initials.js'
 import { t } from '../lib/l10n.js'
 import { fpsValue, timeToFrame } from '../lib/timecode.js'
@@ -51,9 +51,9 @@ const props = defineProps({
 
 /**
  * seek: a Frame to go to, keeping the playback state; hold and release: a drag holds playback and lets it go on;
- * comment: a Frame to comment on; jump: a Comment to go to; closeComposer: the field at the Waveform is closed from here
+ * skip: a double tap by finger or pen, -1 back or 1 on; comment: a Frame to comment on; jump: a Comment to go to; closeComposer: the field at the Waveform is closed from here
  */
-const emit = defineEmits(['seek', 'hold', 'release', 'comment', 'jump', 'closeComposer', 'pick'])
+const emit = defineEmits(['seek', 'hold', 'release', 'comment', 'jump', 'closeComposer', 'pick', 'skip'])
 
 /** Room below the wave for the Comments' circles (none on lanes), in px */
 const BOTTOM = props.lanes ? 8 : 40
@@ -586,6 +586,14 @@ let press = null
 /** Two fingers: their distance and the span when they came down */
 let pinch = null
 
+/** When the place pinned for a Comment was last let go, on the clock of pointer events */
+let placeLetGoAt = -1
+watch(() => props.pending, (now, was) => {
+	if (was && !now) {
+		placeLetGoAt = performance.now()
+	}
+}, { flush: 'sync' })
+
 /** The stage's left edge, read once a pointer comes down */
 let left = 0
 
@@ -632,7 +640,7 @@ function onDown(event) {
 		pinch = { distance: spread(), span: shown.value }
 		return
 	}
-	press = { id: event.pointerId, x: event.clientX, y: event.clientY, from: onScreen(), moved: false, long: false }
+	press = { id: event.pointerId, x: event.clientX, y: event.clientY, from: onScreen(), moved: false, long: false, down: event.timeStamp }
 	// A finger or a pen resting on a circle opens its card, as a tap does; elsewhere, where one may comment, the Comment field for that place
 	if (event.pointerType !== 'mouse') {
 		const at = press
@@ -744,20 +752,44 @@ function onUp(event) {
 	press = null
 }
 
+/** When the last plain tap by finger or pen lifted, for a double tap */
+let lastTapAt = null
+
 /**
  * A click or a tap: on a circle it opens the Comment's card; with a card
- * open it only closes it; elsewhere it only seeks, and playback goes on as it was
+ * open it only closes it. Otherwise a mouse click seeks, playback going on as it was;
+ * a finger or pen does not seek, but a double tap skips (story 104)
  *
  * @param {PointerEvent} event - the pointer lifts where it came down
  */
 function tap(event) {
 	const circle = hit(event.clientX, event.clientY, event.pointerType)
-	if (circle) {
+	if (event.pointerType === 'mouse') {
+		if (circle) {
+			openCircle(circle, xOf(event))
+		} else if (card.value) {
+			card.value = null
+		} else {
+			emit('seek', frameAtX(xOf(event)))
+		}
+		return
+	}
+	const { action, side } = waveTap({
+		circle: !!circle,
+		card: !!card.value,
+		// An empty field is let go by the touch itself; one with text stays, and its tap counts
+		field: placeLetGoAt >= press.down,
+		since: lastTapAt === null ? null : event.timeStamp - lastTapAt,
+		x: xOf(event),
+		width: size.width,
+	})
+	lastTapAt = action === 'first' ? event.timeStamp : null
+	if (action === 'open') {
 		openCircle(circle, xOf(event))
-	} else if (card.value) {
+	} else if (action === 'close') {
 		card.value = null
-	} else {
-		emit('seek', frameAtX(xOf(event)))
+	} else if (action === 'skip' && side) {
+		emit('skip', side)
 	}
 }
 
@@ -900,7 +932,7 @@ function label(step) {
 				{{ label(step) }}
 			</button>
 		</div>
-		<!-- Each lane's name; a tap on it plays its sound, a tap on its wave seeks as anywhere -->
+		<!-- Each lane's name; a tap on it plays its sound, a click on its wave seeks as anywhere -->
 		<button
 			v-for="(lane, index) in lanes ?? []"
 			:key="index"

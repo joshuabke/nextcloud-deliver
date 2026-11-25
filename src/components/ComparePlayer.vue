@@ -583,6 +583,7 @@ onBeforeUnmount(() => {
 				:playing="playing"
 				:clock="clock"
 				@seek="seekPlaying"
+				@skip="skipBy"
 				@hold="hold"
 				@release="release"
 				@pick="listen($event === 0 ? 'a' : 'b')" />
