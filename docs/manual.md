@@ -66,6 +66,7 @@ A Review Link shows only the files whoever made it may share in Files. A file sh
 ## On a phone
 
 - For video and audio, Play stands under the bar beside the time and the length. Skipping ten seconds and single Frames are in the ⋯ menu in the same row; it stays open while you step.
+- To find a place exactly, hold your finger still on the bar for a moment: a zoomed section of it opens above, a tenth of the piece and at most a minute, with its time at either end. Move your finger to go through it; let go to stay there. A quick drag still goes through the whole piece.
 
 ## Reviewing audio
 
