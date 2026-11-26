@@ -750,6 +750,7 @@ function onMove(event) {
 	// Moving past the slop either way is no resting finger
 	if (Math.hypot(dx, event.clientY - press.y) > TAP_SLOP) {
 		clearTimeout(press.timer)
+		press.slipped = true
 	}
 	if (!press.moved && !press.long && Math.abs(dx) > TAP_SLOP) {
 		press.moved = true
@@ -823,8 +824,8 @@ function tap(event) {
 	})
 	lastTapAt = action === 'first' ? event.timeStamp : null
 	clearTimeout(toggleTimer)
-	if (action === 'first') {
-		// Not while a drag or a pinch that came since holds playback
+	// Not for a press that wandered, nor while a drag or a pinch that came since holds playback
+	if (action === 'first' && !press.slipped) {
 		toggleTimer = setTimeout(() => !press?.moved && !pinch && emit('toggle'), DOUBLE_TAP_MS)
 	}
 	if (action === 'open') {

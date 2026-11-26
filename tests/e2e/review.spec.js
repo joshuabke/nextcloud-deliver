@@ -2470,8 +2470,8 @@ test.describe('Audio review', () => {
 		const back = (at) => member.locator('video.deliver-player__video').evaluate((element, seconds) => {
 			element.currentTime = seconds
 		}, at)
-		const tapAt = async (at) => {
-			await fingers('touchStart', [[at, y]])
+		const tapAt = async (at, high = y) => {
+			await fingers('touchStart', [[at, high]])
 			await fingers('touchEnd', [])
 		}
 		// A first tap that lets go of the empty field skips nothing either; the second is a tap of its own and plays
@@ -2494,22 +2494,23 @@ test.describe('Audio review', () => {
 		await tapAt(box.x + box.width * 0.85)
 		await expect.poll(paused).toBe(true)
 		await back(start)
-		// A tap beside the player's open menu only closes it (#268), and two quick ones skip nothing: the second plays
+		// A tap beside the player's open menu, clear of it at the top, only closes it (#268), and two quick ones skip nothing: the second plays
+		const beside = () => tapAt(box.x + box.width * 0.85, box.y + 60)
 		const settings = member.getByRole('button', { name: 'Playback settings' })
 		await settings.tap()
 		await expect(member.getByRole('menuitem', { name: 'One Frame back' })).toBeVisible()
-		await tapAt(box.x + box.width * 0.85)
+		await beside()
 		await expect(member.getByRole('menuitem', { name: 'One Frame back' })).toBeHidden()
 		await member.waitForTimeout(500)
 		expect(await paused()).toBe(true)
 		expect(await time()).toBe(start)
 		await settings.tap()
 		await expect(member.getByRole('menuitem', { name: 'One Frame back' })).toBeVisible()
-		await tapAt(box.x + box.width * 0.85)
-		await tapAt(box.x + box.width * 0.85)
+		await beside()
+		await beside()
 		await expect.poll(paused).toBe(false)
 		expect(await time()).toBeLessThan(start + 5)
-		await tapAt(box.x + box.width * 0.85)
+		await beside()
 		await expect.poll(paused).toBe(true)
 		await back(start)
 		await tapAt(box.x + box.width * 0.5)
@@ -2520,9 +2521,9 @@ test.describe('Audio review', () => {
 		await tapAt(box.x + box.width * 0.85)
 		await tapAt(box.x + box.width * 0.85)
 		await expect.poll(time).toBeCloseTo(start + 10, 0)
+		await expect(member.locator('.deliver-player__flash')).toContainText('+10')
 		await member.waitForTimeout(500)
 		expect(await paused()).toBe(true)
-		await expect(member.locator('.deliver-player__flash')).toContainText('+10')
 		await tapAt(box.x + box.width * 0.1)
 		await tapAt(box.x + box.width * 0.1)
 		await expect.poll(time).toBeCloseTo(start, 0)
