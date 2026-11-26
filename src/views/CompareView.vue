@@ -173,6 +173,7 @@ function jump(comment) {
 				:aria-label="t('deliver', 'Layout')" />
 		</template>
 
+		<!-- The Comments shown follow the side someone switches the sound to, not a pass of Alternate A/B: a tab picked by hand holds until then -->
 		<ComparePlayer
 			ref="player"
 			v-model:offset="offset"
@@ -182,7 +183,8 @@ function jump(comment) {
 			:b="versionB"
 			:clock="clock"
 			:commentsA="commentsA"
-			:commentsB="commentsB" />
+			:commentsB="commentsB"
+			@listen="tab = $event" />
 
 		<template #panel>
 			<!-- On a phone held upright the list waits under the grabber, as the Review view's does -->
