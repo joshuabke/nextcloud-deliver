@@ -988,6 +988,8 @@ onBeforeUnmount(() => {
 .deliver-compare__window {
 	position: absolute;
 	inset-block: 0;
+	/* Its borders inside: across the whole piece it ran 2 px past the bar, over the Comments beside it */
+	box-sizing: border-box;
 	min-width: 2px;
 	border-inline: 1px solid rgba(255, 255, 255, 0.35);
 	background: rgba(255, 255, 255, 0.08);
