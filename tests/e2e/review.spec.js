@@ -2107,6 +2107,65 @@ test.describe('Audio review', () => {
 		await field.fill('')
 	})
 
+	test('entering the Comment field stops audio and video at the Frame of that moment, by mouse, on a phone without a key and as a Reviewer; typing then stops nothing more', async ({ playwright }) => {
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		const audio = page.locator('video.deliver-player__video')
+		await expect(audio).toHaveJSProperty('readyState', 4)
+		const field = page.locator('#deliver-comment-body')
+		const anchor = page.locator('.deliver-comments__anchor')
+		const time = () => audio.evaluate((element) => element.currentTime)
+		const paused = () => audio.evaluate((element) => element.paused)
+		await page.getByRole('button', { name: 'Play (Space)' }).click()
+		await expect.poll(time).toBeGreaterThan(1)
+		await field.click()
+		await expect.poll(paused).toBe(true)
+		// The Frame where the element stopped, to the millisecond, give or take the last one
+		const stopped = Math.round(await time() * 1000)
+		const clockOf = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms % 60000 / 1000)).padStart(2, '0')}.${String(ms % 1000).padStart(3, '0')}`
+		await expect(anchor).toHaveText(new RegExp(`^(${clockOf(stopped - 1)}|${clockOf(stopped)}|${clockOf(stopped + 1)})$`))
+		const at = await anchor.textContent()
+		// Played on with the field open, typing stops nothing, and the Comment stays where the field was entered
+		await audio.evaluate((element) => element.play())
+		await field.pressSequentially('here')
+		await expect.poll(time).toBeGreaterThan(stopped / 1000 + 0.5)
+		expect(await paused()).toBe(false)
+		await expect(anchor).toHaveText(at)
+		await field.fill('')
+		await audio.evaluate((element) => element.pause())
+		await page.locator('.deliver-review__title').click()
+
+		// On a phone a tap into the field stops audio and video alike, with no key pressed
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const member = await phone.newPage()
+		await login(member)
+		const tapStops = async (where, path) => {
+			await where.goto(path)
+			const media = where.locator('video.deliver-player__video')
+			await expect(media).toHaveJSProperty('readyState', 4)
+			await where.getByRole('button', { name: 'Play', exact: true }).tap()
+			await expect.poll(() => media.evaluate((element) => element.currentTime)).toBeGreaterThan(0.5)
+			await where.locator('#deliver-comment-body').tap()
+			await expect(where.locator('#deliver-comment-body')).toBeFocused()
+			await expect.poll(() => media.evaluate((element) => element.paused)).toBe(true)
+		}
+		await tapStops(member, `/apps/deliver/versions/${versionId}`)
+		await tapStops(member, `/apps/deliver/versions/${clipVersionId}`)
+		await phone.close()
+
+		// A Reviewer's field does the same
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const link = (await (await api.post(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`)).json()).ocs.data
+		await api.dispose()
+		const guest = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const reviewer = await guest.newPage()
+		await reviewer.goto(`/apps/deliver/s/${link.token}/versions/${clipVersionId}`)
+		await reviewer.locator('#deliver-reviewer-name').fill('Pia')
+		await reviewer.getByRole('button', { name: 'Start reviewing' }).tap()
+		await expect(reviewer.locator('.deliver-comments__gate')).toHaveCount(0)
+		await tapStops(reviewer, `/apps/deliver/s/${link.token}/versions/${clipVersionId}`)
+		await guest.close()
+	})
+
 	test('by mouse a click on the wave does not seek and a double click skips ten seconds; the strip under it seeks and shows a dashed line first', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		expect((await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${versionId}/comments?format=json`, { data: { inFrame: 330000, body: 'in the strip' } })).ok()).toBe(true)

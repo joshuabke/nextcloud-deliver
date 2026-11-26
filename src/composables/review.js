@@ -50,13 +50,13 @@ export function useReview({ version, projectMode, projectFps, refresh, collapsed
 	}))
 
 	/**
-	 * Set by C, the Comment button, or the first keystroke in the Comment
-	 * field; until then a new Comment lands where the player stands.
+	 * Set by C, the Comment button, entering the Comment field or its first
+	 * keystroke; until then a new Comment lands where the player stands.
 	 */
 	const pinned = ref(null)
 	/** Whether typing set the pin, so emptying the field lets go of it again */
 	let pinnedByTyping = false
-	/** A place on audio pinned by C or a long press: let go again while nothing is written (story 181) */
+	/** A place on audio pinned by C or a long press, or one pinned by entering the field: let go again while nothing is written (story 181) */
 	let loose = false
 	/** Whether the field holds text */
 	let written = false
@@ -173,9 +173,29 @@ export function useReview({ version, projectMode, projectFps, refresh, collapsed
 	}
 
 	/**
-	 * Typing started: the picture stops, as with C, and the Comment belongs to
-	 * the Frame on screen now, not to wherever the player is when it is sent.
-	 * Typing does not stop audio (C does, story 181).
+	 * Entering the Comment field stops playback, audio and video, as C does,
+	 * and pins the Frame of that moment (story 28). Where C, a long press, a
+	 * Range or typing already holds a place, as when the app itself focuses
+	 * the field after C, nothing more happens. Read from the focus, which
+	 * a phone gives without any key.
+	 *
+	 * @param {FocusEvent} event - the focus goes somewhere on the page
+	 */
+	function onFocusin(event) {
+		if (pinned.value !== null || !['deliver-comment-body', 'deliver-comment-body-inline'].includes(event.target?.id)) {
+			return
+		}
+		player.value?.pause?.()
+		pinned.value = anchor.value
+		loose = true
+	}
+	document.addEventListener('focusin', onFocusin)
+
+	/**
+	 * Typing started where nothing holds a place yet: the picture stops, and
+	 * the Comment belongs to the Frame on screen now, not to wherever the
+	 * player is when it is sent. Typing does not stop audio (entering the
+	 * field and C do).
 	 */
 	function hold() {
 		written = true
@@ -256,6 +276,7 @@ export function useReview({ version, projectMode, projectFps, refresh, collapsed
 		}
 	}, { immediate: true })
 	onBeforeUnmount(() => {
+		document.removeEventListener('focusin', onFocusin)
 		clearTimeout(recheck)
 		store.draft = { body: '', files: [] }
 	})
