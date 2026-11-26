@@ -3050,6 +3050,64 @@ test.describe('Skipping ten seconds', () => {
 		expect(await time()).toBeLessThan(beforeBack - 9)
 		expect(await video.evaluate((element) => element.paused)).toBe(false)
 	})
+
+	test('a finger held on the bar opens a zoomed section above it and seeks through it; a quick drag stays the bar\'s (#273)', async () => {
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const touchPage = await phone.newPage()
+		await login(touchPage)
+		await touchPage.goto(`/apps/deliver/versions/${versionId}`)
+		const video = touchPage.locator('video.deliver-player__video')
+		await expect.poll(() => video.evaluate((element) => element.duration)).toBeCloseTo(30, 0)
+		const cdp = await phone.newCDPSession(touchPage)
+		const bar = await touchPage.locator('.deliver-player__timeline').boundingBox()
+		const y = bar.y + bar.height / 2
+		const touch = (type, x) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] })
+		const frame = () => video.evaluate((element) => Math.floor(element.currentTime * 25 + 0.001))
+		const paused = () => video.evaluate((element) => element.paused)
+		const loupe = touchPage.locator('.deliver-player__loupe')
+		const x = bar.x + bar.width / 2
+		const onBar = (px) => Math.floor((px - bar.x) / bar.width * 750)
+
+		// A quick drag goes through the whole piece, as ever
+		await touch('touchStart', x)
+		await touch('touchMove', x + bar.width * 0.2)
+		await expect.poll(frame).toBe(onBar(x + bar.width * 0.2))
+		await touch('touchEnd')
+		await expect(loupe).toHaveCount(0)
+
+		// Held still, a tenth of the piece opens above the bar, as wide as it, the playhead where the finger came down
+		await touch('touchStart', x)
+		await expect(loupe).toBeVisible()
+		const at = onBar(x)
+		expect(await frame()).toBe(at)
+		const box = await loupe.boundingBox()
+		expect(box.y + box.height).toBeLessThanOrEqual(bar.y)
+		expect(box.x).toBeGreaterThanOrEqual(0)
+		expect(box.x + box.width).toBeLessThanOrEqual(390)
+		await expect(loupe.locator('.deliver-player__loupe-ends span')).toHaveText(['00:00:13:13', '00:00:16:12'])
+		// The finger seeks through those three seconds, the Frame over it
+		await touch('touchMove', x + bar.width * 0.4)
+		const there = at + Math.round(0.4 * 75)
+		await expect.poll(frame).toBe(there)
+		await expect(touchPage.locator('.deliver-player__hover-time')).toHaveText('00:00:16:05')
+		// Letting go keeps the place and opens nothing
+		await touch('touchEnd')
+		await expect(loupe).toHaveCount(0)
+		await touchPage.waitForTimeout(300)
+		expect(await frame()).toBe(there)
+		expect(await paused()).toBe(true)
+		await expect(touchPage.locator('[role="dialog"], .deliver-comment--selected')).toHaveCount(0)
+
+		// Playing, a hold holds playback as a drag does and lets it go on
+		await touchPage.getByRole('button', { name: 'Play', exact: true }).tap()
+		await expect.poll(paused).toBe(false)
+		await touch('touchStart', x)
+		await expect(loupe).toBeVisible()
+		expect(await paused()).toBe(true)
+		await touch('touchEnd')
+		await expect.poll(paused).toBe(false)
+		await phone.close()
+	})
 })
 
 test.describe('Uploads whose name is taken', () => {

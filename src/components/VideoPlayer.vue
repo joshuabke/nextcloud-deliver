@@ -29,12 +29,14 @@ import DrawToolbar from './DrawToolbar.vue'
 import WaveformStage from './WaveformStage.vue'
 import { useFullscreen } from '../composables/fullscreen.js'
 import { useGestures } from '../composables/gestures.js'
+import { useLongPress } from '../composables/longpress.js'
 import { useRange } from '../composables/range.js'
 import { languageName, toWebVtt } from '../lib/captions.js'
 import { COLORS, drawingsAt } from '../lib/drawing.js'
 import { actionFor } from '../lib/hotkeys.js'
 import { t } from '../lib/l10n.js'
 import { liveSeek } from '../lib/liveSeek.js'
+import { loupeFrame, loupePart, openLoupe } from '../lib/loupe.js'
 import { hoverSource } from '../lib/media.js'
 import { SKIP_SECONDS, skipFrames } from '../lib/skip.js'
 import { formatAt, formatLength, fpsValue, frameToTime, modesFor, stepOf, timeToFrame } from '../lib/timecode.js'
@@ -120,6 +122,8 @@ const span = ref(readSpan())
 /** The part of the piece on the stage, shown on the bar under it */
 const shownWindow = computed(() => scrolling.value ? overviewWindow(frame.value / fpsValue(fps.value), span.value, durationFrames.value / fpsValue(fps.value)) : null)
 const hover = ref(null)
+/** The zoomed section of the bar a finger or pen held still on it opens (#273), while it stays down */
+const loupe = ref(null)
 const scrubber = ref(null)
 /** Whether a mouse is over the bar: a tap's :hover would stay */
 const pointed = ref(false)
@@ -315,7 +319,7 @@ async function loadStrip() {
 function frameAt(event) {
 	const box = event.currentTarget.getBoundingClientRect()
 	const ratio = Math.min(1, Math.max(0, (event.clientX - box.left) / box.width))
-	return Math.min(lastFrame.value, Math.floor(ratio * durationFrames.value))
+	return loupe.value ? loupeFrame(loupe.value, ratio, lastFrame.value) : Math.min(lastFrame.value, Math.floor(ratio * durationFrames.value))
 }
 
 /**
@@ -432,6 +436,38 @@ const live = liveSeek((target) => {
 	return true
 })
 
+/** A finger or pen held still on the bar opens the zoomed section (#273) */
+const { press: loupePress } = useLongPress(() => {
+	if (!dragging.value || !barWidth.value) {
+		return
+	}
+	const at = frame.value
+	loupe.value = openLoupe(at, Math.min(1, Math.max(0, (hover.value?.left ?? 0) / barWidth.value)), durationFrames.value, fpsValue(fps.value))
+	// Seeking through it holds playback as a drag does; it stays on the Frame it opened on, not where playback went meanwhile
+	hold()
+	frame.value = at
+	live.want(at)
+})
+/** The Range and the Comments' Ranges within the section */
+const loupeParts = computed(() => !loupe.value
+	? []
+	: [
+			...(range.value && range.value.outFrame !== null ? [{ key: 'range', kind: 'deliver-player__range', anchor: range.value }] : []),
+			...props.comments.filter((each) => each.outFrame !== null).map((each) => ({ key: 'r' + each.id, kind: 'deliver-player__span', anchor: each })),
+		].map(({ anchor, ...part }) => ({ ...part, at: loupePart(loupe.value, anchor.inFrame, anchor.outFrame + 1) })).filter((part) => part.at))
+/** The Comments' circles within the section, as on the bar */
+const loupeMarks = computed(() => {
+	if (!loupe.value || !barWidth.value) {
+		return []
+	}
+	const { start, frames } = loupe.value
+	const perFrame = barWidth.value / frames
+	return circlesOf(props.comments.filter((each) => each.inFrame >= start && each.inFrame <= start + frames), perFrame)
+		.map((circle) => ({ ...circle, ...circleLook(circle, [store.selected]), x: circle.x - start * perFrame }))
+})
+/** Where the player stands in the section, in percent */
+const loupeAt = computed(() => loupe.value ? (loupePart(loupe.value, 0, frame.value)?.width ?? 0) : 0)
+
 /** Chrome hands a touch near a button, the controls right under the bar, to it, unless what is touched answers a click itself */
 function keepTouch() {}
 
@@ -450,6 +486,7 @@ function onDragStart(event) {
 	dragging.value = true
 	pressedAt = frameAt(event)
 	event.currentTarget.setPointerCapture(event.pointerId)
+	loupePress.pointerdown(event)
 	follow(event)
 }
 
@@ -480,6 +517,7 @@ function follow(event) {
  */
 function onPointerMove(event) {
 	if (event.pointerType === 'mouse' || dragging.value) {
+		loupePress.pointermove(event)
 		follow(event)
 	}
 }
@@ -495,9 +533,11 @@ function onDragEnd(event) {
 	}
 	dragging.value = false
 	live.reset()
+	loupePress.pointerup()
 	if (event.type === 'pointerup') {
 		seekTo(frameAt(event))
 	}
+	loupe.value = null
 	release()
 	if (event.pointerType !== 'mouse') {
 		leaveScrubber()
@@ -978,9 +1018,39 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 						{{ mark.text }}
 					</span>
 				</div>
-				<!-- Over the circles; while a finger drags, the playhead follows it -->
-				<div class="deliver-player__playhead" :style="{ left: dragging && hover ? hover.left + 'px' : progress + '%' }" />
-				<div v-show="hover" class="deliver-player__hover" :style="{ left: (hover?.left ?? 0) + 'px' }">
+				<!-- Over the circles; while a finger drags, the playhead follows it, in the zoomed section only there -->
+				<div class="deliver-player__playhead" :style="{ left: dragging && hover && !loupe ? hover.left + 'px' : progress + '%' }" />
+				<!-- A finger held on the bar zooms into it: this section, above the bar and across it, which the finger then seeks through -->
+				<div v-if="loupe" class="deliver-player__loupe" aria-hidden="true">
+					<div class="deliver-player__loupe-bar">
+						<div class="deliver-player__loupe-track">
+							<div class="deliver-player__progress" :style="{ width: loupeAt + '%' }" />
+							<div
+								v-for="part in loupeParts"
+								:key="part.key"
+								:class="part.kind"
+								:style="{ left: part.at.left + '%', width: part.at.width + '%' }" />
+						</div>
+						<span
+							v-for="mark in loupeMarks"
+							:key="(mark.comment ?? mark.cluster[0]).id"
+							class="deliver-player__circle"
+							:class="{ 'deliver-player__circle--resolved': mark.pale, 'deliver-player__circle--ringed': mark.ringed }"
+							:style="{ left: mark.x + 'px', '--deliver-circle-fill': mark.fill, '--deliver-circle-line': mark.line }">
+							{{ mark.text }}
+						</span>
+						<div class="deliver-player__playhead" :style="{ left: loupeAt + '%' }" />
+					</div>
+					<div class="deliver-player__loupe-ends">
+						<span>{{ formatAt(Math.ceil(loupe.start), clock) }}</span>
+						<span>{{ formatAt(Math.min(lastFrame, Math.floor(loupe.start + loupe.frames)), clock) }}</span>
+					</div>
+				</div>
+				<div
+					v-show="hover"
+					class="deliver-player__hover"
+					:class="{ 'deliver-player__hover--loupe': loupe }"
+					:style="{ left: (hover?.left ?? 0) + 'px' }">
 					<canvas
 						v-show="scrubDrawn"
 						ref="scrubCanvas"
@@ -1481,6 +1551,48 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	gap: 2px;
 	pointer-events: none;
 	z-index: 1;
+}
+
+/* The zoomed section a held finger opens: over the picture, as wide as the bar, so a finger at either end reaches the section's */
+.deliver-player__loupe {
+	position: absolute;
+	bottom: calc(100% + 8px);
+	inset-inline: -10px;
+	z-index: 1;
+	box-sizing: border-box;
+	height: 46px;
+	padding: 4px 10px;
+	border-radius: var(--border-radius-large);
+	background: rgba(0, 0, 0, 0.85);
+	box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
+	pointer-events: none;
+}
+
+.deliver-player__loupe-bar {
+	position: relative;
+	height: 22px;
+}
+
+.deliver-player__loupe-track {
+	position: absolute;
+	inset-inline: 0;
+	top: 8px;
+	height: 6px;
+	background: rgba(255, 255, 255, 0.22);
+}
+
+.deliver-player__loupe-ends {
+	display: flex;
+	justify-content: space-between;
+	color: #fff;
+	font-family: monospace;
+	font-size: 11px;
+	line-height: 14px;
+}
+
+/* The Frame over the finger stands above the section */
+.deliver-player__hover--loupe {
+	bottom: calc(100% + 60px);
 }
 
 .deliver-player__scrub-video {
