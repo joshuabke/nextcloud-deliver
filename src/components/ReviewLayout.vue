@@ -382,9 +382,10 @@ body.deliver-review footer {
 	min-height: 0;
 }
 
-/* Compare's pictures and Waveforms too: they kept their least height, so the list stopped under them, lower with the Waveforms than halfway */
-.deliver-layout--up :deep(.deliver-compare__stage),
-.deliver-layout--up :deep(.deliver-compare__lanes) {
+/* Compare's pictures and Waveforms too: they kept their least height, so the list stopped under them, lower with the Waveforms than halfway.
+	Specific enough to win over Compare's own heights (with the Waveforms, and the lanes of two pieces of audio on a phone) */
+.deliver-layout--upright.deliver-layout--up :deep(.deliver-compare .deliver-compare__stage),
+.deliver-layout--upright.deliver-layout--up :deep(.deliver-compare .deliver-compare__lanes) {
 	flex: 0 0 0;
 	min-height: 0;
 	overflow: hidden;

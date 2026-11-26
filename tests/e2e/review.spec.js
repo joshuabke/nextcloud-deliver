@@ -3002,6 +3002,8 @@ test.describe('Comparing sound', () => {
 			}
 			return found
 		})
+		// The heights of the pictures and the Waveforms
+		const folded = () => page.evaluate(() => ['.deliver-compare__stage', '.deliver-compare__lanes'].map((each) => document.querySelector(each).getBoundingClientRect().height))
 		await grabber.tap()
 		for (const width of [375, 390, 430]) {
 			await page.setViewportSize({ width, height: PHONE.viewport.height })
@@ -3015,6 +3017,7 @@ test.describe('Comparing sound', () => {
 			const top = (await sheet.boundingBox()).y
 			expect(top).toBeLessThan(halfway - 100)
 			expect(top).toBeCloseTo(controls.y + controls.height, 0)
+			expect(await folded()).toEqual([0, 0])
 			await expect(page.getByRole('radio', { name: /^V2/ })).toBeVisible()
 			expect(await inSheet()).toEqual([])
 			await grabber.tap()
@@ -3023,6 +3026,21 @@ test.describe('Comparing sound', () => {
 		await page.setViewportSize({ width: 844, height: 390 })
 		await page.getByRole('button', { name: 'Show Comments' }).tap()
 		await expect(sheet).toBeVisible()
+		expect(await inSheet()).toEqual([])
+
+		// Two pieces of audio: their lanes, the view itself, fold away as the Review view's Waveform does
+		await page.setViewportSize({ width: 390, height: PHONE.viewport.height })
+		await page.goto(`/apps/deliver/compare/${mix[1].id}/${mix[0].id}`)
+		await expect(page.locator('.deliver-compare video').first()).toHaveJSProperty('readyState', 4)
+		await grabber.tap()
+		await expect(page.locator('.deliver-layout--middle')).toHaveCount(1)
+		const halfway = (await sheet.boundingBox()).y
+		await grabber.tap()
+		await expect(page.locator('.deliver-layout--up')).toHaveCount(1)
+		expect(await folded()).toEqual([0, 0])
+		const controls = await page.locator('.deliver-compare__controls').boundingBox()
+		expect((await sheet.boundingBox()).y).toBeCloseTo(controls.y + controls.height, 0)
+		expect((await sheet.boundingBox()).y).toBeLessThan(halfway - 100)
 		expect(await inSheet()).toEqual([])
 		// The Waveforms folded away to nothing and back draw on without an error
 		expect(errors).toEqual([])
