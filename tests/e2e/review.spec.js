@@ -3044,6 +3044,84 @@ test.describe('Comparing sound', () => {
 		await expect(page.locator('.deliver-compare__lanes canvas')).toBeVisible()
 	})
 
+	test('on a phone the Comment sheet pulled up takes the place of the pictures and Waveforms, and nothing of the player lies in it', async () => {
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const page = await phone.newPage()
+		const errors = []
+		page.on('pageerror', (error) => errors.push(error.message))
+		await login(page)
+		await page.goto(`/apps/deliver/compare/${cut[1].id}/${cut[0].id}`)
+		await expect(page.locator('.deliver-compare video').first()).toHaveJSProperty('readyState', 4)
+		await page.getByRole('button', { name: 'Playback settings' }).tap()
+		await page.getByRole('menuitemcheckbox', { name: 'Waveforms' }).tap()
+		await page.keyboard.press('Escape')
+		await expect(page.locator('.deliver-compare__lanes canvas')).toBeVisible()
+		const sheet = page.locator('.deliver-layout__panel')
+		const grabber = page.locator('.deliver-layout__grabber')
+		// Whatever of the player lies in the sheet's box, and whether a finger there reaches it
+		const inSheet = () => page.evaluate(() => {
+			const box = document.querySelector('.deliver-layout__panel').getBoundingClientRect()
+			const found = []
+			for (const element of document.querySelectorAll('.deliver-compare *')) {
+				const each = element.getBoundingClientRect()
+				if (each.width && each.height && each.bottom > box.top + 0.5 && each.top < box.bottom && each.right > box.left && each.left < box.right) {
+					found.push(String(element.className?.baseVal ?? element.className))
+				}
+			}
+			for (let y = box.top + 2; y < box.bottom; y += 8) {
+				for (let x = box.left + 2; x < box.right; x += 8) {
+					if (document.elementFromPoint(x, y)?.closest('.deliver-compare')) {
+						found.push(`reached at ${x},${y}`)
+					}
+				}
+			}
+			return found
+		})
+		// The heights of the pictures and the Waveforms
+		const folded = () => page.evaluate(() => ['.deliver-compare__stage', '.deliver-compare__lanes'].map((each) => document.querySelector(each).getBoundingClientRect().height))
+		await grabber.tap()
+		for (const width of [375, 390, 430]) {
+			await page.setViewportSize({ width, height: PHONE.viewport.height })
+			await expect(page.locator('.deliver-layout--middle')).toHaveCount(1)
+			const halfway = (await sheet.boundingBox()).y
+			expect(await inSheet()).toEqual([])
+			await grabber.tap()
+			await expect(page.locator('.deliver-layout--up')).toHaveCount(1)
+			// Up, the list stands right under the A/B switch and the transport, well above its half height, as in the Review view
+			const controls = await page.locator('.deliver-compare__controls').boundingBox()
+			const top = (await sheet.boundingBox()).y
+			expect(top).toBeLessThan(halfway - 100)
+			expect(top).toBeCloseTo(controls.y + controls.height, 0)
+			expect(await folded()).toEqual([0, 0])
+			await expect(page.getByRole('radio', { name: /^V2/ })).toBeVisible()
+			expect(await inSheet()).toEqual([])
+			await grabber.tap()
+		}
+		// Sideways the list opens beside the pictures, clear of them too
+		await page.setViewportSize({ width: 844, height: 390 })
+		await page.getByRole('button', { name: 'Show Comments' }).tap()
+		await expect(sheet).toBeVisible()
+		expect(await inSheet()).toEqual([])
+
+		// Two pieces of audio: their lanes, the view itself, fold away as the Review view's Waveform does
+		await page.setViewportSize({ width: 390, height: PHONE.viewport.height })
+		await page.goto(`/apps/deliver/compare/${mix[1].id}/${mix[0].id}`)
+		await expect(page.locator('.deliver-compare video').first()).toHaveJSProperty('readyState', 4)
+		await grabber.tap()
+		await expect(page.locator('.deliver-layout--middle')).toHaveCount(1)
+		const halfway = (await sheet.boundingBox()).y
+		await grabber.tap()
+		await expect(page.locator('.deliver-layout--up')).toHaveCount(1)
+		expect(await folded()).toEqual([0, 0])
+		const controls = await page.locator('.deliver-compare__controls').boundingBox()
+		expect((await sheet.boundingBox()).y).toBeCloseTo(controls.y + controls.height, 0)
+		expect((await sheet.boundingBox()).y).toBeLessThan(halfway - 100)
+		expect(await inSheet()).toEqual([])
+		// The Waveforms folded away to nothing and back draw on without an error
+		expect(errors).toEqual([])
+		await phone.close()
+	})
+
 	test('on a phone held sideways, pictures, both lanes and the transport fit without scrolling', async () => {
 		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: { width: 844, height: 390 } })
 		const sideways = await phone.newPage()
