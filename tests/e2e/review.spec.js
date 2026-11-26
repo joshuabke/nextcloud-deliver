@@ -2352,7 +2352,7 @@ test.describe('Audio review', () => {
 		await phone.close()
 	})
 
-	test('over the whole piece the Comments are on the wave only, zoomed in on the bar too, where a press seeks and opens nothing', async ({ playwright }) => {
+	test('over the whole piece the Comments are on the wave only, zoomed in on the bar too, where a tap opens the card and a drag seeks', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		const ids = []
 		const open = async (target, zoom) => {
@@ -2402,7 +2402,7 @@ test.describe('Audio review', () => {
 		await expect.poll(() => timeOf(page)).toBeCloseTo(90, 0)
 		await expect(card(page)).toHaveCount(0)
 
-		// Zoomed in the bar has it too, translucent until the list selects it, and a click or a drag on it is the bar's
+		// Zoomed in the bar has it too, translucent until the list selects it; a click on it opens the card of its count, which seeks nowhere
 		await page.getByRole('button', { name: '1 min', exact: true }).click()
 		expect((await canvas.boundingBox()).height).toBe(stage.height)
 		const circle = await circleOf(page)
@@ -2410,14 +2410,21 @@ test.describe('Audio review', () => {
 		const back = () => circle.evaluate((element) => getComputedStyle(element).backgroundColor)
 		expect(await back()).toMatch(/rgba\(0, 0, 0, 0\.\d+\)/)
 		await page.mouse.click(row.x + 6, row.y)
-		await expect.poll(() => timeOf(page)).toBeCloseTo(90 + 6 / under.width * 360, 0)
+		await expect(card(page)).toContainText('on the bar')
+		await expect(card(page)).toContainText('1 of 2')
+		expect(await timeOf(page)).toBeCloseTo(90, 0)
+		await expect(circle).toHaveClass(/--ringed/)
+		// A click beside it closes the card and seeks there exactly; a drag from the circle is the bar's
+		await page.mouse.click(row.x + 14, row.y)
+		await expect(card(page)).toHaveCount(0)
+		await expect.poll(() => timeOf(page)).toBeCloseTo(90 + 14 / under.width * 360, 0)
+		await page.mouse.move(row.x + 6, row.y)
 		await page.mouse.down()
 		await page.mouse.move(under.x + under.width / 2, row.y, { steps: 4 })
 		await expect.poll(() => timeOf(page)).toBeCloseTo(180, 0)
 		await page.mouse.up()
 		await page.waitForTimeout(400)
 		await expect(card(page)).toHaveCount(0)
-		await expect(page.locator('.deliver-comment--selected')).toHaveCount(0)
 		await page.locator('.deliver-comment').filter({ hasText: 'close by' }).locator('.deliver-comment__anchor').click()
 		await expect(circle).toHaveClass(/--ringed/)
 		await expect.poll(back).toBe('rgb(0, 0, 0)')
@@ -2429,8 +2436,15 @@ test.describe('Audio review', () => {
 		const at = await (await circleOf(member)).boundingBox()
 		const touch = await phone.newCDPSession(member)
 		const y = at.y + at.height / 2
+		// A tap on it opens the card over it, held sideways too, and seeks nowhere; a tap elsewhere closes it
 		await member.touchscreen.tap(at.x + at.width / 2, y)
-		await expect.poll(() => timeOf(member)).toBeCloseTo(90, 0)
+		await expect(card(member)).toContainText('on the bar')
+		const over = await card(member).boundingBox()
+		expect(over.y + over.height).toBeLessThanOrEqual(at.y)
+		expect(over.width).toBeLessThanOrEqual(264)
+		expect(await timeOf(member)).toBeLessThan(1)
+		await member.touchscreen.tap(at.x + at.width / 2, y - 120)
+		await expect(card(member)).toHaveCount(0)
 		await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: at.x + at.width / 2, y }] })
 		for (const x of [at.x + 60, at.x + 160, at.x + 260]) {
 			await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y }] })
@@ -2501,15 +2515,23 @@ test.describe('Audio review', () => {
 		expect(mark).toBeLessThan(8)
 		expect(await member.locator('video.deliver-player__video').evaluate((element) => element.currentTime)).toBeLessThan(1)
 		await expect(member.locator('.deliver-player--fullscreen')).toHaveCount(0)
-		// A tap on a circle, 7.5 seconds on, opens its card; closing it hands the focus back to the field
+		// A tap on a circle, 7.5 seconds on, opens its card: small, over the circle, beside the playhead, not a sheet
 		const lane = await canvas.boundingBox()
 		await fingers('touchStart', [[lane.x + lane.width * 0.625, lane.y + lane.height - 20]])
 		await fingers('touchEnd', [])
-		const sheet = member.getByRole('dialog', { name: /^Comment #/ })
-		await expect(sheet).toContainText('for the phone')
-		await expect(sheet).toBeFocused()
-		await sheet.getByRole('button', { name: 'Close' }).tap()
-		await expect(sheet).toHaveCount(0)
+		const small = member.getByRole('dialog', { name: /^Comment #/ })
+		await expect(small).toContainText('for the phone')
+		await expect(small).toContainText('1 reply')
+		await expect(small).toBeFocused()
+		const over = await small.boundingBox()
+		expect(over.width).toBeLessThan(lane.width / 2)
+		expect(over.x).toBeGreaterThan(lane.x + lane.width / 2)
+		expect(over.x + over.width).toBeLessThanOrEqual(lane.x + lane.width)
+		expect(over.y + over.height).toBeLessThanOrEqual(lane.y + lane.height - 32)
+		// A tap anywhere else closes it and hands the focus back to the field
+		await fingers('touchStart', [[lane.x + lane.width * 0.3, y]])
+		await fingers('touchEnd', [])
+		await expect(small).toHaveCount(0)
 		await expect(field).toBeFocused()
 		// A single tap on the wave seeks nowhere; a double tap on its right third skips ten seconds, in the middle nothing
 		const time = () => member.locator('video.deliver-player__video').evaluate((element) => element.currentTime)
@@ -2564,15 +2586,72 @@ test.describe('Audio review', () => {
 		const stage = await wave.boundingBox()
 		await wave.click({ position: { x: stage.width / 2, y: stage.height - 20 } })
 		const card = reviewer.getByRole('dialog', { name: /^Comment #/ })
-		await expect(card).toContainText('and a reply')
+		await expect(card).toContainText('for the phone')
+		await expect(card).toContainText('1 reply')
 		await expect(card.locator('textarea')).toHaveCount(0)
-		await expect(card.getByRole('button', { name: 'Go to' })).toBeVisible()
-		// A click elsewhere in the strip seeks but opens no field
-		await card.getByRole('button', { name: 'Close' }).click()
+		await expect(card.getByRole('button', { name: 'Reply' })).toHaveCount(0)
+		await expect(card.getByTitle('Go to this Frame')).toBeVisible()
+		// A click elsewhere in the strip closes it, seeks, and opens no field
 		await wave.click({ position: { x: stage.width * 0.75, y: stage.height - 20 } })
+		await expect(card).toHaveCount(0)
 		await expect.poll(() => reviewer.locator('video.deliver-player__video').evaluate((element) => element.currentTime)).toBeCloseTo(11.25, 0)
 		await expect(reviewer.locator('#deliver-comment-body')).toHaveCount(0)
 		await visitor.close()
+	})
+
+	test('Reply on a circle\'s card opens the Comment list at that Comment with its Reply field focused: upright, sideways and with the panel closed', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const made = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${versionId}/comments?format=json`, { data: { inFrame: 22500, body: 'answer me' } })
+		const id = (await made.json()).ocs.data.id
+		/**
+		 * Opens the Version, taps or clicks the circle 22.5 seconds on and Reply on its card
+		 *
+		 * @param {import('@playwright/test').Page} target - the Review view
+		 * @param {boolean} touch - a finger, else the mouse
+		 */
+		const reply = async (target, touch) => {
+			await target.goto(`/apps/deliver/versions/${versionId}`)
+			const canvas = target.locator('.deliver-wave canvas')
+			await expect(canvas).toBeVisible()
+			await expect(target.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
+			await target.getByRole('button', { name: '1 min', exact: true }).click()
+			const lane = await canvas.boundingBox()
+			const at = { x: lane.x + lane.width * 0.875, y: lane.y + lane.height - 20 }
+			await (touch ? target.touchscreen.tap(at.x, at.y) : target.mouse.click(at.x, at.y))
+			const card = target.getByRole('dialog', { name: /^Comment #/ })
+			await expect(card).toContainText('answer me')
+			await card.getByRole('button', { name: 'Reply', exact: true }).click()
+			await expect(card).toHaveCount(0)
+			const item = target.locator('.deliver-comments__list > .deliver-comment').filter({ hasText: 'answer me' })
+			await expect(item.getByPlaceholder('Write a Reply')).toBeFocused()
+			await expect(item.getByPlaceholder('Write a Reply')).toBeInViewport()
+			await expect(item).toHaveClass(/deliver-comment--selected/)
+		}
+
+		// Upright the list comes up under the picture
+		const upright = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const phone = await upright.newPage()
+		await login(phone)
+		await reply(phone, true)
+		await expect(phone.locator('.deliver-layout--middle')).toHaveCount(1)
+		await upright.close()
+		// Sideways with the list closed, it opens beside the picture
+		const sideways = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: { width: 852, height: 393 } })
+		const held = await sideways.newPage()
+		await login(held)
+		await held.goto(`/apps/deliver/versions/${versionId}`)
+		await expect(held.locator('.deliver-layout__panel')).toBeHidden()
+		await reply(held, true)
+		await expect(held.locator('.deliver-layout__panel')).toBeVisible()
+		await sideways.close()
+		// On a desktop the closed panel opens
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		await page.getByRole('button', { name: 'Hide Comments' }).click()
+		await expect(page.locator('.deliver-layout__panel')).toBeHidden()
+		await reply(page, false)
+		await expect(page.locator('.deliver-layout__panel')).toBeVisible()
+		expect((await api.delete(`/ocs/v2.php/apps/deliver/api/v1/comments/${id}?format=json`)).ok()).toBe(true)
+		await api.dispose()
 	})
 })
 
