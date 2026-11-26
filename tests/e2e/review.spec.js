@@ -2949,6 +2949,35 @@ test.describe('Comparing sound', () => {
 		await expect(page.getByRole('radio', { name: now })).toHaveAttribute('aria-checked', 'true')
 	})
 
+	test('the Comments shown follow the side heard, and a tab picked by hand holds until the sound switches again', async () => {
+		for (const pair of [cut, mix]) {
+			await page.goto(`/apps/deliver/compare/${pair[1].id}/${pair[0].id}`)
+			await expect(page.locator('.deliver-compare video').first()).toHaveJSProperty('readyState', 4)
+			const shows = (number) => expect(page.getByRole('radio', { name: `Comments on V${number}` })).toHaveAttribute('aria-checked', 'true')
+			await shows(1)
+			await page.locator('.deliver-layout__bar h2').click()
+			await page.keyboard.press('2')
+			await shows(2)
+			// The halves of the A/B switch
+			await page.getByRole('radio', { name: /^V1/ }).click()
+			await shows(1)
+			// The other side's Comments by hand, while V1 is heard
+			await page.getByRole('radio', { name: 'Comments on V2' }).click()
+			await shows(2)
+			await expect(page.getByRole('radio', { name: /^V1/ })).toHaveAttribute('aria-checked', 'true')
+			await page.locator('.deliver-layout__bar h2').click()
+			await page.keyboard.press('2')
+			await page.keyboard.press('1')
+			await shows(1)
+		}
+		// Tab, after a click into the player, and a lane's name
+		await page.locator('.deliver-compare__lanes canvas').click()
+		await page.keyboard.press('Tab')
+		await expect(page.getByRole('radio', { name: 'Comments on V2' })).toHaveAttribute('aria-checked', 'true')
+		await page.locator('.deliver-wave__lane').first().click()
+		await expect(page.getByRole('radio', { name: 'Comments on V1' })).toHaveAttribute('aria-checked', 'true')
+	})
+
 	test('a video Compare shows both Waveforms under the pictures when asked, and the pictures stay', async () => {
 		await page.goto(`/apps/deliver/compare/${cut[1].id}/${cut[0].id}`)
 		const videos = page.locator('.deliver-compare video')
