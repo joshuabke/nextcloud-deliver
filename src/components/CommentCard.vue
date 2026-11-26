@@ -204,8 +204,8 @@ onBeforeUnmount(() => {
 	color: var(--color-success-text);
 }
 
-/* The Comment's place, which goes there as the list's does; the resets keep Nextcloud's button style away */
-.deliver-comment-card__time {
+/* The Comment's place, which goes there as the list's does; the resets keep Nextcloud's button style away, whose margin outweighs a class */
+.deliver-comment-card__head > .deliver-comment-card__time {
 	display: inline-flex;
 	flex: none;
 	align-items: center;

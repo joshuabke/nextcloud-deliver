@@ -1620,7 +1620,6 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	width: 20px;
 	height: 20px;
 	min-height: 0;
-	margin: 0;
 	padding: 0;
 	border: 2px solid var(--deliver-circle-line);
 	border-radius: 50%;
@@ -1629,6 +1628,11 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	font: bold 9px/0 sans-serif;
 	text-shadow: 0 0 2px #000;
 	transform: translate(-50%, -50%);
+}
+
+/* Nextcloud gives a button a margin by a rule that outweighs a class */
+.deliver-player__circles > .deliver-player__circle {
+	margin: 0;
 }
 
 .deliver-player__circle:focus-visible {
