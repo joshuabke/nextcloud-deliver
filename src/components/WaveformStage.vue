@@ -572,6 +572,8 @@ onMounted(() => {
 	}
 	seen.observe(host.value)
 	onResolution()
+	document.addEventListener('pointerdown', dropToggle, true)
+	document.addEventListener('keydown', dropToggle, true)
 })
 onBeforeUnmount(() => {
 	resolution?.removeEventListener('change', onResolution)
@@ -579,7 +581,22 @@ onBeforeUnmount(() => {
 	seen.disconnect()
 	cancelAnimationFrame(frameRequest)
 	clearTimeout(toggleTimer)
+	document.removeEventListener('pointerdown', dropToggle, true)
+	document.removeEventListener('keydown', dropToggle, true)
 })
+
+/**
+ * Whatever else happens within the wait wins over the waiting toggle: a key (Space, C), a press elsewhere (Play,
+ * the Comment field), or playback or a Comment changing by itself
+ *
+ * @param {Event} [event] - a key or a pointer anywhere; none for a change of state
+ */
+function dropToggle(event) {
+	if (!event || event.type === 'keydown' || !host.value?.contains(event.target)) {
+		clearTimeout(toggleTimer)
+	}
+}
+watch(() => [props.playing, props.pending, props.composing], () => dropToggle())
 
 /** Where the field at the Waveform stands: at its place when it opened, kept on the stage */
 const composeLeft = ref(0)
@@ -824,9 +841,9 @@ function tap(event) {
 	})
 	lastTapAt = action === 'first' ? event.timeStamp : null
 	clearTimeout(toggleTimer)
-	// Not for a press that wandered, nor while a drag or a pinch that came since holds playback
+	// Not for a press that wandered, nor while a finger or two that came since are still down
 	if (action === 'first' && !press.slipped) {
-		toggleTimer = setTimeout(() => !press?.moved && !pinch && emit('toggle'), DOUBLE_TAP_MS)
+		toggleTimer = setTimeout(() => !press && !pinch && emit('toggle'), DOUBLE_TAP_MS)
 	}
 	if (action === 'open') {
 		openCircle(circle, xOf(event))
