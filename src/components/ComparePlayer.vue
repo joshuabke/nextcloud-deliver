@@ -50,6 +50,9 @@ const props = defineProps({
 	commentsB: { type: Array, default: () => [] },
 })
 
+/** Someone switched the sound, by a key, Tab, a half of the switch or a lane's name; a pass of Alternate A/B is no one's switch */
+const emit = defineEmits(['listen'])
+
 const isMobile = useIsMobile()
 const locale = getLanguage()
 const root = ref(null)
@@ -148,6 +151,7 @@ const heardIndex = () => audio.value === 'a' ? 0 : 1
  */
 function listen(side) {
 	audio.value = side
+	emit('listen', side)
 	startMix(elements(), heardIndex)
 }
 
