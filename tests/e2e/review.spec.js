@@ -3084,7 +3084,15 @@ test.describe('Skipping ten seconds', () => {
 		expect(box.y + box.height).toBeLessThanOrEqual(bar.y)
 		expect(box.x).toBeGreaterThanOrEqual(0)
 		expect(box.x + box.width).toBeLessThanOrEqual(390)
-		await expect(loupe.locator('.deliver-player__loupe-ends span')).toHaveText(['00:00:13:13', '00:00:16:12'])
+		// Opaque, so nothing under it shows through
+		await expect(loupe).toHaveCSS('background-color', 'rgb(0, 0, 0)')
+		// Its ends are as far as the finger reaches, beyond the bar's ends too
+		const ends = loupe.locator('.deliver-player__loupe-ends span')
+		await expect(ends).toHaveCount(2)
+		for (const [end, px] of [[1, bar.x + bar.width + 20], [0, bar.x - 20]]) {
+			await touch('touchMove', px)
+			await expect(touchPage.locator('.deliver-player__hover-time')).toHaveText(await ends.nth(end).textContent())
+		}
 		// The finger seeks through those three seconds, the Frame over it
 		await touch('touchMove', x + bar.width * 0.4)
 		const there = at + Math.round(0.4 * 75)
@@ -3097,6 +3105,16 @@ test.describe('Skipping ten seconds', () => {
 		expect(await frame()).toBe(there)
 		expect(await paused()).toBe(true)
 		await expect(touchPage.locator('[role="dialog"], .deliver-comment--selected')).toHaveCount(0)
+
+		// A second finger on the bar starts no hold of its own: a drag goes on through the whole piece
+		const fingers = (type, one, two) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: two === undefined ? [{ x: one, y, id: 0 }] : [{ x: one, y, id: 0 }, { x: two, y, id: 1 }] })
+		await fingers('touchStart', x)
+		await touchPage.waitForTimeout(60)
+		await fingers('touchStart', x, x + 60)
+		await fingers('touchMove', x + 50, x + 60)
+		await touchPage.waitForTimeout(700)
+		await expect(loupe).toHaveCount(0)
+		await touch('touchEnd')
 
 		// Playing, a hold holds playback as a drag does and lets it go on
 		await touchPage.getByRole('button', { name: 'Play', exact: true }).tap()

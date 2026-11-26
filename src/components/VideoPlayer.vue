@@ -483,10 +483,15 @@ function onDragStart(event) {
 	if (!durationFrames.value || (event.pointerType === 'mouse' && (event.button !== 0 || event.target.closest('button')))) {
 		return
 	}
+	// Only the first pointer can hold still for the zoomed section; a second one ends that wait
+	if (dragging.value) {
+		loupePress.pointerup()
+	} else {
+		loupePress.pointerdown(event)
+	}
 	dragging.value = true
 	pressedAt = frameAt(event)
 	event.currentTarget.setPointerCapture(event.pointerId)
-	loupePress.pointerdown(event)
 	follow(event)
 }
 
@@ -1041,9 +1046,10 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 						</span>
 						<div class="deliver-player__playhead" :style="{ left: loupeAt + '%' }" />
 					</div>
+					<!-- As far as the finger reaches either way -->
 					<div class="deliver-player__loupe-ends">
-						<span>{{ formatAt(Math.ceil(loupe.start), clock) }}</span>
-						<span>{{ formatAt(Math.min(lastFrame, Math.floor(loupe.start + loupe.frames)), clock) }}</span>
+						<span>{{ formatAt(loupeFrame(loupe, 0, lastFrame), clock) }}</span>
+						<span>{{ formatAt(loupeFrame(loupe, 1, lastFrame), clock) }}</span>
 					</div>
 				</div>
 				<div
@@ -1563,7 +1569,8 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	height: 46px;
 	padding: 4px 10px;
 	border-radius: var(--border-radius-large);
-	background: rgba(0, 0, 0, 0.85);
+	/* Opaque: the Waveform's circles under it would read as its own */
+	background: #000;
 	box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
 	pointer-events: none;
 }
