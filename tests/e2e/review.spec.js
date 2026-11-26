@@ -2668,6 +2668,7 @@ test.describe('Audio review', () => {
 		await expect.poll(paused).toBe(false)
 		await tapAt(box.x + box.width * 0.85)
 		await expect.poll(paused).toBe(true)
+		// The seek back can land a microsecond beside where it was set, so the time after it is compared to a tenth of a millisecond, far below a moment of playback
 		await back(start)
 		// A tap beside the player's open menu, clear of it at the top, only closes it (#268), and two quick ones skip nothing: the second plays
 		const beside = () => tapAt(box.x + box.width * 0.85, box.y + 60)
@@ -2678,7 +2679,7 @@ test.describe('Audio review', () => {
 		await expect(member.getByRole('menuitem', { name: 'One Frame back' })).toBeHidden()
 		await member.waitForTimeout(500)
 		expect(await paused()).toBe(true)
-		expect(await time()).toBe(start)
+		expect(await time()).toBeCloseTo(start, 4)
 		await settings.tap()
 		await expect(member.getByRole('menuitem', { name: 'One Frame back' })).toBeVisible()
 		await beside()
@@ -2701,14 +2702,14 @@ test.describe('Audio review', () => {
 		await pointer([['pointerup', box.x + box.width * 0.75]])
 		await expect(field).toBeFocused()
 		expect(await paused()).toBe(true)
-		expect(await time()).toBe(start)
+		expect(await time()).toBeCloseTo(start, 4)
 		// A tap lets go of the empty field, and only does that
 		await tapAt(box.x + box.width * 0.85)
 		await member.waitForTimeout(500)
 		expect(await paused()).toBe(true)
 		await doubleTapAt(box.x + box.width * 0.5)
 		await member.waitForTimeout(500)
-		expect(await time()).toBe(start)
+		expect(await time()).toBeCloseTo(start, 4)
 		expect(await paused()).toBe(true)
 		await doubleTapAt(box.x + box.width * 0.85)
 		await expect.poll(time).toBeCloseTo(start + 10, 0)
