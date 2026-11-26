@@ -681,7 +681,6 @@ OC.L10N.register(
 		"{minutes} min": "{minutes} min",
 		"Whole": "Alles",
 		"Zoom the Waveform": "Wellenform zoomen",
-		"Go to": "Hinspringen",
 		"Comment #{number}": "Kommentar #{number}",
 		"Show the Assets as a list": "Assets als Liste zeigen",
 		"Previous Comment": "Vorheriger Kommentar",
@@ -694,7 +693,12 @@ OC.L10N.register(
 		"Alternate A/B: every pass of the loop plays the other side": "A/B abwechseln: Jeder Durchlauf der Schleife spielt die andere Seite",
 		"Waveforms": "Wellenformen",
 		"Waveforms under the pictures": "Wellenformen unter den Bildern",
-		"Start a Range here, then go to its end (I and O)": "Hier einen Bereich beginnen, dann zu seinem Ende gehen (I und O)"
+		"Start a Range here, then go to its end (I and O)": "Hier einen Bereich beginnen, dann zu seinem Ende gehen (I und O)",
+		"Comment by {author} at {time}": "Kommentar von {author} bei {time}",
+		"_%n Comment at {time}_::_%n Comments at {time}_": [
+			"%n Kommentar bei {time}",
+			"%n Kommentare bei {time}"
+		]
 	},
 	undefined
 );

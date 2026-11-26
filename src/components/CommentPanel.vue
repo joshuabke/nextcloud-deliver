@@ -3,7 +3,7 @@ import filterIcon from '@mdi/svg/svg/chevron-down.svg?raw'
 import searchIcon from '@mdi/svg/svg/magnify.svg?raw'
 import sortIcon from '@mdi/svg/svg/sort.svg?raw'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
@@ -81,11 +81,21 @@ const threads = computed(() => {
 const list = ref(null)
 
 /**
- * Brings a Comment into view and marks it for a moment, for a jump to it
+ * Brings a Comment into view and marks it for a moment, for a jump to it;
+ * where the search or the filter hides it, that goes, so it is there (#273)
  *
  * @param {number} id - the Comment
  */
-function reveal(id) {
+async function reveal(id) {
+	const thread = store.threads.find((each) => each.id === id)
+	if (thread && !matches(thread)) {
+		searching.value = false
+		query.value = ''
+	}
+	if (thread && show.value !== 'all' && thread.resolved !== (show.value === 'resolved')) {
+		show.value = 'all'
+	}
+	await nextTick()
 	const item = list.value?.querySelector(`[data-comment="${id}"]`)
 	if (!item) {
 		return

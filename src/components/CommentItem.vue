@@ -8,7 +8,7 @@ import penIcon from '@mdi/svg/svg/draw.svg?raw'
 import reactIcon from '@mdi/svg/svg/emoticon-plus-outline.svg?raw'
 import fileIcon from '@mdi/svg/svg/file-outline.svg?raw'
 import { formatFileSize } from '@nextcloud/files'
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -35,8 +35,6 @@ const props = defineProps({
 	number: { type: Number, default: null },
 	/** The thread last clicked or jumped to: lifted out, its React button showing without a hover */
 	selected: { type: Boolean, default: false },
-	/** The Reply field shows without asking, as in the card on the Waveform */
-	replyOpen: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['jump'])
@@ -49,7 +47,7 @@ const editing = ref(false)
 const draft = ref('')
 const replying = ref(false)
 const showReplies = ref(true)
-/** Kept in the store, so a Reply half written survives the card on the Waveform closing */
+/** Kept in the store, so a Reply half written survives its field closing */
 const reply = computed({
 	get: () => store.replies[props.comment.id] ?? '',
 	set: (text) => {
@@ -57,6 +55,7 @@ const reply = computed({
 	},
 })
 const { busy, error, run } = useBusy()
+const replyField = ref(null)
 
 const mine = computed(() => store.mine(props.comment))
 const unseen = computed(() => props.comment.createdAt > store.seenUntil && !mine.value)
@@ -70,6 +69,19 @@ const canEdit = computed(() => mine.value && store.canEditOwn)
 const canDelete = computed(() => (mine.value && store.canDeleteOwn) || store.manages)
 /** Reactions need a name to put on them, like Comments (story 91) */
 const canReact = computed(() => store.canComment === true && store.me?.type !== 'unnamed')
+
+// Reply on a circle's card opens this Comment's Reply field and puts the focus in it (#273)
+watch(() => store.replyTo, async (id) => {
+	if (id !== props.comment.id || props.isReply) {
+		return
+	}
+	store.replyTo = null
+	if (canReply.value) {
+		replying.value = true
+		await nextTick()
+		replyField.value?.focus({ preventScroll: true })
+	}
+}, { immediate: true })
 
 /**
  * @param {{authors: Array<object>}} reaction - one emoji with who gave it
@@ -256,14 +268,15 @@ function saveReply() {
 				{{ error }}
 			</p>
 
-			<div v-if="replying || (replyOpen && canReply)" class="deliver-comment__reply-form">
+			<div v-if="replying" class="deliver-comment__reply-form">
 				<textarea
+					ref="replyField"
 					v-model="reply"
 					class="deliver-comment__input"
 					rows="2"
 					:placeholder="t('deliver', 'Write a Reply')" />
 				<div class="deliver-comment__buttons">
-					<NcButton v-if="!replyOpen" variant="tertiary" @click="replying = false">
+					<NcButton variant="tertiary" @click="replying = false">
 						{{ t('deliver', 'Cancel') }}
 					</NcButton>
 					<NcButton variant="primary" :disabled="busy || !reply.trim()" @click="saveReply">
@@ -271,9 +284,9 @@ function saveReply() {
 					</NcButton>
 				</div>
 			</div>
-			<div v-if="!replying && ((canReply && !replyOpen) || canReact)" class="deliver-comment__footer">
+			<div v-if="!replying && (canReply || canReact)" class="deliver-comment__footer">
 				<button
-					v-if="canReply && !replyOpen"
+					v-if="canReply"
 					type="button"
 					class="deliver-comment__link"
 					@click="replying = true">
