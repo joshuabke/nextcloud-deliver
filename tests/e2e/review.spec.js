@@ -2089,7 +2089,7 @@ test.describe('Audio review', () => {
 		await goTo(50)
 	})
 
-	test('a Comment half written stays with its Version: on the next Asset the field is empty and a keystroke stops the video', async () => {
+	test('a Comment half written stays with its Version: on the next Asset the field is empty and entering it stops the video', async () => {
 		await page.goto(`/apps/deliver/versions/${versionId}`)
 		await expect(page.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
 		await page.locator('#deliver-comment-body').fill('left behind')

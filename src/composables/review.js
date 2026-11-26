@@ -192,17 +192,13 @@ export function useReview({ version, projectMode, projectFps, refresh, collapsed
 	document.addEventListener('focusin', onFocusin)
 
 	/**
-	 * Typing started where nothing holds a place yet: the picture stops, and
-	 * the Comment belongs to the Frame on screen now, not to wherever the
-	 * player is when it is sent. Typing does not stop audio (entering the
-	 * field and C do).
+	 * Typing started where nothing holds a place yet: the Comment belongs to
+	 * the Frame on screen now, not to wherever the player is when it is sent.
+	 * Typing stops nothing: entering the field did.
 	 */
 	function hold() {
 		written = true
 		if (pinned.value === null) {
-			if (!audio.value) {
-				player.value?.pause()
-			}
 			pinned.value = anchor.value
 			pinnedByTyping = true
 		}
