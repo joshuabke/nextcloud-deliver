@@ -1217,12 +1217,14 @@ test.describe('Review view', () => {
 		const x = held.x + held.width / 2 - 6
 		const there = Math.floor((x - bar.x) / bar.width * 100)
 		const hold = finger(x, held.y + held.height / 2)
+		const frame = () => video.evaluate((element) => Math.floor(element.currentTime * 25 + 0.001))
 		await hold.down()
 		await expect(touchPage.locator('.deliver-player__loupe')).toBeVisible()
-		await expect(touchPage.locator('.deliver-player__hover-time')).toHaveText(`00:00:01:${String(there - 25).padStart(2, '0')}`)
+		await expect.poll(frame).toBe(there)
+		await expect(touchPage.locator('.deliver-player__loupe-ends span').first()).not.toHaveText('00:00:00:00')
 		await hold.up()
 		await expect(touchPage.locator('.deliver-player__loupe')).toHaveCount(0)
-		await expect.poll(() => video.evaluate((element) => Math.floor(element.currentTime * 25 + 0.001))).toBe(there)
+		await expect.poll(frame).toBe(there)
 		await touchPage.waitForTimeout(300)
 		await expect(touchPage.getByRole('dialog', { name: /^Comment #/ })).toHaveCount(0)
 		// The mouse shows the Frame's time over a circle as beside it
