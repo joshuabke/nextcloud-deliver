@@ -1208,6 +1208,23 @@ test.describe('Review view', () => {
 			expect(await paused()).toBe(false)
 			await target.getByRole('button', { name: /^Pause/ }).first().click()
 		}
+		// A finger held on the circle is a hold, not a tap: the zoomed section opens around the circle's place, and letting go seeks there and opens no card
+		await touchPage.goto(`/apps/deliver/versions/${newest}`)
+		const video = touchPage.locator('video.deliver-player__video')
+		await expect(video).toHaveJSProperty('readyState', 4)
+		const held = await touchPage.locator('.deliver-player__circle').filter({ hasText: 'D' }).boundingBox()
+		const bar = await touchPage.locator('.deliver-player__timeline').boundingBox()
+		const x = held.x + held.width / 2 - 6
+		const there = Math.floor((x - bar.x) / bar.width * 100)
+		const hold = finger(x, held.y + held.height / 2)
+		await hold.down()
+		await expect(touchPage.locator('.deliver-player__loupe')).toBeVisible()
+		await expect(touchPage.locator('.deliver-player__hover-time')).toHaveText(`00:00:01:${String(there - 25).padStart(2, '0')}`)
+		await hold.up()
+		await expect(touchPage.locator('.deliver-player__loupe')).toHaveCount(0)
+		await expect.poll(() => video.evaluate((element) => Math.floor(element.currentTime * 25 + 0.001))).toBe(there)
+		await touchPage.waitForTimeout(300)
+		await expect(touchPage.getByRole('dialog', { name: /^Comment #/ })).toHaveCount(0)
 		// The mouse shows the Frame's time over a circle as beside it
 		const box = await page.locator('.deliver-player__circle').filter({ hasText: 'D' }).boundingBox()
 		await page.mouse.move(0, 0)
@@ -2650,6 +2667,63 @@ test.describe('Audio review', () => {
 		await expect(page.locator('.deliver-layout__panel')).toBeHidden()
 		await reply(page, false)
 		await expect(page.locator('.deliver-layout__panel')).toBeVisible()
+		expect((await api.delete(`/ocs/v2.php/apps/deliver/api/v1/comments/${id}?format=json`)).ok()).toBe(true)
+		await api.dispose()
+	})
+
+	test('Reply shows its Comment where the list\'s search or filter hides it, and the small card closes as soon as playback starts', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const made = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${versionId}/comments?format=json`, { data: { inFrame: 22500, body: 'hidden from the list' } })
+		const id = (await made.json()).ocs.data.id
+		expect((await api.put(`/ocs/v2.php/apps/deliver/api/v1/comments/${id}/resolved?format=json`, { data: { resolved: true } })).ok()).toBe(true)
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		const canvas = page.locator('.deliver-wave canvas')
+		await expect(canvas).toBeVisible()
+		const video = page.locator('video.deliver-player__video')
+		await expect(video).toHaveJSProperty('readyState', 4)
+		await page.getByRole('button', { name: '1 min', exact: true }).click()
+		const lane = await canvas.boundingBox()
+		const circle = { x: lane.x + lane.width * 0.875, y: lane.y + lane.height - 20 }
+		const card = page.getByRole('dialog', { name: /^Comment #/ })
+		const item = page.locator('.deliver-comments__list > .deliver-comment').filter({ hasText: 'hidden from the list' })
+		const replyThere = async () => {
+			await page.mouse.click(circle.x, circle.y)
+			await expect(card).toContainText('hidden from the list')
+			await card.getByRole('button', { name: 'Reply', exact: true }).click()
+			await expect(card).toHaveCount(0)
+			await expect(item.getByPlaceholder('Write a Reply')).toBeFocused()
+			await expect(item.getByPlaceholder('Write a Reply')).toBeInViewport()
+		}
+
+		// A search that leaves it out goes
+		await page.getByRole('button', { name: 'Search Comments' }).click()
+		await page.locator('.deliver-comments__search').fill('nothing like it')
+		await expect(item).toHaveCount(0)
+		await replyThere()
+		await expect(page.locator('.deliver-comments__search')).toHaveCount(0)
+		// So does "Unresolved" for a resolved one
+		await page.locator('.deliver-comments__show button').click()
+		await page.getByRole('menuitemradio', { name: 'Unresolved' }).click()
+		await expect(item).toHaveCount(0)
+		await replyThere()
+		await expect(page.locator('.deliver-comments__show')).toContainText('All Comments')
+
+		// Playback starting closes the card, on the wave and on the bar
+		await page.locator('.deliver-review__title').click()
+		await page.mouse.click(circle.x, circle.y)
+		await expect(card).toBeVisible()
+		await page.keyboard.press('Space')
+		await expect(card).toHaveCount(0)
+		await expect.poll(() => video.evaluate((element) => element.paused)).toBe(false)
+		await page.keyboard.press('Space')
+		await expect.poll(() => video.evaluate((element) => element.paused)).toBe(true)
+		const onBar = await page.locator('.deliver-player__circles > .deliver-player__circle').first().boundingBox()
+		await page.mouse.click(onBar.x + onBar.width / 2, onBar.y + onBar.height / 2)
+		await expect(card).toBeVisible()
+		await page.keyboard.press('Space')
+		await expect(card).toHaveCount(0)
+		await expect.poll(() => video.evaluate((element) => element.paused)).toBe(false)
+		await page.keyboard.press('Space')
 		expect((await api.delete(`/ocs/v2.php/apps/deliver/api/v1/comments/${id}?format=json`)).ok()).toBe(true)
 		await api.dispose()
 	})

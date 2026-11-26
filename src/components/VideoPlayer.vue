@@ -153,6 +153,12 @@ function markName({ comment, cluster }) {
 /** The Comment whose card a circle on the bar opened, the circle in the window, and the Comments of a count circle (#273) */
 const barCard = ref(null)
 const barOpened = computed(() => barCard.value && props.comments.find((comment) => comment.id === barCard.value.id))
+// It closes as soon as playback starts, which would leave it pointing at a place gone by (decided 2026-11-26)
+watch(playing, (now) => {
+	if (now) {
+		barCard.value = null
+	}
+})
 
 /**
  * Opens the card of a circle on the bar over it, and selects its Comment in the list too; it does not seek

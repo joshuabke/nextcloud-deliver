@@ -78,6 +78,12 @@ watch(card, (now, was) => {
 		cardClosedAt = performance.now()
 	}
 }, { flush: 'sync' })
+// It closes as soon as playback starts, which would leave it pointing at a place gone by (decided 2026-11-26)
+watch(() => props.playing, (now) => {
+	if (now) {
+		card.value = null
+	}
+})
 
 const host = ref(null)
 const canvas = ref(null)
