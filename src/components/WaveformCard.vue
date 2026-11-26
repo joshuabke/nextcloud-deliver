@@ -1,45 +1,28 @@
 <script setup>
-import previousIcon from '@mdi/svg/svg/chevron-left.svg?raw'
-import nextIcon from '@mdi/svg/svg/chevron-right.svg?raw'
-import closeIcon from '@mdi/svg/svg/close.svg?raw'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import NcButton from '@nextcloud/vue/components/NcButton'
-import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
-import CommentItem from './CommentItem.vue'
-import { t } from '../lib/l10n.js'
-import { useCommentsStore } from '../store/comments.js'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 
-// A Comment opened from its circle on the scrolling Waveform (story 181): the
-// Comment as the list shows it, with its Replies and the field to answer, and
-// "Go to". At the wave, or on a phone a sheet from below.
+// The field a new Comment is written in at the Waveform, while the Comment
+// list is out of sight (story 182, N12), handed in as the default slot. At
+// the wave, or on a phone a sheet from below that sits on the keyboard.
 
 const props = defineProps({
-	/** The Comment shown; none for the field a new one is written in, handed in as the default slot (N12) */
-	comment: { type: Object, default: null },
-	/** Its name for a screen reader where it shows no Comment */
-	label: { type: String, default: '' },
-	/** How time is shown */
-	clock: { type: Object, required: true },
+	/** Its name for a screen reader */
+	label: { type: String, required: true },
 	/** Where on the stage it stands, its middle; null for the sheet */
 	left: { type: Number, default: null },
-	/** The Comments of a count circle that no zoom parts, to step through; null otherwise */
-	siblings: { type: Array, default: null },
 	/** Elements whose clicks are not outside: the stage handles its own */
 	inside: { type: Array, default: () => [] },
 })
 
-/** close: the card goes; jump: go to the Comment; show: another Comment of the same place */
-const emit = defineEmits(['close', 'jump', 'show'])
+/** close: the card goes */
+const emit = defineEmits(['close'])
 
-const store = useCommentsStore()
 const root = ref(null)
-const number = computed(() => props.comment ? store.numbers.get(props.comment.id) ?? null : null)
-const index = computed(() => props.siblings?.findIndex((each) => each.id === props.comment?.id) ?? -1)
 /** Where the focus was, to have it back when the card goes */
 const before = document.activeElement
 
 /**
- * @return {boolean} whether something in the card is under way: a Reply half written or a menu open
+ * @return {boolean} whether something in the card is under way: text written or a menu open
  */
 function busy() {
 	return [...root.value.querySelectorAll('textarea')].some((field) => field.value.trim() !== '')
@@ -47,7 +30,7 @@ function busy() {
 }
 
 /**
- * Escape closes the card wherever the focus is, but not while a Reply is half written or its menu is open
+ * Escape closes the card wherever the focus is, but not while text is written or a menu is open
  *
  * @param {KeyboardEvent} event - a key
  */
@@ -59,8 +42,8 @@ function onKey(event) {
 
 /**
  * A click outside closes it: on the bar, the page, anywhere but the card, its
- * menus, the stage, which handles its own, and the Comment list, whose
- * selection the card follows. A Reply half written stays in the store.
+ * menus, the stage, which handles its own, and the Comment list. Its place is
+ * kept while it holds text, until the Comment is sent or the field emptied.
  *
  * @param {PointerEvent} event - a pointer comes down
  */
@@ -70,11 +53,9 @@ function onOutside(event) {
 		|| props.inside.some((element) => element?.contains(target))) {
 		return
 	}
-	// The field for a new Comment stays while it holds text: its place is kept until the Comment is sent or the field emptied
-	if (props.comment === null && busy()) {
-		return
+	if (!busy()) {
+		emit('close')
 	}
-	emit('close')
 }
 
 /**
@@ -118,51 +99,11 @@ onBeforeUnmount(() => {
 		:class="{ 'deliver-wave-card--sheet': left === null }"
 		:style="left === null ? keyboardRoom : { left: left + 'px' }"
 		role="dialog"
-		:aria-label="comment ? t('deliver', 'Comment #{number}', { number }) : label"
+		:aria-label="label"
 		tabindex="-1"
 		@pointerdown.stop
 		@wheel.stop>
-		<slot v-if="!comment" />
-		<ul v-else class="deliver-wave-card__thread">
-			<CommentItem
-				:comment="comment"
-				:clock="clock"
-				:number="number"
-				replyOpen
-				@jump="emit('jump', $event)" />
-		</ul>
-		<div v-if="comment" class="deliver-wave-card__actions">
-			<template v-if="siblings">
-				<NcButton
-					variant="tertiary"
-					:disabled="index <= 0"
-					:aria-label="t('deliver', 'Previous Comment')"
-					@click="emit('show', siblings[index - 1])">
-					<template #icon>
-						<NcIconSvgWrapper :svg="previousIcon" />
-					</template>
-				</NcButton>
-				<span class="deliver-wave-card__count">{{ t('deliver', '{index} of {count}', { index: index + 1, count: siblings.length }) }}</span>
-				<NcButton
-					variant="tertiary"
-					:disabled="index >= siblings.length - 1"
-					:aria-label="t('deliver', 'Next Comment')"
-					@click="emit('show', siblings[index + 1])">
-					<template #icon>
-						<NcIconSvgWrapper :svg="nextIcon" />
-					</template>
-				</NcButton>
-			</template>
-			<span class="deliver-wave-card__spacer" />
-			<NcButton variant="secondary" @click="emit('jump', comment)">
-				{{ t('deliver', 'Go to') }}
-			</NcButton>
-			<NcButton variant="tertiary" :aria-label="t('deliver', 'Close')" @click="emit('close')">
-				<template #icon>
-					<NcIconSvgWrapper :svg="closeIcon" />
-				</template>
-			</NcButton>
-		</div>
+		<slot />
 	</div>
 </template>
 
@@ -204,26 +145,5 @@ onBeforeUnmount(() => {
 
 .deliver-wave-card:focus {
 	outline: none;
-}
-
-/* Always in reach, also where a long thread scrolls in a low sheet */
-.deliver-wave-card__actions {
-	position: sticky;
-	bottom: calc(-2 * var(--default-grid-baseline));
-	display: flex;
-	align-items: center;
-	gap: var(--default-grid-baseline);
-	padding-block: var(--default-grid-baseline);
-	background: inherit;
-}
-
-.deliver-wave-card__spacer {
-	flex: 1;
-}
-
-.deliver-wave-card__count {
-	color: var(--color-text-maxcontrast);
-	font-size: 13px;
-	font-variant-numeric: tabular-nums;
 }
 </style>

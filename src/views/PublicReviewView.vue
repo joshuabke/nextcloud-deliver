@@ -66,7 +66,7 @@ const version = computed(() => context.value?.versions.find((each) => each.id ==
 const assetIndex = computed(() => (newest.value ?? []).findIndex((each) => each.assetId === context.value?.asset?.id))
 const assetCount = computed(() => newest.value?.length ?? 0)
 
-const { player, panel, inline, composing, startComment, closeInline, mode, clock, anchor, pinned, letGo, jump, posted, drawing, draft, draw, range, markRange, clearRange } = useReview({
+const { player, panel, inline, composing, startComment, closeInline, mode, clock, anchor, pinned, letGo, jump, reply, posted, drawing, draft, draw, range, markRange, clearRange } = useReview({
 	version,
 	projectMode: computed(() => context.value?.project.timecodeMode ?? 'smpte'),
 	projectFps: computed(() => context.value?.project.fps ?? { num: 25, den: 1 }),
@@ -287,6 +287,7 @@ async function claim({ name, email, mail }) {
 				:composing="composing"
 				@comment="startComment"
 				@jump="jump"
+				@reply="reply"
 				@swipe="step"
 				@seeked="letGo"
 				@closeComposer="closeInline">

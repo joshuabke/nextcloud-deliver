@@ -1,6 +1,7 @@
 <script setup>
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import CommentCard from './CommentCard.vue'
 import WaveformCard from './WaveformCard.vue'
 import { HOLD_MS, TAP_SLOP, waveTap } from '../lib/gestures.js'
 import { avatarRgb } from '../lib/initials.js'
@@ -50,9 +51,10 @@ const props = defineProps({
 
 /**
  * seek: a Frame to go to, keeping the playback state; hold and release: a drag holds playback and lets it go on;
- * skip: a double tap or, off the lanes, a double click, -1 back or 1 on; comment: a Frame to comment on; jump: a Comment to go to; closeComposer: the field at the Waveform is closed from here
+ * skip: a double tap or, off the lanes, a double click, -1 back or 1 on; comment: a Frame to comment on; jump: a Comment to go to;
+ * reply: a Comment to answer in the list; closeComposer: the field at the Waveform is closed from here
  */
-const emit = defineEmits(['seek', 'hold', 'release', 'comment', 'jump', 'closeComposer', 'pick', 'skip'])
+const emit = defineEmits(['seek', 'hold', 'release', 'comment', 'jump', 'reply', 'closeComposer', 'pick', 'skip'])
 
 /** Room below the wave for the Comments' circles (none on lanes), in px: the strip where a mouse click seeks */
 const BOTTOM = props.lanes ? 8 : 40
@@ -66,16 +68,16 @@ const CARD_HALF = 180
 const store = useCommentsStore()
 const isMobile = useIsMobile()
 
-/** The Comment whose card is open, where on the stage, and the Comments of its place where no zoom parts them */
+/** The Comment whose card is open, its circle in the window, and the Comments of its place where no zoom parts them */
 const card = ref(null)
 const opened = computed(() => card.value && props.comments.find((comment) => comment.id === card.value.id))
-
-// The card follows the list: another Comment selected there shows in it
-watch(() => store.selected, (id) => {
-	if (card.value && id !== card.value.id && props.comments.some((comment) => comment.id === id)) {
-		card.value = { ...card.value, id, siblings: card.value.siblings?.some((each) => each.id === id) ? card.value.siblings : null }
+/** When the card last went, on the clock of pointer events: a press anywhere closes it, and on the wave does nothing else */
+let cardClosedAt = -1
+watch(card, (now, was) => {
+	if (was && !now) {
+		cardClosedAt = performance.now()
 	}
-})
+}, { flush: 'sync' })
 
 const host = ref(null)
 const canvas = ref(null)
@@ -660,7 +662,7 @@ function onDown(event) {
 				at.long = true
 			}
 			if (circle) {
-				openCircle(circle, at.x - left)
+				openCircle(circle)
 			} else if (props.canComment) {
 				emit('comment', frameAtX(at.x - left))
 			}
@@ -807,7 +809,7 @@ function tap(event) {
 	const circle = hit(event.clientX, event.clientY, event.pointerType)
 	const { action, side } = waveTap({
 		circle: !!circle,
-		card: !!card.value,
+		card: !!card.value || cardClosedAt >= press.down,
 		seeks: event.pointerType === 'mouse' && (!!props.lanes || (press.strip && inStrip(event))),
 		// An empty field is let go by the touch or click itself; one with text stays, and its tap counts
 		field: placeLetGoAt >= press.down,
@@ -817,7 +819,7 @@ function tap(event) {
 	})
 	lastTapAt = action === 'first' ? event.timeStamp : null
 	if (action === 'open') {
-		openCircle(circle, xOf(event))
+		openCircle(circle)
 	} else if (action === 'close') {
 		card.value = null
 	} else if (action === 'seek') {
@@ -853,18 +855,17 @@ function onHover(event) {
  * until its Comments stand apart; where even the closest zoom leaves them
  * together, it opens the card on the first, to step through them there.
  *
- * @param {{comment?: object, cluster?: object[]}} circle - the circle hit
- * @param {number} x - where it was hit, from the stage's left edge
+ * @param {{comment?: object, cluster?: object[], x: number}} circle - the circle hit
  */
-function openCircle(circle, x) {
+function openCircle(circle) {
 	if (circle.comment) {
-		open(circle.comment, x, null)
+		open(circle.comment, circle.x, null)
 		return
 	}
 	const { cluster } = circle
 	const parted = spreadSpan(cluster, fpsValue(props.fps), size.width, duration.value)
 	if (parted === null) {
-		open(cluster[0], x, cluster)
+		open(cluster[0], circle.x, cluster)
 		return
 	}
 	zoom(parted)
@@ -872,10 +873,10 @@ function openCircle(circle, x) {
 }
 
 /**
- * Opens a Comment's card at its circle, and selects it in the list too; the circle does not seek
+ * Opens a Comment's card over its circle, clear of the playhead, and selects it in the list too; the circle does not seek
  *
  * @param {object} comment - the Comment
- * @param {number} x - where it was hit, from the stage's left edge
+ * @param {number} x - its circle's centre, from the start of the piece
  * @param {?object[]} siblings - the Comments of its place to step through, where no zoom parts them
  */
 function open(comment, x, siblings) {
@@ -883,7 +884,13 @@ function open(comment, x, siblings) {
 	if (props.composing) {
 		emit('closeComposer')
 	}
-	card.value = { id: comment.id, left: Math.min(size.width - CARD_HALF - 8, Math.max(CARD_HALF + 8, x)), siblings }
+	const box = host.value.getBoundingClientRect()
+	const at = onScreen()
+	card.value = {
+		id: comment.id,
+		at: { x: box.left + x - offsetAt(at), y: box.top + size.height - BOTTOM / 2 - CIRCLE / 2, line: box.left + placeAt(at).head / ratio },
+		siblings,
+	}
 	store.selected = comment.id
 }
 
@@ -901,6 +908,14 @@ function show(comment) {
 function goTo(comment) {
 	card.value = null
 	emit('jump', comment)
+}
+
+/**
+ * @param {object} comment - the Comment of the card, to answer in the list
+ */
+function reply(comment) {
+	card.value = null
+	emit('reply', comment)
 }
 
 /**
@@ -996,17 +1011,17 @@ function label(step) {
 		</button>
 		<!-- Toasts of the field at the Waveform, in the stage's top corner: clear of the transport buttons and of a sheet -->
 		<div id="deliver-wave-toasts" class="deliver-wave__toasts" @pointerdown.stop />
-		<!-- The Comment at its circle, with its Replies and a field to answer; on a phone a sheet from below -->
-		<WaveformCard
+		<!-- The Comment at its circle, small, its Reply in the list (#273) -->
+		<CommentCard
 			v-if="opened"
 			:comment="opened"
-			:clock="clock"
-			:left="isMobile ? null : card.left"
 			:siblings="card.siblings"
-			:inside="[host]"
+			:clock="clock"
+			:at="card.at"
 			@close="card = null"
+			@show="show"
 			@jump="goTo"
-			@show="show" />
+			@reply="reply" />
 		<!-- The field at the Waveform, while the Comment list is out of sight (N12) -->
 		<WaveformCard
 			v-else-if="composing && pending"
