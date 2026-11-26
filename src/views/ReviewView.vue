@@ -80,7 +80,7 @@ const compareWith = computed(() => {
 })
 const folderUrl = computed(() => uploadFolder(context.value?.versions ?? []))
 
-const { player, panel, inline, composing, startComment, closeInline, mode, clock, anchor, pinned, letGo, jump, posted, drawing, draft, draw, range, markRange, clearRange } = useReview({
+const { player, panel, inline, composing, startComment, closeInline, mode, clock, anchor, pinned, letGo, jump, reply, posted, drawing, draft, draw, range, markRange, clearRange } = useReview({
 	version,
 	projectMode: computed(() => context.value?.project.timecodeMode ?? 'smpte'),
 	projectFps: computed(() => context.value?.project.fps ?? { num: 25, den: 1 }),
@@ -325,6 +325,7 @@ function upload(event) {
 			:composing="composing"
 			@comment="startComment"
 			@jump="jump"
+			@reply="reply"
 			@swipe="step"
 			@seeked="letGo"
 			@closeComposer="closeInline">

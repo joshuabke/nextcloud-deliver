@@ -44,8 +44,10 @@ export const useCommentsStore = defineStore('comments', {
 		selected: null,
 		/** The Comment being written: the field under the list and the one at the Waveform (N12) show the same text and files */
 		draft: { body: '', files: [] },
-		/** Replies being written, by the Comment they answer: the list and the card on the Waveform share them, and closing the card keeps them */
+		/** Replies being written, by the Comment they answer, kept while the list's field for them is closed */
 		replies: {},
+		/** The Comment whose Reply field the list opens and focuses next: Reply on a circle's card (#273) */
+		replyTo: null,
 		/** Who approved or requested changes: [{ author, status, updatedAt }] */
 		approvals: [],
 		/** What one person may attach on this Version in all, in bytes, as the server says (story 92) */
@@ -99,6 +101,7 @@ export const useCommentsStore = defineStore('comments', {
 			this.approvals = []
 			this.selected = null
 			this.replies = {}
+			this.replyTo = null
 			await this.reload()
 			if (this.versionId !== versionId) {
 				// Another Version was opened while this one loaded

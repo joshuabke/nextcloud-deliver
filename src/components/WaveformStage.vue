@@ -1,8 +1,9 @@
 <script setup>
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import CommentCard from './CommentCard.vue'
 import WaveformCard from './WaveformCard.vue'
-import { HOLD_MS, TAP_SLOP, waveTap } from '../lib/gestures.js'
+import { DOUBLE_TAP_MS, HOLD_MS, TAP_SLOP, waveTap } from '../lib/gestures.js'
 import { avatarRgb } from '../lib/initials.js'
 import { t } from '../lib/l10n.js'
 import { fpsValue, timeToFrame } from '../lib/timecode.js'
@@ -46,13 +47,16 @@ const props = defineProps({
 	pending: { type: Object, default: null },
 	/** Whether the field is open at the Waveform, at the place it holds (N12); the view hands it in as the composer slot */
 	composing: { type: Boolean, default: false },
+	/** Whether a card outside the stage is open, the one a circle on the bar opens (#273): a tap that closes it does only that */
+	cardOutside: { type: Boolean, default: false },
 })
 
 /**
  * seek: a Frame to go to, keeping the playback state; hold and release: a drag holds playback and lets it go on;
- * skip: a double tap or, off the lanes, a double click, -1 back or 1 on; comment: a Frame to comment on; jump: a Comment to go to; closeComposer: the field at the Waveform is closed from here
+ * skip: a double tap or, off the lanes, a double click, -1 back or 1 on; toggle: a single tap or click on the wave, once no second one followed;
+ * comment: a Frame to comment on; jump: a Comment to go to; reply: a Comment to answer in the list; closeComposer: the field at the Waveform is closed from here
  */
-const emit = defineEmits(['seek', 'hold', 'release', 'comment', 'jump', 'closeComposer', 'pick', 'skip'])
+const emit = defineEmits(['seek', 'hold', 'release', 'comment', 'jump', 'reply', 'closeComposer', 'pick', 'skip', 'toggle'])
 
 /** Room below the wave for the Comments' circles (none on lanes), in px: the strip where a mouse click seeks */
 const BOTTOM = props.lanes ? 8 : 40
@@ -66,14 +70,19 @@ const CARD_HALF = 180
 const store = useCommentsStore()
 const isMobile = useIsMobile()
 
-/** The Comment whose card is open, where on the stage, and the Comments of its place where no zoom parts them */
+/** The Comment whose card is open, its circle in the window, and the Comments of its place where no zoom parts them */
 const card = ref(null)
 const opened = computed(() => card.value && props.comments.find((comment) => comment.id === card.value.id))
-
-// The card follows the list: another Comment selected there shows in it
-watch(() => store.selected, (id) => {
-	if (card.value && id !== card.value.id && props.comments.some((comment) => comment.id === id)) {
-		card.value = { ...card.value, id, siblings: card.value.siblings?.some((each) => each.id === id) ? card.value.siblings : null }
+/**
+ * Whether the card was open when the last press came down: a press anywhere closes it, and on the wave does nothing
+ * else. Noted by the stage's listener on the document, added before the card's own, which closes it on that press;
+ * not by the clock, as a busy page handles a second press with a timeStamp from before it closed the card
+ */
+let cardAtPress = false
+// It closes as soon as playback starts, which would leave it pointing at a place gone by (decided 2026-11-26)
+watch(() => props.playing, (now) => {
+	if (now) {
+		card.value = null
 	}
 })
 
@@ -92,6 +101,8 @@ let pixels = { width: 0, height: 0 }
 let ratio = 1
 let colors = { played: '#fff', rest: 'rgba(255, 255, 255, 0.3)' }
 let visible = true
+/** A single tap or click on the wave waits for a second one before it plays or pauses */
+let toggleTimer = null
 /** Set by the stage's own continuous seeks (the wheel): the wave follows them without a glide */
 let following = false
 /** Further than this from where playing would have taken it, in seconds, the playhead was sought */
@@ -571,12 +582,46 @@ onMounted(() => {
 	}
 	seen.observe(host.value)
 	onResolution()
+	document.addEventListener('pointerdown', notePress, true)
+	document.addEventListener('keydown', dropToggle, true)
 })
 onBeforeUnmount(() => {
 	resolution?.removeEventListener('change', onResolution)
 	resized.disconnect()
 	seen.disconnect()
 	cancelAnimationFrame(frameRequest)
+	clearTimeout(toggleTimer)
+	document.removeEventListener('pointerdown', notePress, true)
+	document.removeEventListener('keydown', dropToggle, true)
+})
+
+/**
+ * Whatever else happens within the wait wins over the waiting toggle: a key (Space, C), a press elsewhere (Play,
+ * the Comment field), or playback or a Comment changing by itself
+ *
+ * @param {Event} [event] - a key or a pointer anywhere; none for a change of state
+ */
+function dropToggle(event) {
+	if (!event || event.type === 'keydown' || !host.value?.contains(event.target)) {
+		clearTimeout(toggleTimer)
+	}
+}
+watch(() => [props.pending, props.composing], () => dropToggle())
+
+/**
+ * @param {PointerEvent} event - a pointer comes down anywhere
+ */
+function notePress(event) {
+	cardAtPress = !!card.value || props.cardOutside
+	dropToggle(event)
+}
+/** The playing state the stage's own toggle asked for, whose arrival is no change from elsewhere */
+let toggledTo = null
+watch(() => props.playing, (now) => {
+	if (now !== toggledTo) {
+		dropToggle()
+	}
+	toggledTo = null
 })
 
 /** Where the field at the Waveform stands: at its place when it opened, kept on the stage */
@@ -596,6 +641,8 @@ const pointers = new Map()
 let press = null
 /** Two fingers: their distance and the span when they came down */
 let pinch = null
+/** Whether a finger's long press on the wave opened something, until that finger lifts */
+let held = false
 
 /** When the place pinned for a Comment was last let go, on the clock of pointer events */
 let placeLetGoAt = -1
@@ -629,7 +676,7 @@ function spread() {
  */
 function onDown(event) {
 	event.stopPropagation()
-	// No mouse events after a finger: their mousedown would take the focus from the Comment field a long press opens
+	// No mouse events after a finger: their mousedown would take the focus from the Comment field a long press opens (iOS Safari sends them all the same, see onTouchEnd)
 	if (event.pointerType !== 'mouse') {
 		event.preventDefault()
 	}
@@ -651,7 +698,9 @@ function onDown(event) {
 		pinch = { distance: spread(), span: shown.value }
 		return
 	}
-	press = { id: event.pointerId, x: event.clientX, y: event.clientY, from: onScreen(), moved: false, long: false, strip: inStrip(event), down: event.timeStamp }
+	// An open menu closes after this, at the touchend or the click: the tap that closes it does only that (#267)
+	const closes = document.querySelector('.v-popper__popper--shown') !== null
+	press = { id: event.pointerId, x: event.clientX, y: event.clientY, from: onScreen(), moved: false, long: false, strip: inStrip(event), down: event.timeStamp, closes, card: cardAtPress }
 	// A finger or a pen resting on a circle opens its card, as a tap does; elsewhere, where one may comment, the Comment field for that place
 	if (event.pointerType !== 'mouse') {
 		const at = press
@@ -659,14 +708,30 @@ function onDown(event) {
 			const circle = hit(at.x, at.y, event.pointerType)
 			if (circle || props.canComment) {
 				at.long = true
+				held = true
 			}
 			if (circle) {
-				openCircle(circle, at.x - left)
+				openCircle(circle)
 			} else if (props.canComment) {
 				emit('comment', frameAtX(at.x - left))
 			}
 		}, HOLD_MS)
 	}
+}
+
+/**
+ * iOS Safari sends a finger's mouse events after it lifts, despite the
+ * pointerdown's preventDefault; after a long press their mousedown takes the
+ * focus from the field it opened, and the keyboard and the Comment list
+ * flash. Only cancelling the touchend keeps them away.
+ *
+ * @param {TouchEvent} event - a finger lifts from the stage or something on it
+ */
+function onTouchEnd(event) {
+	if (held && event.target === canvas.value) {
+		event.preventDefault()
+	}
+	held = false
 }
 
 /**
@@ -746,6 +811,7 @@ function onMove(event) {
 	// Moving past the slop either way is no resting finger
 	if (Math.hypot(dx, event.clientY - press.y) > TAP_SLOP) {
 		clearTimeout(press.timer)
+		press.slipped = true
 	}
 	if (!press.moved && !press.long && Math.abs(dx) > TAP_SLOP) {
 		press.moved = true
@@ -799,8 +865,9 @@ let lastTapAt = null
 /**
  * A click or a tap: on a circle it opens the Comment's card. A mouse click
  * in the strip, and anywhere on lanes, seeks, playback going on as it was,
- * and closes an open card. Elsewhere nothing seeks: with a card open it only
- * closes it, else a double tap or a double click skips (story 104)
+ * and closes an open card. Elsewhere nothing seeks: with a card or a menu open
+ * it only closes it, else a double tap or a double click skips (story 104) and a
+ * single one plays or pauses once no second one has come
  *
  * @param {PointerEvent} event - the pointer lifts where it came down
  */
@@ -808,7 +875,7 @@ function tap(event) {
 	const circle = hit(event.clientX, event.clientY, event.pointerType)
 	const { action, side } = waveTap({
 		circle: !!circle,
-		card: !!card.value,
+		card: !!card.value || press.card || press.closes,
 		seeks: event.pointerType === 'mouse' && (!!props.lanes || (press.strip && inStrip(event))),
 		// An empty field is let go by the touch or click itself; one with text stays, and its tap counts
 		field: placeLetGoAt >= press.down,
@@ -817,8 +884,18 @@ function tap(event) {
 		width: size.width,
 	})
 	lastTapAt = action === 'first' ? event.timeStamp : null
+	clearTimeout(toggleTimer)
+	// Not for a press that wandered, nor while a finger or two that came since are still down
+	if (action === 'first' && !press.slipped) {
+		toggleTimer = setTimeout(() => {
+			if (!press && !pinch) {
+				toggledTo = !props.playing
+				emit('toggle')
+			}
+		}, DOUBLE_TAP_MS)
+	}
 	if (action === 'open') {
-		openCircle(circle, xOf(event))
+		openCircle(circle)
 	} else if (action === 'close') {
 		card.value = null
 	} else if (action === 'seek') {
@@ -854,18 +931,17 @@ function onHover(event) {
  * until its Comments stand apart; where even the closest zoom leaves them
  * together, it opens the card on the first, to step through them there.
  *
- * @param {{comment?: object, cluster?: object[]}} circle - the circle hit
- * @param {number} x - where it was hit, from the stage's left edge
+ * @param {{comment?: object, cluster?: object[], x: number}} circle - the circle hit
  */
-function openCircle(circle, x) {
+function openCircle(circle) {
 	if (circle.comment) {
-		open(circle.comment, x, null)
+		open(circle.comment, circle.x, null)
 		return
 	}
 	const { cluster } = circle
 	const parted = spreadSpan(cluster, fpsValue(props.fps), size.width, duration.value)
 	if (parted === null) {
-		open(cluster[0], x, cluster)
+		open(cluster[0], circle.x, cluster)
 		return
 	}
 	zoom(parted)
@@ -873,10 +949,10 @@ function openCircle(circle, x) {
 }
 
 /**
- * Opens a Comment's card at its circle, and selects it in the list too; the circle does not seek
+ * Opens a Comment's card over its circle, clear of the playhead, and selects it in the list too; the circle does not seek
  *
  * @param {object} comment - the Comment
- * @param {number} x - where it was hit, from the stage's left edge
+ * @param {number} x - its circle's centre, from the start of the piece
  * @param {?object[]} siblings - the Comments of its place to step through, where no zoom parts them
  */
 function open(comment, x, siblings) {
@@ -884,7 +960,13 @@ function open(comment, x, siblings) {
 	if (props.composing) {
 		emit('closeComposer')
 	}
-	card.value = { id: comment.id, left: Math.min(size.width - CARD_HALF - 8, Math.max(CARD_HALF + 8, x)), siblings }
+	const box = host.value.getBoundingClientRect()
+	const at = onScreen()
+	card.value = {
+		id: comment.id,
+		at: { x: box.left + x - offsetAt(at), y: box.top + size.height - BOTTOM / 2 - CIRCLE / 2, line: box.left + placeAt(at).head / ratio },
+		siblings,
+	}
 	store.selected = comment.id
 }
 
@@ -902,6 +984,14 @@ function show(comment) {
 function goTo(comment) {
 	card.value = null
 	emit('jump', comment)
+}
+
+/**
+ * @param {object} comment - the Comment of the card, to answer in the list
+ */
+function reply(comment) {
+	card.value = null
+	emit('reply', comment)
 }
 
 /**
@@ -961,6 +1051,7 @@ function label(step) {
 		@pointerup="onUp($event); onHover($event)"
 		@pointercancel="onUp"
 		@pointerleave="onHover"
+		@touchend="onTouchEnd"
 		@wheel="onWheel"
 		@contextmenu.prevent>
 		<canvas ref="canvas" class="deliver-wave__canvas" aria-hidden="true" />
@@ -997,17 +1088,17 @@ function label(step) {
 		</button>
 		<!-- Toasts of the field at the Waveform, in the stage's top corner: clear of the transport buttons and of a sheet -->
 		<div id="deliver-wave-toasts" class="deliver-wave__toasts" @pointerdown.stop />
-		<!-- The Comment at its circle, with its Replies and a field to answer; on a phone a sheet from below -->
-		<WaveformCard
+		<!-- The Comment at its circle, small, its Reply in the list (#273) -->
+		<CommentCard
 			v-if="opened"
 			:comment="opened"
-			:clock="clock"
-			:left="isMobile ? null : card.left"
 			:siblings="card.siblings"
-			:inside="[host]"
+			:clock="clock"
+			:at="card.at"
 			@close="card = null"
+			@show="show"
 			@jump="goTo"
-			@show="show" />
+			@reply="reply" />
 		<!-- The field at the Waveform, while the Comment list is out of sight (N12) -->
 		<WaveformCard
 			v-else-if="composing && pending"

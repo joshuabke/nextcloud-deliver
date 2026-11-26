@@ -34,11 +34,12 @@ export function tapSide(x, width) {
 
 /**
  * What a tap or a mouse click on the scrolling Waveform does. A circle opens; where it seeks (a mouse in the strip
- * under the wave or on Compare's lanes), it seeks every time, an open card closing too. Elsewhere it never seeks: an open card
- * or an empty Comment field it just closed is all it closes, and one that follows a plain one within DOUBLE_TAP_MS skips to the side it hit (0 in the middle).
+ * under the wave or on Compare's lanes), it seeks every time, an open card closing too. Elsewhere it never seeks: an open card,
+ * a menu or an empty Comment field it just closed is all it closes, one that follows a plain one within DOUBLE_TAP_MS skips to
+ * the side it hit (0 in the middle), and a plain one that no second one follows plays or pauses.
  *
  * @param {{circle: boolean, card: boolean, seeks?: boolean, field?: boolean, since: number|null, x: number, width: number}} tap - what it hit, an open card, whether it seeks there, ms since the last plain tap (null if none), where
- * @return {{action: 'open'|'close'|'seek'|'skip'|'first', side: number}} 'first' waits for a second tap
+ * @return {{action: 'open'|'close'|'seek'|'skip'|'first', side: number}} 'first' waits for a second tap, and plays or pauses without one
  */
 export function waveTap({ circle, card, seeks = false, field = false, since, x, width }) {
 	if (circle) {

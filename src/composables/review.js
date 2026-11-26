@@ -1,7 +1,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { derivedPending, isStill } from '../lib/media.js'
 import { useCommentsStore } from '../store/comments.js'
-import { sheet } from './panel.js'
+import { landscape, sheet } from './panel.js'
 
 /** How long to wait before asking again while derived media is being made */
 export const DERIVED_RECHECK = 10000
@@ -175,6 +175,23 @@ export function useReview({ version, projectMode, projectFps, refresh, collapsed
 	}
 
 	/**
+	 * Reply on a circle's card: the Comment list comes out at that Comment, its
+	 * Reply field open and focused; on a phone the list comes up as far as it
+	 * shows it, held sideways it opens beside the picture (#273)
+	 *
+	 * @param {{id: number}} comment - the Comment to answer
+	 */
+	function reply(comment) {
+		openPanel?.()
+		sheet.aside.value = true
+		if (!landscape.value) {
+			sheet.level.value = Math.max(1, sheet.level.value)
+		}
+		store.replyTo = comment.id
+		nextTick(() => panel.value?.reveal(comment.id))
+	}
+
+	/**
 	 * Entering the Comment field stops playback, audio and video, as C does,
 	 * and pins the Frame of that moment (story 28). Where C, a long press, a
 	 * Range or typing already holds a place, as when the app itself focuses
@@ -288,5 +305,5 @@ export function useReview({ version, projectMode, projectFps, refresh, collapsed
 		store.draft = { body: '', files: [] }
 	})
 
-	return { player, panel, inline, composing, startComment, closeInline, mode, clock, anchor, pinned, pin, hold, release, letGo, jump, posted, drawing, draft, draw, range, markRange, clearRange }
+	return { player, panel, inline, composing, startComment, closeInline, mode, clock, anchor, pinned, pin, hold, release, letGo, jump, reply, posted, drawing, draft, draw, range, markRange, clearRange }
 }
