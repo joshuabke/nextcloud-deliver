@@ -50,6 +50,9 @@ const props = defineProps({
 	commentsB: { type: Array, default: () => [] },
 })
 
+/** Someone switched the sound, by a key, Tab, a half of the switch or a lane's name; a pass of Alternate A/B is no one's switch */
+const emit = defineEmits(['listen'])
+
 const isMobile = useIsMobile()
 const locale = getLanguage()
 const root = ref(null)
@@ -148,6 +151,7 @@ const heardIndex = () => audio.value === 'a' ? 0 : 1
  */
 function listen(side) {
 	audio.value = side
+	emit('listen', side)
 	startMix(elements(), heardIndex)
 }
 
@@ -988,6 +992,8 @@ onBeforeUnmount(() => {
 .deliver-compare__window {
 	position: absolute;
 	inset-block: 0;
+	/* Its borders inside: across the whole piece it ran 2 px past the bar, over the Comments beside it */
+	box-sizing: border-box;
 	min-width: 2px;
 	border-inline: 1px solid rgba(255, 255, 255, 0.35);
 	background: rgba(255, 255, 255, 0.08);

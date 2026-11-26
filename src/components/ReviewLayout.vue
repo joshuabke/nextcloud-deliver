@@ -348,7 +348,7 @@ body.deliver-review footer {
 	}
 }
 
-/* Pulled up: of the player only its timeline and controls stay, the picture plays on unseen */
+/* Pulled up: of the player only its timeline and controls stay (in Compare with its A/B switch), the picture plays on unseen */
 .deliver-layout--upright.deliver-layout--up .deliver-layout__main {
 	flex: none;
 }
@@ -380,6 +380,16 @@ body.deliver-review footer {
 .deliver-layout--up :deep(.deliver-still__stage) {
 	flex: 0 0 0;
 	min-height: 0;
+}
+
+/* Compare's pictures and Waveforms too: they kept their least height, so the list stopped under them, lower with the Waveforms than halfway.
+	Specific enough to win over Compare's own heights (with the Waveforms, and the lanes of two pieces of audio on a phone) */
+.deliver-layout--upright.deliver-layout--up :deep(.deliver-compare .deliver-compare__stage),
+.deliver-layout--upright.deliver-layout--up :deep(.deliver-compare .deliver-compare__lanes) {
+	flex: 0 0 0;
+	min-height: 0;
+	overflow: hidden;
+	border: none;
 }
 
 /* Writing: the list steps aside, so the picture and the field both stay above the keyboard */

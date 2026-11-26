@@ -3080,6 +3080,81 @@ test.describe('Comparing sound', () => {
 		await expect(page.getByRole('radio', { name: now })).toHaveAttribute('aria-checked', 'true')
 	})
 
+	test('the Comments shown follow the side someone switches the sound to, a tab picked by hand holds until the next switch, and an alternating loop leaves the list alone', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const made = []
+		// Only the newest Version takes Comments: V1's list stays empty
+		for (const [version, body] of [[mix[0], 'Heard on V2']]) {
+			const commented = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${version.id}/comments?format=json`, { data: { inFrame: 1, body } })
+			expect(commented.status(), await commented.text()).toBe(201)
+			made.push((await commented.json()).ocs.data.id)
+		}
+		try {
+			for (const pair of [cut, mix]) {
+				await page.goto(`/apps/deliver/compare/${pair[1].id}/${pair[0].id}`)
+				await expect(page.locator('.deliver-compare video').first()).toHaveJSProperty('readyState', 4)
+				// The tab, and on the mix, whose Comments the list holds
+				const shows = async (number) => {
+					await expect(page.getByRole('radio', { name: `Comments on V${number}` })).toHaveAttribute('aria-checked', 'true')
+					if (pair === mix) {
+						await expect(page.locator('.deliver-layout__panel')).toContainText(number === 2 ? 'Heard on V2' : 'No Comments yet.')
+					}
+				}
+				await shows(1)
+				await page.locator('.deliver-layout__bar h2').click()
+				await page.keyboard.press('2')
+				await shows(2)
+				// The halves of the A/B switch
+				await page.getByRole('radio', { name: /^V1/ }).click()
+				await shows(1)
+				// The other side's Comments by hand, while V1 is heard
+				await page.getByRole('radio', { name: 'Comments on V2' }).click()
+				await shows(2)
+				await expect(page.getByRole('radio', { name: /^V1/ })).toHaveAttribute('aria-checked', 'true')
+				await page.locator('.deliver-layout__bar h2').click()
+				await page.keyboard.press('2')
+				await page.keyboard.press('1')
+				await shows(1)
+			}
+			// Tab, after a click into the player, and a lane's name
+			await page.locator('.deliver-compare__lanes canvas').click()
+			await page.keyboard.press('Tab')
+			await expect(page.getByRole('radio', { name: 'Comments on V2' })).toHaveAttribute('aria-checked', 'true')
+			await page.locator('.deliver-wave__lane').first().click()
+			await expect(page.getByRole('radio', { name: 'Comments on V1' })).toHaveAttribute('aria-checked', 'true')
+
+			// Alternating, the passes switch the sound but not the list: V2's Comments, picked by hand, stay with the focus on one
+			const bar = await page.locator('.deliver-compare__timeline').boundingBox()
+			const at = (share) => page.mouse.click(bar.x + bar.width * share, bar.y + bar.height / 2)
+			await at(0.25)
+			await page.keyboard.press('i')
+			await at(0.3)
+			await page.keyboard.press('o')
+			await at(0.25)
+			await page.getByRole('button', { name: 'Alternate A/B' }).click()
+			await page.getByRole('radio', { name: 'Comments on V2' }).click()
+			const anchor = page.locator('.deliver-compare-view__anchor')
+			await anchor.focus()
+			await page.evaluate(() => {
+				window.passes = new Set()
+				const halves = document.querySelectorAll('.deliver-compare__sound')
+				new MutationObserver(() => window.passes.add(halves[0].getAttribute('aria-checked'))).observe(halves[0], { attributes: true })
+			})
+			await page.locator('.deliver-compare__controls button[aria-label="Play (Space)"]').evaluate((button) => button.click())
+			// A pass of each side
+			await expect.poll(() => page.evaluate(() => window.passes.size), { timeout: 15_000 }).toBe(2)
+			await page.locator('.deliver-compare__controls button[aria-label="Pause (Space)"]').evaluate((button) => button.click())
+			await expect(page.getByRole('radio', { name: 'Comments on V2' })).toHaveAttribute('aria-checked', 'true')
+			await expect(page.locator('.deliver-compare-view__list')).toHaveText(/Heard on V2/)
+			await expect(anchor).toBeFocused()
+		} finally {
+			for (const id of made) {
+				await api.delete(`/ocs/v2.php/apps/deliver/api/v1/comments/${id}?format=json`)
+			}
+			await api.dispose()
+		}
+	})
+
 	test('a video Compare shows both Waveforms under the pictures when asked, and the pictures stay', async () => {
 		await page.goto(`/apps/deliver/compare/${cut[1].id}/${cut[0].id}`)
 		const videos = page.locator('.deliver-compare video')
@@ -3098,6 +3173,84 @@ test.describe('Comparing sound', () => {
 		await page.getByRole('radio', { name: 'Wipe' }).click()
 		await expect(page.locator('.deliver-compare__handle')).toBeVisible()
 		await expect(page.locator('.deliver-compare__lanes canvas')).toBeVisible()
+	})
+
+	test('on a phone the Comment sheet pulled up takes the place of the pictures and Waveforms, and nothing of the player lies in it', async () => {
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const page = await phone.newPage()
+		const errors = []
+		page.on('pageerror', (error) => errors.push(error.message))
+		await login(page)
+		await page.goto(`/apps/deliver/compare/${cut[1].id}/${cut[0].id}`)
+		await expect(page.locator('.deliver-compare video').first()).toHaveJSProperty('readyState', 4)
+		await page.getByRole('button', { name: 'Playback settings' }).tap()
+		await page.getByRole('menuitemcheckbox', { name: 'Waveforms' }).tap()
+		await page.keyboard.press('Escape')
+		await expect(page.locator('.deliver-compare__lanes canvas')).toBeVisible()
+		const sheet = page.locator('.deliver-layout__panel')
+		const grabber = page.locator('.deliver-layout__grabber')
+		// Whatever of the player lies in the sheet's box, and whether a finger there reaches it
+		const inSheet = () => page.evaluate(() => {
+			const box = document.querySelector('.deliver-layout__panel').getBoundingClientRect()
+			const found = []
+			for (const element of document.querySelectorAll('.deliver-compare *')) {
+				const each = element.getBoundingClientRect()
+				if (each.width && each.height && each.bottom > box.top + 0.5 && each.top < box.bottom && each.right > box.left && each.left < box.right) {
+					found.push(String(element.className?.baseVal ?? element.className))
+				}
+			}
+			for (let y = box.top + 2; y < box.bottom; y += 8) {
+				for (let x = box.left + 2; x < box.right; x += 8) {
+					if (document.elementFromPoint(x, y)?.closest('.deliver-compare')) {
+						found.push(`reached at ${x},${y}`)
+					}
+				}
+			}
+			return found
+		})
+		// The heights of the pictures and the Waveforms
+		const folded = () => page.evaluate(() => ['.deliver-compare__stage', '.deliver-compare__lanes'].map((each) => document.querySelector(each).getBoundingClientRect().height))
+		await grabber.tap()
+		for (const width of [375, 390, 430]) {
+			await page.setViewportSize({ width, height: PHONE.viewport.height })
+			await expect(page.locator('.deliver-layout--middle')).toHaveCount(1)
+			const halfway = (await sheet.boundingBox()).y
+			expect(await inSheet()).toEqual([])
+			await grabber.tap()
+			await expect(page.locator('.deliver-layout--up')).toHaveCount(1)
+			// Up, the list stands right under the A/B switch and the transport, well above its half height, as in the Review view
+			const controls = await page.locator('.deliver-compare__controls').boundingBox()
+			const top = (await sheet.boundingBox()).y
+			expect(top).toBeLessThan(halfway - 100)
+			expect(top).toBeCloseTo(controls.y + controls.height, 0)
+			expect(await folded()).toEqual([0, 0])
+			await expect(page.getByRole('radio', { name: /^V2/ })).toBeVisible()
+			expect(await inSheet()).toEqual([])
+			await grabber.tap()
+		}
+		// Sideways the list opens beside the pictures, clear of them too
+		await page.setViewportSize({ width: 844, height: 390 })
+		await page.getByRole('button', { name: 'Show Comments' }).tap()
+		await expect(sheet).toBeVisible()
+		expect(await inSheet()).toEqual([])
+
+		// Two pieces of audio: their lanes, the view itself, fold away as the Review view's Waveform does
+		await page.setViewportSize({ width: 390, height: PHONE.viewport.height })
+		await page.goto(`/apps/deliver/compare/${mix[1].id}/${mix[0].id}`)
+		await expect(page.locator('.deliver-compare video').first()).toHaveJSProperty('readyState', 4)
+		await grabber.tap()
+		await expect(page.locator('.deliver-layout--middle')).toHaveCount(1)
+		const halfway = (await sheet.boundingBox()).y
+		await grabber.tap()
+		await expect(page.locator('.deliver-layout--up')).toHaveCount(1)
+		expect(await folded()).toEqual([0, 0])
+		const controls = await page.locator('.deliver-compare__controls').boundingBox()
+		expect((await sheet.boundingBox()).y).toBeCloseTo(controls.y + controls.height, 0)
+		expect((await sheet.boundingBox()).y).toBeLessThan(halfway - 100)
+		expect(await inSheet()).toEqual([])
+		// The Waveforms folded away to nothing and back draw on without an error
+		expect(errors).toEqual([])
+		await phone.close()
 	})
 
 	test('on a phone held sideways, pictures, both lanes and the transport fit without scrolling', async () => {
@@ -3180,6 +3333,82 @@ test.describe('Skipping ten seconds', () => {
 		await page.waitForTimeout(300)
 		expect(await time()).toBeLessThan(beforeBack - 9)
 		expect(await video.evaluate((element) => element.paused)).toBe(false)
+	})
+
+	test('a finger held on the bar opens a zoomed section above it and seeks through it; a quick drag stays the bar\'s (#273)', async () => {
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const touchPage = await phone.newPage()
+		await login(touchPage)
+		await touchPage.goto(`/apps/deliver/versions/${versionId}`)
+		const video = touchPage.locator('video.deliver-player__video')
+		await expect.poll(() => video.evaluate((element) => element.duration)).toBeCloseTo(30, 0)
+		const cdp = await phone.newCDPSession(touchPage)
+		const bar = await touchPage.locator('.deliver-player__timeline').boundingBox()
+		const y = bar.y + bar.height / 2
+		const touch = (type, x) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] })
+		const frame = () => video.evaluate((element) => Math.floor(element.currentTime * 25 + 0.001))
+		const paused = () => video.evaluate((element) => element.paused)
+		const loupe = touchPage.locator('.deliver-player__loupe')
+		const x = bar.x + bar.width / 2
+		const onBar = (px) => Math.floor((px - bar.x) / bar.width * 750)
+
+		// A quick drag goes through the whole piece, as ever
+		await touch('touchStart', x)
+		await touch('touchMove', x + bar.width * 0.2)
+		await expect.poll(frame).toBe(onBar(x + bar.width * 0.2))
+		await touch('touchEnd')
+		await expect(loupe).toHaveCount(0)
+
+		// Held still, a tenth of the piece opens above the bar, as wide as it, the playhead where the finger came down
+		await touch('touchStart', x)
+		await expect(loupe).toBeVisible()
+		const at = onBar(x)
+		expect(await frame()).toBe(at)
+		const box = await loupe.boundingBox()
+		expect(box.y + box.height).toBeLessThanOrEqual(bar.y)
+		expect(box.x).toBeGreaterThanOrEqual(0)
+		expect(box.x + box.width).toBeLessThanOrEqual(390)
+		// Opaque, so nothing under it shows through
+		await expect(loupe).toHaveCSS('background-color', 'rgb(0, 0, 0)')
+		// Its ends are as far as the finger reaches, beyond the bar's ends too
+		const ends = loupe.locator('.deliver-player__loupe-ends span')
+		await expect(ends).toHaveCount(2)
+		for (const [end, px] of [[1, bar.x + bar.width + 20], [0, bar.x - 20]]) {
+			await touch('touchMove', px)
+			await expect(touchPage.locator('.deliver-player__hover-time')).toHaveText(await ends.nth(end).textContent())
+		}
+		// The finger seeks through those three seconds, the Frame over it
+		await touch('touchMove', x + bar.width * 0.4)
+		const there = at + Math.round(0.4 * 75)
+		await expect.poll(frame).toBe(there)
+		await expect(touchPage.locator('.deliver-player__hover-time')).toHaveText('00:00:16:05')
+		// Letting go keeps the place and opens nothing
+		await touch('touchEnd')
+		await expect(loupe).toHaveCount(0)
+		await touchPage.waitForTimeout(300)
+		expect(await frame()).toBe(there)
+		expect(await paused()).toBe(true)
+		await expect(touchPage.locator('[role="dialog"], .deliver-comment--selected')).toHaveCount(0)
+
+		// A second finger on the bar starts no hold of its own: a drag goes on through the whole piece
+		const fingers = (type, one, two) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: two === undefined ? [{ x: one, y, id: 0 }] : [{ x: one, y, id: 0 }, { x: two, y, id: 1 }] })
+		await fingers('touchStart', x)
+		await touchPage.waitForTimeout(60)
+		await fingers('touchStart', x, x + 60)
+		await fingers('touchMove', x + 50, x + 60)
+		await touchPage.waitForTimeout(700)
+		await expect(loupe).toHaveCount(0)
+		await touch('touchEnd')
+
+		// Playing, a hold holds playback as a drag does and lets it go on
+		await touchPage.getByRole('button', { name: 'Play', exact: true }).tap()
+		await expect.poll(paused).toBe(false)
+		await touch('touchStart', x)
+		await expect(loupe).toBeVisible()
+		expect(await paused()).toBe(true)
+		await touch('touchEnd')
+		await expect.poll(paused).toBe(false)
+		await phone.close()
 	})
 })
 
