@@ -1007,7 +1007,7 @@ test.describe('Review view', () => {
 		await api.dispose()
 	})
 
-	test('close Comments share a circle with their count, and the bar grows under a mouse and takes a finger up to its edges', async ({ playwright }) => {
+	test('close Comments share a circle with their count, reached by Tab, and the bar grows under a mouse and takes a finger up to its edges', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
 		const newest = Math.max(...project.ocs.data.assets[0].versions.map((each) => each.id))
@@ -1020,12 +1020,34 @@ test.describe('Review view', () => {
 		await expect(page.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
 		const count = page.locator('.deliver-player__circle').filter({ hasText: '3' })
 		await expect(count).toHaveCount(1)
-		// Selected in the list, its circle is ringed; nothing of it is for the keyboard or a screen reader, as the list is
+		// Selected in the list, its circle is ringed
 		await page.locator('.deliver-comment').filter({ hasText: 'at 60' }).locator('.deliver-comment__anchor').click()
 		await expect(page.locator('.deliver-player__circle--ringed')).toHaveCount(1)
 		await expect(count).not.toHaveClass(/--ringed/)
-		await expect(page.locator('.deliver-player__scrubber').locator('button, [tabindex], [role]')).toHaveCount(0)
-		await expect(page.locator('.deliver-player__circles')).toHaveAttribute('aria-hidden', 'true')
+		// Tab reaches each circle by its name; Enter opens its card, the count's with previous and next; Escape hands the focus back
+		const single = page.getByRole('button', { name: 'Comment by deliver-e2e at 00:00:02:10' })
+		await single.focus()
+		await page.keyboard.press('Tab')
+		await expect(page.getByRole('button', { name: '3 Comments at 00:00:03:10' })).toBeFocused()
+		await page.keyboard.press('Shift+Tab')
+		await expect(single).toBeFocused()
+		await page.keyboard.press('Enter')
+		const card = page.getByRole('dialog', { name: /^Comment #/ })
+		await expect(card).toContainText('at 60')
+		await expect(card).toBeFocused()
+		await page.keyboard.press('Escape')
+		await expect(card).toHaveCount(0)
+		await expect(single).toBeFocused()
+		await page.keyboard.press('Tab')
+		await page.keyboard.press('Enter')
+		await expect(card).toContainText('at 85')
+		await expect(card).toContainText('1 of 3')
+		await card.getByRole('button', { name: 'Next Comment' }).click()
+		await expect(card).toContainText('at 86')
+		await expect(card).toContainText('2 of 3')
+		await page.keyboard.press('Escape')
+		await expect(page.getByRole('button', { name: '3 Comments at 00:00:03:10' })).toBeFocused()
+		expect(await page.locator('video.deliver-player__video').evaluate((element) => Math.floor(element.currentTime * 25 + 0.001))).toBe(60)
 		// The bar grows under a mouse, on a narrow window too, not under a finger
 		await page.setViewportSize({ width: 900, height: 800 })
 		await page.locator('.deliver-player__timeline').hover()
@@ -1077,7 +1099,7 @@ test.describe('Review view', () => {
 		await api.dispose()
 	})
 
-	test('a press on a Comment\'s circle seeks and drags as anywhere on the bar, by mouse, finger and pen, and opens nothing', async ({ playwright }) => {
+	test('a tap on a Comment\'s circle on the bar opens its small card and seeks nowhere, a press beside it or one that moves seeks as anywhere, by mouse, finger and pen', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		const project = await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()
 		const newest = Math.max(...project.ocs.data.assets[0].versions.map((each) => each.id))
@@ -1128,27 +1150,43 @@ test.describe('Review view', () => {
 			const x = box.x + box.width / 2 - 6
 			const { down, move, up } = pointer(x, box.y + box.height / 2)
 			const at = (px) => Math.floor((px - bar.x) / bar.width * 100)
-			const opened = target.locator('[role="dialog"], .deliver-comment--selected')
+			const card = target.getByRole('dialog', { name: /^Comment #/ })
 
-			// Pressed it is there at once, under the pointer, not at the Comment; the playback state stays
+			// Tapped it opens its card over it, inside the window, and the player stays where it was
 			await down()
-			await expect.poll(frame).toBe(at(x))
 			await up()
-			await target.waitForTimeout(400)
-			expect(await frame()).toBe(at(x))
+			await expect(card).toContainText('look at me')
+			await expect(circle).toHaveClass(/--ringed/)
+			expect(await frame()).toBe(0)
 			expect(await paused()).toBe(true)
-			await expect(opened).toHaveCount(0)
-			await expect(circle).not.toHaveClass(/--ringed/)
-			// Twice in a row is twice a seek
+			const over = await card.boundingBox()
+			expect(over.y + over.height).toBeLessThanOrEqual(box.y)
+			expect(over.x).toBeGreaterThanOrEqual(0)
+			expect(over.x + over.width).toBeLessThanOrEqual(target.viewportSize().width)
+			expect(over.x).toBeLessThan(box.x + box.width / 2)
+			expect(over.x + over.width).toBeGreaterThan(box.x + box.width / 2)
+			// A press beside it, past its edge, closes the card and is there at once, under the pointer; the playback state stays
+			const beside = pointer(box.x - 4, box.y + box.height / 2)
+			await beside.down()
+			await expect(card).toHaveCount(0)
+			await expect.poll(frame).toBe(at(box.x - 4))
+			await beside.up()
+			await target.waitForTimeout(400)
+			expect(await frame()).toBe(at(box.x - 4))
+			expect(await paused()).toBe(true)
+			await expect(card).toHaveCount(0)
+			// Twice in a row on the circle opens it again, no seek
 			await down()
 			await up()
 			await down()
 			await up()
 			await target.waitForTimeout(400)
-			expect(await frame()).toBe(at(x))
-			await expect(opened).toHaveCount(0)
+			expect(await frame()).toBe(at(box.x - 4))
+			await expect(card).toBeVisible()
+			await target.keyboard.press('Escape')
+			await expect(card).toHaveCount(0)
 
-			// Playing, a click goes on playing; a drag holds playback and shows the Frame over the pointer
+			// Playing, a press on the circle that moves past the slop is a drag: it holds playback, shows the Frame over the pointer and opens nothing
 			await target.getByRole('button', { name: /^Play/ }).first().click()
 			await expect.poll(paused).toBe(false)
 			await down()
@@ -1161,11 +1199,14 @@ test.describe('Review view', () => {
 			await expect.poll(frame).toBe(at(x))
 			await up()
 			await expect.poll(paused).toBe(false)
-			await expect(opened).toHaveCount(0)
+			await expect(card).toHaveCount(0)
+			// A tap on it while playing opens it and goes on playing
 			await down()
 			await up()
+			await expect(card).toBeVisible()
 			await target.waitForTimeout(200)
 			expect(await paused()).toBe(false)
+			await target.getByRole('button', { name: /^Pause/ }).first().click()
 		}
 		// The mouse shows the Frame's time over a circle as beside it
 		const box = await page.locator('.deliver-player__circle').filter({ hasText: 'D' }).boundingBox()
@@ -1769,7 +1810,7 @@ test.describe('Audio review', () => {
 		await page.getByRole('button', { name: '1 min' }).click()
 	})
 
-	test('C comments on the wave, an empty field lets go of the place, and a circle opens a card that follows the list and keeps a Reply half written', async () => {
+	test('C comments on the wave, an empty field lets go of the place, and a circle opens a small card whose Reply answers in the list', async () => {
 		await page.goto(`/apps/deliver/versions/${versionId}`)
 		const canvas = page.locator('.deliver-wave canvas')
 		await expect(canvas).toBeVisible()
@@ -1852,24 +1893,35 @@ test.describe('Audio review', () => {
 		const card = page.getByRole('dialog', { name: /^Comment #/ })
 		await expect(card).toContainText('clicked here')
 		await expect(first).toHaveClass(/deliver-comment--selected/)
-		// It follows the list: another Comment picked there shows in it
+		// Small: who, where, the text, and Reply; no thread and no field. It covers neither its circle nor the playhead over it
+		await expect(card).toContainText('1:55.000')
+		await expect(card.locator('textarea, .deliver-comment')).toHaveCount(0)
+		const [over, stage] = await Promise.all([card.boundingBox(), canvas.boundingBox()])
+		expect(over.width).toBeLessThanOrEqual(264)
+		expect(over.height).toBeLessThan(120)
+		expect(over.y + over.height).toBeLessThanOrEqual(stage.y + stage.height - 32)
+		expect(over.x >= stage.x + stage.width / 2 + 1 || over.x + over.width <= stage.x + stage.width / 2 - 1).toBe(true)
+		// A click anywhere else closes it, in the list too
 		await second.locator('.deliver-comment__body').click()
-		await expect(card).toContainText('while it played')
-		await first.locator('.deliver-comment__body').click()
-		await expect(card).toContainText('clicked here')
-		// Escape leaves a Reply half written alone; a click on the bar closes the card, and the Reply waits for it
-		await card.getByPlaceholder('Write a Reply').fill('half')
-		await page.keyboard.press('Escape')
-		await expect(card).toBeVisible()
-		await page.locator('.deliver-player__timeline').click()
 		await expect(card).toHaveCount(0)
 		await openFirst()
-		await expect(card.getByPlaceholder('Write a Reply')).toHaveValue('half')
-		await card.getByPlaceholder('Write a Reply').fill('answered on the wave')
+		await page.locator('.deliver-player__timeline').click({ position: { x: 4, y: 8 } })
+		await expect(card).toHaveCount(0)
+		// A Reply half written in the list waits for the next Reply on the card, which opens the list's field at that Comment
+		await first.locator('.deliver-comment__link', { hasText: 'Reply' }).click()
+		await first.getByPlaceholder('Write a Reply').fill('half')
+		await first.getByRole('button', { name: 'Cancel' }).click()
+		await openFirst()
 		await card.getByRole('button', { name: 'Reply', exact: true }).click()
-		await expect(first.locator('.deliver-comment--reply')).toContainText('answered on the wave')
-		await expect(card.locator('.deliver-comment--reply')).toContainText('answered on the wave')
-		// With nothing half written, Escape closes it wherever the focus is
+		await expect(card).toHaveCount(0)
+		await expect(first.getByPlaceholder('Write a Reply')).toBeFocused()
+		await expect(first.getByPlaceholder('Write a Reply')).toHaveValue('half')
+		await first.getByPlaceholder('Write a Reply').fill('answered from the wave')
+		await first.getByRole('button', { name: 'Reply', exact: true }).click()
+		await expect(first.locator('.deliver-comment--reply')).toContainText('answered from the wave')
+		// Its Replies are counted on the card; Escape closes it wherever the focus is
+		await openFirst()
+		await expect(card).toContainText('1 reply')
 		await page.locator('.deliver-review__title').click()
 		await page.keyboard.press('Escape')
 		await expect(card).toHaveCount(0)

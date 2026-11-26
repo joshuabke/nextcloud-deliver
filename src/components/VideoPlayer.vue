@@ -465,15 +465,21 @@ function release() {
 let pressedAt = null
 /** A press that came down on a circle, until it moves past the slop: lifted there it opens the circle's card instead of seeking */
 let circlePress = null
-/** The circle a pointer came down on, handed to the bar's press */
-let circleDown = null
 
 /**
- * @param {object} mark - a circle on the bar
- * @param {PointerEvent} event - a pointer comes down on it, on its way to the bar
+ * By where the pointer is: the circles take no pointer, so that a touch near one stays the bar's, and beside a circle
+ * the bar seeks to the Frame under the finger
+ *
+ * @param {PointerEvent} event - a pointer comes down on the bar
+ * @return {{mark: object, element: Element}|null} the circle it came down in
  */
-function pressCircle(mark, event) {
-	circleDown = { mark, element: event.currentTarget }
+function circleUnder(event) {
+	const elements = [...event.currentTarget.querySelectorAll('.deliver-player__circles > .deliver-player__circle')]
+	const index = elements.findIndex((element) => {
+		const box = element.getBoundingClientRect()
+		return Math.hypot(event.clientX - box.left - box.width / 2, event.clientY - box.top - box.height / 2) <= box.width / 2
+	})
+	return index < 0 ? null : { mark: marks.value[index], element: elements[index] }
 }
 
 const live = liveSeek((target) => {
@@ -498,13 +504,12 @@ function keepTouch() {}
  * @param {PointerEvent} event - a pointer comes down on the bar
  */
 function onDragStart(event) {
-	const circle = circleDown
-	circleDown = null
 	if (!durationFrames.value || (event.pointerType === 'mouse' && event.button !== 0)) {
 		return
 	}
 	dragging.value = true
 	pressedAt = frameAt(event)
+	const circle = circleUnder(event)
 	circlePress = circle && { ...circle, x: event.clientX, y: event.clientY }
 	event.currentTarget.setPointerCapture(event.pointerId)
 	follow(event)
@@ -1037,7 +1042,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 						:style="{ left: leftOf(each) + '%', width: widthOf(each) + '%' }" />
 				</div>
 				<!-- A circle per Comment, centred on its Frame, as on the Waveform; close ones are one with their count.
-					A tap or Enter opens its card; a press that moves drags as anywhere on the bar -->
+					A tap or Enter opens its card; a press that moves drags as anywhere on the bar. A pointer goes to the bar -->
 				<div class="deliver-player__circles">
 					<button
 						v-for="mark in marks"
@@ -1047,7 +1052,6 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 						:class="{ 'deliver-player__circle--resolved': mark.pale, 'deliver-player__circle--ringed': mark.ringed }"
 						:style="{ left: mark.x + 'px', '--deliver-circle-fill': mark.fill, '--deliver-circle-line': mark.line }"
 						:aria-label="markName(mark)"
-						@pointerdown="pressCircle(mark, $event)"
 						@click="$event.detail === 0 && openMark(mark, $event.currentTarget)">
 						{{ mark.text }}
 					</button>
@@ -1594,8 +1598,9 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 
 /*
  * A circle as the Waveform draws it (circleLook, drawCircles), but the bar shows through. 20 px: it stands only 2 px over a
- * desktop's bar, short of the buttons below and the picture's captions; two are 24 px apart at least. The resets keep
- * Nextcloud's button style away.
+ * desktop's bar, short of the buttons below and the picture's captions; two are 24 px apart at least. Buttons for the keyboard
+ * only, and the resets keep Nextcloud's button style away: a pointer goes to the bar, which finds the circle by its place
+ * (circleUnder), as a target of its own beside the bar would take a finger's touch from the bar and give it to the picture.
  */
 .deliver-player__circles {
 	position: absolute;
@@ -1624,12 +1629,6 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	font: bold 9px/0 sans-serif;
 	text-shadow: 0 0 2px #000;
 	transform: translate(-50%, -50%);
-	cursor: pointer;
-}
-
-/* The bar's circles take a press; the zoomed section's do not */
-.deliver-player__circles > .deliver-player__circle {
-	pointer-events: auto;
 }
 
 .deliver-player__circle:focus-visible {
