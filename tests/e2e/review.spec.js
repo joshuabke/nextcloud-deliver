@@ -2166,7 +2166,7 @@ test.describe('Audio review', () => {
 		await goTo(50)
 	})
 
-	test('a Comment half written stays with its Version: on the next Asset the field is empty and a keystroke stops the video', async () => {
+	test('a Comment half written stays with its Version: on the next Asset the field is empty and entering it stops the video', async () => {
 		await page.goto(`/apps/deliver/versions/${versionId}`)
 		await expect(page.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
 		await page.locator('#deliver-comment-body').fill('left behind')
@@ -2182,6 +2182,92 @@ test.describe('Audio review', () => {
 		await field.pressSequentially('x')
 		await expect.poll(() => video.evaluate((element) => element.paused)).toBe(true)
 		await field.fill('')
+	})
+
+	test('entering the Comment field stops audio and video at the Frame of that moment, by mouse, on a phone without a key and as a Reviewer, and typing or drawing keeps that Frame', async ({ playwright }) => {
+		await page.goto(`/apps/deliver/versions/${versionId}`)
+		const audio = page.locator('video.deliver-player__video')
+		await expect(audio).toHaveJSProperty('readyState', 4)
+		const field = page.locator('#deliver-comment-body')
+		const anchor = page.locator('.deliver-comments__anchor')
+		const time = () => audio.evaluate((element) => element.currentTime)
+		const paused = () => audio.evaluate((element) => element.paused)
+		await page.getByRole('button', { name: 'Play (Space)' }).click()
+		await expect.poll(time).toBeGreaterThan(1)
+		await field.click()
+		await expect.poll(paused).toBe(true)
+		// The Frame where the element stopped, to the millisecond, give or take the last one
+		const stopped = Math.round(await time() * 1000)
+		const clockOf = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms % 60000 / 1000)).padStart(2, '0')}.${String(ms % 1000).padStart(3, '0')}`
+		await expect(anchor).toHaveText(new RegExp(`^(${clockOf(stopped - 1)}|${clockOf(stopped)}|${clockOf(stopped + 1)})$`))
+		const at = await anchor.textContent()
+		// Played on with the field open, typing stops it again, and the Comment stays where the field was entered
+		await audio.evaluate((element) => element.play())
+		await expect.poll(time).toBeGreaterThan(stopped / 1000 + 0.3)
+		await field.pressSequentially('here')
+		await expect.poll(paused).toBe(true)
+		await expect(anchor).toHaveText(at)
+		await field.fill('')
+		await page.locator('.deliver-review__title').click()
+
+		// A Drawing keeps the Frame where the field was entered, its first stroke and a seek after it too
+		await page.goto(`/apps/deliver/versions/${clipVersionId}`)
+		const video = page.locator('video.deliver-player__video')
+		await expect(video).toHaveJSProperty('readyState', 4)
+		await video.evaluate((element) => {
+			element.currentTime = 1
+		})
+		await expect(page.locator('.deliver-player__timecode')).toContainText('00:00:01:00')
+		await field.click()
+		await expect(anchor).toHaveText(/00:00:01:00/)
+		await page.getByRole('button', { name: 'Draw on the picture' }).click()
+		const stage = await page.locator('.deliver-player__stage').boundingBox()
+		await page.mouse.move(stage.x + stage.width * 0.3, stage.y + stage.height * 0.3)
+		await page.mouse.down()
+		await page.mouse.move(stage.x + stage.width * 0.6, stage.y + stage.height * 0.5, { steps: 8 })
+		await page.mouse.up()
+		await expect(page.locator('.deliver-comments__drawn')).toHaveText('1 shape drawn')
+		const timeline = page.locator('.deliver-player__timeline')
+		const bar = await timeline.boundingBox()
+		await timeline.click({ position: { x: bar.width * 0.8, y: bar.height / 2 } })
+		await expect(page.locator('.deliver-player__timecode')).not.toContainText('00:00:01:00')
+		await expect(anchor).toHaveText(/00:00:01:00/)
+
+		// On a phone a tap into the field stops audio and video alike, with no key pressed
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const member = await phone.newPage()
+		await login(member)
+		const tapStops = async (where, path) => {
+			await where.goto(path)
+			const media = where.locator('video.deliver-player__video')
+			await expect(media).toHaveJSProperty('readyState', 4)
+			await where.getByRole('button', { name: 'Play', exact: true }).tap()
+			await expect.poll(() => media.evaluate((element) => element.currentTime)).toBeGreaterThan(0.5)
+			await where.locator('#deliver-comment-body').tap()
+			await expect(where.locator('#deliver-comment-body')).toBeFocused()
+			await expect.poll(() => media.evaluate((element) => element.paused)).toBe(true)
+			// Played on while the field keeps the focus, as a tap on the Waveform does, a tap into it stops it again
+			await media.evaluate((element) => element.play())
+			await expect.poll(() => media.evaluate((element) => element.paused)).toBe(false)
+			await where.locator('#deliver-comment-body').tap()
+			await expect.poll(() => media.evaluate((element) => element.paused)).toBe(true)
+		}
+		await tapStops(member, `/apps/deliver/versions/${versionId}`)
+		await tapStops(member, `/apps/deliver/versions/${clipVersionId}`)
+		await phone.close()
+
+		// A Reviewer's field does the same
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const link = (await (await api.post(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`)).json()).ocs.data
+		await api.dispose()
+		const guest = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const reviewer = await guest.newPage()
+		await reviewer.goto(`/apps/deliver/s/${link.token}/versions/${clipVersionId}`)
+		await reviewer.locator('#deliver-reviewer-name').fill('Pia')
+		await reviewer.getByRole('button', { name: 'Start reviewing' }).tap()
+		await expect(reviewer.locator('.deliver-comments__gate')).toHaveCount(0)
+		await tapStops(reviewer, `/apps/deliver/s/${link.token}/versions/${clipVersionId}`)
+		await guest.close()
 	})
 
 	test('by mouse a click on the wave does not seek and a double click skips ten seconds; the strip under it seeks and shows a dashed line first', async ({ playwright }) => {

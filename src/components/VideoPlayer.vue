@@ -745,7 +745,7 @@ function pause() {
 	stopReverse()
 	video.value?.pause()
 	playing.value = false
-	// timeupdate comes only a few times a second, so the Frame on screen is read now: C and typing pin it
+	// timeupdate comes only a few times a second, so the Frame on screen is read now: C, entering the Comment field and typing pin it
 	if (video.value) {
 		frame.value = timeToFrame(video.value.currentTime, fps.value)
 	}
