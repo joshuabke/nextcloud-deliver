@@ -2,7 +2,7 @@
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import WaveformCard from './WaveformCard.vue'
-import { HOLD_MS, TAP_SLOP, waveTap } from '../lib/gestures.js'
+import { DOUBLE_TAP_MS, HOLD_MS, TAP_SLOP, waveTap } from '../lib/gestures.js'
 import { avatarRgb } from '../lib/initials.js'
 import { t } from '../lib/l10n.js'
 import { fpsValue, timeToFrame } from '../lib/timecode.js'
@@ -50,9 +50,9 @@ const props = defineProps({
 
 /**
  * seek: a Frame to go to, keeping the playback state; hold and release: a drag holds playback and lets it go on;
- * skip: a double tap or, off the lanes, a double click, -1 back or 1 on; comment: a Frame to comment on; jump: a Comment to go to; closeComposer: the field at the Waveform is closed from here
+ * skip: a double tap or, off the lanes, a double click, -1 back or 1 on; toggle: a single tap or click on the wave, once no second one followed; comment: a Frame to comment on; jump: a Comment to go to; closeComposer: the field at the Waveform is closed from here
  */
-const emit = defineEmits(['seek', 'hold', 'release', 'comment', 'jump', 'closeComposer', 'pick', 'skip'])
+const emit = defineEmits(['seek', 'hold', 'release', 'comment', 'jump', 'closeComposer', 'pick', 'skip', 'toggle'])
 
 /** Room below the wave for the Comments' circles (none on lanes), in px: the strip where a mouse click seeks */
 const BOTTOM = props.lanes ? 8 : 40
@@ -92,6 +92,8 @@ let pixels = { width: 0, height: 0 }
 let ratio = 1
 let colors = { played: '#fff', rest: 'rgba(255, 255, 255, 0.3)' }
 let visible = true
+/** A single tap or click on the wave waits for a second one before it plays or pauses */
+let toggleTimer = null
 /** Set by the stage's own continuous seeks (the wheel): the wave follows them without a glide */
 let following = false
 /** Further than this from where playing would have taken it, in seconds, the playhead was sought */
@@ -576,6 +578,7 @@ onBeforeUnmount(() => {
 	resized.disconnect()
 	seen.disconnect()
 	cancelAnimationFrame(frameRequest)
+	clearTimeout(toggleTimer)
 })
 
 /** Where the field at the Waveform stands: at its place when it opened, kept on the stage */
@@ -650,7 +653,9 @@ function onDown(event) {
 		pinch = { distance: spread(), span: shown.value }
 		return
 	}
-	press = { id: event.pointerId, x: event.clientX, y: event.clientY, from: onScreen(), moved: false, long: false, strip: inStrip(event), down: event.timeStamp }
+	// An open menu closes after this, at the touchend or the click: the tap that closes it does only that (#267)
+	const closes = document.querySelector('.v-popper__popper--shown') !== null
+	press = { id: event.pointerId, x: event.clientX, y: event.clientY, from: onScreen(), moved: false, long: false, strip: inStrip(event), down: event.timeStamp, closes }
 	// A finger or a pen resting on a circle opens its card, as a tap does; elsewhere, where one may comment, the Comment field for that place
 	if (event.pointerType !== 'mouse') {
 		const at = press
@@ -798,8 +803,9 @@ let lastTapAt = null
 /**
  * A click or a tap: on a circle it opens the Comment's card. A mouse click
  * in the strip, and anywhere on lanes, seeks, playback going on as it was,
- * and closes an open card. Elsewhere nothing seeks: with a card open it only
- * closes it, else a double tap or a double click skips (story 104)
+ * and closes an open card. Elsewhere nothing seeks: with a card or a menu open
+ * it only closes it, else a double tap or a double click skips (story 104) and a
+ * single one plays or pauses once no second one has come
  *
  * @param {PointerEvent} event - the pointer lifts where it came down
  */
@@ -807,7 +813,7 @@ function tap(event) {
 	const circle = hit(event.clientX, event.clientY, event.pointerType)
 	const { action, side } = waveTap({
 		circle: !!circle,
-		card: !!card.value,
+		card: !!card.value || press.closes,
 		seeks: event.pointerType === 'mouse' && (!!props.lanes || (press.strip && inStrip(event))),
 		// An empty field is let go by the touch or click itself; one with text stays, and its tap counts
 		field: placeLetGoAt >= press.down,
@@ -816,6 +822,11 @@ function tap(event) {
 		width: size.width,
 	})
 	lastTapAt = action === 'first' ? event.timeStamp : null
+	clearTimeout(toggleTimer)
+	if (action === 'first') {
+		// Not while a drag or a pinch that came since holds playback
+		toggleTimer = setTimeout(() => !press?.moved && !pinch && emit('toggle'), DOUBLE_TAP_MS)
+	}
 	if (action === 'open') {
 		openCircle(circle, xOf(event))
 	} else if (action === 'close') {

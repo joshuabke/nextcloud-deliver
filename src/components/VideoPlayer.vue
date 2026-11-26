@@ -893,6 +893,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 				:composing="composing"
 				@seek="seekTo"
 				@skip="skipTap"
+				@toggle="playPause"
 				@hold="hold"
 				@release="release"
 				@comment="commentAt"
