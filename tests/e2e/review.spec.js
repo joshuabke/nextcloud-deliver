@@ -1880,7 +1880,12 @@ test.describe('Audio review', () => {
 		const closing = await audio.evaluate((element) => element.currentTime)
 		await canvas.dblclick({ position: { x: box.width * 0.95, y: box.height / 4 } })
 		await expect(card).toHaveCount(0)
-		expect(await audio.evaluate((element) => element.currentTime)).toBe(closing)
+		// Its second click is a click of its own: it plays, from where it stood
+		await expect.poll(() => audio.evaluate((element) => element.paused)).toBe(false)
+		const after = await audio.evaluate((element) => element.currentTime)
+		expect(after).toBeGreaterThanOrEqual(closing)
+		expect(after).toBeLessThan(closing + 5)
+		await audio.evaluate((element) => element.pause())
 	})
 
 	test('with the Comment list hidden, a Comment on audio is written at the Waveform and the list stays hidden', async () => {
@@ -2527,6 +2532,12 @@ test.describe('Audio review', () => {
 			await fingers('touchStart', [[at, high]])
 			await fingers('touchEnd', [])
 		}
+		// Both taps in one go in the page, so that a slow machine does not stretch them apart past DOUBLE_TAP_MS
+		const doubleTapAt = (at) => canvas.evaluate((element, [x, high]) => {
+			for (const type of ['pointerdown', 'pointerup', 'pointerdown', 'pointerup']) {
+				element.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: high, pointerId: 9, pointerType: 'touch', bubbles: true, cancelable: true }))
+			}
+		}, [at, y])
 		// A first tap that lets go of the empty field skips nothing either; the second is a tap of its own and plays
 		await fingers('touchStart', [[box.x + box.width * 0.75, y]])
 		await member.waitForTimeout(700)
@@ -2588,19 +2599,16 @@ test.describe('Audio review', () => {
 		await tapAt(box.x + box.width * 0.85)
 		await member.waitForTimeout(500)
 		expect(await paused()).toBe(true)
-		await tapAt(box.x + box.width * 0.5)
-		await tapAt(box.x + box.width * 0.5)
+		await doubleTapAt(box.x + box.width * 0.5)
 		await member.waitForTimeout(500)
 		expect(await time()).toBe(start)
 		expect(await paused()).toBe(true)
-		await tapAt(box.x + box.width * 0.85)
-		await tapAt(box.x + box.width * 0.85)
+		await doubleTapAt(box.x + box.width * 0.85)
 		await expect.poll(time).toBeCloseTo(start + 10, 0)
 		await expect(member.locator('.deliver-player__flash')).toContainText('+10')
 		await member.waitForTimeout(500)
 		expect(await paused()).toBe(true)
-		await tapAt(box.x + box.width * 0.1)
-		await tapAt(box.x + box.width * 0.1)
+		await doubleTapAt(box.x + box.width * 0.1)
 		await expect.poll(time).toBeCloseTo(start, 0)
 		// A long press on playing audio stops it
 		await member.getByRole('button', { name: 'Play', exact: true }).tap()

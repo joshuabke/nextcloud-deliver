@@ -597,7 +597,15 @@ function dropToggle(event) {
 		clearTimeout(toggleTimer)
 	}
 }
-watch(() => [props.playing, props.pending, props.composing], () => dropToggle())
+watch(() => [props.pending, props.composing], () => dropToggle())
+/** The playing state the stage's own toggle asked for, whose arrival is no change from elsewhere */
+let toggledTo = null
+watch(() => props.playing, (now) => {
+	if (now !== toggledTo) {
+		dropToggle()
+	}
+	toggledTo = null
+})
 
 /** Where the field at the Waveform stands: at its place when it opened, kept on the stage */
 const composeLeft = ref(0)
@@ -862,7 +870,12 @@ function tap(event) {
 	clearTimeout(toggleTimer)
 	// Not for a press that wandered, nor while a finger or two that came since are still down
 	if (action === 'first' && !press.slipped) {
-		toggleTimer = setTimeout(() => !press && !pinch && emit('toggle'), DOUBLE_TAP_MS)
+		toggleTimer = setTimeout(() => {
+			if (!press && !pinch) {
+				toggledTo = !props.playing
+				emit('toggle')
+			}
+		}, DOUBLE_TAP_MS)
 	}
 	if (action === 'open') {
 		openCircle(circle, xOf(event))
