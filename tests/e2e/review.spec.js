@@ -3122,6 +3122,31 @@ test.describe('Comparing sound', () => {
 		await phone.close()
 	})
 
+	test('on a phone the tabs of the Comments in Compare stand clear of the sheet\'s grabber at its middle and top height', async () => {
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: { width: 375, height: 667 } })
+		const page = await phone.newPage()
+		await login(page)
+		await page.goto(`/apps/deliver/compare/${cut[1].id}/${cut[0].id}`)
+		await expect(page.locator('.deliver-compare video').first()).toHaveJSProperty('readyState', 4)
+		const grabber = page.locator('.deliver-layout__grabber')
+		const tabs = page.locator('.deliver-compare-view__tabs')
+		for (const level of ['middle', 'up']) {
+			await grabber.tap()
+			await expect(page.locator(`.deliver-layout--${level}`)).toHaveCount(1)
+			const grab = await grabber.boundingBox()
+			expect(grab.y + grab.height).toBeLessThanOrEqual((await tabs.boundingBox()).y)
+			// A finger on the inner half of either tab picks that tab, not a step of the sheet
+			for (const name of [/^Comments on V2/, /^Comments on V1/]) {
+				const tab = page.getByRole('radio', { name })
+				const box = await tab.boundingBox()
+				await page.touchscreen.tap(name.source.includes('V2') ? box.x + 8 : box.x + box.width - 8, box.y + box.height / 2)
+				await expect(tab).toHaveAttribute('aria-checked', 'true')
+				await expect(page.locator(`.deliver-layout--${level}`)).toHaveCount(1)
+			}
+		}
+		await phone.close()
+	})
+
 	test('on a phone held sideways, pictures, both lanes and the transport fit without scrolling', async () => {
 		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: { width: 844, height: 390 } })
 		const sideways = await phone.newPage()

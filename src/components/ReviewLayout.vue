@@ -359,9 +359,10 @@ body.deliver-review footer {
 	flex: 1;
 }
 
-/* Pulled out, the grabber sits in the middle of the list's head row, between its filter and its buttons */
-.deliver-layout--middle .deliver-layout__grabber,
-.deliver-layout--up .deliver-layout__grabber {
+/* Pulled out, the grabber sits in the middle of the list's head row, between its filter and its buttons.
+	Compare's tabs fill their row, so there it stays a row of its own above them, as when the sheet is down */
+.deliver-layout--middle .deliver-layout__panel:not(:has(.deliver-compare-view__tabs)) .deliver-layout__grabber,
+.deliver-layout--up .deliver-layout__panel:not(:has(.deliver-compare-view__tabs)) .deliver-layout__grabber {
 	position: absolute;
 	top: 0;
 	left: 50%;
@@ -371,8 +372,8 @@ body.deliver-review footer {
 	transform: translateX(-50%);
 }
 
-.deliver-layout--middle .deliver-layout__grabber::after,
-.deliver-layout--up .deliver-layout__grabber::after {
+.deliver-layout--middle .deliver-layout__panel:not(:has(.deliver-compare-view__tabs)) .deliver-layout__grabber::after,
+.deliver-layout--up .deliver-layout__panel:not(:has(.deliver-compare-view__tabs)) .deliver-layout__grabber::after {
 	top: 24px;
 }
 
