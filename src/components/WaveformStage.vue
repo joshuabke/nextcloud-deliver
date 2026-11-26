@@ -71,13 +71,12 @@ const isMobile = useIsMobile()
 /** The Comment whose card is open, its circle in the window, and the Comments of its place where no zoom parts them */
 const card = ref(null)
 const opened = computed(() => card.value && props.comments.find((comment) => comment.id === card.value.id))
-/** When the card last went, on the clock of pointer events: a press anywhere closes it, and on the wave does nothing else */
-let cardClosedAt = -1
-watch(card, (now, was) => {
-	if (was && !now) {
-		cardClosedAt = performance.now()
-	}
-}, { flush: 'sync' })
+/**
+ * Whether the card was open when the last press came down: a press anywhere closes it, and on the wave does nothing
+ * else. Noted by the stage's listener on the document, added before the card's own, which closes it on that press;
+ * not by the clock, as a busy page handles a second press with a timeStamp from before it closed the card
+ */
+let cardAtPress = false
 // It closes as soon as playback starts, which would leave it pointing at a place gone by (decided 2026-11-26)
 watch(() => props.playing, (now) => {
 	if (now) {
@@ -581,7 +580,7 @@ onMounted(() => {
 	}
 	seen.observe(host.value)
 	onResolution()
-	document.addEventListener('pointerdown', dropToggle, true)
+	document.addEventListener('pointerdown', notePress, true)
 	document.addEventListener('keydown', dropToggle, true)
 })
 onBeforeUnmount(() => {
@@ -590,7 +589,7 @@ onBeforeUnmount(() => {
 	seen.disconnect()
 	cancelAnimationFrame(frameRequest)
 	clearTimeout(toggleTimer)
-	document.removeEventListener('pointerdown', dropToggle, true)
+	document.removeEventListener('pointerdown', notePress, true)
 	document.removeEventListener('keydown', dropToggle, true)
 })
 
@@ -606,6 +605,14 @@ function dropToggle(event) {
 	}
 }
 watch(() => [props.pending, props.composing], () => dropToggle())
+
+/**
+ * @param {PointerEvent} event - a pointer comes down anywhere
+ */
+function notePress(event) {
+	cardAtPress = !!card.value
+	dropToggle(event)
+}
 /** The playing state the stage's own toggle asked for, whose arrival is no change from elsewhere */
 let toggledTo = null
 watch(() => props.playing, (now) => {
@@ -691,7 +698,7 @@ function onDown(event) {
 	}
 	// An open menu closes after this, at the touchend or the click: the tap that closes it does only that (#267)
 	const closes = document.querySelector('.v-popper__popper--shown') !== null
-	press = { id: event.pointerId, x: event.clientX, y: event.clientY, from: onScreen(), moved: false, long: false, strip: inStrip(event), down: event.timeStamp, closes }
+	press = { id: event.pointerId, x: event.clientX, y: event.clientY, from: onScreen(), moved: false, long: false, strip: inStrip(event), down: event.timeStamp, closes, card: cardAtPress }
 	// A finger or a pen resting on a circle opens its card, as a tap does; elsewhere, where one may comment, the Comment field for that place
 	if (event.pointerType !== 'mouse') {
 		const at = press
@@ -866,7 +873,7 @@ function tap(event) {
 	const circle = hit(event.clientX, event.clientY, event.pointerType)
 	const { action, side } = waveTap({
 		circle: !!circle,
-		card: !!card.value || cardClosedAt >= press.down || press.closes,
+		card: !!card.value || press.card || press.closes,
 		seeks: event.pointerType === 'mouse' && (!!props.lanes || (press.strip && inStrip(event))),
 		// An empty field is let go by the touch or click itself; one with text stays, and its tap counts
 		field: placeLetGoAt >= press.down,
