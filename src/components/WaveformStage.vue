@@ -47,6 +47,8 @@ const props = defineProps({
 	pending: { type: Object, default: null },
 	/** Whether the field is open at the Waveform, at the place it holds (N12); the view hands it in as the composer slot */
 	composing: { type: Boolean, default: false },
+	/** Whether a card outside the stage is open, the one a circle on the bar opens (#273): a tap that closes it does only that */
+	cardOutside: { type: Boolean, default: false },
 })
 
 /**
@@ -610,7 +612,7 @@ watch(() => [props.pending, props.composing], () => dropToggle())
  * @param {PointerEvent} event - a pointer comes down anywhere
  */
 function notePress(event) {
-	cardAtPress = !!card.value
+	cardAtPress = !!card.value || props.cardOutside
 	dropToggle(event)
 }
 /** The playing state the stage's own toggle asked for, whose arrival is no change from elsewhere */

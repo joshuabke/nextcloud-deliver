@@ -1017,6 +1017,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 				:canComment="canComment"
 				:pending="pending"
 				:composing="composing"
+				:cardOutside="!!barOpened"
 				@seek="seekTo"
 				@skip="skipTap"
 				@toggle="playPause"

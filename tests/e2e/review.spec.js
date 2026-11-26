@@ -2487,6 +2487,14 @@ test.describe('Audio review', () => {
 		await expect(card(page)).toContainText('1 of 2')
 		expect(await timeOf(page)).toBeCloseTo(90, 0)
 		await expect(circle).toHaveClass(/--ringed/)
+		// A click on the wave closes the bar's card and does only that: no Play after the double-click wait
+		const paused = (target) => target.locator('video.deliver-player__video').evaluate((element) => element.paused)
+		await page.mouse.click(stage.x + stage.width / 2, stage.y + stage.height / 3)
+		await expect(card(page)).toHaveCount(0)
+		await page.waitForTimeout(600)
+		expect(await paused(page)).toBe(true)
+		await page.mouse.click(row.x + 6, row.y)
+		await expect(card(page)).toContainText('on the bar')
 		// A click beside it closes the card and seeks there exactly; a drag from the circle is the bar's
 		await page.mouse.click(row.x + 14, row.y)
 		await expect(card(page)).toHaveCount(0)
@@ -2518,6 +2526,8 @@ test.describe('Audio review', () => {
 		expect(await timeOf(member)).toBeLessThan(1)
 		await member.touchscreen.tap(at.x + at.width / 2, y - 120)
 		await expect(card(member)).toHaveCount(0)
+		await member.waitForTimeout(600)
+		expect(await paused(member)).toBe(true)
 		await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: at.x + at.width / 2, y }] })
 		for (const x of [at.x + 60, at.x + 160, at.x + 260]) {
 			await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y }] })
@@ -2680,11 +2690,15 @@ test.describe('Audio review', () => {
 		await beside()
 		await expect.poll(paused).toBe(true)
 		await back(start)
-		// A tap and then a resting finger opens the field without a moment of sound
-		await tapAt(box.x + box.width * 0.85)
-		await fingers('touchStart', [[box.x + box.width * 0.75, y]])
+		// A tap and then a resting finger opens the field without a moment of sound; the tap and the finger's coming down in one go in the page, within DOUBLE_TAP_MS on a slow machine too
+		const pointer = (steps) => canvas.evaluate((element, [all, high]) => {
+			for (const [type, x] of all) {
+				element.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: high, pointerId: 9, pointerType: 'touch', bubbles: true, cancelable: true }))
+			}
+		}, [steps, y])
+		await pointer([['pointerdown', box.x + box.width * 0.85], ['pointerup', box.x + box.width * 0.85], ['pointerdown', box.x + box.width * 0.75]])
 		await member.waitForTimeout(700)
-		await fingers('touchEnd', [])
+		await pointer([['pointerup', box.x + box.width * 0.75]])
 		await expect(field).toBeFocused()
 		expect(await paused()).toBe(true)
 		expect(await time()).toBe(start)
