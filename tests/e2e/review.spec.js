@@ -2515,10 +2515,17 @@ test.describe('Audio review', () => {
 
 		// A finger resting a quarter of the stage to the right, 15 seconds on, opens the field there; it neither seeks nor goes fullscreen
 		await member.getByRole('button', { name: '1 min' }).tap()
+		const cancelled = () => member.evaluate(() => window.touchEnds.at(-1))
+		await member.evaluate(() => {
+			window.touchEnds = []
+			document.addEventListener('touchend', (event) => window.touchEnds.push(event.defaultPrevented))
+		})
 		await fingers('touchStart', [[box.x + box.width * 0.75, y]])
 		await member.waitForTimeout(700)
 		await fingers('touchEnd', [])
 		await expect(field).toBeFocused()
+		// Its touchend is cancelled: iOS Safari sends a finger's mouse events otherwise, whose mousedown takes the focus from the field
+		expect(await cancelled()).toBe(true)
 		await expect(anchor).toHaveText('0:15.000')
 		// The place waits on the wave as a line in the primary colour, over the wave not yet played
 		const mark = await canvas.evaluate((element) => {
@@ -2542,6 +2549,8 @@ test.describe('Audio review', () => {
 		await expect(small).toContainText('for the phone')
 		await expect(small).toContainText('1 reply')
 		await expect(small).toBeFocused()
+		// A tap is no long press: its touchend stays
+		expect(await cancelled()).toBe(false)
 		const over = await small.boundingBox()
 		expect(over.width).toBeLessThan(lane.width / 2)
 		expect(over.x).toBeGreaterThan(lane.x + lane.width / 2)

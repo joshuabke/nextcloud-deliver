@@ -604,6 +604,8 @@ const pointers = new Map()
 let press = null
 /** Two fingers: their distance and the span when they came down */
 let pinch = null
+/** Whether a finger's long press on the wave opened something, until that finger lifts */
+let held = false
 
 /** When the place pinned for a Comment was last let go, on the clock of pointer events */
 let placeLetGoAt = -1
@@ -637,7 +639,7 @@ function spread() {
  */
 function onDown(event) {
 	event.stopPropagation()
-	// No mouse events after a finger: their mousedown would take the focus from the Comment field a long press opens
+	// No mouse events after a finger: their mousedown would take the focus from the Comment field a long press opens (iOS Safari sends them all the same, see onTouchEnd)
 	if (event.pointerType !== 'mouse') {
 		event.preventDefault()
 	}
@@ -667,6 +669,7 @@ function onDown(event) {
 			const circle = hit(at.x, at.y, event.pointerType)
 			if (circle || props.canComment) {
 				at.long = true
+				held = true
 			}
 			if (circle) {
 				openCircle(circle)
@@ -675,6 +678,21 @@ function onDown(event) {
 			}
 		}, HOLD_MS)
 	}
+}
+
+/**
+ * iOS Safari sends a finger's mouse events after it lifts, despite the
+ * pointerdown's preventDefault; after a long press their mousedown takes the
+ * focus from the field it opened, and the keyboard and the Comment list
+ * flash. Only cancelling the touchend keeps them away.
+ *
+ * @param {TouchEvent} event - a finger lifts from the stage or something on it
+ */
+function onTouchEnd(event) {
+	if (held && event.target === canvas.value) {
+		event.preventDefault()
+	}
+	held = false
 }
 
 /**
@@ -982,6 +1000,7 @@ function label(step) {
 		@pointerup="onUp($event); onHover($event)"
 		@pointercancel="onUp"
 		@pointerleave="onHover"
+		@touchend="onTouchEnd"
 		@wheel="onWheel"
 		@contextmenu.prevent>
 		<canvas ref="canvas" class="deliver-wave__canvas" aria-hidden="true" />
