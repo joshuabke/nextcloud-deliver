@@ -2107,7 +2107,7 @@ test.describe('Audio review', () => {
 		await field.fill('')
 	})
 
-	test('entering the Comment field stops audio and video at the Frame of that moment, by mouse, on a phone without a key and as a Reviewer; typing then stops nothing more', async ({ playwright }) => {
+	test('entering the Comment field stops audio and video at the Frame of that moment, by mouse, on a phone without a key and as a Reviewer, and typing or drawing keeps that Frame', async ({ playwright }) => {
 		await page.goto(`/apps/deliver/versions/${versionId}`)
 		const audio = page.locator('video.deliver-player__video')
 		await expect(audio).toHaveJSProperty('readyState', 4)
@@ -2124,15 +2124,37 @@ test.describe('Audio review', () => {
 		const clockOf = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms % 60000 / 1000)).padStart(2, '0')}.${String(ms % 1000).padStart(3, '0')}`
 		await expect(anchor).toHaveText(new RegExp(`^(${clockOf(stopped - 1)}|${clockOf(stopped)}|${clockOf(stopped + 1)})$`))
 		const at = await anchor.textContent()
-		// Played on with the field open, typing stops nothing, and the Comment stays where the field was entered
+		// Played on with the field open, typing stops it again, and the Comment stays where the field was entered
 		await audio.evaluate((element) => element.play())
+		await expect.poll(time).toBeGreaterThan(stopped / 1000 + 0.3)
 		await field.pressSequentially('here')
-		await expect.poll(time).toBeGreaterThan(stopped / 1000 + 0.5)
-		expect(await paused()).toBe(false)
+		await expect.poll(paused).toBe(true)
 		await expect(anchor).toHaveText(at)
 		await field.fill('')
-		await audio.evaluate((element) => element.pause())
 		await page.locator('.deliver-review__title').click()
+
+		// A Drawing keeps the Frame where the field was entered, its first stroke and a seek after it too
+		await page.goto(`/apps/deliver/versions/${clipVersionId}`)
+		const video = page.locator('video.deliver-player__video')
+		await expect(video).toHaveJSProperty('readyState', 4)
+		await video.evaluate((element) => {
+			element.currentTime = 1
+		})
+		await expect(page.locator('.deliver-player__timecode')).toContainText('00:00:01:00')
+		await field.click()
+		await expect(anchor).toHaveText(/00:00:01:00/)
+		await page.getByRole('button', { name: 'Draw on the picture' }).click()
+		const stage = await page.locator('.deliver-player__stage').boundingBox()
+		await page.mouse.move(stage.x + stage.width * 0.3, stage.y + stage.height * 0.3)
+		await page.mouse.down()
+		await page.mouse.move(stage.x + stage.width * 0.6, stage.y + stage.height * 0.5, { steps: 8 })
+		await page.mouse.up()
+		await expect(page.locator('.deliver-comments__drawn')).toHaveText('1 shape drawn')
+		const timeline = page.locator('.deliver-player__timeline')
+		const bar = await timeline.boundingBox()
+		await timeline.click({ position: { x: bar.width * 0.8, y: bar.height / 2 } })
+		await expect(page.locator('.deliver-player__timecode')).not.toContainText('00:00:01:00')
+		await expect(anchor).toHaveText(/00:00:01:00/)
 
 		// On a phone a tap into the field stops audio and video alike, with no key pressed
 		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
@@ -2146,6 +2168,11 @@ test.describe('Audio review', () => {
 			await expect.poll(() => media.evaluate((element) => element.currentTime)).toBeGreaterThan(0.5)
 			await where.locator('#deliver-comment-body').tap()
 			await expect(where.locator('#deliver-comment-body')).toBeFocused()
+			await expect.poll(() => media.evaluate((element) => element.paused)).toBe(true)
+			// Played on while the field keeps the focus, as a tap on the Waveform does, a tap into it stops it again
+			await media.evaluate((element) => element.play())
+			await expect.poll(() => media.evaluate((element) => element.paused)).toBe(false)
+			await where.locator('#deliver-comment-body').tap()
 			await expect.poll(() => media.evaluate((element) => element.paused)).toBe(true)
 		}
 		await tapStops(member, `/apps/deliver/versions/${versionId}`)
