@@ -2,6 +2,7 @@ import { chromium, expect, test } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
+import { DOUBLE_TAP_MS } from '../../src/lib/gestures.js'
 import { CLIP, CLIP_SCRUB, CUT_A, CUT_B, DNXHR, HAND_PROXY, LONG, LONG_MIX, MIX, MIX_A, MIX_B } from './fixtures.js'
 
 const URL = process.env.DELIVER_TEST_URL ?? 'http://localhost:8080'
@@ -2151,21 +2152,33 @@ test.describe('Audio review', () => {
 			await expect.poll(paused).toBe(true)
 			// What else happens within the wait wins: C comments with the sound stopped, Space plays, a click into the field leaves it standing
 			const field = page.locator('#deliver-comment-body')
-			await canvas.click({ position: { x: box.width * 0.85, y: box.height / 2 } })
-			await page.keyboard.press('c')
+			// The click and what follows it in one go in the page, so that a slow machine does not stretch the moment between them past the wait
+			const clickThen = (then) => canvas.evaluate((element, key) => {
+				const stage = element.getBoundingClientRect()
+				const at = { clientX: stage.left + stage.width * 0.85, clientY: stage.top + stage.height / 2, pointerId: 7, pointerType: 'mouse', button: 0, bubbles: true }
+				element.dispatchEvent(new PointerEvent('pointerdown', at))
+				element.dispatchEvent(new PointerEvent('pointerup', at))
+				if (key === null) {
+					const into = document.getElementById('deliver-comment-body')
+					into.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 8, pointerType: 'mouse', button: 0, bubbles: true }))
+					into.focus()
+				} else {
+					document.body.dispatchEvent(new KeyboardEvent('keydown', { key, code: key === ' ' ? 'Space' : 'KeyC', bubbles: true, cancelable: true }))
+				}
+			}, then)
+			await clickThen('c')
 			await expect(field).toBeFocused()
 			await page.waitForTimeout(500)
 			expect(await paused()).toBe(true)
 			await field.press('Escape')
 			await page.locator('.deliver-review__title').click()
-			await canvas.click({ position: { x: box.width * 0.85, y: box.height / 2 } })
-			await page.keyboard.press(' ')
+			await clickThen(' ')
 			await page.waitForTimeout(500)
 			expect(await paused()).toBe(false)
 			await page.keyboard.press(' ')
 			await expect.poll(paused).toBe(true)
-			await canvas.click({ position: { x: box.width * 0.85, y: box.height / 2 } })
-			await field.click()
+			await clickThen(null)
+			await expect(field).toBeFocused()
 			await page.waitForTimeout(500)
 			expect(await paused()).toBe(true)
 			await page.locator('.deliver-review__title').click()
@@ -2283,6 +2296,17 @@ test.describe('Audio review', () => {
 				count++
 				return clear.apply(this, args)
 			}
+			const frames = (n) => new Promise((resolve) => {
+				const next = (left) => left ? requestAnimationFrame(() => next(left - 1)) : resolve()
+				next(n)
+			})
+			// A slow machine may still be drawing what the pause and the mouse leaving for the button asked for: counted from once that is done
+			let before = -1
+			while (count !== before) {
+				before = count
+				await frames(10)
+			}
+			count = 0
 			const box = element.getBoundingClientRect()
 			const counts = []
 			for (const [x, y] of [[100, 100], [120, 100], [200, box.height - 20], [200, box.height - 10], [200, 100]]) {
@@ -2513,10 +2537,18 @@ test.describe('Audio review', () => {
 		await expect(anchor).toHaveText(/^0:00\./)
 		await expect.poll(paused).toBe(false)
 		expect(await time()).toBeLessThan(5)
-		// Not at once: it waits whether a second tap comes
+		// Not at once: it waits whether a second tap comes, measured in the page, where a slow machine does not stretch it
+		await member.locator('video.deliver-player__video').evaluate((element) => {
+			document.addEventListener('pointerup', () => {
+				element.tappedAt = performance.now()
+			}, { capture: true, once: true })
+			element.addEventListener('pause', () => {
+				element.pausedAt = performance.now()
+			}, { once: true })
+		})
 		await tapAt(box.x + box.width * 0.85)
-		expect(await paused()).toBe(false)
 		await expect.poll(paused).toBe(true)
+		expect(await member.locator('video.deliver-player__video').evaluate((element) => element.pausedAt - element.tappedAt)).toBeGreaterThanOrEqual(DOUBLE_TAP_MS)
 		const start = await time()
 		await tapAt(box.x + box.width * 0.85)
 		await expect.poll(paused).toBe(false)
@@ -2536,6 +2568,8 @@ test.describe('Audio review', () => {
 		await settings.tap()
 		await expect(member.getByRole('menuitem', { name: 'One Frame back' })).toBeVisible()
 		await beside()
+		// The menu closes a frame after the touch; a second tap before that would still close it, which no finger is quick enough for
+		await member.waitForFunction(() => document.querySelector('.v-popper__popper--shown') === null, null, { polling: 'raf' })
 		await beside()
 		await expect.poll(paused).toBe(false)
 		expect(await time()).toBeLessThan(start + 5)
