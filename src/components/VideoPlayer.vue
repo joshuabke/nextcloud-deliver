@@ -24,6 +24,7 @@ import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import CommentCard from './CommentCard.vue'
 import DrawingLayer from './DrawingLayer.vue'
 import DrawToolbar from './DrawToolbar.vue'
 import WaveformStage from './WaveformStage.vue'
@@ -33,8 +34,9 @@ import { useLongPress } from '../composables/longpress.js'
 import { useRange } from '../composables/range.js'
 import { languageName, toWebVtt } from '../lib/captions.js'
 import { COLORS, drawingsAt } from '../lib/drawing.js'
+import { TAP_SLOP } from '../lib/gestures.js'
 import { actionFor } from '../lib/hotkeys.js'
-import { t } from '../lib/l10n.js'
+import { n, t } from '../lib/l10n.js'
 import { liveSeek } from '../lib/liveSeek.js'
 import { loupeFrame, loupePart, openLoupe } from '../lib/loupe.js'
 import { hoverSource } from '../lib/media.js'
@@ -66,7 +68,7 @@ const props = defineProps({
 	composing: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['comment', 'jump', 'swipe', 'seeked', 'closeComposer', 'update:mode', 'update:drawing'])
+const emit = defineEmits(['comment', 'jump', 'reply', 'swipe', 'seeked', 'closeComposer', 'update:mode', 'update:drawing'])
 
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2]
 
@@ -136,6 +138,52 @@ const barResized = new ResizeObserver(([entry]) => {
 const marks = computed(() => !barWidth.value || !durationFrames.value || (scrolling.value && isWhole(span.value, durationFrames.value / fpsValue(fps.value)))
 	? []
 	: circlesOf(props.comments, barWidth.value / durationFrames.value).map((circle) => ({ ...circle, ...circleLook(circle, [store.selected]) })))
+
+/**
+ * @param {{comment?: object, cluster?: object[]}} mark - a circle on the bar
+ * @return {string} its name, for the keyboard and a screen reader
+ */
+function markName({ comment, cluster }) {
+	const time = formatAt((comment ?? cluster[0]).inFrame, props.clock)
+	return comment
+		? t('deliver', 'Comment by {author} at {time}', { author: comment.author.name, time })
+		: n('deliver', '%n Comment at {time}', '%n Comments at {time}', cluster.length, { time })
+}
+
+/** The Comment whose card a circle on the bar opened, the circle in the window, and the Comments of a count circle (#273) */
+const barCard = ref(null)
+const barOpened = computed(() => barCard.value && props.comments.find((comment) => comment.id === barCard.value.id))
+// It closes as soon as playback starts, which would leave it pointing at a place gone by (decided 2026-11-26)
+watch(playing, (now) => {
+	if (now) {
+		barCard.value = null
+	}
+})
+
+/**
+ * Opens the card of a circle on the bar over it, and selects its Comment in the list too; it does not seek
+ *
+ * @param {{comment?: object, cluster?: object[]}} mark - the circle
+ * @param {Element} element - the circle on screen
+ */
+function openMark(mark, element) {
+	// A Comment's card and the field never show at once
+	if (props.composing) {
+		emit('closeComposer')
+	}
+	const box = element.getBoundingClientRect()
+	const comment = mark.comment ?? mark.cluster[0]
+	barCard.value = { id: comment.id, siblings: mark.cluster ?? null, at: { x: box.left + box.width / 2, y: box.top, line: null } }
+	store.selected = comment.id
+}
+
+/**
+ * @param {object} comment - another Comment of the same place
+ */
+function showOnBar(comment) {
+	barCard.value = { ...barCard.value, id: comment.id }
+	store.selected = comment.id
+}
 const tool = ref('pen')
 const color = ref(COLORS[0])
 /** The picture's own size, for placing drawings on it */
@@ -425,6 +473,24 @@ function release() {
 
 /** The Frame a press on the bar came down on */
 let pressedAt = null
+/** A press that came down on a circle, until it moves past the slop: lifted there it opens the circle's card instead of seeking */
+let circlePress = null
+
+/**
+ * By where the pointer is: the circles take no pointer, so that a touch near one stays the bar's, and beside a circle
+ * the bar seeks to the Frame under the finger
+ *
+ * @param {PointerEvent} event - a pointer comes down on the bar
+ * @return {{mark: object, element: Element}|null} the circle it came down in
+ */
+function circleUnder(event) {
+	const elements = [...event.currentTarget.querySelectorAll('.deliver-player__circles > .deliver-player__circle')]
+	const index = elements.findIndex((element) => {
+		const box = element.getBoundingClientRect()
+		return Math.hypot(event.clientX - box.left - box.width / 2, event.clientY - box.top - box.height / 2) <= box.width / 2
+	})
+	return index < 0 ? null : { mark: marks.value[index], element: elements[index] }
+}
 
 const live = liveSeek((target) => {
 	const element = video.value
@@ -441,7 +507,9 @@ const { press: loupePress } = useLongPress(() => {
 	if (!dragging.value || !barWidth.value) {
 		return
 	}
-	const at = frame.value
+	// From the Frame under the finger: on a circle the press has not moved the player yet, and it is a hold now, not a tap
+	circlePress = null
+	const at = hover.value?.frame ?? pressedAt
 	loupe.value = openLoupe(at, Math.min(1, Math.max(0, (hover.value?.left ?? 0) / barWidth.value)), durationFrames.value, fpsValue(fps.value))
 	// Seeking through it holds playback as a drag does; it stays on the Frame it opened on, not where playback went meanwhile
 	hold()
@@ -480,7 +548,7 @@ function keepTouch() {}
  * @param {PointerEvent} event - a pointer comes down on the bar
  */
 function onDragStart(event) {
-	if (!durationFrames.value || (event.pointerType === 'mouse' && (event.button !== 0 || event.target.closest('button')))) {
+	if (!durationFrames.value || (event.pointerType === 'mouse' && event.button !== 0)) {
 		return
 	}
 	// Only the first pointer can hold still for the zoomed section; a second one ends that wait
@@ -491,6 +559,8 @@ function onDragStart(event) {
 	}
 	dragging.value = true
 	pressedAt = frameAt(event)
+	const circle = circleUnder(event)
+	circlePress = circle && { ...circle, x: event.clientX, y: event.clientY }
 	event.currentTarget.setPointerCapture(event.pointerId)
 	follow(event)
 }
@@ -502,6 +572,11 @@ function onDragStart(event) {
  */
 function follow(event) {
 	onHover(event)
+	// On a circle the press waits: lifted within the slop it opens the card, moved past it it drags as anywhere
+	if (circlePress && Math.hypot(event.clientX - circlePress.x, event.clientY - circlePress.y) <= TAP_SLOP) {
+		return
+	}
+	circlePress = null
 	if (dragging.value) {
 		const at = frameAt(event)
 		// A click only seeks and keeps the playback state, shuttle included; once the pointer leaves its Frame it is a drag
@@ -539,8 +614,14 @@ function onDragEnd(event) {
 	dragging.value = false
 	live.reset()
 	loupePress.pointerup()
+	const circle = circlePress
+	circlePress = null
 	if (event.type === 'pointerup') {
-		seekTo(frameAt(event))
+		if (circle) {
+			openMark(circle.mark, circle.element)
+		} else {
+			seekTo(frameAt(event))
+		}
 	}
 	loupe.value = null
 	release()
@@ -943,6 +1024,7 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 				@release="release"
 				@comment="commentAt"
 				@jump="emit('jump', $event)"
+				@reply="emit('reply', $event)"
 				@closeComposer="emit('closeComposer')">
 				<template #composer>
 					<slot name="composer" />
@@ -1013,16 +1095,20 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 						class="deliver-player__span"
 						:style="{ left: leftOf(each) + '%', width: widthOf(each) + '%' }" />
 				</div>
-				<!-- A circle per Comment, centred on its Frame, as on the Waveform; close ones are one with their count. Only to look at: a press goes to the bar -->
-				<div class="deliver-player__circles" aria-hidden="true">
-					<span
+				<!-- A circle per Comment, centred on its Frame, as on the Waveform; close ones are one with their count.
+					A tap or Enter opens its card; a press that moves drags as anywhere on the bar. A pointer goes to the bar -->
+				<div class="deliver-player__circles">
+					<button
 						v-for="mark in marks"
 						:key="(mark.comment ?? mark.cluster[0]).id"
+						type="button"
 						class="deliver-player__circle"
 						:class="{ 'deliver-player__circle--resolved': mark.pale, 'deliver-player__circle--ringed': mark.ringed }"
-						:style="{ left: mark.x + 'px', '--deliver-circle-fill': mark.fill, '--deliver-circle-line': mark.line }">
+						:style="{ left: mark.x + 'px', '--deliver-circle-fill': mark.fill, '--deliver-circle-line': mark.line }"
+						:aria-label="markName(mark)"
+						@click="$event.detail === 0 && openMark(mark, $event.currentTarget)">
 						{{ mark.text }}
-					</span>
+					</button>
 				</div>
 				<!-- Over the circles; while a finger drags, the playhead follows it, in the zoomed section only there -->
 				<div class="deliver-player__playhead" :style="{ left: dragging && hover && !loupe ? hover.left + 'px' : progress + '%' }" />
@@ -1069,6 +1155,18 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 				</div>
 			</div>
 		</div>
+
+		<!-- A circle's card on the bar, as on the Waveform (#273) -->
+		<CommentCard
+			v-if="barOpened"
+			:comment="barOpened"
+			:siblings="barCard.siblings"
+			:clock="clock"
+			:at="barCard.at"
+			@close="barCard = null"
+			@show="showOnBar"
+			@jump="barCard = null; emit('jump', $event)"
+			@reply="barCard = null; emit('reply', $event)" />
 
 		<!-- A phone: one row, Play and the time on the left; skipping, Frame steps and the settings in one menu -->
 		<div v-if="isMobile" class="deliver-player__controls">
@@ -1628,7 +1726,9 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 
 /*
  * A circle as the Waveform draws it (circleLook, drawCircles), but the bar shows through. 20 px: it stands only 2 px over a
- * desktop's bar, short of the buttons below and the picture's captions; two are 24 px apart at least.
+ * desktop's bar, short of the buttons below and the picture's captions; two are 24 px apart at least. Buttons for the keyboard
+ * only, and the resets keep Nextcloud's button style away: a pointer goes to the bar, which finds the circle by its place
+ * (circleUnder), as a target of its own beside the bar would take a finger's touch from the bar and give it to the picture.
  */
 .deliver-player__circles {
 	position: absolute;
@@ -1647,6 +1747,8 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	box-sizing: border-box;
 	width: 20px;
 	height: 20px;
+	min-height: 0;
+	padding: 0;
 	border: 2px solid var(--deliver-circle-line);
 	border-radius: 50%;
 	background: linear-gradient(var(--deliver-circle-fill) 0 0) var(--deliver-circle-back);
@@ -1654,6 +1756,16 @@ const loopLabel = computed(() => outPoint.value === null ? t('deliver', 'Loop') 
 	font: bold 9px/0 sans-serif;
 	text-shadow: 0 0 2px #000;
 	transform: translate(-50%, -50%);
+}
+
+/* Nextcloud gives a button a margin by a rule that outweighs a class */
+.deliver-player__circles > .deliver-player__circle {
+	margin: 0;
+}
+
+.deliver-player__circle:focus-visible {
+	outline: 2px solid #fff;
+	outline-offset: 1px;
 }
 
 /* Half of the room inside the ring and half a capital's height: the capitals stand in the middle, whatever the font */
