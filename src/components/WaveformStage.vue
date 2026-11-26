@@ -195,7 +195,8 @@ function offsetAt(at) {
  */
 function draw() {
 	const context = canvas.value?.getContext('2d')
-	if (!context || !pixels.width) {
+	// Folded to nothing, as Compare's lanes under a phone's Comment list pulled up, there is nothing to draw on
+	if (!context || !pixels.width || !pixels.height) {
 		return
 	}
 	context.setTransform(1, 0, 0, 1, 0, 0)
