@@ -1,4 +1,5 @@
 <script setup>
+import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { ref } from 'vue'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionInput from '@nextcloud/vue/components/NcActionInput'
@@ -23,6 +24,8 @@ const props = defineProps({
 const emit = defineEmits(['open', 'changed'])
 
 const { busy, error, run: runBusy } = useBusy()
+/** A phone drops no files (Out of Scope); it uploads a new Version from the Asset's menu */
+const isMobile = useIsMobile()
 const dragging = ref(false)
 
 /**
@@ -135,7 +138,7 @@ function drop(event) {
 			</li>
 		</ul>
 
-		<p class="deliver-stack__drop">
+		<p v-if="!isMobile" class="deliver-stack__drop">
 			{{ t('deliver', 'Drop a file here to upload it next to the newest Version and stack it on top.') }}
 		</p>
 	</section>

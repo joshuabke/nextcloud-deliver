@@ -526,6 +526,8 @@ test.describe('Review view', () => {
 			await page.getByRole('menuitem', { name: 'Manage Versions' }).tap()
 			const stack = page.getByRole('dialog', { name: 'Versions of clip' })
 			await expect(stack).toContainText('Version 1')
+			// Nothing is dropped on a phone, so the dialog does not offer it
+			await expect(stack).not.toContainText('Drop a file')
 			await page.keyboard.press('Escape')
 			await expect(stack).toBeHidden()
 		}
