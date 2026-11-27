@@ -134,6 +134,28 @@ export function selectAll(assets) {
 }
 
 /**
+ * @param {{id: number, manages?: boolean, versions: Array<{state: string}>}} asset - an Asset
+ * @param {number[]} selected - ids already ticked
+ * @param {?boolean} tickedMissing - whether the ticked Assets are Missing ones, or null while none is ticked
+ * @return {boolean} whether this Asset may join the selection (story 141, #313)
+ */
+export function canSelect(asset, selected, tickedMissing) {
+	return Boolean(asset.manages)
+		&& !selected.includes(asset.id)
+		&& (tickedMissing === null || tickedMissing === allMissing(asset))
+}
+
+/**
+ * @param {number[]} selected - ids already ticked
+ * @param {{id: number, manages?: boolean, versions: Array<{state: string}>}} asset - an Asset to add
+ * @param {?boolean} tickedMissing - whether the ticked Assets are Missing ones, or null while none is ticked
+ * @return {number[]} the selection with the Asset added, or unchanged if it cannot join
+ */
+export function addToSelection(selected, asset, tickedMissing) {
+	return canSelect(asset, selected, tickedMissing) ? [...selected, asset.id] : selected
+}
+
+/**
  * @param {object[]} assets - the Assets in the order they are on screen
  * @param {number} from - the id of the Asset ticked last
  * @param {number} to - the id of the Asset shift-clicked now
