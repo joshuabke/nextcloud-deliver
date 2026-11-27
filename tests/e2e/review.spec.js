@@ -27,6 +27,8 @@ const PHONE = {
 	hasTouch: true,
 	userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Mobile/15E148 Safari/604.1',
 }
+/** A phone whose zoom Nextcloud leaves free */
+const ANDROID = 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Mobile Safari/537.36'
 const ocsHeaders = { 'OCS-APIREQUEST': 'true', Accept: 'application/json' }
 
 test.describe('Review view', () => {
@@ -2890,6 +2892,51 @@ test.describe('Audio review', () => {
 		await expect(page.locator('.deliver-layout__panel')).toBeHidden()
 		await reply(page, false)
 		await expect(page.locator('.deliver-layout__panel')).toBeVisible()
+		expect((await api.delete(`/ocs/v2.php/apps/deliver/api/v1/comments/${id}?format=json`)).ok()).toBe(true)
+		await api.dispose()
+	})
+
+	test('on a phone Reply on the card brings its field above the keyboard, upright and sideways, as a tap into the field does (#284)', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const made = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${versionId}/comments?format=json`, { data: { inFrame: 22500, body: 'answer me above the keyboard' } })
+		const id = (await made.json()).ocs.data.id
+		for (const viewport of [PHONE.viewport, { width: 852, height: 393 }]) {
+			// Nextcloud holds an iPhone's zoom at 1, and the zoom below stands in for the keyboard
+			const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport, userAgent: ANDROID })
+			// iOS brings a field above its keyboard as the field takes the focus, unless that focus
+			// prevents scrolling; a scrollIntoView knows nothing of the keyboard. Chromium's would pan
+			// the zoomed view below, so here it stays out
+			await phone.addInitScript(() => {
+				Element.prototype.scrollIntoView = () => {}
+			})
+			const target = await phone.newPage()
+			await login(target)
+			await target.goto(`/apps/deliver/versions/${versionId}`)
+			const canvas = target.locator('.deliver-wave canvas')
+			await expect(canvas).toBeVisible()
+			await expect(target.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
+			await target.getByRole('button', { name: '1 min', exact: true }).click()
+			const lane = await canvas.boundingBox()
+			await target.touchscreen.tap(lane.x + lane.width * 0.875, lane.y + lane.height - 20)
+			const card = target.getByRole('dialog', { name: /^Comment #/ })
+			await expect(card).toContainText('answer me above the keyboard')
+			// The keyboard as iOS opens it: the visual viewport shrinks, the layout keeps the window's size.
+			// Zoomed in, the visual viewport is as much smaller, and a field the browser brings into view lands in it
+			const cdp = await phone.newCDPSession(target)
+			await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 2 })
+			await expect.poll(() => target.evaluate(() => window.visualViewport.scale)).toBe(2)
+			// Zoomed, a click would miss: the press goes to the button itself
+			await card.getByRole('button', { name: 'Reply', exact: true }).dispatchEvent('click')
+			const field = target.locator('.deliver-comments__list > .deliver-comment').filter({ hasText: 'answer me above the keyboard' }).getByPlaceholder('Write a Reply')
+			await expect(field).toBeFocused()
+			await expect.poll(() => field.evaluate((element) => {
+				const box = element.getBoundingClientRect()
+				const seen = window.visualViewport
+				return box.top >= seen.offsetTop && box.bottom <= seen.offsetTop + seen.height
+					&& box.left >= seen.offsetLeft && box.right <= seen.offsetLeft + seen.width
+			})).toBe(true)
+			await phone.close()
+		}
 		expect((await api.delete(`/ocs/v2.php/apps/deliver/api/v1/comments/${id}?format=json`)).ok()).toBe(true)
 		await api.dispose()
 	})
