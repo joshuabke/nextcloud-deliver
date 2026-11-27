@@ -1133,7 +1133,6 @@ function label(step) {
 .deliver-wave__zoom {
 	position: absolute;
 	top: 6px;
-	/* The start side: on a phone held sideways the layout's Comments button sits in the top end corner */
 	inset-inline-start: 8px;
 	display: flex;
 	gap: 2px;

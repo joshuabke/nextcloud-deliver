@@ -109,6 +109,17 @@ function step() {
 					<NcActions v-if="isMobile && $slots.menu" variant="tertiary" :aria-label="t('deliver', 'More')">
 						<slot name="menu" />
 					</NcActions>
+					<!-- Sideways the list beside the picture, from the bar: over the picture the button covered it -->
+					<NcButton
+						v-if="sideways"
+						variant="tertiary"
+						:pressed="aside"
+						:aria-label="aside ? t('deliver', 'Hide Comments') : t('deliver', 'Show Comments')"
+						@click="aside = !aside">
+						<template #icon>
+							<NcIconSvgWrapper :svg="commentsIcon" />
+						</template>
+					</NcButton>
 					<NcButton
 						v-if="!isMobile"
 						variant="tertiary"
@@ -126,17 +137,6 @@ function step() {
 			<div class="deliver-layout__body" :class="{ 'deliver-layout__body--wide': !panelOpen && !isMobile }">
 				<div class="deliver-layout__main">
 					<slot />
-					<NcButton
-						v-if="sideways"
-						class="deliver-layout__aside"
-						variant="tertiary"
-						:pressed="aside"
-						:aria-label="aside ? t('deliver', 'Hide Comments') : t('deliver', 'Show Comments')"
-						@click="aside = !aside">
-						<template #icon>
-							<NcIconSvgWrapper :svg="commentsIcon" />
-						</template>
-					</NcButton>
 				</div>
 				<div v-show="sideways ? aside : panelOpen || isMobile" class="deliver-layout__panel">
 					<button
@@ -433,13 +433,5 @@ body.deliver-review footer {
 .deliver-layout--sideways .deliver-layout__panel {
 	flex: none;
 	width: min(360px, 45%);
-}
-
-.deliver-layout__aside {
-	position: absolute !important;
-	top: var(--default-grid-baseline);
-	right: var(--default-grid-baseline);
-	z-index: 3;
-	background: rgba(0, 0, 0, 0.5) !important;
 }
 </style>

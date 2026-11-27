@@ -1485,6 +1485,17 @@ test.describe('The bar on a phone', () => {
 		expect(below.y).toBeGreaterThanOrEqual(box.y + box.height - 0.5)
 	}
 
+	/**
+	 * Nothing of the layout lies over the picture's top end corner, where the Comments button floated sideways
+	 *
+	 * @param {import('@playwright/test').Locator} stage - the picture, or Compare's pictures
+	 * @return {Promise<boolean>}
+	 */
+	const clearCorner = (stage) => stage.evaluate((element) => {
+		const box = element.getBoundingClientRect()
+		return element.contains(document.elementFromPoint(box.right - 20, box.top + 20))
+	})
+
 	test('back, name, Version, Approval and Share stand in one row upright and sideways, and fullscreen or writing sideways hide it (#285)', async () => {
 		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: { width: 393, height: 852 } })
 		const page = await phone.newPage()
@@ -1501,7 +1512,10 @@ test.describe('The bar on a phone', () => {
 		]
 		for (const [width, height] of [[393, 852], [375, 667], [852, 393], [932, 430], [640, 360]]) {
 			await page.setViewportSize({ width, height })
-			await oneRow(page, buttons, width > height ? 44 : 56)
+			const sideways = width > height
+			// Sideways the list beside the picture opens from the bar, not from a button over the picture
+			await oneRow(page, sideways ? [...buttons, page.getByRole('button', { name: 'Show Comments' })] : buttons, sideways ? 44 : 56)
+			expect(await clearCorner(page.locator('.deliver-player__stage'))).toBe(true)
 		}
 		// Upright on the smallest, the long name gives way to the buttons
 		await page.setViewportSize({ width: 375, height: 667 })
@@ -1534,12 +1548,13 @@ test.describe('The bar on a phone', () => {
 		await phone.close()
 	})
 
-	test('a Reviewer\'s link and Compare keep their bar sideways (#285)', async () => {
+	test('a Reviewer\'s link and Compare keep their bar sideways, with the Comments button in it (#285)', async () => {
 		const guest = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: { width: 852, height: 393 } })
 		const reviewer = await guest.newPage()
 		await reviewer.goto(`/apps/deliver/s/${token}/versions/${versions[0].id}`)
 		await expect(reviewer.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
-		await oneRow(reviewer, [reviewer.locator('.deliver-layout__bar .deliver-version-picker').first()], 44)
+		await oneRow(reviewer, [reviewer.locator('.deliver-layout__bar .deliver-version-picker').first(), reviewer.getByRole('button', { name: 'Show Comments' })], 44)
+		expect(await clearCorner(reviewer.locator('.deliver-player__stage'))).toBe(true)
 		await guest.close()
 
 		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: { width: 852, height: 393 } })
@@ -1549,7 +1564,8 @@ test.describe('The bar on a phone', () => {
 		await expect(page.locator('.deliver-compare video').first()).toHaveJSProperty('readyState', 4)
 		for (const [width, height] of [[852, 393], [932, 430], [640, 360]]) {
 			await page.setViewportSize({ width, height })
-			await oneRow(page, [page.getByRole('link', { name: 'Back to the Review' }), page.getByRole('radio').first()], 44)
+			await oneRow(page, [page.getByRole('link', { name: 'Back to the Review' }), page.getByRole('radio').first(), page.getByRole('button', { name: 'Show Comments' })], 44)
+			expect(await clearCorner(page.locator('.deliver-compare__stage'))).toBe(true)
 		}
 		await page.getByRole('link', { name: 'Back to the Review' }).tap()
 		await expect(page).toHaveURL(new RegExp(`/versions/${versions[0].id}$`))
