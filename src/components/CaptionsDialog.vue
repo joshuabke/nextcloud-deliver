@@ -3,10 +3,10 @@ import deleteIcon from '@mdi/svg/svg/trash-can-outline.svg?raw'
 import { getLanguage } from '@nextcloud/l10n'
 import { computed, nextTick, onMounted, ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
+import DeliverDialog from './DeliverDialog.vue'
 import { errorMessage, getVersion, giveCaptions, removeCaptions } from '../api.js'
 import { COMMON_LANGUAGES, isCaptionsFile, languageName, languageOfName, MAX_BYTES, toWebVtt } from '../lib/captions.js'
 import { t } from '../lib/l10n.js'
@@ -104,7 +104,7 @@ async function remove(tag) {
 </script>
 
 <template>
-	<NcDialog :name="t('deliver', 'Captions')" size="small" @closing="emit('close')">
+	<DeliverDialog :name="t('deliver', 'Captions')" size="small" @closing="emit('close')">
 		<ul
 			v-if="present?.length"
 			ref="list"
@@ -148,7 +148,7 @@ async function remove(tag) {
 				{{ t('deliver', 'Add Captions') }}
 			</NcButton>
 		</template>
-	</NcDialog>
+	</DeliverDialog>
 </template>
 
 <style scoped>

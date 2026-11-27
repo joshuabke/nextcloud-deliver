@@ -3,9 +3,9 @@ import { generateUrl } from '@nextcloud/router'
 import { ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
-import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
+import DeliverDialog from './DeliverDialog.vue'
 import ProjectMembers from './ProjectMembers.vue'
 import ProjectSettingsFields from './ProjectSettingsFields.vue'
 import { useBusy } from '../composables/busy.js'
@@ -46,7 +46,7 @@ async function remove() {
 </script>
 
 <template>
-	<NcDialog
+	<DeliverDialog
 		:name="t('deliver', 'Settings of {project}', { project: project.name })"
 		size="normal"
 		@closing="emit('close')">
@@ -92,7 +92,7 @@ async function remove() {
 				{{ t('deliver', 'Open in Files') }}
 			</NcButton>
 		</template>
-	</NcDialog>
+	</DeliverDialog>
 </template>
 
 <style scoped>

@@ -35,7 +35,6 @@ import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, onBeforeUnmount, ref, watch, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
@@ -45,6 +44,7 @@ import NcTextField from '@nextcloud/vue/components/NcTextField'
 import AssetCard from '../components/AssetCard.vue'
 import CaptionsDialog from '../components/CaptionsDialog.vue'
 import ContextMenu from '../components/ContextMenu.vue'
+import DeliverDialog from '../components/DeliverDialog.vue'
 import DueDateDialog from '../components/DueDateDialog.vue'
 import FilterBar from '../components/FilterBar.vue'
 import LayoutSwitch from '../components/LayoutSwitch.vue'
@@ -1016,7 +1016,7 @@ function dropped(event) {
 				v-if="menu"
 				v-bind="menu"
 				@close="menu = null" />
-			<NcDialog
+			<DeliverDialog
 				v-if="managed"
 				:name="t('deliver', 'Versions of {asset}', { asset: managed.name })"
 				size="normal"
@@ -1028,8 +1028,8 @@ function dropped(event) {
 					:folderUrl="davFolder(managed.path)"
 					@open="router.push(`/versions/${$event}`)"
 					@changed="store.fetch(props.id)" />
-			</NcDialog>
-			<NcDialog
+			</DeliverDialog>
+			<DeliverDialog
 				v-if="assigning"
 				:name="assigning.length === 1
 					? t('deliver', 'Move {asset} to another Project', { asset: assigning[0].name })
@@ -1049,8 +1049,8 @@ function dropped(event) {
 						{{ t('deliver', 'Move') }}
 					</NcButton>
 				</template>
-			</NcDialog>
-			<NcDialog
+			</DeliverDialog>
+			<DeliverDialog
 				v-if="stackingFile"
 				:name="t('deliver', 'Add {file} as a new Version', { file: stackingFile.name })"
 				size="small"
@@ -1068,7 +1068,7 @@ function dropped(event) {
 						{{ t('deliver', 'Add') }}
 					</NcButton>
 				</template>
-			</NcDialog>
+			</DeliverDialog>
 			<RenameDialog
 				v-if="renaming"
 				:name="renaming.name"

@@ -3,11 +3,11 @@ import { showError, showSuccess } from '@nextcloud/dialogs'
 import { computed, reactive, ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
-import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcTextArea from '@nextcloud/vue/components/NcTextArea'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import AssetPicker from './AssetPicker.vue'
 import ContactField from './ContactField.vue'
+import DeliverDialog from './DeliverDialog.vue'
 import LinkRights from './LinkRights.vue'
 import { inviteToProject } from '../api.js'
 import { copyLink } from '../clipboard.js'
@@ -72,7 +72,7 @@ function invite() {
 </script>
 
 <template>
-	<NcDialog :name="t('deliver', 'Invite a Reviewer')" size="normal" @closing="emit('close')">
+	<DeliverDialog :name="t('deliver', 'Invite a Reviewer')" size="normal" @closing="emit('close')">
 		<form id="deliver-invite" class="deliver-invite" @submit.prevent="invite">
 			<div class="deliver-invite__person">
 				<ContactField
@@ -125,7 +125,7 @@ function invite() {
 				{{ t('deliver', 'Invite') }}
 			</NcButton>
 		</template>
-	</NcDialog>
+	</DeliverDialog>
 </template>
 
 <style scoped>

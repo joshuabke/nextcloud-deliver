@@ -30,6 +30,25 @@ export function isTyping(target) {
 }
 
 /**
+ * NcModal listens for Escape through @nextcloud/vue's useHotKey, which ignores
+ * inputs, textareas, selects and contentEditable elements. From any of those,
+ * bare Escape closes the dialog unless a child control already handled it (#306).
+ *
+ * @param {KeyboardEvent} event - a keydown bubbling out of a dialog
+ * @return {boolean} whether the dialog should close
+ */
+export function closesDialog(event) {
+	return event.key === 'Escape'
+		&& !event.defaultPrevented
+		&& !event.isComposing
+		&& !event.repeat
+		&& !event.ctrlKey
+		&& !event.metaKey
+		&& !event.altKey
+		&& isTyping(event.target)
+}
+
+/**
  * @param {KeyboardEvent} event - the keystroke
  * @return {string|null} the action to run, or null when the key means nothing here
  */

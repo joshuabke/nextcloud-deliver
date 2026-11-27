@@ -1,5 +1,5 @@
 <script setup>
-import NcDialog from '@nextcloud/vue/components/NcDialog'
+import DeliverDialog from './DeliverDialog.vue'
 import { t } from '../lib/l10n.js'
 
 const props = defineProps({
@@ -23,7 +23,7 @@ const buttons = [
 </script>
 
 <template>
-	<NcDialog
+	<DeliverDialog
 		class="deliver-confirm"
 		:name="name"
 		:message="message"

@@ -7,9 +7,9 @@ import { formatFileSize } from '@nextcloud/files'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcProgressBar from '@nextcloud/vue/components/NcProgressBar'
+import DeliverDialog from './DeliverDialog.vue'
 import NameText from './NameText.vue'
 import UploadRename from './UploadRename.vue'
 import { n, t } from '../lib/l10n.js'
@@ -128,7 +128,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 </script>
 
 <template>
-	<NcDialog
+	<DeliverDialog
 		v-if="store.expanded"
 		:name="t('deliver', 'Uploads')"
 		size="normal"
@@ -269,7 +269,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 				{{ store.sending.length ? t('deliver', 'Continue in the background') : t('deliver', 'Close') }}
 			</NcButton>
 		</template>
-	</NcDialog>
+	</DeliverDialog>
 	<!-- Minimised: a card in the corner, a bar on phones, on every view (story 134) -->
 	<div
 		v-else-if="store.items.length"

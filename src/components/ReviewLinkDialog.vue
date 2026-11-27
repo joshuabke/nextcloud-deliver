@@ -1,8 +1,8 @@
 <script setup>
 import { computed, ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import NcDialog from '@nextcloud/vue/components/NcDialog'
 import AssetPicker from './AssetPicker.vue'
+import DeliverDialog from './DeliverDialog.vue'
 import LinkActivityDialog from './LinkActivityDialog.vue'
 import ReviewLinkItem from './ReviewLinkItem.vue'
 import { errorMessage, linkApi } from '../api.js'
@@ -45,7 +45,7 @@ async function pick(assetIds) {
 </script>
 
 <template>
-	<NcDialog
+	<DeliverDialog
 		:name="link.title ?? linkTitle(link)"
 		size="normal"
 		@closing="emit('close')">
@@ -81,7 +81,7 @@ async function pick(assetIds) {
 			</NcButton>
 		</template>
 		<LinkActivityDialog v-if="showActivity" :link="link" @close="showActivity = false" />
-	</NcDialog>
+	</DeliverDialog>
 </template>
 
 <style scoped>
