@@ -2958,6 +2958,42 @@ test.describe('Audio review', () => {
  */
 const heard = (videos) => videos.evaluateAll((all) => all.map((video) => video.deliverGain && !video.muted ? video.deliverGain.gain.value > 0.5 : !video.muted))
 
+/**
+ * The rows of Compare's lanes drawn all the way across, in CSS px from the canvas's top: bars leave gaps, a dividing line does not
+ *
+ * @param {import('@playwright/test').Page} on - the page
+ */
+const dividers = (on) => on.locator('.deliver-compare__lanes canvas').evaluate((element) => {
+	const { width, height } = element
+	const data = element.getContext('2d').getImageData(0, 0, width, height).data
+	const rows = []
+	for (let y = 0; y < height; y++) {
+		let drawn = 0
+		for (let x = 0; x < width; x++) {
+			drawn += data[(y * width + x) * 4 + 3] > 0 ? 1 : 0
+		}
+		if (drawn > width * 0.95) {
+			rows.push(y * element.clientHeight / height)
+		}
+	}
+	return rows
+})
+
+/**
+ * A line divides the two lanes, in the gap between them: under the first lane's name, above the second's
+ *
+ * @param {import('@playwright/test').Page} on - the page
+ */
+async function expectDivider(on) {
+	await expect.poll(async () => (await dividers(on)).length).toBeGreaterThan(0)
+	const canvas = await on.locator('.deliver-compare__lanes canvas').boundingBox()
+	const [first, second] = await on.locator('.deliver-compare__lanes .deliver-wave__lane').evaluateAll((all) => all.map((each) => each.getBoundingClientRect()))
+	for (const row of await dividers(on)) {
+		expect(row).toBeGreaterThan(first.bottom - canvas.y)
+		expect(row).toBeLessThan(second.top - canvas.y)
+	}
+}
+
 test.describe('Comparing sound', () => {
 	let browser
 	let context
@@ -3019,6 +3055,7 @@ test.describe('Comparing sound', () => {
 		const canvas = page.locator('.deliver-compare__lanes canvas')
 		await expect(canvas).toBeVisible()
 		await expect(page.locator('.deliver-wave__lane')).toHaveText(['V1', 'V2'])
+		await expectDivider(page)
 		const side = page.getByRole('radio', { name: /^V2/ })
 		expect(await heard(videos)).toEqual([true, false])
 
@@ -3591,6 +3628,7 @@ test.describe('Comparing sound', () => {
 		expect(controls.y + controls.height).toBeLessThanOrEqual(390)
 		const sound = await sideways.getByRole('radio', { name: /^V1/ }).boundingBox()
 		expect(sound.height).toBeGreaterThanOrEqual(44)
+		await expectDivider(sideways)
 		await phone.close()
 	})
 })

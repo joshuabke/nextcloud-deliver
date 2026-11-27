@@ -64,6 +64,8 @@ const BOTTOM = props.lanes ? 8 : 40
 const LANE_GAP = 8
 /** A lane that is not heard */
 const SUBDUED = { played: 'rgba(255, 255, 255, 0.5)', rest: 'rgba(255, 255, 255, 0.16)' }
+/** The line in the gap between two lanes */
+const DIVIDER = 'rgba(255, 255, 255, 0.24)'
 /** Half the card's width, to keep it on the stage */
 const CARD_HALF = 180
 
@@ -311,6 +313,13 @@ function drawBars(context, offset, head) {
 			drawLane(context, levels, grid, bands[index], offset + shiftPixels(lane.shift, across.value, pixels.width), head, lane.audible ? colors : SUBDUED)
 		}
 	})
+	// A line across the middle of each gap, a whole device pixel thick
+	const line = Math.max(1, Math.round(ratio))
+	context.fillStyle = DIVIDER
+	for (let lane = 1; lane < bands.length; lane++) {
+		const above = bands[lane - 1].top + bands[lane - 1].height
+		context.fillRect(0, Math.round((above + bands[lane].top - line) / 2), pixels.width, line)
+	}
 }
 
 /**
