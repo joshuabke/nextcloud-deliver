@@ -1535,10 +1535,14 @@ test.describe('The bar on a phone', () => {
 			expect((await api.fetch(`${dav}/${name}`, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(201)
 		}
 		const assets = async () => (await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()).ocs.data.assets
-		await expect.poll(async () => (await assets())[0]?.versions.length).toBe(2)
-		versions = (await assets())[0].versions
+		const asset = async () => (await assets()).find((each) => each.name === NAME)
+		await expect.poll(async () => (await asset())?.versions.length).toBe(2)
+		// A second Asset, so that Previous and Next Asset are in the bar or its menu, for a Reviewer too
+		expect((await api.fetch(`${dav}/teaser.webm`, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(201)
+		await expect.poll(async () => (await assets()).length).toBe(2)
+		versions = (await asset()).versions
 		// A Due Date adds its line to the name's block in the bar
-		expect((await api.put(`/ocs/v2.php/apps/deliver/api/v1/assets/${(await assets())[0].id}?format=json`, { data: { dueDate: '2030-02-20' } })).ok()).toBe(true)
+		expect((await api.put(`/ocs/v2.php/apps/deliver/api/v1/assets/${(await asset()).id}?format=json`, { data: { dueDate: '2030-02-20' } })).ok()).toBe(true)
 		token = (await (await api.post(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`)).json()).ocs.data.token
 		await api.dispose()
 		browser = await chromium.connectOverCDP(CDP)
@@ -1575,6 +1579,8 @@ test.describe('The bar on a phone', () => {
 		await expect(bar).toBeVisible()
 		const box = await bar.boundingBox()
 		expect(box.height).toBeLessThanOrEqual(height)
+		// Nothing runs past the window's edge, in the bar or the page
+		expect(await bar.evaluate((element) => element.scrollWidth <= element.clientWidth && document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 		for (const button of buttons) {
 			const each = await button.boundingBox()
 			expect(each.y).toBeGreaterThanOrEqual(box.y)
@@ -1605,21 +1611,29 @@ test.describe('The bar on a phone', () => {
 		await expect(page.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
 		const share = page.getByRole('button', { name: 'Share', exact: true })
 		await expect(page.locator('.deliver-layout__bar .deliver-due')).toBeVisible()
+		const more = page.getByRole('button', { name: 'More', exact: true })
 		const buttons = [
 			page.getByRole('link', { name: /^Back to/ }),
 			page.getByRole('button', { name: 'Approve', exact: true }),
 			page.locator('.deliver-layout__bar .deliver-version-picker button'),
 			share,
-			page.getByRole('button', { name: 'More', exact: true }),
 		]
+		// Sideways what the menu holds upright stands in the bar as icons (#296)
+		const menu = ['Previous Asset', 'Next Asset', 'New Version'].map((name) => page.getByRole('button', { name, exact: true }))
 		for (const [width, height] of [[393, 852], [375, 667], [852, 393], [932, 430], [640, 360]]) {
 			await page.setViewportSize({ width, height })
 			const sideways = width > height
 			await expect(page.locator(sideways ? '.deliver-layout--sideways' : '.deliver-layout--upright')).toHaveCount(1)
 			// Sideways the list beside the picture opens from the bar, not from a button over the picture
-			await oneRow(page, sideways ? [...buttons, page.getByRole('button', { name: 'Show Comments' })] : buttons, sideways ? 44 : 56)
+			await oneRow(page, sideways ? [...buttons, ...menu, page.getByRole('button', { name: 'Show Comments' })] : [...buttons, more], sideways ? 44 : 56)
+			await expect(more).toHaveCount(sideways ? 0 : 1)
 			expect(await clearCorner(page.locator('.deliver-player__stage'))).toBe(true)
 		}
+		// Even on the narrowest sideways the name gives way, not a button; New Version still picks a file
+		expect(await page.locator('.deliver-review__title').evaluate((title) => title.scrollWidth > title.clientWidth)).toBe(true)
+		const chooser = page.waitForEvent('filechooser')
+		await menu[2].tap()
+		await chooser
 		// Upright on the smallest, the long name gives way to the buttons
 		await page.setViewportSize({ width: 375, height: 667 })
 		await expect(page.locator('.deliver-layout--upright')).toHaveCount(1)
@@ -1662,8 +1676,24 @@ test.describe('The bar on a phone', () => {
 		await expect(reviewer.locator('.deliver-layout__bar .deliver-due')).toBeVisible()
 		// Only to read: no pointer over it
 		await expect(reviewer.locator('.deliver-layout__bar span.deliver-due__button')).toHaveCSS('cursor', 'default')
-		await oneRow(reviewer, [reviewer.locator('.deliver-layout__bar .deliver-version-picker').first(), reviewer.getByRole('button', { name: 'Show Comments' })], 44)
-		expect(await clearCorner(reviewer.locator('.deliver-player__stage'))).toBe(true)
+		// Previous, Next Asset and Download stand in the bar, no menu left (#296)
+		const reviewerButtons = [
+			reviewer.getByRole('button', { name: 'All Assets' }),
+			reviewer.locator('.deliver-layout__bar .deliver-version-picker').first(),
+			...['Previous Asset', 'Next Asset'].map((name) => reviewer.getByRole('button', { name, exact: true })),
+			reviewer.getByRole('link', { name: 'Download the original' }),
+			reviewer.getByRole('button', { name: 'Show Comments' }),
+		]
+		for (const [width, height] of [[852, 393], [932, 430], [640, 360]]) {
+			await reviewer.setViewportSize({ width, height })
+			await expect(reviewer.locator('.deliver-layout--sideways')).toHaveCount(1)
+			await oneRow(reviewer, reviewerButtons, 44)
+			await expect(reviewer.getByRole('button', { name: 'More', exact: true })).toHaveCount(0)
+			// The long name ends short of the buttons, not under them
+			const title = await reviewer.locator('.deliver-layout__bar .deliver-layout__title').boundingBox()
+			expect(title.x + title.width).toBeLessThanOrEqual((await reviewerButtons[1].boundingBox()).x)
+			expect(await clearCorner(reviewer.locator('.deliver-player__stage'))).toBe(true)
+		}
 		await guest.close()
 
 		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: { width: 852, height: 393 } })
@@ -1673,6 +1703,7 @@ test.describe('The bar on a phone', () => {
 		await expect(page.locator('.deliver-compare video').first()).toHaveJSProperty('readyState', 4)
 		for (const [width, height] of [[852, 393], [932, 430], [640, 360]]) {
 			await page.setViewportSize({ width, height })
+			await expect(page.locator('.deliver-layout--sideways')).toHaveCount(1)
 			await oneRow(page, [page.getByRole('link', { name: 'Back to the Review' }), page.getByRole('radio').first(), page.getByRole('button', { name: 'Show Comments' })], 44)
 			expect(await clearCorner(page.locator('.deliver-compare__stage'))).toBe(true)
 		}
