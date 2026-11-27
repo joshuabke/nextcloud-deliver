@@ -473,6 +473,7 @@ OC.L10N.register(
 			"%n Medienjobs sind fehlgeschlagen. Die Deliver-Verwaltungseinstellungen zeigen, warum, und wiederholen sie."
 		],
 		"A preview of what Reviewers see. You comment and approve in Deliver.": "Eine Vorschau dessen, was Reviewer sehen. Kommentieren und abnehmen können Sie in Deliver.",
+		"Select": "Auswählen",
 		"Select all": "Alle auswählen",
 		"_%n minute left_::_%n minutes left_": [
 			"noch %n Minute",

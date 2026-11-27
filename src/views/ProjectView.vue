@@ -2,6 +2,7 @@
 import backIcon from '@mdi/svg/svg/arrow-left.svg?raw'
 import dueIcon from '@mdi/svg/svg/calendar-clock.svg?raw'
 import clearIcon from '@mdi/svg/svg/checkbox-blank-off-outline.svg?raw'
+import selectIcon from '@mdi/svg/svg/checkbox-marked-outline.svg?raw'
 import chevronDownIcon from '@mdi/svg/svg/chevron-down.svg?raw'
 import chevronRightIcon from '@mdi/svg/svg/chevron-right.svg?raw'
 import captionsIcon from '@mdi/svg/svg/closed-caption-outline.svg?raw'
@@ -56,7 +57,7 @@ import { assignAsset, deleteAsset, disableAsset, enableFile, errorMessage, regen
 import { useGridOptions, useLayout } from '../composables/layout.js'
 import { useQuery } from '../composables/query.js'
 import { confirmRemoval } from '../confirm.js'
-import { allMissing, between, FILTER_LABELS, FILTERS, found, passes, selectAll, SORT_OPTIONS, sortAssets, SORTS } from '../lib/filters.js'
+import { addToSelection, allMissing, between, canSelect, FILTER_LABELS, FILTERS, found, passes, selectAll, SORT_OPTIONS, sortAssets, SORTS } from '../lib/filters.js'
 import { folderLevel, groupByFolder, inFolder, projectDavPath, projectDir } from '../lib/folders.js'
 import { n, t } from '../lib/l10n.js'
 import { gridStyle, mediaFit } from '../lib/listView.js'
@@ -264,6 +265,19 @@ function pick(asset, { range, add }) {
 	}
 	selected.value = [asset.id]
 	anchor = asset.id
+}
+
+/**
+ * Adds an Asset to the selection, as its menu's "Select" entry does (#313)
+ *
+ * @param {object} asset - the Asset to select
+ */
+function select(asset) {
+	const next = addToSelection(selected.value, asset, tickedMissing.value)
+	if (next !== selected.value) {
+		selected.value = next
+		anchor = asset.id
+	}
 }
 /** Media files in the folder on screen that are no Assets, greyed out under them to add one by one; they have no state to filter by */
 const notUpForReview = computed(() => filter.value !== 'all'
@@ -652,6 +666,7 @@ function assetItems(asset) {
 			group: 'file',
 			href: generateUrl('/apps/files/files/{fileId}', { fileId: newest.fileId }) + '?' + new URLSearchParams({ dir, opendetails: 'true' }),
 		},
+		canSelect(asset, selected.value, tickedMissing.value) && { label: t('deliver', 'Select'), icon: selectIcon, group: 'file', action: () => select(asset) },
 		asset.manages && { label: project.value.none ? t('deliver', 'Remove from Deliver') : t('deliver', 'Remove from Project'), icon: removeIcon, danger: true, action: () => remove([asset]) },
 		asset.manages && asset.filesWrite && { label: t('deliver', 'Delete'), icon: deleteIcon, danger: true, action: () => deleteFiles([asset]) },
 	]

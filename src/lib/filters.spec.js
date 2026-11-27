@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { allMissing, between, found, passes, projectPasses, selectAll, sortAssets, sortProjects } from './filters.js'
+import { addToSelection, allMissing, between, canSelect, found, passes, projectPasses, selectAll, sortAssets, sortProjects } from './filters.js'
 
 const version = (fields = {}) => ({ name: 'cut_v2.mov', unseen: 0, approvals: { approved: 0, changes: 0 }, ...fields })
 const asset = (fields = {}, versions = [version()]) => ({ name: 'Cut', dueDate: null, versions, ...fields })
@@ -79,5 +79,24 @@ describe('ticking Assets', () => {
 		expect(between(row, 2, 4).map((each) => each.id)).toEqual([2, 3, 4])
 		expect(between(row, 4, 1).map((each) => each.id)).toEqual([1, 2, 3, 4])
 		expect(between(row, 9, 3).map((each) => each.id)).toEqual([3])
+	})
+
+	it('lets a manageable Asset join the selection when not ticked and of the same Missing state (#313)', () => {
+		const first = asset({ id: 1, manages: true })
+		const second = asset({ id: 2, manages: true })
+		const readOnly = asset({ id: 3, manages: false })
+		const gone = asset({ id: 4, manages: true }, [version({ state: 'missing' })])
+		expect(canSelect(first, [], null)).toBe(true)
+		expect(addToSelection([], first, null)).toEqual([1])
+		expect(canSelect(first, [1], false)).toBe(false)
+		expect(addToSelection([1], first, false)).toEqual([1])
+		expect(canSelect(second, [1], false)).toBe(true)
+		expect(addToSelection([1], second, false)).toEqual([1, 2])
+		expect(canSelect(readOnly, [], null)).toBe(false)
+		expect(addToSelection([], readOnly, null)).toEqual([])
+		expect(canSelect(gone, [1], false)).toBe(false)
+		expect(addToSelection([1], gone, false)).toEqual([1])
+		expect(canSelect(gone, [], null)).toBe(true)
+		expect(addToSelection([], gone, null)).toEqual([4])
 	})
 })
