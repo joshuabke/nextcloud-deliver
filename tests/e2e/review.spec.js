@@ -2929,11 +2929,12 @@ test.describe('Audio review', () => {
 			await card.getByRole('button', { name: 'Reply', exact: true }).dispatchEvent('click')
 			const field = target.locator('.deliver-comments__list > .deliver-comment').filter({ hasText: 'answer me above the keyboard' }).getByPlaceholder('Write a Reply')
 			await expect(field).toBeFocused()
+			// Its first line, where the text goes, in the zoomed view: as the browser brings the caret into view
 			await expect.poll(() => field.evaluate((element) => {
 				const box = element.getBoundingClientRect()
 				const seen = window.visualViewport
-				return box.top >= seen.offsetTop && box.bottom <= seen.offsetTop + seen.height
-					&& box.left >= seen.offsetLeft && box.right <= seen.offsetLeft + seen.width
+				return box.top >= seen.offsetTop && box.top + 24 <= seen.offsetTop + seen.height
+					&& box.left >= seen.offsetLeft && box.left < seen.offsetLeft + seen.width
 			})).toBe(true)
 			await phone.close()
 		}

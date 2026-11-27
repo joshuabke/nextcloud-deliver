@@ -70,7 +70,9 @@ const canDelete = computed(() => (mine.value && store.canDeleteOwn) || store.man
 /** Reactions need a name to put on them, like Comments (story 91) */
 const canReact = computed(() => store.canComment === true && store.me?.type !== 'unnamed')
 
-// Reply on a circle's card opens this Comment's Reply field and puts the focus in it (#273)
+// Reply on a circle's card opens this Comment's Reply field and puts the focus in it (#273),
+// still within the press on Reply, so a phone opens its keyboard. There the focus may scroll:
+// iOS brings a field above its keyboard only as it takes a focus that does (#284)
 watch(() => store.replyTo, async (id) => {
 	if (id !== props.comment.id || props.isReply) {
 		return
@@ -79,7 +81,7 @@ watch(() => store.replyTo, async (id) => {
 	if (canReply.value) {
 		replying.value = true
 		await nextTick()
-		replyField.value?.focus({ preventScroll: true })
+		replyField.value?.focus({ preventScroll: !window.matchMedia('(pointer: coarse)').matches })
 	}
 }, { immediate: true })
 
