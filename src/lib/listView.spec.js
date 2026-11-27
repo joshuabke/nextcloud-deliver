@@ -12,27 +12,29 @@ function refuse() {
 const closed = refuse
 
 describe('the remembered layout', () => {
-	it('is the grid until chosen', () => {
-		expect(readLayout('project-1', memory())).toBe('grid')
+	it('is the list until chosen', () => {
+		expect(readLayout('project-1', memory())).toBe('list')
 	})
 
 	it('is kept per Project and per link', () => {
 		const storage = memory()
+		writeLayout('project-1', 'grid', storage)
+		expect(readLayout('project-1', storage)).toBe('grid')
+		expect(readLayout('project-2', storage)).toBe('list')
+		expect(readLayout('link-abc', storage)).toBe('list')
 		writeLayout('project-1', 'list', storage)
 		expect(readLayout('project-1', storage)).toBe('list')
-		expect(readLayout('project-2', storage)).toBe('grid')
-		expect(readLayout('link-abc', storage)).toBe('grid')
 	})
 
 	it('ignores what is not a layout', () => {
 		const storage = memory()
 		storage().setItem('deliver.layout.project-1', 'tiles')
-		expect(readLayout('project-1', storage)).toBe('grid')
+		expect(readLayout('project-1', storage)).toBe('list')
 	})
 
 	it('survives a storage that throws', () => {
-		expect(() => writeLayout('project-1', 'list', closed)).not.toThrow()
-		expect(readLayout('project-1', closed)).toBe('grid')
+		expect(() => writeLayout('project-1', 'grid', closed)).not.toThrow()
+		expect(readLayout('project-1', closed)).toBe('list')
 	})
 })
 
