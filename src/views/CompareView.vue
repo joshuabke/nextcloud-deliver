@@ -37,7 +37,8 @@ const player = ref(null)
 const offset = ref(0)
 const mode = ref('side')
 const audio = ref('a')
-const tab = ref('a')
+/** The side whose Comments the list shows: the one someone last switched the sound to */
+const listed = ref('a')
 const LAYOUTS = [
 	{ id: 'side', label: t('deliver', 'Side by side') },
 	{ id: 'wipe', label: t('deliver', 'Wipe') },
@@ -55,13 +56,9 @@ const clock = computed(() => ({
 }))
 /** Side B's Comments read in its own Frames */
 const clockB = computed(() => ({ ...clock.value, fps: versionB.value?.fps, startFrame: versionB.value?.startFrame ?? 0 }))
-const tabs = computed(() => [versionA.value, versionB.value].filter(Boolean).map((version, index) => ({
-	id: index === 0 ? 'a' : 'b',
-	label: t('deliver', 'Comments on V{number}', { number: version.number }),
-})))
 const commentsA = computed(() => comments.value[props.a] ?? [])
 const commentsB = computed(() => comments.value[props.b] ?? [])
-const shown = computed(() => tab.value === 'a' ? commentsA.value : commentsB.value)
+const shown = computed(() => listed.value === 'a' ? commentsA.value : commentsB.value)
 
 watch(() => [props.a, props.b], async ([a, b]) => {
 	error.value = null
@@ -109,10 +106,10 @@ function swap() {
 }
 
 /**
- * @param {object} comment - a Comment of the side on the tab
+ * @param {object} comment - a Comment of the side listed
  */
 function jump(comment) {
-	const target = tab.value === 'a'
+	const target = listed.value === 'a'
 		? comment.inFrame
 		: frameOnA(comment.inFrame, versionA.value.fps, versionB.value.fps, offset.value)
 	player.value?.seekTo(target)
@@ -173,7 +170,7 @@ function jump(comment) {
 				:aria-label="t('deliver', 'Layout')" />
 		</template>
 
-		<!-- The Comments shown follow the side someone switches the sound to, not a pass of Alternate A/B: a tab picked by hand holds until then -->
+		<!-- The Comments shown follow the side someone switches the sound to, not a pass of Alternate A/B -->
 		<ComparePlayer
 			ref="player"
 			v-model:offset="offset"
@@ -184,15 +181,13 @@ function jump(comment) {
 			:clock="clock"
 			:commentsA="commentsA"
 			:commentsB="commentsB"
-			@listen="tab = $event" />
+			@listen="listed = $event" />
 
 		<template #panel>
-			<!-- On a phone held upright the list waits under the grabber, as the Review view's does -->
-			<SegmentedControl
-				v-model="tab"
-				class="deliver-compare-view__tabs deliver-comments__head"
-				:options="tabs"
-				wide />
+			<!-- Named, since while Alternate A/B plays the switch shows the other side; on a phone held upright the list waits under the grabber, as the Review view's does -->
+			<h3 class="deliver-compare-view__heading deliver-comments__head">
+				{{ t('deliver', 'Comments on V{number}', { number: (listed === 'a' ? versionA : versionB).number }) }}
+			</h3>
 			<ul v-if="shown.length" class="deliver-compare-view__list deliver-comments__list">
 				<li v-for="comment in shown" :key="comment.id">
 					<button
@@ -200,7 +195,7 @@ function jump(comment) {
 						type="button"
 						class="deliver-compare-view__anchor"
 						@click="jump(comment)">
-						{{ formatAt(comment.inFrame, tab === 'a' ? clock : clockB) }}
+						{{ formatAt(comment.inFrame, listed === 'a' ? clock : clockB) }}
 					</button>
 					<span class="deliver-compare-view__author">{{ comment.author.name }}</span>
 					<p>{{ comment.body }}</p>
@@ -218,8 +213,15 @@ function jump(comment) {
 	margin: calc(var(--default-clickable-area) + 4 * var(--default-grid-baseline)) calc(4 * var(--default-grid-baseline));
 }
 
-.deliver-compare-view__tabs {
-	margin: calc(3 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline)) var(--default-grid-baseline);
+.deliver-compare-view__heading {
+	display: flex;
+	align-items: center;
+	/* As high as the Review view's head row, so the grabber sits in it alike, and clear of the first Comment below */
+	min-height: calc(var(--default-clickable-area) + 2 * var(--default-grid-baseline));
+	margin: 0 0 var(--default-grid-baseline);
+	padding: 0 calc(3 * var(--default-grid-baseline));
+	font-size: var(--default-font-size);
+	font-weight: normal;
 }
 
 .deliver-compare-view__list {
