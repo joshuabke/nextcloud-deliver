@@ -5,7 +5,9 @@ import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import removeIcon from '@mdi/svg/svg/delete-outline.svg?raw'
 import filesIcon from '@mdi/svg/svg/folder-outline.svg?raw'
 import icon from '@mdi/svg/svg/folder-play-outline.svg?raw'
+import noProjectIcon from '@mdi/svg/svg/inbox-outline.svg?raw'
 import openIcon from '@mdi/svg/svg/open-in-app.svg?raw'
+import projectIcon from '@mdi/svg/svg/play-box-multiple-outline.svg?raw'
 import addIcon from '@mdi/svg/svg/plus.svg?raw'
 import { FilePickerType, getFilePickerBuilder } from '@nextcloud/dialogs'
 import { loadState } from '@nextcloud/initial-state'
@@ -31,7 +33,7 @@ import { useQuery } from '../composables/query.js'
 import { confirmProjectRemoval } from '../confirm.js'
 import { FILTER_LABELS, PROJECT_FILTERS, projectPasses, SORT_OPTIONS, sortProjects, SORTS } from '../lib/filters.js'
 import { projectDir } from '../lib/folders.js'
-import { t } from '../lib/l10n.js'
+import { n, t } from '../lib/l10n.js'
 import { useProjectsStore } from '../store/projects.js'
 
 const store = useProjectsStore()
@@ -69,6 +71,13 @@ function openMenu(event, project) {
 	menu.value = {
 		x: event.clientX,
 		y: event.clientY,
+		// A phone's sheet names the Project above its menu, as its card shows it
+		head: {
+			name: project.name,
+			icon: project.none ? noProjectIcon : project.folderId ? icon : projectIcon,
+			line: n('deliver', '%n Asset', '%n Assets', project.activity.assets),
+			timestamp: project.activity.lastActivity,
+		},
 		items: [
 			!project.none && { label: t('deliver', 'Project settings'), icon: settingsIcon, action: () => { settings.value = project } },
 			{ label: t('deliver', 'Open'), icon: openIcon, action: () => router.push(`/projects/${project.id}`) },

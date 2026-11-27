@@ -53,6 +53,8 @@ export function useLongPress(open) {
 	return {
 		press,
 		fromButton(event) {
+			// Safari leaves the focus where it was on a tap; a sheet gives it back to the button it came from
+			event.currentTarget.focus({ preventScroll: true })
 			const box = event.currentTarget.getBoundingClientRect()
 			open({ clientX: box.left, clientY: box.bottom })
 		},

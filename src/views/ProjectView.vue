@@ -9,6 +9,7 @@ import removeIcon from '@mdi/svg/svg/delete-outline.svg?raw'
 import downloadIcon from '@mdi/svg/svg/download.svg?raw'
 import notUpIcon from '@mdi/svg/svg/eye-off-outline.svg?raw'
 import addIcon from '@mdi/svg/svg/eye-plus-outline.svg?raw'
+import assetIcon from '@mdi/svg/svg/filmstrip.svg?raw'
 import filesIcon from '@mdi/svg/svg/folder-eye-outline.svg?raw'
 import moveIcon from '@mdi/svg/svg/folder-move-outline.svg?raw'
 import flatIcon from '@mdi/svg/svg/folder-off-outline.svg?raw'
@@ -24,6 +25,7 @@ import retryIcon from '@mdi/svg/svg/refresh.svg?raw'
 import renameIcon from '@mdi/svg/svg/rename-outline.svg?raw'
 import deleteIcon from '@mdi/svg/svg/trash-can-outline.svg?raw'
 import uploadIcon from '@mdi/svg/svg/tray-arrow-up.svg?raw'
+import audioIcon from '@mdi/svg/svg/waveform.svg?raw'
 import { getCurrentUser } from '@nextcloud/auth'
 import { generateRemoteUrl, generateUrl } from '@nextcloud/router'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
@@ -54,11 +56,12 @@ import { confirmRemoval } from '../confirm.js'
 import { allMissing, between, FILTER_LABELS, FILTERS, found, passes, selectAll, SORT_OPTIONS, sortAssets, SORTS } from '../lib/filters.js'
 import { folderLevel, groupByFolder, inFolder, projectDavPath, projectDir } from '../lib/folders.js'
 import { n, t } from '../lib/l10n.js'
-import { acceptFor, mediaKind, stackKind } from '../lib/media.js'
+import { acceptFor, isStill, mediaKind, stackKind } from '../lib/media.js'
 import { isOriginal } from '../lib/original.js'
 import { cannotConvert, inspect } from '../lib/proxy.js'
 import { offer } from '../lib/proxyPlan.js'
 import { stackSuggestions } from '../lib/suggestions.js'
+import { runtime } from '../lib/timecode.js'
 import { useProjectsStore } from '../store/projects.js'
 import { hasFfmpeg, proxySettings, useUploadsStore } from '../store/uploads.js'
 
@@ -314,7 +317,7 @@ function stackOptionsFor(file) {
  */
 function fileItems(url, name, fileId, mayRename) {
 	return [
-		{ label: t('deliver', 'Download'), icon: downloadIcon, href: url, download: name },
+		{ label: t('deliver', 'Download'), icon: downloadIcon, group: 'file', href: url, download: name },
 		mayRename && { label: t('deliver', 'Rename…'), icon: renameIcon, action: () => { renaming.value = { name, fileId } } },
 	]
 }
@@ -341,6 +344,7 @@ function openFileMenu(event, file) {
 	menu.value = {
 		x: event.clientX,
 		y: event.clientY,
+		head: { name: file.name, icon: file.mimeType.startsWith('audio/') ? audioIcon : assetIcon, line: file.path || project.value.name },
 		items: [
 			canAdd && { label: t('deliver', 'Add for review'), icon: addIcon, action: () => add(file) },
 			canAdd && stackOptionsFor(file).length > 0 && { label: t('deliver', 'Add as a new Version of…'), icon: newVersionIcon, action: () => openStacking(file) },
@@ -427,7 +431,27 @@ function openMenu(event, asset) {
 		x: event.clientX,
 		y: event.clientY,
 		title: many ? n('deliver', '%n Asset selected', '%n Assets selected', selected.value.length) : null,
+		head: many ? null : assetHead(asset),
 		items: (many ? selectionItems() : assetItems(asset)).filter(Boolean),
+	}
+}
+
+/**
+ * @param {object} asset - an Asset
+ * @return {object} what a phone's sheet shows above its menu: the newest Version's still, file name, number and who delivered it
+ */
+function assetHead(asset) {
+	const newest = asset.versions[0]
+	const audio = newest.mimeType?.startsWith('audio/')
+	return {
+		name: newest.name,
+		icon: audio ? audioIcon : assetIcon,
+		fileId: !audio && newest.state === 'ready' ? newest.fileId : null,
+		scrubUrl: newest.scrubUrl,
+		comments: newest.comments,
+		runtime: isStill(newest) ? null : runtime(newest.durationFrames, newest.fps),
+		line: [t('deliver', 'V{number}', { number: newest.number }), newest.deliveredBy?.name].filter(Boolean).join(' · '),
+		timestamp: newest.createdAt,
 	}
 }
 
@@ -592,21 +616,22 @@ function assetItems(asset) {
 	const [newest, previous] = asset.versions
 	const dir = asset.path.startsWith('/') ? asset.path : projectDir(project.value.path) + (asset.path ? '/' + asset.path : '')
 	return [
-		{ label: t('deliver', 'Open'), icon: openIcon, action: () => router.push(`/versions/${newest.id}`) },
+		{ label: t('deliver', 'Open'), icon: openIcon, group: 'open', action: () => router.push(`/versions/${newest.id}`) },
 		previous && { label: t('deliver', 'Compare with the Version before'), icon: compareIcon, action: () => router.push(`/compare/${previous.id}/${newest.id}`) },
-		asset.manages && asset.filesWrite && { label: t('deliver', 'Upload a new Version'), icon: newVersionIcon, action: () => pickVersion(asset) },
-		asset.manages && newest.processingFailed && { label: t('deliver', 'Process again'), icon: retryIcon, action: () => processAgain([asset]) },
-		...missingEntries(asset),
-		asset.manages && newest.takesProxy && newest.url && !uploads.proxies[newest.id] && { label: t('deliver', 'Upload Proxy…'), icon: uploadProxyIcon, action: () => pickProxy(newest) },
-		asset.manages && newest.proxyHandedIn && !uploads.proxies[newest.id] && { label: t('deliver', 'Remove Proxy'), icon: removeProxyIcon, action: () => dropHandedIn(newest) },
-		asset.manages && asset.filesWrite && newest.url && newest.mimeType?.startsWith('video/') && { label: t('deliver', 'Add Captions…'), icon: captionsIcon, action: () => { captionsFor.value = newest } },
-		asset.manages && { label: asset.dueDate ? t('deliver', 'Change the Due Date') : t('deliver', 'Set a Due Date'), icon: dueIcon, action: () => { dueFor.value = [asset] } },
+		asset.manages && asset.filesWrite && { label: t('deliver', 'Upload a new Version'), icon: newVersionIcon, group: 'media', action: () => pickVersion(asset) },
+		asset.manages && newest.processingFailed && { label: t('deliver', 'Process again'), icon: retryIcon, group: 'media', action: () => processAgain([asset]) },
+		...missingEntries(asset).map((item) => ({ ...item, group: 'media' })),
+		asset.manages && newest.takesProxy && newest.url && !uploads.proxies[newest.id] && { label: t('deliver', 'Upload Proxy…'), icon: uploadProxyIcon, group: 'media', action: () => pickProxy(newest) },
+		asset.manages && newest.proxyHandedIn && !uploads.proxies[newest.id] && { label: t('deliver', 'Remove Proxy'), icon: removeProxyIcon, group: 'media', action: () => dropHandedIn(newest) },
+		asset.manages && asset.filesWrite && newest.url && newest.mimeType?.startsWith('video/') && { label: t('deliver', 'Add Captions…'), icon: captionsIcon, group: 'media', action: () => { captionsFor.value = newest } },
+		asset.manages && { label: asset.dueDate ? t('deliver', 'Change the Due Date') : t('deliver', 'Set a Due Date'), icon: dueIcon, group: 'review', action: () => { dueFor.value = [asset] } },
 		asset.manages && { label: t('deliver', 'Manage Versions'), icon: stackIcon, action: () => { managing.value = asset.id } },
 		asset.manages && { label: t('deliver', 'Move to Project…'), icon: moveIcon, action: () => openAssign([asset]) },
 		...(newest.url ? fileItems(newest.url, newest.name, newest.fileId, asset.manages && asset.filesWrite) : []),
 		{
 			label: t('deliver', 'Show in Files'),
 			icon: filesIcon,
+			group: 'file',
 			href: generateUrl('/apps/files/files/{fileId}', { fileId: newest.fileId }) + '?' + new URLSearchParams({ dir, opendetails: 'true' }),
 		},
 		asset.manages && { label: project.value.none ? t('deliver', 'Remove from Deliver') : t('deliver', 'Remove from Project'), icon: removeIcon, danger: true, action: () => remove([asset]) },
