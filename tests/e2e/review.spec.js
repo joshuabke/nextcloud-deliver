@@ -1471,6 +1471,58 @@ test.describe('Review view', () => {
 		await cleanup.dispose()
 	})
 
+	test('a long name is cut shortly before its end, which stays in view, on its card, its row and the bar', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const dav = `/remote.php/dav/files/${USER}/${folder}`
+		const name = 'Franz Liszt - S.141, Grande Étude de Paganini No.2 in E-flat major, Andantino capriccioso, live at the Konzerthaus mix3'
+		const count = async () => (await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()).ocs.data.assets.length
+		const before = await count()
+		expect((await api.fetch(`${dav}/${name}.webm`, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(201)
+		await expect.poll(count).toBe(before + 1)
+		await api.dispose()
+
+		/** The end of the name as shown, whether it lies in its box, and whether the rest is cut */
+		const shownEnd = (label) => label.evaluate((element) => {
+			const box = element.getBoundingClientRect()
+			const tail = [...element.querySelectorAll('.deliver-name__tail')].find((part) => getComputedStyle(part).display !== 'none')
+			const head = element.querySelector('.deliver-name__head')
+			if (!tail || !head) {
+				return { end: null }
+			}
+			const own = tail.getBoundingClientRect()
+			return {
+				end: tail.dataset.text,
+				inside: own.width > 0 && own.left >= box.left - 0.5 && own.right <= box.right + 0.5 && own.top >= box.top - 0.5 && own.bottom <= box.bottom + 0.5,
+				cut: element.scrollHeight > element.clientHeight || head.scrollWidth > head.clientWidth,
+			}
+		})
+		const shown = { end: '2 mix3', inside: true, cut: true }
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		try {
+			const small = await phone.newPage()
+			await login(small)
+			for (const at of [page, small]) {
+				for (const look of ['grid', 'list']) {
+					await at.goto(`/apps/deliver/projects/${projectId}`)
+					await at.evaluate(([key, value]) => localStorage.setItem(key, value), [`deliver.layout.project-${projectId}`, look])
+					await at.reload()
+					const label = card(at, name).locator('.deliver-card__name')
+					await expect(label).toHaveAttribute('title', `${name}.webm`)
+					expect(await shownEnd(label), `${look} at ${at.viewportSize().width} px`).toEqual(shown)
+				}
+				await card(at, name).locator('.deliver-card__link').click()
+				const title = at.locator('.deliver-layout__bar h2')
+				await expect(title).toHaveAccessibleName(name)
+				expect(await shownEnd(title.locator('.deliver-name')), `the bar at ${at.viewportSize().width} px`).toEqual(shown)
+			}
+		} finally {
+			await phone.close()
+			const cleanup = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth })
+			await cleanup.fetch(`${dav}/${name}.webm`, { method: 'DELETE' })
+			await cleanup.dispose()
+		}
+	})
+
 	test('a Review Link named after a long folder without spaces keeps its heading within a phone\'s width', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		const dav = `/remote.php/dav/files/${USER}/${folder}_festival_submission_directors_cut_colour_graded_final`
