@@ -14,6 +14,7 @@ import NcDateTime from '@nextcloud/vue/components/NcDateTime'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DueDate from './DueDate.vue'
 import MediaStill from './MediaStill.vue'
+import NameText from './NameText.vue'
 import { useLongPress } from '../composables/longpress.js'
 import { n, t } from '../lib/l10n.js'
 import { decisionOf } from '../lib/listView.js'
@@ -151,9 +152,11 @@ const status = computed(() => {
 					<span v-else-if="length" class="deliver-card__status">{{ length }}</span>
 				</template>
 			</div>
-			<div class="deliver-card__name" :title="newest.name">
-				{{ asset.name }}
-			</div>
+			<NameText
+				class="deliver-card__name"
+				:name="asset.name"
+				:lines="2"
+				:title="newest.name" />
 			<!-- What the badges on the still say, in the row's own line -->
 			<div v-if="list" class="deliver-card__facts">
 				<span class="deliver-card__fact deliver-card__fact--bold">{{ t('deliver', 'V{number}', { number: newest.number }) }}</span>

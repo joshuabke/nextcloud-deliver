@@ -43,14 +43,8 @@
 	padding-inline-end: var(--default-clickable-area);
 }
 
-/* A long name wraps to a second line, breaking inside a word without spaces, and is cut only after it; its title holds it whole */
+/* A long name wraps to a second line and is cut shortly before its end (NameText); its title holds it whole */
 .deliver-card__name {
-	display: -webkit-box;
-	-webkit-box-orient: vertical;
-	-webkit-line-clamp: 2;
-	line-clamp: 2;
-	overflow: hidden;
-	overflow-wrap: anywhere;
 	font-size: var(--font-size-small, 13px);
 	font-weight: bold;
 }

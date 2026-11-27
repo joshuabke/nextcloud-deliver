@@ -21,6 +21,7 @@ import CommentPanel from '../components/CommentPanel.vue'
 import DueDate from '../components/DueDate.vue'
 import ImageViewer from '../components/ImageViewer.vue'
 import LinkLanding from '../components/LinkLanding.vue'
+import NameText from '../components/NameText.vue'
 import ReviewerMenu from '../components/ReviewerMenu.vue'
 import ReviewLayout from '../components/ReviewLayout.vue'
 import VersionPicker from '../components/VersionPicker.vue'
@@ -202,7 +203,7 @@ async function claim({ name, email, mail }) {
 				<ReviewerMenu v-if="context.me?.type !== 'member'" v-model:reviewer="reviewer" />
 				<div class="deliver-public__crumbs">
 					<h2 class="deliver-layout__title">
-						{{ context.asset?.name }}
+						<NameText :name="context.asset?.name ?? ''" :title="context.asset?.name" />
 					</h2>
 					<DueDate v-if="isMobile" class="deliver-public__due" :modelValue="context.asset?.dueDate ?? null" />
 				</div>

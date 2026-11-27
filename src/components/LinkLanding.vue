@@ -13,6 +13,7 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DueDate from './DueDate.vue'
 import LayoutSwitch from './LayoutSwitch.vue'
 import MediaStill from './MediaStill.vue'
+import NameText from './NameText.vue'
 import SortMenu from './SortMenu.vue'
 import { useLayout } from '../composables/layout.js'
 import { LINK_SORTS, SORT_OPTIONS, sortAssets } from '../lib/filters.js'
@@ -191,7 +192,11 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 					<div class="deliver-landing__media">
 						<button type="button" class="deliver-landing__folder" @click="folder = sub.path">
 							<NcIconSvgWrapper :svg="folderIcon" :size="40" />
-							<span class="deliver-landing__folder-name" :title="sub.name">{{ sub.name }}</span>
+							<NameText
+								class="deliver-landing__folder-name"
+								:name="sub.name"
+								:lines="2"
+								:title="sub.name" />
 							<span class="deliver-landing__count">{{ n('deliver', '%n Asset', '%n Assets', sub.count) }}</span>
 						</button>
 						<input
@@ -238,7 +243,7 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 								class="deliver-landing__name"
 								:title="asset.name"
 								@click="emit('open', asset.newestId)">
-								<span class="deliver-landing__name-text">{{ asset.name }}</span>
+								<NameText class="deliver-landing__name-text" :name="asset.name" :lines="2" />
 							</button>
 							<div v-if="look === 'list'" class="deliver-landing__facts">
 								<span class="deliver-landing__fact-version">{{ t('deliver', 'V{number}', { number: asset.number }) }}</span>
@@ -398,16 +403,10 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 	cursor: pointer;
 }
 
-/* Two lines, smaller, breaking inside a word without spaces, cut only after them; the title holds the name whole */
+/* Two lines, smaller, cut shortly before the end; the title holds the name whole */
 .deliver-landing__folder-name,
 .deliver-landing__name-text {
-	display: -webkit-box;
-	-webkit-box-orient: vertical;
-	-webkit-line-clamp: 2;
-	line-clamp: 2;
 	max-width: 100%;
-	overflow: hidden;
-	overflow-wrap: anywhere;
 	font-size: var(--font-size-small, 13px);
 	font-weight: bold;
 }

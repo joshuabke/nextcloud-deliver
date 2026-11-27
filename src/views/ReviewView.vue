@@ -24,6 +24,7 @@ import DueDate from '../components/DueDate.vue'
 import DueDateDialog from '../components/DueDateDialog.vue'
 import ExportMenu from '../components/ExportMenu.vue'
 import ImageViewer from '../components/ImageViewer.vue'
+import NameText from '../components/NameText.vue'
 import ReviewLayout from '../components/ReviewLayout.vue'
 import ReviewLinks from '../components/ReviewLinks.vue'
 import VersionPicker from '../components/VersionPicker.vue'
@@ -215,7 +216,7 @@ function upload(event) {
 						@update:modelValue="setDue" />
 				</div>
 				<h2 class="deliver-layout__title deliver-review__title" tabindex="-1">
-					{{ context.asset.name }}
+					<NameText :name="context.asset.name" :title="context.asset.name" />
 				</h2>
 			</div>
 			<DueDate

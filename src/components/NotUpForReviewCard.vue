@@ -4,6 +4,7 @@ import videoIcon from '@mdi/svg/svg/filmstrip.svg?raw'
 import audioIcon from '@mdi/svg/svg/waveform.svg?raw'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import NameText from './NameText.vue'
 import { useLongPress } from '../composables/longpress.js'
 import { t } from '../lib/l10n.js'
 
@@ -31,9 +32,11 @@ const { press, fromButton } = useLongPress((where) => emit('menu', where))
 			<div class="deliver-card__still">
 				<NcIconSvgWrapper :svg="file.mimeType.startsWith('audio/') ? audioIcon : videoIcon" :size="40" />
 			</div>
-			<div class="deliver-card__name" :title="file.name">
-				{{ file.name }}
-			</div>
+			<NameText
+				class="deliver-card__name"
+				:name="file.name"
+				:lines="2"
+				:title="file.name" />
 			<div class="deliver-card__meta">
 				{{ where }}
 			</div>
