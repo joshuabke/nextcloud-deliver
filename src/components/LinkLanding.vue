@@ -191,7 +191,7 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 					<div class="deliver-landing__media">
 						<button type="button" class="deliver-landing__folder" @click="folder = sub.path">
 							<NcIconSvgWrapper :svg="folderIcon" :size="40" />
-							<span class="deliver-landing__folder-name">{{ sub.name }}</span>
+							<span class="deliver-landing__folder-name" :title="sub.name">{{ sub.name }}</span>
 							<span class="deliver-landing__count">{{ n('deliver', '%n Asset', '%n Assets', sub.count) }}</span>
 						</button>
 						<input
@@ -238,7 +238,7 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 								class="deliver-landing__name"
 								:title="asset.name"
 								@click="emit('open', asset.newestId)">
-								{{ asset.name }}
+								<span class="deliver-landing__name-text">{{ asset.name }}</span>
 							</button>
 							<div v-if="look === 'list'" class="deliver-landing__facts">
 								<span class="deliver-landing__fact-version">{{ t('deliver', 'V{number}', { number: asset.number }) }}</span>
@@ -391,12 +391,18 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 	cursor: pointer;
 }
 
-.deliver-landing__folder-name {
+/* Two lines, smaller, breaking inside a word without spaces, cut only after them; the title holds the name whole */
+.deliver-landing__folder-name,
+.deliver-landing__name-text {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
 	max-width: 100%;
 	overflow: hidden;
+	overflow-wrap: anywhere;
+	font-size: var(--font-size-small, 13px);
 	font-weight: bold;
-	text-overflow: ellipsis;
-	white-space: nowrap;
 }
 
 .deliver-landing__grid {
@@ -518,10 +524,6 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 .deliver-landing__name {
 	flex: 1;
 	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	font-weight: bold;
 }
 
 .deliver-landing__text {

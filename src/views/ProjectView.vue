@@ -862,7 +862,7 @@ function dropped(event) {
 				<li v-for="sub in level.folders" :key="sub.path">
 					<button type="button" class="deliver-project__folder-card" @click="folder = sub.path">
 						<NcIconSvgWrapper :svg="folderIcon" :size="32" />
-						<span class="deliver-project__folder-name">{{ sub.name }}</span>
+						<span class="deliver-project__folder-name" :title="sub.name">{{ sub.name }}</span>
 						<span class="deliver-project__folder-count">{{ n('deliver', '%n Asset', '%n Assets', sub.count) }}</span>
 					</button>
 				</li>
@@ -1097,6 +1097,8 @@ function dropped(event) {
 	align-items: center;
 	gap: calc(2 * var(--default-grid-baseline));
 	width: 100%;
+	/* As tall as a neighbour whose name takes two lines */
+	height: 100%;
 	min-height: 0;
 	margin: 0;
 	padding: calc(3 * var(--default-grid-baseline));
@@ -1113,13 +1115,18 @@ function dropped(event) {
 	border-color: var(--color-primary-element);
 }
 
+/* As an Asset's name: two lines, smaller, breaking inside a word without spaces */
 .deliver-project__folder-name {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
 	flex: 1;
 	min-width: 0;
 	overflow: hidden;
+	overflow-wrap: anywhere;
+	font-size: var(--font-size-small, 13px);
 	font-weight: bold;
-	text-overflow: ellipsis;
-	white-space: nowrap;
 }
 
 .deliver-project__folder-count {
