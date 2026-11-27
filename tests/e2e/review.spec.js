@@ -1461,7 +1461,8 @@ test.describe('Review view', () => {
 			const style = getComputedStyle(element)
 			return {
 				lines: Math.round(element.clientHeight / parseFloat(style.lineHeight)),
-				cut: element.scrollHeight > element.clientHeight,
+				// Past its two lines, or on the second one before its end
+				cut: element.scrollHeight > element.clientHeight || [...element.querySelectorAll('.deliver-name__head')].some((head) => head.checkVisibility({ visibilityProperty: true }) && head.scrollWidth > head.clientWidth),
 				sideways: element.scrollWidth > element.clientWidth,
 				size: parseFloat(style.fontSize),
 				body: parseFloat(getComputedStyle(document.body).fontSize),
@@ -1498,7 +1499,7 @@ test.describe('Review view', () => {
 		/** The end of the name as shown, whether it lies in its box, and whether the rest is cut */
 		const shownEnd = (label) => label.evaluate((element) => {
 			const box = element.getBoundingClientRect()
-			const shown = (part) => part.getClientRects().length > 0
+			const shown = (part) => part.checkVisibility({ visibilityProperty: true })
 			const tail = [...element.querySelectorAll('.deliver-name__tail')].find(shown)
 			const head = [...element.querySelectorAll('.deliver-name__head')].find(shown)
 			if (!tail || !head) {
@@ -1683,7 +1684,7 @@ test.describe('The bar on a phone', () => {
 			expect(await clearCorner(page.locator('.deliver-player__stage'))).toBe(true)
 		}
 		// Even on the narrowest sideways the name gives way, not a button; New Version still picks a file
-		expect(await page.locator('.deliver-review__title').evaluate((title) => title.scrollWidth > title.clientWidth)).toBe(true)
+		expect(await page.locator('.deliver-review__title .deliver-name__head').evaluate((head) => head.scrollWidth > head.clientWidth)).toBe(true)
 		const chooser = page.waitForEvent('filechooser')
 		await menu[2].tap()
 		await chooser

@@ -96,9 +96,15 @@ onBeforeUnmount(() => observer.unobserve(root.value))
 		:data-head="parts.head"
 		:data-tail="parts.tail">
 		<span class="hidden-visually">{{ name }}</span>
-		<span class="deliver-name__head" aria-hidden="true" :data-text="parts.head" /><span class="deliver-name__tail" aria-hidden="true" :data-text="parts.tail" />
-		<!-- Cut on two lines: the first line as it wrapped, then the rest of the head and the tail as on one line -->
-		<template v-if="lines === 2">
+		<template v-if="lines === 1">
+			<span class="deliver-name__head" aria-hidden="true" :data-text="parts.head" /><span class="deliver-name__tail" aria-hidden="true" :data-text="parts.tail" />
+		</template>
+		<template v-else>
+			<!-- Cut, it stays without a height, so the box keeps the widths the whole name asks for -->
+			<span class="deliver-name__whole" aria-hidden="true">
+				<span class="deliver-name__head" :data-text="parts.head" /><span class="deliver-name__tail" :data-text="parts.tail" />
+			</span>
+			<!-- Cut: the first line as it wrapped, then the rest of the head and the tail as on one line -->
 			<span class="deliver-name__first" aria-hidden="true" />
 			<span class="deliver-name__line" aria-hidden="true">
 				<span class="deliver-name__head deliver-name__rest" /><span class="deliver-name__tail" :data-text="parts.tail" />
@@ -142,13 +148,25 @@ onBeforeUnmount(() => observer.unobserve(root.value))
 	overflow-wrap: anywhere;
 }
 
-.deliver-name--two > .deliver-name__tail {
+.deliver-name__whole > .deliver-name__tail {
 	white-space: nowrap;
 }
 
-.deliver-name--two:not(.deliver-name--cut) :is(.deliver-name__first, .deliver-name__line),
-.deliver-name--cut > :is(.deliver-name__head, .deliver-name__tail) {
+.deliver-name--two:not(.deliver-name--cut) :is(.deliver-name__first, .deliver-name__line) {
 	display: none;
+}
+
+.deliver-name--cut .deliver-name__whole {
+	display: block;
+	height: 0;
+	overflow: hidden;
+	visibility: hidden;
+}
+
+/* Sized by the box, never sizing it */
+.deliver-name__first,
+.deliver-name__line {
+	contain: inline-size;
 }
 
 .deliver-name__first {
