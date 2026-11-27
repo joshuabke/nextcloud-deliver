@@ -1720,6 +1720,22 @@ test.describe('Menus on a phone', () => {
 	/** Longer than any row or card shows whole */
 	const NAME = 'the-final-mix-of-the-trailer-for-the-festival-in-autumn-with-its-very-long-title.webm'
 	const UPRIGHT = { width: 393, height: 852 }
+	/** What the pages of a test threw; any of it fails the test */
+	let errors = []
+
+	/**
+	 * @param {import('@playwright/test').Page} page - a page of this test
+	 * @return {import('@playwright/test').Page} the same, its errors collected
+	 */
+	const watched = (page) => page.on('pageerror', (error) => errors.push(error.message))
+
+	test.beforeEach(() => {
+		errors = []
+	})
+
+	test.afterEach(() => {
+		expect(errors).toEqual([])
+	})
 	const SIDEWAYS = { width: 852, height: 393 }
 
 	test.beforeAll(async ({ playwright }) => {
@@ -1771,7 +1787,7 @@ test.describe('Menus on a phone', () => {
 	async function desktopLabels() {
 		if (!onDesktop) {
 			const desktop = await browser.newContext({ baseURL: BROWSER_URL, viewport: { width: 1280, height: 800 } })
-			const page = await desktop.newPage()
+			const page = watched(await desktop.newPage())
 			await login(page)
 			await page.goto(`/apps/deliver/projects/${projectId}`)
 			await page.getByRole('button', { name: /^Actions for the-final-mix/ }).click()
@@ -1782,7 +1798,7 @@ test.describe('Menus on a phone', () => {
 	}
 
 	/**
-	 * A finger strokes down from the middle of an element, as Playwright has no swipe
+	 * A finger strokes down (up, by a negative distance) from the middle of an element, as Playwright has no swipe
 	 *
 	 * @param {import('@playwright/test').Page} page - the page
 	 * @param {import('@playwright/test').Locator} from - where the finger comes down
@@ -1802,7 +1818,7 @@ test.describe('Menus on a phone', () => {
 
 	test('on a desktop the menu stays a menu, and the click outside that closes it only closes it', async () => {
 		const desktop = await browser.newContext({ baseURL: BROWSER_URL, viewport: { width: 1280, height: 800 } })
-		const page = await desktop.newPage()
+		const page = watched(await desktop.newPage())
 		await login(page)
 		await page.goto(`/apps/deliver/projects/${projectId}`)
 		const more = page.getByRole('button', { name: /^Actions for the-final-mix/ })
@@ -1828,7 +1844,7 @@ test.describe('Menus on a phone', () => {
 	// Sideways, where the rows' ends lie beside the sheet as beside a small menu, so the taps land where they would without one
 	test('on a phone a tap on another row or on ⋯ while the menu is open only closes it (#298)', async () => {
 		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: SIDEWAYS })
-		const page = await phone.newPage()
+		const page = watched(await phone.newPage())
 		await login(page)
 		await page.goto(`/apps/deliver/projects/${projectId}`)
 		const url = page.url()
@@ -1853,7 +1869,7 @@ test.describe('Menus on a phone', () => {
 	for (const viewport of [UPRIGHT, SIDEWAYS]) {
 		test(`on a phone ${viewport === UPRIGHT ? 'upright' : 'sideways'} the ⋯ menu of a row opens as a sheet, and a tap on the strip or on ⋯ only closes it`, async () => {
 			const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport })
-			const page = await phone.newPage()
+			const page = watched(await phone.newPage())
 			await login(page)
 			await page.goto(`/apps/deliver/projects/${projectId}`)
 			const url = page.url()
@@ -1883,6 +1899,13 @@ test.describe('Menus on a phone', () => {
 			const panel = await sheet.boundingBox()
 			expect(panel.y).toBeGreaterThanOrEqual(40)
 			expect(panel.y + panel.height).toBeCloseTo(viewport.height, 0)
+			// A finger scrolls the entries, not the page under them
+			const body = sheet.locator('.deliver-sheet__body')
+			if (await body.evaluate((element) => element.scrollHeight > element.clientHeight)) {
+				await strokeDown(page, sheet.getByRole('menuitem', { name: 'Open', exact: true }), -150)
+				await expect.poll(() => body.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+				await expect(sheet).toBeVisible()
+			}
 			await remove.scrollIntoViewIfNeeded()
 			await expect(remove).toBeInViewport()
 
@@ -1895,18 +1918,22 @@ test.describe('Menus on a phone', () => {
 			await page.waitForTimeout(300)
 			expect(page.url()).toBe(url)
 
-			// A second tap on ⋯ closes it and does not open it again (#298); upright the sheet covers the button
+			// A second tap on ⋯ closes it and does not open it again (#298), where the sheet leaves the button in sight
 			await more.tap()
 			await expect(sheet).toBeVisible()
 			const button = await more.boundingBox()
 			const [x, y] = [button.x + button.width / 2, button.y + button.height / 2]
+			// On the strip, or under the sheet itself where it is high enough to cover the button
+			const onStrip = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y).classList.contains('deliver-sheet'), { x, y })
+			expect(onStrip || await page.evaluate(({ x, y }) => document.querySelector('.deliver-sheet__panel').contains(document.elementFromPoint(x, y)), { x, y })).toBe(true)
 			if (viewport === SIDEWAYS) {
+				expect(onStrip).toBe(true)
+			}
+			if (onStrip) {
 				await page.touchscreen.tap(x, y)
 				await expect(sheet).toHaveCount(0)
 				await page.waitForTimeout(300)
 				await expect(sheet).toHaveCount(0)
-			} else {
-				expect(await page.evaluate(({ x, y }) => document.querySelector('.deliver-sheet__panel').contains(document.elementFromPoint(x, y)), { x, y })).toBe(true)
 			}
 			expect(page.url()).toBe(url)
 			await phone.close()
@@ -1915,7 +1942,7 @@ test.describe('Menus on a phone', () => {
 
 	test('on a phone the sheet closes by Escape and a stroke down, keeps the focus inside, and its entries work', async () => {
 		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: UPRIGHT })
-		const page = await phone.newPage()
+		const page = watched(await phone.newPage())
 		await login(page)
 		await page.goto(`/apps/deliver/projects/${projectId}`)
 		const url = page.url()
@@ -1924,6 +1951,13 @@ test.describe('Menus on a phone', () => {
 
 		await more.tap()
 		await expect(sheet).toBeFocused()
+		// Arrow keys walk the entries, as in the menu on a desktop
+		await page.keyboard.press('Tab')
+		await expect(sheet.getByRole('menuitem').first()).toBeFocused()
+		await page.keyboard.press('ArrowDown')
+		await expect(sheet.getByRole('menuitem').nth(1)).toBeFocused()
+		await page.keyboard.press('ArrowUp')
+		await expect(sheet.getByRole('menuitem').first()).toBeFocused()
 		// Tab walks the entries and stays in the sheet
 		const count = await sheet.getByRole('menuitem').count()
 		for (let step = 0; step <= count; step++) {
@@ -1963,7 +1997,7 @@ test.describe('Menus on a phone', () => {
 
 	test('on a phone a Project\'s menu opens as a sheet with its icon and its Assets', async () => {
 		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: UPRIGHT })
-		const page = await phone.newPage()
+		const page = watched(await phone.newPage())
 		await login(page)
 		await page.goto('/apps/deliver/')
 		await page.getByRole('button', { name: `Actions for ${folder}` }).tap()

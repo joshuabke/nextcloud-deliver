@@ -2,7 +2,8 @@
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
 // A sheet from below on a phone, as high as what it holds and at most up to a strip of the page:
-// a tap on that strip, a stroke down and Escape close it, and nothing under it gets the tap
+// a tap on that strip, a stroke down and Escape close it, and nothing under it gets the tap.
+// The default slot scrolls; the header slot stays above it
 defineProps({
 	/** What the sheet is about, for a screen reader */
 	label: { type: String, required: true },
@@ -11,6 +12,8 @@ defineProps({
 const emit = defineEmits(['close'])
 
 const panel = ref(null)
+/** The part that scrolls */
+const body = ref(null)
 /** Where the focus was before, the button that opened the sheet, so it goes back there */
 const opener = document.activeElement
 /** Whether the finger or the mouse came down on the strip, so the click that follows closes the sheet; the release of a long press that opened it does not */
@@ -32,10 +35,12 @@ function stripClick() {
 }
 
 /**
+ * A stroke from the grabber or the header, or from the body while it is at its top
+ *
  * @param {TouchEvent} event - a finger on the sheet
  */
 function strokeStart(event) {
-	strokeFrom = panel.value.scrollTop <= 0 ? event.touches[0].clientY : null
+	strokeFrom = body.value.scrollTop <= 0 || !body.value.contains(event.target) ? event.touches[0].clientY : null
 }
 
 /**
@@ -118,7 +123,12 @@ onBeforeUnmount(() => {
 				@touchend="strokeEnd"
 				@touchcancel="strokeEnd">
 				<div class="deliver-sheet__grabber" aria-hidden="true" />
-				<slot />
+				<div v-if="$slots.header" class="deliver-sheet__header">
+					<slot name="header" />
+				</div>
+				<div ref="body" class="deliver-sheet__body">
+					<slot />
+				</div>
 			</div>
 		</div>
 	</Teleport>
@@ -139,19 +149,18 @@ onBeforeUnmount(() => {
 
 .deliver-sheet__panel {
 	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
 	width: 100%;
 	max-width: 640px;
 	/* Up to a strip of the page, below the notch; dvh follows the toolbars of the browser */
 	max-height: calc(100dvh - max(48px, env(safe-area-inset-top) + 24px));
 	margin: 0 auto;
 	padding: 0 max(calc(3 * var(--default-grid-baseline)), env(safe-area-inset-right)) max(calc(3 * var(--default-grid-baseline)), env(safe-area-inset-bottom)) max(calc(3 * var(--default-grid-baseline)), env(safe-area-inset-left));
-	overflow-y: auto;
-	overscroll-behavior: contain;
 	border-radius: var(--border-radius-container-large, 16px) var(--border-radius-container-large, 16px) 0 0;
 	background: var(--color-main-background);
 	color: var(--color-main-text);
 	box-shadow: 0 -2px 16px var(--color-box-shadow);
-	touch-action: pan-y;
 	animation: deliver-sheet-in 0.2s ease-out;
 	outline: none;
 }
@@ -160,8 +169,21 @@ onBeforeUnmount(() => {
 	transition: none;
 }
 
+.deliver-sheet__header {
+	flex: none;
+}
+
+.deliver-sheet__body {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	touch-action: pan-y;
+}
+
 /* The bar to pull at, as the Comment sheet of the Review view has it */
 .deliver-sheet__grabber {
+	flex: none;
 	position: relative;
 	height: 20px;
 }

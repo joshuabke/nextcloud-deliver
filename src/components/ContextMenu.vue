@@ -85,10 +85,13 @@ function swallowClick() {
 	function done() {
 		document.removeEventListener('click', swallow, true)
 		document.removeEventListener('pointerdown', done, true)
+		document.removeEventListener('pointercancel', done, true)
 	}
 	document.addEventListener('click', swallow, true)
-	// Not called for the press under way: listeners added while an event is dispatched wait for the next one
+	// Not called for the press under way: listeners added while an event is dispatched wait for the next one.
+	// A press that becomes a scroll is cancelled and has no click
 	document.addEventListener('pointerdown', done, true)
+	document.addEventListener('pointercancel', done, true)
 }
 
 onMounted(async () => {
@@ -146,6 +149,7 @@ function close() {
 			{{ title }}
 		</div>
 		<div
+			ref="menu"
 			class="deliver-menu-sheet"
 			role="menu"
 			:aria-label="title ?? head?.name"
