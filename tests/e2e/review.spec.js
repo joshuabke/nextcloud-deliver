@@ -2213,7 +2213,37 @@ test.describe('Menus on a phone', () => {
 		const display = phonePage.getByRole('dialog', { name: 'Display options' })
 		await expect(display).toBeVisible()
 		await display.getByText('Grid', { exact: true }).tap()
-		await expect(display.getByText('Card size', { exact: true })).toBeVisible()
+		await expect(display.locator('.deliver-sheet__label', { hasText: /^Card size$/ })).toBeVisible()
+		// Grid and List stand at the top of the display sheet as two full-width segments (#302, #309)
+		const gridSegment = display.getByRole('radio', { name: 'Grid', exact: true })
+		const listSegment = display.getByRole('radio', { name: 'List', exact: true })
+		const sheetBox = await display.boundingBox()
+		const gridBox = await gridSegment.boundingBox()
+		const listBox = await listSegment.boundingBox()
+		const firstRowBox = await display.locator('.deliver-sheet__row').first().boundingBox()
+		expect(gridBox.height).toBeGreaterThanOrEqual(56)
+		expect(listBox.height).toBeGreaterThanOrEqual(56)
+		expect(Math.abs(gridBox.y - listBox.y)).toBeLessThanOrEqual(2)
+		expect(gridBox.y + gridBox.height).toBeLessThanOrEqual(firstRowBox.y)
+		expect(gridBox.width + listBox.width).toBeGreaterThanOrEqual(sheetBox.width * 0.9)
+		// Aspect ratio shows visible labels, and every segment button is touch-sized on a single line
+		for (const name of ['Landscape', 'Square', 'Portrait']) {
+			await expect(display.getByRole('radio', { name, exact: true })).toBeVisible()
+		}
+		const segments = await display.getByRole('radio').evaluateAll((buttons) => buttons.map((button) => {
+			const text = button.querySelector('.deliver-display-sheet__segment-label') ?? button
+			const style = getComputedStyle(text)
+			const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.3
+			return {
+				height: button.getBoundingClientRect().height,
+				lines: text.getBoundingClientRect().height / lineHeight,
+			}
+		}))
+		expect(segments.length).toBeGreaterThanOrEqual(12)
+		for (const segment of segments) {
+			expect(segment.height).toBeGreaterThanOrEqual(44)
+			expect(segment.lines).toBeLessThanOrEqual(1.6)
+		}
 		const displayRows = await display.locator('.deliver-sheet__row, .deliver-sheet__item').evaluateAll((rows) => rows.map((row) => {
 			const label = row.querySelector('.deliver-sheet__label') ?? row
 			return {

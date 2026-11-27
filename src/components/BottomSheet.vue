@@ -222,6 +222,11 @@ onBeforeUnmount(() => {
 	line-height: 1.3;
 }
 
+.deliver-sheet__body :deep(.deliver-sheet__row) {
+	flex-wrap: wrap;
+	gap: calc(2 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline));
+}
+
 .deliver-sheet__body :deep(.deliver-sheet__item) {
 	border: none;
 	border-radius: 0;
@@ -260,12 +265,17 @@ onBeforeUnmount(() => {
 	font-weight: normal;
 }
 
+.deliver-sheet__body :deep(.deliver-sheet__row > .deliver-sheet__label) {
+	flex: 1 1 auto;
+}
+
 .deliver-sheet__body :deep(label.deliver-sheet__label) {
 	cursor: pointer;
 }
 
 .deliver-sheet__body :deep(.deliver-sheet__control) {
 	flex: none;
+	max-width: 100%;
 	margin: 0;
 	padding: 0;
 	border: 0;
