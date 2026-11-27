@@ -1780,6 +1780,28 @@ test.describe('Menus on a phone', () => {
 		await desktop.close()
 	})
 
+	test('on a phone a tap on another row or on ⋯ while the menu is open only closes it (#298)', async () => {
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: UPRIGHT })
+		const page = await phone.newPage()
+		await login(page)
+		await page.goto(`/apps/deliver/projects/${projectId}`)
+		const url = page.url()
+		const more = page.getByRole('button', { name: /^Actions for the-final-mix/ })
+		const menu = page.getByRole('menu')
+		await more.tap()
+		await expect(menu).toBeVisible()
+		await card(page, 'other').locator('.deliver-card__name').tap()
+		await expect(menu).toHaveCount(0)
+		await page.waitForTimeout(300)
+		expect(page.url()).toBe(url)
+		await more.tap()
+		await expect(menu).toBeVisible()
+		await more.tap({ force: true })
+		await page.waitForTimeout(300)
+		await expect(menu).toHaveCount(0)
+		await phone.close()
+	})
+
 	for (const viewport of [UPRIGHT, SIDEWAYS]) {
 		test(`on a phone ${viewport === UPRIGHT ? 'upright' : 'sideways'} the ⋯ menu of a row opens as a sheet, and a tap on the strip or on ⋯ only closes it`, async () => {
 			const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport })
