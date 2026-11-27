@@ -150,7 +150,7 @@ function close() {
 		</div>
 		<div
 			ref="menu"
-			class="deliver-menu-sheet"
+			class="deliver-sheet__groups"
 			role="menu"
 			:aria-label="title ?? head?.name"
 			@keydown="onKey">
@@ -158,19 +158,19 @@ function close() {
 				v-for="(group, index) in groups"
 				:key="index"
 				role="group"
-				class="deliver-menu-sheet__group">
+				class="deliver-sheet__group">
 				<a
 					v-for="item in group"
 					:key="item.label"
 					:href="item.href ?? '#'"
 					:download="item.download"
 					role="menuitem"
-					class="deliver-context-menu__item deliver-menu-sheet__item"
-					:class="{ 'deliver-context-menu__item--danger': item.danger, 'deliver-context-menu__item--disabled': item.disabled }"
+					class="deliver-sheet__item"
+					:class="{ 'deliver-sheet__item--danger': item.danger, 'deliver-sheet__item--disabled': item.disabled }"
 					:aria-disabled="item.disabled || undefined"
 					@click="item.href ? emit('close') : ($event.preventDefault(), item.disabled || choose(item))">
-					<NcIconSvgWrapper :svg="item.icon" :size="20" />
-					{{ item.label }}
+					<NcIconSvgWrapper :svg="item.icon" :size="24" />
+					<span class="deliver-sheet__label">{{ item.label }}</span>
 				</a>
 			</div>
 		</div>
@@ -256,8 +256,9 @@ function close() {
 /* The whole name, on as many lines as it takes */
 .deliver-menu-sheet__name {
 	max-width: 100%;
-	font-size: 16px;
+	font-size: 18px;
 	font-weight: bold;
+	line-height: 1.3;
 	overflow-wrap: anywhere;
 }
 
@@ -266,39 +267,14 @@ function close() {
 	color: var(--color-text-maxcontrast);
 }
 
+.deliver-menu-sheet__line {
+	font-size: var(--default-font-size, 15px);
+}
+
 .deliver-menu-sheet__title {
-	padding: 0 0 calc(2 * var(--default-grid-baseline));
+	padding: 0 0 calc(3 * var(--default-grid-baseline));
 	font-weight: bold;
 	text-align: center;
-}
-
-.deliver-menu-sheet {
-	display: flex;
-	flex-direction: column;
-	gap: calc(3 * var(--default-grid-baseline));
-}
-
-/* Each group a card of its own, its entries split by a line */
-.deliver-menu-sheet__group {
-	overflow: hidden;
-	border-radius: var(--border-radius-large);
-	background: var(--color-background-hover);
-}
-
-.deliver-menu-sheet__item {
-	gap: calc(4 * var(--default-grid-baseline));
-	min-height: 48px;
-	padding: 0 calc(4 * var(--default-grid-baseline));
-	border-radius: 0;
-}
-
-.deliver-menu-sheet__item + .deliver-menu-sheet__item {
-	border-top: 1px solid var(--color-border);
-}
-
-.deliver-menu-sheet__item:hover,
-.deliver-menu-sheet__item:focus-visible {
-	background: var(--color-background-darker);
 }
 
 .deliver-context-menu {

@@ -4,8 +4,6 @@ import filterIcon from '@mdi/svg/svg/filter-variant.svg?raw'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import NcFormBox from '@nextcloud/vue/components/NcFormBox'
-import NcFormBoxButton from '@nextcloud/vue/components/NcFormBoxButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import BottomSheet from './BottomSheet.vue'
 import SortMenu from './SortMenu.vue'
@@ -55,22 +53,21 @@ const filterLabel = computed(() => activeFilter.value
 				<template #header>
 					{{ t('deliver', 'Filter') }}
 				</template>
-				<NcFormBox>
-					<NcFormBoxButton
+				<div class="deliver-sheet__group">
+					<button
 						v-for="(each, index) in filters"
 						:key="each.id"
+						type="button"
+						class="deliver-sheet__item"
 						:aria-pressed="filter === each.id"
 						@click="filter = each.id; filterOpen = false">
-						<span class="deliver-filter-sheet__row">
+						<span class="deliver-sheet__label deliver-filter-sheet__row">
 							<span>{{ each.label }}</span>
 							<span v-if="index > 0" class="deliver-filter-bar__count">{{ each.count }}</span>
 						</span>
-						<template #icon>
-							<NcIconSvgWrapper v-if="filter === each.id" :svg="checkIcon" />
-							<span v-else class="deliver-filter-sheet__spacer" />
-						</template>
-					</NcFormBoxButton>
-				</NcFormBox>
+						<NcIconSvgWrapper v-if="filter === each.id" :svg="checkIcon" :size="24" />
+					</button>
+				</div>
 			</BottomSheet>
 		</template>
 		<div
@@ -125,11 +122,5 @@ const filterLabel = computed(() => activeFilter.value
 	display: flex;
 	align-items: center;
 	gap: var(--default-grid-baseline);
-}
-
-.deliver-filter-sheet__spacer {
-	display: inline-block;
-	width: 20px;
-	height: 20px;
 }
 </style>
