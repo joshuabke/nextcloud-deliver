@@ -64,6 +64,8 @@ const BOTTOM = props.lanes ? 8 : 40
 const LANE_GAP = 8
 /** A lane that is not heard */
 const SUBDUED = { played: 'rgba(255, 255, 255, 0.5)', rest: 'rgba(255, 255, 255, 0.16)' }
+/** The line in the gap between two lanes */
+const DIVIDER = 'rgba(255, 255, 255, 0.24)'
 /** Half the card's width, to keep it on the stage */
 const CARD_HALF = 180
 
@@ -225,6 +227,7 @@ function draw() {
 				drawSpans(each, 0)
 				each.setTransform(1, 0, 0, 1, 0, 0)
 				drawBars(each, 0, -Infinity)
+				drawDividers(each)
 			}),
 			played: layer((each) => drawBars(each, 0, Infinity)),
 			top: layer((each) => {
@@ -245,6 +248,7 @@ function draw() {
 	drawSpans(context, offset / ratio)
 	context.setTransform(1, 0, 0, 1, 0, 0)
 	drawBars(context, offset, head)
+	drawDividers(context)
 	drawHead(context, head)
 	context.setTransform(ratio, 0, 0, ratio, 0, 0)
 	drawTop(context, offset / ratio)
@@ -303,7 +307,7 @@ function drawSpans(context, offset) {
 function drawBars(context, offset, head) {
 	// Over the whole piece the wave stands; scrolling, it moves at the playback rate
 	const grid = barGrid(across.value, pixels.width, ratio, isWhole(shown.value, duration.value) ? 0 : props.media?.playbackRate || 1)
-	const bands = laneBands(shownLanes.value.length, pixels.height, Math.round(TOP.value * ratio), Math.round(BOTTOM * ratio), Math.round(LANE_GAP * ratio))
+	const bands = shownBands()
 	shownLanes.value.forEach((lane, index) => {
 		if (lane.waveform) {
 			const levels = keep('bars' + index, [lane.waveform, grid.seconds, loudest.value], () => bars(lane.waveform, grid.seconds, loudest.value))
@@ -311,6 +315,26 @@ function drawBars(context, offset, head) {
 			drawLane(context, levels, grid, bands[index], offset + shiftPixels(lane.shift, across.value, pixels.width), head, lane.audible ? colors : SUBDUED)
 		}
 	})
+}
+
+/** @return {Array<{top: number, height: number}>} each lane's band, in device pixels */
+function shownBands() {
+	return laneBands(shownLanes.value.length, pixels.height, Math.round(TOP.value * ratio), Math.round(BOTTOM * ratio), Math.round(LANE_GAP * ratio))
+}
+
+/**
+ * A line across the middle of each gap between two lanes, a whole device pixel thick; drawn once, not with each layer of bars
+ *
+ * @param {CanvasRenderingContext2D} context - where to draw, untransformed
+ */
+function drawDividers(context) {
+	const bands = shownBands()
+	const line = Math.max(1, Math.round(ratio))
+	context.fillStyle = DIVIDER
+	for (let lane = 1; lane < bands.length; lane++) {
+		const above = bands[lane - 1].top + bands[lane - 1].height
+		context.fillRect(0, Math.round((above + bands[lane].top - line) / 2), pixels.width, line)
+	}
 }
 
 /**
