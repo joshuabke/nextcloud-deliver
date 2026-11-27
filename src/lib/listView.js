@@ -6,8 +6,8 @@ export const LAYOUTS = ['grid', 'list']
 const key = (scope) => `deliver.layout.${scope}`
 
 /**
- * What this browser remembers for a Project or a Review Link; the grid until
- * it was told otherwise, and where storage is closed or throws.
+ * What this browser remembers for a Project or a Review Link; the compact rows
+ * until it was told otherwise, and where storage is closed or throws.
  *
  * @param {string} scope - 'project-12' or 'link-<token>'
  * @param {() => Storage} [storage] - gives localStorage, unless a test brings its own; asked inside the try, as the accessor itself may throw
@@ -16,9 +16,9 @@ const key = (scope) => `deliver.layout.${scope}`
 export function readLayout(scope, storage = () => globalThis.localStorage) {
 	try {
 		const value = storage().getItem(key(scope))
-		return LAYOUTS.includes(value) ? value : 'grid'
+		return LAYOUTS.includes(value) ? value : 'list'
 	} catch {
-		return 'grid'
+		return 'list'
 	}
 }
 
