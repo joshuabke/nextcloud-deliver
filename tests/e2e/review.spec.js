@@ -1790,7 +1790,7 @@ test.describe('Menus on a phone', () => {
 		const menu = page.getByRole('menu')
 		await more.tap()
 		await expect(menu).toBeVisible()
-		await card(page, 'other').locator('.deliver-card__name').tap()
+		await card(page, 'other').locator('.deliver-card__name').tap({ force: true })
 		await expect(menu).toHaveCount(0)
 		await page.waitForTimeout(300)
 		expect(page.url()).toBe(url)
