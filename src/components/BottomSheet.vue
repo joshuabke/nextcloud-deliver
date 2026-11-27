@@ -148,6 +148,9 @@ onBeforeUnmount(() => {
 }
 
 .deliver-sheet__panel {
+	--deliver-sheet-row: 54px;
+	--deliver-sheet-font-size: 17px;
+	--deliver-sheet-icon-size: 24px;
 	box-sizing: border-box;
 	display: flex;
 	flex-direction: column;
@@ -172,7 +175,7 @@ onBeforeUnmount(() => {
 .deliver-sheet__header {
 	flex: none;
 	padding-bottom: calc(3 * var(--default-grid-baseline));
-	font-size: 16px;
+	font-size: var(--deliver-sheet-font-size);
 	font-weight: bold;
 	text-align: center;
 }
@@ -183,6 +186,109 @@ onBeforeUnmount(() => {
 	overflow-y: auto;
 	overscroll-behavior: contain;
 	touch-action: pan-y;
+	font-size: var(--deliver-sheet-font-size);
+}
+
+/* Shared sheet blocks and touch-sized rows (#309) */
+.deliver-sheet__body :deep(.deliver-sheet__groups) {
+	display: flex;
+	flex-direction: column;
+	gap: calc(3 * var(--default-grid-baseline));
+}
+
+.deliver-sheet__body :deep(.deliver-sheet__group) {
+	overflow: hidden;
+	border-radius: var(--border-radius-large);
+	background: var(--color-background-hover);
+}
+
+.deliver-sheet__body :deep(.deliver-sheet__group > :not(:first-child)) {
+	border-top: 1px solid var(--color-border);
+}
+
+.deliver-sheet__body :deep(.deliver-sheet__row),
+.deliver-sheet__body :deep(.deliver-sheet__item) {
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	gap: calc(4 * var(--default-grid-baseline));
+	width: 100%;
+	min-width: 0;
+	min-height: var(--deliver-sheet-row);
+	margin: 0;
+	padding: calc(2 * var(--default-grid-baseline)) calc(4 * var(--default-grid-baseline));
+	color: var(--color-main-text);
+	font-size: var(--deliver-sheet-font-size);
+	line-height: 1.3;
+}
+
+.deliver-sheet__body :deep(.deliver-sheet__row) {
+	flex-wrap: wrap;
+	gap: calc(2 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline));
+}
+
+.deliver-sheet__body :deep(.deliver-sheet__item) {
+	border: none;
+	border-radius: 0;
+	background: none;
+	box-shadow: none;
+	font: inherit;
+	font-size: var(--deliver-sheet-font-size);
+	font-weight: normal;
+	text-align: start;
+	text-decoration: none;
+	cursor: pointer;
+}
+
+.deliver-sheet__body :deep(.deliver-sheet__item:hover),
+.deliver-sheet__body :deep(.deliver-sheet__item:focus-visible) {
+	background: var(--color-background-darker);
+	outline: none;
+}
+
+.deliver-sheet__body :deep(.deliver-sheet__item--disabled),
+.deliver-sheet__body :deep(.deliver-sheet__item--disabled:hover) {
+	background: none;
+	color: var(--color-text-maxcontrast);
+	cursor: default;
+}
+
+.deliver-sheet__body :deep(.deliver-sheet__item--danger) {
+	color: var(--color-error-text);
+}
+
+.deliver-sheet__body :deep(.deliver-sheet__label) {
+	flex: 1;
+	min-width: 0;
+	margin: 0;
+	font-size: var(--deliver-sheet-font-size);
+	font-weight: normal;
+}
+
+.deliver-sheet__body :deep(.deliver-sheet__row > .deliver-sheet__label) {
+	flex: 1 1 auto;
+}
+
+.deliver-sheet__body :deep(label.deliver-sheet__label) {
+	cursor: pointer;
+}
+
+.deliver-sheet__body :deep(.deliver-sheet__control) {
+	flex: none;
+	max-width: 100%;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	font-size: var(--default-font-size);
+}
+
+.deliver-sheet__body :deep(.deliver-sheet__item .icon-vue) {
+	flex: none;
+	width: var(--deliver-sheet-icon-size);
+	min-width: var(--deliver-sheet-icon-size);
+	height: var(--deliver-sheet-icon-size);
+	min-height: var(--deliver-sheet-icon-size);
+	opacity: 1;
 }
 
 /* The bar to pull at, as the Comment sheet of the Review view has it */

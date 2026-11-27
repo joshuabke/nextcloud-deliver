@@ -2210,6 +2210,124 @@ test.describe('Menus on a phone', () => {
 		await expect(otherBox).not.toBeChecked()
 		await phone.close()
 	})
+
+	test('on a phone sheet rows are touch-sized with larger text, while desktop keeps its size (#309)', async () => {
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: UPRIGHT })
+		const phonePage = watched(await phone.newPage())
+		await login(phonePage)
+		await phonePage.goto(`/apps/deliver/projects/${projectId}`)
+
+		const measureRow = (row) => row.evaluate((element) => {
+			const label = element.querySelector('.deliver-sheet__label') ?? element
+			return {
+				height: element.getBoundingClientRect().height,
+				fontSize: parseFloat(getComputedStyle(label).fontSize),
+			}
+		})
+
+		await phonePage.getByRole('button', { name: /^Actions for the-final-mix/ }).tap()
+		const sheet = sheetOf(phonePage)
+		await expect(sheet).toBeVisible()
+		const menuRow = await measureRow(sheet.getByRole('menuitem', { name: 'Open', exact: true }))
+		expect(menuRow.height).toBeGreaterThanOrEqual(52)
+		expect(menuRow.fontSize).toBeGreaterThanOrEqual(16)
+		await phonePage.keyboard.press('Escape')
+		await expect(sheet).toHaveCount(0)
+
+		await phonePage.getByRole('button', { name: 'Sort by' }).tap()
+		const sortSheet = phonePage.getByRole('dialog', { name: 'Sort by' })
+		await expect(sortSheet).toBeVisible()
+		const sortRow = await measureRow(sortSheet.getByRole('button', { name: 'Name' }))
+		expect(sortRow.height).toBeGreaterThanOrEqual(52)
+		expect(sortRow.fontSize).toBeGreaterThanOrEqual(16)
+		await phonePage.keyboard.press('Escape')
+		await expect(sortSheet).toHaveCount(0)
+
+		await phonePage.getByRole('button', { name: 'Display options' }).tap()
+		const display = phonePage.getByRole('dialog', { name: 'Display options' })
+		await expect(display).toBeVisible()
+		await display.getByText('Grid', { exact: true }).tap()
+		await expect(display.locator('.deliver-sheet__label', { hasText: /^Card size$/ })).toBeVisible()
+		// Grid and List stand at the top of the display sheet as two full-width segments (#302, #309)
+		const gridSegment = display.locator('.deliver-display-sheet__layout-option', { hasText: /^Grid$/ })
+		const listSegment = display.locator('.deliver-display-sheet__layout-option', { hasText: /^List$/ })
+		const sheetBox = await display.boundingBox()
+		const gridBox = await gridSegment.boundingBox()
+		const listBox = await listSegment.boundingBox()
+		const firstRowBox = await display.locator('.deliver-sheet__row').first().boundingBox()
+		expect(gridBox.height).toBeGreaterThanOrEqual(56)
+		expect(listBox.height).toBeGreaterThanOrEqual(56)
+		expect(Math.abs(gridBox.y - listBox.y)).toBeLessThanOrEqual(2)
+		expect(gridBox.y + gridBox.height).toBeLessThanOrEqual(firstRowBox.y)
+		expect(gridBox.width + listBox.width).toBeGreaterThanOrEqual(sheetBox.width * 0.9)
+		// Aspect ratio shows visible labels, and every segment button is touch-sized on a single line
+		for (const name of ['Landscape', 'Square', 'Portrait']) {
+			await expect(display.locator('.deliver-display-sheet__segment', { hasText: new RegExp(`^${name}$`) })).toBeVisible()
+		}
+		const segments = await display.locator('.deliver-display-sheet__segment').evaluateAll((buttons) => buttons.map((button) => {
+			const text = button.querySelector(':scope > div:last-of-type') ?? button
+			const style = getComputedStyle(text)
+			const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.3
+			return {
+				height: button.getBoundingClientRect().height,
+				lines: text.getBoundingClientRect().height / lineHeight,
+			}
+		}))
+		expect(segments.length).toBeGreaterThanOrEqual(12)
+		for (const segment of segments) {
+			expect(segment.height).toBeGreaterThanOrEqual(44)
+			expect(segment.lines).toBeLessThanOrEqual(1.6)
+		}
+		const displayRows = await display.locator('.deliver-sheet__row, .deliver-sheet__item').evaluateAll((rows) => rows.map((row) => {
+			const label = row.querySelector('.deliver-sheet__label') ?? row
+			return {
+				height: row.getBoundingClientRect().height,
+				fontSize: parseFloat(getComputedStyle(label).fontSize),
+			}
+		}))
+		expect(displayRows.length).toBeGreaterThan(1)
+		expect(displayRows[1].height).toBeGreaterThanOrEqual(52)
+		expect(displayRows[1].fontSize).toBeGreaterThanOrEqual(16)
+		for (const row of displayRows) {
+			expect(row.height).toBeGreaterThanOrEqual(52)
+			expect(row.height).toBeLessThanOrEqual(80)
+		}
+		// Radio groups support native arrow-key navigation
+		const cardSize = display.getByRole('group', { name: 'Card size' })
+		const mediumSize = cardSize.getByRole('radio', { name: 'M', exact: true })
+		const largeSize = cardSize.getByRole('radio', { name: 'L', exact: true })
+		await expect(mediumSize).toBeChecked()
+		await mediumSize.focus()
+		await phonePage.keyboard.press('ArrowRight')
+		await expect(largeSize).toBeChecked()
+		await phone.close()
+
+		const desktop = await browser.newContext({ baseURL: BROWSER_URL, viewport: { width: 1280, height: 800 } })
+		const desktopPage = watched(await desktop.newPage())
+		await login(desktopPage)
+		await desktopPage.goto(`/apps/deliver/projects/${projectId}`)
+		await desktopPage.getByRole('button', { name: /^Actions for the-final-mix/ }).click()
+		const menu = desktopPage.getByRole('menu')
+		await expect(menu).toBeVisible()
+		// Today's desktop menu row keeps min-height: var(--default-clickable-area) (34 px) and body font size
+		const desktopRow = await menu.getByRole('menuitem', { name: 'Open', exact: true }).evaluate((element) => {
+			const probe = document.createElement('div')
+			probe.style.height = 'var(--default-clickable-area)'
+			document.body.append(probe)
+			const clickable = probe.getBoundingClientRect().height
+			probe.remove()
+			return {
+				height: element.getBoundingClientRect().height,
+				clickable,
+				fontSize: parseFloat(getComputedStyle(element).fontSize),
+				bodyFontSize: parseFloat(getComputedStyle(document.body).fontSize),
+			}
+		})
+		expect(desktopRow.height).toBeCloseTo(desktopRow.clickable, 0)
+		expect(desktopRow.height).toBeLessThan(48)
+		expect(desktopRow.fontSize).toBe(desktopRow.bodyFontSize)
+		await desktop.close()
+	})
 })
 
 test.describe('Audio review', () => {
