@@ -27,6 +27,8 @@ const PHONE = {
 	hasTouch: true,
 	userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Mobile/15E148 Safari/604.1',
 }
+/** A phone whose zoom Nextcloud leaves free */
+const ANDROID = 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Mobile Safari/537.36'
 const ocsHeaders = { 'OCS-APIREQUEST': 'true', Accept: 'application/json' }
 
 test.describe('Review view', () => {
@@ -97,24 +99,31 @@ test.describe('Review view', () => {
 		await expect(page).toHaveURL(new RegExp(`/projects/${projectId}$`))
 	})
 
-	test('the list is remembered for the Project, and a card keeps its actions as a row', async () => {
+	test('a Project opens as a list, a card keeps its actions as a row, and the cards are remembered for the Project', async () => {
 		await page.goto(`/apps/deliver/projects/${projectId}`)
-		await expect(page.locator('.deliver-card')).not.toHaveClass(/deliver-card--row/)
-		await page.getByRole('button', { name: 'Show the Assets as a list' }).click()
+		const layout = page.getByRole('button', { name: 'Show the Assets as a list' })
+		// Rows until someone picks the cards
 		await expect(page.locator('.deliver-card').first()).toHaveClass(/deliver-card--row/)
+		await expect(layout).toHaveAttribute('aria-pressed', 'true')
 		await expect(page.locator('.deliver-card__facts').first()).toContainText('V1')
-		await page.reload()
-		await expect(page.locator('.deliver-card').first()).toHaveClass(/deliver-card--row/)
-		await expect(page.getByRole('button', { name: 'Show the Assets as a list' })).toHaveAttribute('aria-pressed', 'true')
 		// The menu is still there, as a row
 		await page.getByRole('button', { name: /^Actions for / }).first().click()
 		await expect(page.getByRole('menuitem', { name: 'Rename…' })).toBeVisible()
 		await page.keyboard.press('Escape')
-		await page.getByRole('button', { name: 'Show the Assets as a list' }).click()
-		await expect(page.locator('.deliver-card').first()).not.toHaveClass(/deliver-card--row/)
+		await layout.click()
+		await expect(page.locator('.deliver-card')).not.toHaveClass(/deliver-card--row/)
+		await page.reload()
+		await expect(page.locator('.deliver-card')).not.toHaveClass(/deliver-card--row/)
+		await expect(layout).toHaveAttribute('aria-pressed', 'false')
+		// Picked again, the list is remembered as well
+		await layout.click()
+		await page.reload()
+		await expect(page.locator('.deliver-card').first()).toHaveClass(/deliver-card--row/)
 	})
 
 	test('uploads into the Project, then filters and finds its Assets', async () => {
+		// Cards, for the badges only a card shows
+		await page.evaluate((key) => localStorage.setItem(key, 'grid'), `deliver.layout.project-${projectId}`)
 		await page.goto(`/apps/deliver/projects/${projectId}`)
 		// The upload button opens the Uploads dialog (story 133)
 		await page.getByRole('button', { name: 'Upload', exact: true }).click()
@@ -209,6 +218,8 @@ test.describe('Review view', () => {
 	})
 
 	test('renames, removes and stacks from the menus of the cards', async () => {
+		// Cards, for the badges only a card shows
+		await page.evaluate((key) => localStorage.setItem(key, 'grid'), `deliver.layout.project-${projectId}`)
 		await page.goto(`/apps/deliver/projects/${projectId}`)
 		// The menu has a button on every screen, beside the name
 		const second = card(page, 'second')
@@ -503,7 +514,7 @@ test.describe('Review view', () => {
 		const due = page.getByRole('dialog', { name: 'Due Date' })
 		await due.getByLabel('Due Date').fill('2030-02-20')
 		await due.getByRole('button', { name: 'Save' }).tap()
-		await expect(clip.locator('.deliver-card__due')).toContainText('20')
+		await expect(clip.locator('.deliver-due')).toContainText('20')
 
 		await page.locator('.deliver-card__more').first().tap()
 		await page.getByRole('menuitem', { name: 'Open', exact: true }).tap()
@@ -1371,7 +1382,7 @@ test.describe('Review view', () => {
 		expect(times[1]).toBeCloseTo(times[0], 3)
 	})
 
-	test('a Review Link remembers the list for itself', async ({ playwright }) => {
+	test('a Review Link opens as a list and remembers the cards for itself', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		// The landing page opens only where a link shows several Assets
 		const dav = `/remote.php/dav/files/${USER}/${folder}`
@@ -1387,8 +1398,9 @@ test.describe('Review view', () => {
 		const reviewer = await visitor.newPage()
 		await reviewer.goto(`/apps/deliver/s/${one}`)
 		await expect(reviewer.locator('.deliver-landing__card').first()).toBeVisible()
-		await expect(reviewer.locator('.deliver-landing__grid--list')).toHaveCount(0)
-		// An Asset is picked for the ZIP in cards and in rows
+		await expect(reviewer.locator('.deliver-landing__grid--list')).toHaveCount(1)
+		await expect(reviewer.locator('.deliver-landing__facts').first()).toContainText('V1')
+		// An Asset is picked for the ZIP in rows and in cards
 		const pick = reviewer.locator('.deliver-landing__pick:not(:disabled)').first()
 		await pick.check()
 		await expect(reviewer.getByRole('link', { name: 'Download selection' })).toBeVisible()
@@ -1398,14 +1410,14 @@ test.describe('Review view', () => {
 		await pick.check()
 		await expect(reviewer.getByRole('link', { name: 'Download selection' })).toBeVisible()
 		await pick.uncheck()
-		await expect(reviewer.locator('.deliver-landing__grid--list')).toHaveCount(1)
-		await expect(reviewer.locator('.deliver-landing__facts').first()).toContainText('V1')
+		await expect(reviewer.locator('.deliver-landing__grid--list')).toHaveCount(0)
 		await reviewer.reload()
-		await expect(reviewer.locator('.deliver-landing__grid--list')).toHaveCount(1)
-		// Another link of the same Project is still cards
-		await reviewer.goto(`/apps/deliver/s/${other}`)
 		await expect(reviewer.locator('.deliver-landing__card').first()).toBeVisible()
 		await expect(reviewer.locator('.deliver-landing__grid--list')).toHaveCount(0)
+		// Another link of the same Project is still a list
+		await reviewer.goto(`/apps/deliver/s/${other}`)
+		await expect(reviewer.locator('.deliver-landing__card').first()).toBeVisible()
+		await expect(reviewer.locator('.deliver-landing__grid--list')).toHaveCount(1)
 		await visitor.close()
 		const cleanup = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth })
 		await cleanup.fetch(`${dav}/linklist.webm`, { method: 'DELETE' })
@@ -2964,6 +2976,84 @@ test.describe('Audio review', () => {
 		await api.dispose()
 	})
 
+	test('on a phone Reply on the card brings its field above the keyboard, upright and sideways, as a tap into the field does (#284)', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const made = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${versionId}/comments?format=json`, { data: { inFrame: 22500, body: 'answer me above the keyboard' } })
+		const id = (await made.json()).ocs.data.id
+		for (const viewport of [PHONE.viewport, { width: 852, height: 393 }]) {
+			// Nextcloud holds an iPhone's zoom at 1, and the zoom below stands in for the keyboard
+			const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport, userAgent: ANDROID })
+			// iOS brings a field above its keyboard as the field takes the focus, unless that focus
+			// prevents scrolling; a scrollIntoView knows nothing of the keyboard. Chromium's would pan
+			// the zoomed view below, so here it stays out
+			await phone.addInitScript(() => {
+				Element.prototype.scrollIntoView = () => {}
+			})
+			const target = await phone.newPage()
+			await login(target)
+			await target.goto(`/apps/deliver/versions/${versionId}`)
+			const canvas = target.locator('.deliver-wave canvas')
+			await expect(canvas).toBeVisible()
+			await expect(target.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
+			await target.getByRole('button', { name: '1 min', exact: true }).click()
+			const lane = await canvas.boundingBox()
+			await target.touchscreen.tap(lane.x + lane.width * 0.875, lane.y + lane.height - 20)
+			const card = target.getByRole('dialog', { name: /^Comment #/ })
+			await expect(card).toContainText('answer me above the keyboard')
+			// The keyboard as iOS opens it: the visual viewport shrinks, the layout keeps the window's size.
+			// Zoomed in, the visual viewport is as much smaller, and a field the browser brings into view lands in it
+			const cdp = await phone.newCDPSession(target)
+			await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 2 })
+			await expect.poll(() => target.evaluate(() => window.visualViewport.scale)).toBe(2)
+			// Zoomed, a click would miss: the press goes to the button itself
+			await card.getByRole('button', { name: 'Reply', exact: true }).dispatchEvent('click')
+			const field = target.locator('.deliver-comments__list > .deliver-comment').filter({ hasText: 'answer me above the keyboard' }).getByPlaceholder('Write a Reply')
+			await expect(field).toBeFocused()
+			// Its first line, where the text goes, in the zoomed view: as the browser brings the caret into view
+			await expect.poll(() => field.evaluate((element) => {
+				const box = element.getBoundingClientRect()
+				const seen = window.visualViewport
+				return box.top >= seen.offsetTop && box.top + 24 <= seen.offsetTop + seen.height
+					&& box.left >= seen.offsetLeft && box.left < seen.offsetLeft + seen.width
+			})).toBe(true)
+			await phone.close()
+		}
+		expect((await api.delete(`/ocs/v2.php/apps/deliver/api/v1/comments/${id}?format=json`)).ok()).toBe(true)
+		await api.dispose()
+	})
+
+	test('on a phone Reply on the card takes the focus from the Comment field, whose list would step aside for it (#284)', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const made = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${versionId}/comments?format=json`, { data: { inFrame: 22500, body: 'answer me while writing' } })
+		const id = (await made.json()).ocs.data.id
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const target = await phone.newPage()
+		await login(target)
+		await target.goto(`/apps/deliver/versions/${versionId}`)
+		const canvas = target.locator('.deliver-wave canvas')
+		await expect(canvas).toBeVisible()
+		await expect(target.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
+		await target.getByRole('button', { name: '1 min', exact: true }).click()
+		// Writing in the Comment field, then a tap on a circle: on touch the field keeps the focus
+		const composer = target.getByPlaceholder('Leave a Comment…')
+		await composer.tap()
+		await expect(composer).toBeFocused()
+		const lane = await canvas.boundingBox()
+		await target.touchscreen.tap(lane.x + lane.width * 0.875, lane.y + lane.height - 20)
+		const card = target.getByRole('dialog', { name: /^Comment #/ })
+		await expect(card).toContainText('answer me while writing')
+		// The card took the focus, so the list is back once the Comment field has let go of writing
+		await expect(target.locator('.deliver-layout--writing')).toHaveCount(0)
+		await card.getByRole('button', { name: 'Reply', exact: true }).tap()
+		const field = target.locator('.deliver-comments__list > .deliver-comment').filter({ hasText: 'answer me while writing' }).getByPlaceholder('Write a Reply')
+		await expect(field).toBeFocused()
+		await expect(field).toBeInViewport()
+		await expect(target.locator('.deliver-layout--writing')).toHaveCount(0)
+		await phone.close()
+		expect((await api.delete(`/ocs/v2.php/apps/deliver/api/v1/comments/${id}?format=json`)).ok()).toBe(true)
+		await api.dispose()
+	})
+
 	test('Reply shows its Comment where the list\'s search or filter hides it, and the small card closes as soon as playback starts', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		const made = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${versionId}/comments?format=json`, { data: { inFrame: 22500, body: 'hidden from the list' } })
@@ -3028,6 +3118,65 @@ test.describe('Audio review', () => {
  */
 const heard = (videos) => videos.evaluateAll((all) => all.map((video) => video.deliverGain && !video.muted ? video.deliverGain.gain.value > 0.5 : !video.muted))
 
+/**
+ * The rows of Compare's lanes drawn all the way across, in CSS px from the canvas's top: bars leave gaps, a dividing line does not
+ *
+ * @param {import('@playwright/test').Page} on - the page
+ * @return {Promise<number[]>} the rows
+ */
+function dividers(on) {
+	return on.locator('.deliver-compare__lanes canvas').evaluate((element) => {
+		const { width, height } = element
+		const data = element.getContext('2d').getImageData(0, 0, width, height).data
+		const rows = []
+		for (let y = 0; y < height; y++) {
+			let drawn = 0
+			for (let x = 0; x < width; x++) {
+				drawn += data[(y * width + x) * 4 + 3] > 0 ? 1 : 0
+			}
+			if (drawn > width * 0.95) {
+				rows.push(y * element.clientHeight / height)
+			}
+		}
+		return rows
+	})
+}
+
+/**
+ * Each divider row's colour near the canvas's left and right edge: drawn once, it is the same on both sides of the playhead
+ *
+ * @param {import('@playwright/test').Page} on - the page
+ * @return {Promise<Array<Array<number[]>>>} per row, the left and the right pixel
+ */
+function dividerEnds(on) {
+	return on.locator('.deliver-compare__lanes canvas').evaluate((element) => {
+		const context = element.getContext('2d')
+		const rows = []
+		for (let y = 0; y < element.height; y++) {
+			const row = context.getImageData(0, y, element.width, 1).data
+			if (row.filter((value, index) => index % 4 === 3 && value > 0).length > element.width * 0.95) {
+				rows.push([[...context.getImageData(2, y, 1, 1).data], [...context.getImageData(element.width - 3, y, 1, 1).data]])
+			}
+		}
+		return rows
+	})
+}
+
+/**
+ * A line divides the two lanes, in the gap between them: under the first lane's name, above the second's
+ *
+ * @param {import('@playwright/test').Page} on - the page
+ */
+async function expectDivider(on) {
+	await expect.poll(async () => (await dividers(on)).length).toBeGreaterThan(0)
+	const canvas = await on.locator('.deliver-compare__lanes canvas').boundingBox()
+	const [first, second] = await on.locator('.deliver-compare__lanes .deliver-wave__lane').evaluateAll((all) => all.map((each) => each.getBoundingClientRect()))
+	for (const row of await dividers(on)) {
+		expect(row).toBeGreaterThan(first.bottom - canvas.y)
+		expect(row).toBeLessThan(second.top - canvas.y)
+	}
+}
+
 test.describe('Comparing sound', () => {
 	let browser
 	let context
@@ -3089,6 +3238,7 @@ test.describe('Comparing sound', () => {
 		const canvas = page.locator('.deliver-compare__lanes canvas')
 		await expect(canvas).toBeVisible()
 		await expect(page.locator('.deliver-wave__lane')).toHaveText(['V1', 'V2'])
+		await expectDivider(page)
 		const side = page.getByRole('radio', { name: /^V2/ })
 		expect(await heard(videos)).toEqual([true, false])
 
@@ -3119,6 +3269,12 @@ test.describe('Comparing sound', () => {
 		const sought = videos.first().evaluate((video) => new Promise((resolve) => video.addEventListener('seeking', () => resolve(true), { once: true })))
 		await canvas.click({ position: { x: box.width * 0.6, y: box.height * 0.6 } })
 		expect(await sought).toBe(true)
+		// Over the whole piece the played part is laid over the rest: the line keeps its colour left of the playhead
+		const ends = await dividerEnds(page)
+		expect(ends.length).toBeGreaterThan(0)
+		for (const [left, right] of ends) {
+			expect(left).toEqual(right)
+		}
 		// Lanes have no strip: at their foot the mouse shows no place to go to
 		await canvas.hover({ position: { x: box.width * 0.6, y: box.height - 5 } })
 		expect(await page.locator('.deliver-wave').evaluate((element) => element.style.cursor)).toBe('')
@@ -3447,7 +3603,7 @@ test.describe('Comparing sound', () => {
 		await expect(page.getByRole('radio', { name: now })).toHaveAttribute('aria-checked', 'true')
 	})
 
-	test('the Comments shown follow the side someone switches the sound to, a tab picked by hand holds until the next switch, and an alternating loop leaves the list alone', async ({ playwright }) => {
+	test('the Comments shown follow the side someone switches the sound to, named by its Version, and an alternating loop leaves the list alone', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		const made = []
 		// Only the newest Version takes Comments: V1's list stays empty
@@ -3456,13 +3612,15 @@ test.describe('Comparing sound', () => {
 			expect(commented.status(), await commented.text()).toBe(201)
 			made.push((await commented.json()).ocs.data.id)
 		}
+		const heading = page.locator('.deliver-compare-view__heading')
 		try {
 			for (const pair of [cut, mix]) {
 				await page.goto(`/apps/deliver/compare/${pair[1].id}/${pair[0].id}`)
 				await expect(page.locator('.deliver-compare video').first()).toHaveJSProperty('readyState', 4)
-				// The tab, and on the mix, whose Comments the list holds
+				// No tabs: the heading, and on the mix, whose Comments the list holds
+				await expect(page.getByRole('radio', { name: /^Comments on/ })).toHaveCount(0)
 				const shows = async (number) => {
-					await expect(page.getByRole('radio', { name: `Comments on V${number}` })).toHaveAttribute('aria-checked', 'true')
+					await expect(heading).toHaveText(`Comments on V${number}`)
 					if (pair === mix) {
 						await expect(page.locator('.deliver-layout__panel')).toContainText(number === 2 ? 'Heard on V2' : 'No Comments yet.')
 					}
@@ -3474,23 +3632,20 @@ test.describe('Comparing sound', () => {
 				// The halves of the A/B switch
 				await page.getByRole('radio', { name: /^V1/ }).click()
 				await shows(1)
-				// The other side's Comments by hand, while V1 is heard
-				await page.getByRole('radio', { name: 'Comments on V2' }).click()
-				await shows(2)
-				await expect(page.getByRole('radio', { name: /^V1/ })).toHaveAttribute('aria-checked', 'true')
 				await page.locator('.deliver-layout__bar h2').click()
 				await page.keyboard.press('2')
+				await shows(2)
 				await page.keyboard.press('1')
 				await shows(1)
 			}
 			// Tab, after a click into the player, and a lane's name
 			await page.locator('.deliver-compare__lanes canvas').click()
 			await page.keyboard.press('Tab')
-			await expect(page.getByRole('radio', { name: 'Comments on V2' })).toHaveAttribute('aria-checked', 'true')
+			await expect(heading).toHaveText('Comments on V2')
 			await page.locator('.deliver-wave__lane').first().click()
-			await expect(page.getByRole('radio', { name: 'Comments on V1' })).toHaveAttribute('aria-checked', 'true')
+			await expect(heading).toHaveText('Comments on V1')
 
-			// Alternating, the passes switch the sound but not the list: V2's Comments, picked by hand, stay with the focus on one
+			// Alternating, the passes switch the sound but not the list: V2's Comments stay with the focus on one
 			const bar = await page.locator('.deliver-compare__timeline').boundingBox()
 			const at = (share) => page.mouse.click(bar.x + bar.width * share, bar.y + bar.height / 2)
 			await at(0.25)
@@ -3498,8 +3653,9 @@ test.describe('Comparing sound', () => {
 			await at(0.3)
 			await page.keyboard.press('o')
 			await at(0.25)
+			await page.keyboard.press('2')
 			await page.getByRole('button', { name: 'Alternate A/B' }).click()
-			await page.getByRole('radio', { name: 'Comments on V2' }).click()
+			await expect(heading).toHaveText('Comments on V2')
 			const anchor = page.locator('.deliver-compare-view__anchor')
 			await anchor.focus()
 			await page.evaluate(() => {
@@ -3511,7 +3667,7 @@ test.describe('Comparing sound', () => {
 			// A pass of each side
 			await expect.poll(() => page.evaluate(() => window.passes.size), { timeout: 15_000 }).toBe(2)
 			await page.locator('.deliver-compare__controls button[aria-label="Pause (Space)"]').evaluate((button) => button.click())
-			await expect(page.getByRole('radio', { name: 'Comments on V2' })).toHaveAttribute('aria-checked', 'true')
+			await expect(heading).toHaveText('Comments on V2')
 			await expect(page.locator('.deliver-compare-view__list')).toHaveText(/Heard on V2/)
 			await expect(anchor).toBeFocused()
 		} finally {
@@ -3620,29 +3776,41 @@ test.describe('Comparing sound', () => {
 		await phone.close()
 	})
 
-	test('on a phone the tabs of the Comments in Compare stand clear of the sheet\'s grabber at its middle and top height', async () => {
+	test('on a phone the grabber of Compare\'s sheet sits in the heading\'s row at its middle and top height, as in the Review view, beside the heading and clear of the list', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const commented = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${cut[0].id}/comments?format=json`, { data: { inFrame: 1, body: 'On V2' } })
+		expect(commented.status(), await commented.text()).toBe(201)
 		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: { width: 375, height: 667 } })
-		const page = await phone.newPage()
-		await login(page)
-		await page.goto(`/apps/deliver/compare/${cut[1].id}/${cut[0].id}`)
-		await expect(page.locator('.deliver-compare video').first()).toHaveJSProperty('readyState', 4)
-		const grabber = page.locator('.deliver-layout__grabber')
-		const tabs = page.locator('.deliver-compare-view__tabs')
-		for (const level of ['middle', 'up']) {
-			await grabber.tap()
-			await expect(page.locator(`.deliver-layout--${level}`)).toHaveCount(1)
-			const grab = await grabber.boundingBox()
-			expect(grab.y + grab.height).toBeLessThanOrEqual((await tabs.boundingBox()).y)
-			// A finger on the inner half of either tab picks that tab, not a step of the sheet
-			for (const name of [/^Comments on V2/, /^Comments on V1/]) {
-				const tab = page.getByRole('radio', { name })
-				const box = await tab.boundingBox()
-				await page.touchscreen.tap(name.source.includes('V2') ? box.x + 8 : box.x + box.width - 8, box.y + box.height / 2)
-				await expect(tab).toHaveAttribute('aria-checked', 'true')
+		try {
+			const page = await phone.newPage()
+			await login(page)
+			// V2 leads, so its Comment is in the list
+			await page.goto(`/apps/deliver/compare/${cut[0].id}/${cut[1].id}`)
+			await expect(page.locator('.deliver-compare video').first()).toHaveJSProperty('readyState', 4)
+			const grabber = page.locator('.deliver-layout__grabber')
+			const heading = page.locator('.deliver-compare-view__heading')
+			for (const level of ['middle', 'up']) {
+				await grabber.tap()
 				await expect(page.locator(`.deliver-layout--${level}`)).toHaveCount(1)
+				const grab = await grabber.boundingBox()
+				// In the heading's row, not a row of its own above it
+				const head = await heading.boundingBox()
+				expect(grab.y).toBeLessThan(head.y + head.height / 2)
+				expect(grab.y + grab.height).toBeGreaterThan(head.y + head.height)
+				expect(grab.y + grab.height).toBeLessThanOrEqual((await page.locator('.deliver-compare-view__list li').boundingBox()).y)
+				const text = await heading.evaluate((element) => {
+					const range = document.createRange()
+					range.selectNodeContents(element)
+					return range.getBoundingClientRect().right
+				})
+				// The handle drawn in the grabber's middle, 40 px wide, stays off the heading's text
+				expect(text).toBeLessThan(grab.x + grab.width / 2 - 20)
 			}
+		} finally {
+			await phone.close()
+			await api.delete(`/ocs/v2.php/apps/deliver/api/v1/comments/${(await commented.json()).ocs.data.id}?format=json`)
+			await api.dispose()
 		}
-		await phone.close()
 	})
 
 	test('on a phone held sideways, pictures, both lanes and the transport fit without scrolling', async () => {
@@ -3661,6 +3829,7 @@ test.describe('Comparing sound', () => {
 		expect(controls.y + controls.height).toBeLessThanOrEqual(390)
 		const sound = await sideways.getByRole('radio', { name: /^V1/ }).boundingBox()
 		expect(sound.height).toBeGreaterThanOrEqual(44)
+		await expectDivider(sideways)
 		await phone.close()
 	})
 })
