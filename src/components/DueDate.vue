@@ -91,8 +91,14 @@ const label = computed(() => {
 	cursor: pointer;
 }
 
-span.deliver-due__button {
+.deliver-due span.deliver-due__button {
 	cursor: default;
+}
+
+/* What Nextcloud's button rule gave on hover and focus before the reset above outranked it */
+.deliver-due button:hover,
+.deliver-due button:focus {
+	background: var(--color-primary-element-light-hover);
 }
 
 .deliver-due .deliver-due__clear {

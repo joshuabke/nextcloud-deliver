@@ -391,6 +391,9 @@ test.describe('Review view', () => {
 		await due.getByRole('button', { name: 'Save' }).click()
 		await expect(page.locator('.deliver-due')).toContainText('Due')
 		await expect(page.locator('.deliver-due__clear')).toBeVisible()
+		// It lights up under the pointer, as other buttons do
+		await page.locator('.deliver-due__button').hover()
+		await expect(page.locator('.deliver-due__button')).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
 
 		// Approving shows the decision next to the menu (story 88)
 		await page.locator('.deliver-approval__menu button').click()
@@ -1561,6 +1564,8 @@ test.describe('The bar on a phone', () => {
 		await reviewer.goto(`/apps/deliver/s/${token}/versions/${versions[0].id}`)
 		await expect(reviewer.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
 		await expect(reviewer.locator('.deliver-layout__bar .deliver-due')).toBeVisible()
+		// Only to read: no pointer over it
+		await expect(reviewer.locator('.deliver-layout__bar span.deliver-due__button')).toHaveCSS('cursor', 'default')
 		await oneRow(reviewer, [reviewer.locator('.deliver-layout__bar .deliver-version-picker').first(), reviewer.getByRole('button', { name: 'Show Comments' })], 44)
 		expect(await clearCorner(reviewer.locator('.deliver-player__stage'))).toBe(true)
 		await guest.close()
