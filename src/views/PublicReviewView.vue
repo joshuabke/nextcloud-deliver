@@ -204,7 +204,7 @@ async function claim({ name, email, mail }) {
 					<h2 class="deliver-layout__title">
 						{{ context.asset?.name }}
 					</h2>
-					<DueDate v-if="isMobile" :modelValue="context.asset?.dueDate ?? null" />
+					<DueDate v-if="isMobile" class="deliver-public__due" :modelValue="context.asset?.dueDate ?? null" />
 				</div>
 				<DueDate v-if="!isMobile" :modelValue="context.asset?.dueDate ?? null" />
 			</template>
@@ -335,6 +335,12 @@ async function claim({ name, email, mail }) {
 	align-items: flex-start;
 	min-width: 0;
 	padding-inline-start: var(--default-grid-baseline);
+	line-height: 1.25;
+}
+
+/* Small enough under the name that the bar keeps its slim row sideways */
+.deliver-public__due {
+	font-size: 12px;
 }
 
 .deliver-public__open {

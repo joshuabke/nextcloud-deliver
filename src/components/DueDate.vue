@@ -73,8 +73,9 @@ const label = computed(() => {
 	font-size: 13px;
 }
 
-.deliver-due__button,
-.deliver-due__clear {
+/* Through .deliver-due: Nextcloud's global button rule outranks a single class and would add its margin and font size */
+.deliver-due .deliver-due__button,
+.deliver-due .deliver-due__clear {
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
@@ -85,15 +86,22 @@ const label = computed(() => {
 	border-radius: var(--border-radius-pill);
 	background: none;
 	color: inherit;
+	font-size: inherit;
 	font-weight: normal;
 	cursor: pointer;
 }
 
-span.deliver-due__button {
+.deliver-due span.deliver-due__button {
 	cursor: default;
 }
 
-.deliver-due__clear {
+/* What Nextcloud's button rule gave on hover and focus before the reset above outranked it */
+.deliver-due button:hover,
+.deliver-due button:focus {
+	background: var(--color-primary-element-light-hover);
+}
+
+.deliver-due .deliver-due__clear {
 	padding: 3px 8px 3px 0;
 }
 

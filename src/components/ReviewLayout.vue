@@ -15,7 +15,7 @@ const panelOpen = defineModel('panelOpen', { type: Boolean, default: true })
 /**
  * Below 1024 px a phone: upright, the picture takes the room and only the
  * field to write in sits below it, the Comment list comes up in its place;
- * sideways, the picture fills the window and the list opens beside it
+ * sideways, the picture fills the window under a slim bar and the list opens beside it
  */
 const isMobile = useIsMobile()
 const sideways = computed(() => isMobile.value && landscape.value)
@@ -95,7 +95,8 @@ function step() {
 				'deliver-layout--up': upright && level === 2 && !writing,
 				'deliver-layout--writing': isMobile && writing,
 			}">
-			<div v-if="!sideways" class="deliver-layout__bar">
+			<!-- Sideways a slim one; while writing there the keyboard leaves no room for it -->
+			<div v-show="!(sideways && writing)" class="deliver-layout__bar">
 				<div class="deliver-layout__start">
 					<slot name="start" />
 				</div>
@@ -108,6 +109,17 @@ function step() {
 					<NcActions v-if="isMobile && $slots.menu" variant="tertiary" :aria-label="t('deliver', 'More')">
 						<slot name="menu" />
 					</NcActions>
+					<!-- Sideways the list beside the picture, from the bar: over the picture the button covered it -->
+					<NcButton
+						v-if="sideways"
+						variant="tertiary"
+						:pressed="aside"
+						:aria-label="aside ? t('deliver', 'Hide Comments') : t('deliver', 'Show Comments')"
+						@click="aside = !aside">
+						<template #icon>
+							<NcIconSvgWrapper :svg="commentsIcon" />
+						</template>
+					</NcButton>
 					<NcButton
 						v-if="!isMobile"
 						variant="tertiary"
@@ -125,17 +137,6 @@ function step() {
 			<div class="deliver-layout__body" :class="{ 'deliver-layout__body--wide': !panelOpen && !isMobile }">
 				<div class="deliver-layout__main">
 					<slot />
-					<NcButton
-						v-if="sideways"
-						class="deliver-layout__aside"
-						variant="tertiary"
-						:pressed="aside"
-						:aria-label="aside ? t('deliver', 'Hide Comments') : t('deliver', 'Show Comments')"
-						@click="aside = !aside">
-						<template #icon>
-							<NcIconSvgWrapper :svg="commentsIcon" />
-						</template>
-					</NcButton>
 				</div>
 				<div v-show="sideways ? aside : panelOpen || isMobile" class="deliver-layout__panel">
 					<button
@@ -235,6 +236,8 @@ body.deliver-review footer {
 :slotted(.deliver-layout__title) {
 	margin: 0;
 	font-size: 16px;
+	/* Nextcloud gives headings more; with a Due Date over or under it the name fits the slim bar sideways */
+	line-height: 1.25;
 	font-weight: bold;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -277,6 +280,12 @@ body.deliver-review footer {
 	min-height: 48px;
 	padding: 0 var(--default-grid-baseline);
 	gap: var(--default-grid-baseline);
+}
+
+/* Sideways the picture has little height to give: the bar takes no more than its buttons */
+.deliver-layout--sideways .deliver-layout__bar {
+	box-sizing: border-box;
+	min-height: 44px;
 }
 
 .deliver-layout--mobile .deliver-layout__start {
@@ -412,7 +421,7 @@ body.deliver-review footer {
 	border-top: 1px solid var(--color-border);
 }
 
-/* Sideways: the picture fills the window, the list opens beside it, as a live chat does */
+/* Sideways: the picture fills the room under the bar, the list opens beside it, as a live chat does */
 .deliver-layout--sideways .deliver-layout__body {
 	flex-direction: row;
 }
@@ -425,13 +434,5 @@ body.deliver-review footer {
 .deliver-layout--sideways .deliver-layout__panel {
 	flex: none;
 	width: min(360px, 45%);
-}
-
-.deliver-layout__aside {
-	position: absolute !important;
-	top: var(--default-grid-baseline);
-	right: var(--default-grid-baseline);
-	z-index: 3;
-	background: rgba(0, 0, 0, 0.5) !important;
 }
 </style>
