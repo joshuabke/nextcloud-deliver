@@ -101,7 +101,11 @@ async function reveal(id) {
 		return
 	}
 	store.selected = id
-	item.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+	// The list alone scrolls: scrollIntoView moves every box around it too, on a phone the whole view (#297)
+	const box = list.value.getBoundingClientRect()
+	const at = item.getBoundingClientRect()
+	const by = at.top < box.top || at.height > box.height ? at.top - box.top : Math.max(0, at.bottom - box.bottom)
+	list.value.scrollBy({ top: by, behavior: 'smooth' })
 	item.classList.add('deliver-comment--revealed')
 	setTimeout(() => item.classList.remove('deliver-comment--revealed'), 1200)
 }
@@ -344,6 +348,15 @@ function claim() {
 	flex-direction: column;
 	gap: calc(3 * var(--default-grid-baseline));
 	padding: var(--default-grid-baseline) calc(3 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline));
+}
+
+/* On a phone, room under the last Comments while a Reply field is open, so the list can bring any of them to its top, above the keyboard (#297) */
+@media (pointer: coarse) {
+	.deliver-comments__list:has(.deliver-comment__reply-form)::after {
+		content: '';
+		flex: none;
+		height: 100%;
+	}
 }
 
 /* The Comment jumped to */
