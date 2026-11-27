@@ -2962,22 +2962,25 @@ const heard = (videos) => videos.evaluateAll((all) => all.map((video) => video.d
  * The rows of Compare's lanes drawn all the way across, in CSS px from the canvas's top: bars leave gaps, a dividing line does not
  *
  * @param {import('@playwright/test').Page} on - the page
+ * @return {Promise<number[]>} the rows
  */
-const dividers = (on) => on.locator('.deliver-compare__lanes canvas').evaluate((element) => {
-	const { width, height } = element
-	const data = element.getContext('2d').getImageData(0, 0, width, height).data
-	const rows = []
-	for (let y = 0; y < height; y++) {
-		let drawn = 0
-		for (let x = 0; x < width; x++) {
-			drawn += data[(y * width + x) * 4 + 3] > 0 ? 1 : 0
+function dividers(on) {
+	return on.locator('.deliver-compare__lanes canvas').evaluate((element) => {
+		const { width, height } = element
+		const data = element.getContext('2d').getImageData(0, 0, width, height).data
+		const rows = []
+		for (let y = 0; y < height; y++) {
+			let drawn = 0
+			for (let x = 0; x < width; x++) {
+				drawn += data[(y * width + x) * 4 + 3] > 0 ? 1 : 0
+			}
+			if (drawn > width * 0.95) {
+				rows.push(y * element.clientHeight / height)
+			}
 		}
-		if (drawn > width * 0.95) {
-			rows.push(y * element.clientHeight / height)
-		}
-	}
-	return rows
-})
+		return rows
+	})
+}
 
 /**
  * A line divides the two lanes, in the gap between them: under the first lane's name, above the second's
