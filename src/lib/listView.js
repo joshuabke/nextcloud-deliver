@@ -8,8 +8,8 @@ export const CARD_SIZES = ['s', 'm', 'l']
 export const ASPECT_RATIOS = ['landscape', 'square', 'portrait']
 /** How a card's still fits its frame: 'fit' shows it whole (letterboxed, the default), 'fill' crops to the card */
 export const THUMBNAIL_FITS = ['fit', 'fill']
-/** How many lines an Asset's name may take on a card */
-export const TITLE_LINES = [1, 2, 3]
+/** How many lines an Asset's name may take on a card (matches NameText) */
+export const TITLE_LINES = [1, 2]
 
 /** Defaults that match the cards as shipped, except the phone's two columns at medium size */
 export const GRID_DEFAULTS = Object.freeze({
@@ -22,13 +22,7 @@ export const GRID_DEFAULTS = Object.freeze({
 })
 
 const key = (scope) => `deliver.layout.${scope}`
-const optionKey = (scope, name) => `deliver.layout.${scope}.${name}`
-
-const MIN_WIDTHS = {
-	mobile: { s: 100, m: 150, l: 260 },
-	desktop: { s: 160, m: 220, l: 320 },
-	wide: { s: 180, m: 260, l: 360 },
-}
+const gridKey = (scope) => `deliver.grid.${scope}`
 
 const ASPECTS = {
 	landscape: { ratio: '16 / 9', heightFactor: 9 / 16 },
@@ -67,52 +61,45 @@ export function writeLayout(scope, layout, storage = () => globalThis.localStora
 }
 
 /**
- * Reads a boolean option stored as '1' or '0', falling back when absent or invalid
+ * Normalises a raw options object, falling back per field to GRID_DEFAULTS
  *
- * @param {string|null} value - what storage held
- * @param {boolean} fallback - the default
- * @return {boolean}
+ * @param {unknown} raw - parsed JSON or caller options
+ * @return {{size: 's'|'m'|'l', aspect: 'landscape'|'square'|'portrait', fit: 'fit'|'fill', titleLines: 1|2, info: boolean, collapseFolders: boolean}}
  */
-function readFlag(value, fallback) {
-	if (value === '1') {
-		return true
+function normaliseGridOptions(raw) {
+	if (!raw || typeof raw !== 'object') {
+		return { ...GRID_DEFAULTS }
 	}
-	if (value === '0') {
-		return false
+	return {
+		size: CARD_SIZES.includes(raw.size) ? raw.size : GRID_DEFAULTS.size,
+		aspect: ASPECT_RATIOS.includes(raw.aspect) ? raw.aspect : GRID_DEFAULTS.aspect,
+		fit: THUMBNAIL_FITS.includes(raw.fit) ? raw.fit : GRID_DEFAULTS.fit,
+		titleLines: TITLE_LINES.includes(raw.titleLines) ? raw.titleLines : GRID_DEFAULTS.titleLines,
+		info: typeof raw.info === 'boolean' ? raw.info : GRID_DEFAULTS.info,
+		collapseFolders: typeof raw.collapseFolders === 'boolean' ? raw.collapseFolders : GRID_DEFAULTS.collapseFolders,
 	}
-	return fallback
 }
 
 /**
  * The grid display options remembered in this browser for a Project or Review Link,
- * stored beside `deliver.layout.<scope>`. Missing, unknown or unreadable keys fall back to GRID_DEFAULTS.
+ * stored as JSON in `deliver.grid.<scope>` beside `deliver.layout.<scope>`.
+ * Missing, unreadable or invalid fields fall back to GRID_DEFAULTS.
  *
  * @param {string} scope - 'project-12' or 'link-<token>'
  * @param {() => Storage} [storage] - gives localStorage, unless a test brings its own
- * @return {{size: 's'|'m'|'l', aspect: 'landscape'|'square'|'portrait', fit: 'fit'|'fill', titleLines: 1|2|3, info: boolean, collapseFolders: boolean}}
+ * @return {{size: 's'|'m'|'l', aspect: 'landscape'|'square'|'portrait', fit: 'fit'|'fill', titleLines: 1|2, info: boolean, collapseFolders: boolean}}
  */
 export function readGridOptions(scope, storage = () => globalThis.localStorage) {
 	try {
-		const store = storage()
-		const size = store.getItem(optionKey(scope, 'size'))
-		const aspect = store.getItem(optionKey(scope, 'aspect'))
-		const fit = store.getItem(optionKey(scope, 'fit'))
-		const titleLines = Number(store.getItem(optionKey(scope, 'titleLines')))
-		return {
-			size: CARD_SIZES.includes(size) ? size : GRID_DEFAULTS.size,
-			aspect: ASPECT_RATIOS.includes(aspect) ? aspect : GRID_DEFAULTS.aspect,
-			fit: THUMBNAIL_FITS.includes(fit) ? fit : GRID_DEFAULTS.fit,
-			titleLines: TITLE_LINES.includes(titleLines) ? titleLines : GRID_DEFAULTS.titleLines,
-			info: readFlag(store.getItem(optionKey(scope, 'info')), GRID_DEFAULTS.info),
-			collapseFolders: readFlag(store.getItem(optionKey(scope, 'collapseFolders')), GRID_DEFAULTS.collapseFolders),
-		}
+		const raw = storage().getItem(gridKey(scope))
+		return raw ? normaliseGridOptions(JSON.parse(raw)) : { ...GRID_DEFAULTS }
 	} catch {
 		return { ...GRID_DEFAULTS }
 	}
 }
 
 /**
- * Writes the grid display options beside `deliver.layout.<scope>`.
+ * Writes the grid display options as JSON in `deliver.grid.<scope>`.
  *
  * @param {string} scope - 'project-12' or 'link-<token>'
  * @param {{size: string, aspect: string, fit: string, titleLines: number, info: boolean, collapseFolders: boolean}} options - the choices
@@ -120,44 +107,10 @@ export function readGridOptions(scope, storage = () => globalThis.localStorage) 
  */
 export function writeGridOptions(scope, options, storage = () => globalThis.localStorage) {
 	try {
-		const store = storage()
-		store.setItem(optionKey(scope, 'size'), CARD_SIZES.includes(options.size) ? options.size : GRID_DEFAULTS.size)
-		store.setItem(optionKey(scope, 'aspect'), ASPECT_RATIOS.includes(options.aspect) ? options.aspect : GRID_DEFAULTS.aspect)
-		store.setItem(optionKey(scope, 'fit'), THUMBNAIL_FITS.includes(options.fit) ? options.fit : GRID_DEFAULTS.fit)
-		store.setItem(optionKey(scope, 'titleLines'), String(TITLE_LINES.includes(options.titleLines) ? options.titleLines : GRID_DEFAULTS.titleLines))
-		store.setItem(optionKey(scope, 'info'), options.info ? '1' : '0')
-		store.setItem(optionKey(scope, 'collapseFolders'), options.collapseFolders ? '1' : '0')
+		storage().setItem(gridKey(scope), JSON.stringify(normaliseGridOptions(options)))
 	} catch {
 		// The choices then last until the page is left
 	}
-}
-
-/**
- * Minimum CSS track width (px) for a card size. On a phone (393 px screen, ~361 px grid)
- * S gives 3 columns, M gives 2 and L gives 1; on a desktop M keeps 220 px (260 px on a Review Link).
- *
- * @param {'s'|'m'|'l'} size - the chosen card size
- * @param {{mobile?: boolean, wide?: boolean}} [surface] - phone vs desktop, and wider cards on a Review Link
- * @return {number} pixels
- */
-export function cardMinWidth(size, { mobile = false, wide = false } = {}) {
-	const table = mobile ? MIN_WIDTHS.mobile : wide ? MIN_WIDTHS.wide : MIN_WIDTHS.desktop
-	return table[size] ?? table.m
-}
-
-/**
- * Column count CSS `repeat(auto-fill, minmax(min(minWidth, 100%), 1fr))` produces for a grid of `width` px.
- *
- * @param {number} width - inner width of the grid in pixels
- * @param {number} minWidth - minimum track width in pixels
- * @param {number} [gap] - column gap in pixels
- * @return {number} columns, at least 1
- */
-export function gridColumns(width, minWidth, gap = 8) {
-	if (width <= 0 || minWidth <= 0) {
-		return 1
-	}
-	return Math.max(1, Math.floor((width + gap) / (minWidth + gap)))
 }
 
 /**
@@ -181,19 +134,16 @@ export function mediaFit(fit) {
 }
 
 /**
- * CSS custom properties applied to a card grid from its display options.
+ * CSS custom properties applied to a card grid for its chosen aspect ratio.
  *
- * @param {{size: string, aspect: string, titleLines: number}} options - the grid display options
- * @param {{mobile?: boolean, wide?: boolean}} [surface] - phone vs desktop, and wider cards on a Review Link
+ * @param {{aspect: string}} options - the grid display options
  * @return {Record<string, string>}
  */
-export function gridStyle(options, surface = {}) {
+export function gridStyle(options) {
 	const spec = aspectSpec(options.aspect)
 	return {
-		'--deliver-grid-min': `${cardMinWidth(options.size, surface)}px`,
 		'--deliver-still-ratio': spec.ratio,
 		'--deliver-still-h': String(spec.heightFactor),
-		'--deliver-title-lines': String(TITLE_LINES.includes(options.titleLines) ? options.titleLines : GRID_DEFAULTS.titleLines),
 	}
 }
 

@@ -19,10 +19,10 @@ export function useLayout(scope) {
 
 /**
  * Grid display options (size, aspect ratio, thumbnail fit, title lines, card info, collapsed folders)
- * remembered in this browser per Project or Review Link beside `deliver.layout.<scope>`.
+ * remembered in this browser per Project or Review Link in `deliver.grid.<scope>` beside `deliver.layout.<scope>`.
  *
  * @param {() => string} scope - 'project-12' or 'link-<token>'; read again when it changes
- * @return {import('vue').Ref<{size: 's'|'m'|'l', aspect: 'landscape'|'square'|'portrait', fit: 'fit'|'fill', titleLines: 1|2|3, info: boolean, collapseFolders: boolean}>}
+ * @return {import('vue').Ref<{size: 's'|'m'|'l', aspect: 'landscape'|'square'|'portrait', fit: 'fit'|'fill', titleLines: 1|2, info: boolean, collapseFolders: boolean}>}
  */
 export function useGridOptions(scope) {
 	const options = ref(readGridOptions(scope()))

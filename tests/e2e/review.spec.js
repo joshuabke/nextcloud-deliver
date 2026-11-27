@@ -2113,7 +2113,7 @@ test.describe('Menus on a phone', () => {
 		await expect(page).toHaveURL(/sort=name/)
 		await expect(page.locator('.deliver-card__name').first()).toHaveText('other')
 
-		// Filter opens as a sheet and applies
+		// Filter opens as a sheet and applies; the button stays icon-only and names the active filter
 		await page.getByRole('button', { name: 'Filter' }).tap()
 		const filterSheet = page.getByRole('dialog', { name: 'Filter' })
 		await expect(filterSheet).toBeVisible()
@@ -2121,7 +2121,9 @@ test.describe('Menus on a phone', () => {
 		await expect(filterSheet).toHaveCount(0)
 		await expect(page).toHaveURL(/filter=changes/)
 		await expect(page.locator('.deliver-card')).toHaveCount(0)
-		await page.getByRole('button', { name: 'Filter' }).tap()
+		const activeFilterButton = page.getByRole('button', { name: 'Filter: Changes requested' })
+		await expect(activeFilterButton).toHaveAttribute('aria-pressed', 'true')
+		await activeFilterButton.tap()
 		await filterSheet.getByRole('button', { name: /^All/ }).tap()
 		await expect(page.locator('.deliver-card')).toHaveCount(2)
 		await phone.close()
@@ -2137,14 +2139,41 @@ test.describe('Menus on a phone', () => {
 		await expect(listToggle).toBeVisible()
 		await listToggle.click()
 		await expect(desktopPage.locator('.deliver-card--row')).toHaveCount(0)
+		const longName = card(desktopPage, NAME.replace(/\.webm$/, '')).locator('.deliver-card__name')
+		const twoLineHeight = (await longName.boundingBox()).height
 		await desktopPage.getByRole('button', { name: 'Display options' }).click()
 		const popover = desktopPage.getByRole('dialog', { name: 'Display options' })
 		await expect(popover).toBeVisible()
 		await expect(popover.getByText('Card size')).toBeVisible()
 		await expect(popover.getByText('Aspect ratio')).toBeVisible()
-		await popover.getByRole('switch', { name: 'Show card info' }).click()
+		await popover.getByText('Show card info').click()
 		await expect(desktopPage.locator('.deliver-card__meta')).toHaveCount(0)
 		await expect(desktopPage.locator('.deliver-card__version').first()).toBeVisible()
+
+		// Title lines reach NameText on a long name: 1 line is one line high with the tail visible
+		await popover.getByRole('button', { name: /^Title lines/ }).click()
+		await popover.getByRole('button', { name: '1 line' }).click()
+		await expect(longName).toHaveClass(/deliver-name--one/)
+		const oneLine = await longName.evaluate((element) => {
+			const box = element.getBoundingClientRect()
+			const style = getComputedStyle(element)
+			const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.5
+			const tail = element.querySelector('.deliver-name__tail')
+			const head = element.querySelector('.deliver-name__head')
+			const own = tail.getBoundingClientRect()
+			return {
+				height: box.height,
+				lineHeight,
+				end: tail.dataset.text,
+				inside: own.width > 0 && own.left >= box.left - 0.5 && own.right <= box.right + 0.5 && own.top >= box.top - 0.5 && own.bottom <= box.bottom + 0.5,
+				cut: head.scrollWidth > head.clientWidth,
+			}
+		})
+		expect(oneLine.height).toBeLessThan(twoLineHeight)
+		expect(oneLine.height).toBeLessThanOrEqual(oneLine.lineHeight * 1.5)
+		expect(oneLine.end).toBe('-title')
+		expect(oneLine.inside).toBe(true)
+		expect(oneLine.cut).toBe(true)
 		await desktop.close()
 	})
 })

@@ -703,9 +703,9 @@ OC.L10N.register(
 		"Grid": "Kacheln",
 		"List": "Liste",
 		"Card size": "Kartengröße",
-		"S": "S",
+		"S": "K",
 		"M": "M",
-		"L": "L",
+		"L": "G",
 		"Aspect ratio": "Seitenverhältnis",
 		"Landscape": "Querformat",
 		"Square": "Quadrat",
@@ -724,7 +724,8 @@ OC.L10N.register(
 		"_%n folder_::_%n folders_": [
 			"%n Ordner",
 			"%n Ordner"
-		]
+		],
+		"Filter: {name}": "Filter: {name}"
 	},
 	undefined
 );

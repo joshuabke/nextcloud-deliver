@@ -43,14 +43,8 @@
 	padding-inline-end: var(--default-clickable-area);
 }
 
-/* A long name wraps to the chosen line count (2 by default), breaking inside a word without spaces; its title holds it whole */
+/* A long name wraps to up to two lines and is cut shortly before its end (NameText); its title holds it whole */
 .deliver-card__name {
-	display: -webkit-box;
-	-webkit-box-orient: vertical;
-	-webkit-line-clamp: var(--deliver-title-lines, 2);
-	line-clamp: var(--deliver-title-lines, 2);
-	overflow: hidden;
-	overflow-wrap: anywhere;
 	font-size: var(--font-size-small, 13px);
 	font-weight: bold;
 }
@@ -107,8 +101,6 @@
 
 .deliver-card--row .deliver-card__name {
 	align-self: end;
-	-webkit-line-clamp: 2;
-	line-clamp: 2;
 }
 
 .deliver-card--row .deliver-card__facts {

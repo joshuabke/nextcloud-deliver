@@ -183,8 +183,13 @@ const layout = useQuery('view', ['folders', 'flat'], 'folders')
 const scope = () => `project-${props.id}`
 const look = useLayout(scope)
 const gridOptions = useGridOptions(scope)
-const cardsStyle = computed(() => look.value === 'grid' ? gridStyle(gridOptions.value, { mobile: isMobile.value }) : undefined)
+const cardsStyle = computed(() => look.value === 'grid' ? gridStyle(gridOptions.value) : undefined)
+const gridClasses = computed(() => look.value === 'list'
+	? 'deliver-project__grid--list'
+	: `deliver-project__grid--${gridOptions.value.size}`)
 const stillFit = computed(() => mediaFit(gridOptions.value.fit))
+/** Whether the folder cards at the top fold into a collapsible row */
+const foldersCollapsed = computed(() => look.value === 'grid' && gridOptions.value.collapseFolders)
 /** Whether the collapsed folders row is currently open */
 const foldersExpanded = ref(false)
 watch([folder, () => gridOptions.value.collapseFolders], () => {
@@ -896,8 +901,9 @@ function dropped(event) {
 					: project.path
 						? t('deliver', 'Enable files for review in the Deliver tab of the Files sidebar.')
 						: t('deliver', 'Add files to this Project in the Deliver tab of the Files sidebar, wherever they lie.')" />
-			<div v-if="browsing && level.folders.length && look === 'grid' && gridOptions.collapseFolders" class="deliver-project__group deliver-project__folders-collapsed">
+			<div v-if="browsing && level.folders.length" class="deliver-project__group deliver-project__folders">
 				<button
+					v-if="foldersCollapsed"
 					type="button"
 					class="deliver-project__folders-toggle"
 					:aria-expanded="foldersExpanded"
@@ -906,39 +912,30 @@ function dropped(event) {
 					<span class="deliver-project__folders-label">{{ n('deliver', '%n folder', '%n folders', level.folders.length) }}</span>
 					<NcIconSvgWrapper :svg="foldersExpanded ? chevronDownIcon : chevronRightIcon" :size="20" />
 				</button>
-				<ul v-if="foldersExpanded" class="deliver-project__grid" :style="cardsStyle">
+				<ul
+					v-if="!foldersCollapsed || foldersExpanded"
+					class="deliver-project__grid"
+					:class="gridClasses"
+					:style="cardsStyle">
 					<li v-for="sub in level.folders" :key="sub.path">
 						<button type="button" class="deliver-project__folder-card" @click="folder = sub.path">
 							<NcIconSvgWrapper :svg="folderIcon" :size="32" />
-							<span class="deliver-project__folder-name" :title="sub.name">{{ sub.name }}</span>
+							<NameText
+								class="deliver-project__folder-name"
+								:name="sub.name"
+								:lines="look === 'list' ? 2 : gridOptions.titleLines"
+								:title="sub.name" />
 							<span class="deliver-project__folder-count">{{ n('deliver', '%n Asset', '%n Assets', sub.count) }}</span>
 						</button>
 					</li>
 				</ul>
 			</div>
-			<ul
-				v-else-if="browsing && level.folders.length"
-				class="deliver-project__grid deliver-project__group"
-				:class="{ 'deliver-project__grid--list': look === 'list' }"
-				:style="cardsStyle">
-				<li v-for="sub in level.folders" :key="sub.path">
-					<button type="button" class="deliver-project__folder-card" @click="folder = sub.path">
-						<NcIconSvgWrapper :svg="folderIcon" :size="32" />
-						<NameText
-							class="deliver-project__folder-name"
-							:name="sub.name"
-							:lines="2"
-							:title="sub.name" />
-						<span class="deliver-project__folder-count">{{ n('deliver', '%n Asset', '%n Assets', sub.count) }}</span>
-					</button>
-				</li>
-			</ul>
 			<section v-for="group in groups" :key="group.path" class="deliver-project__group">
 				<h3 v-if="group.path !== folder" class="deliver-project__folder">
 					<NcIconSvgWrapper :svg="folderIcon" :size="20" />
 					{{ group.path }}
 				</h3>
-				<ul class="deliver-project__grid" :class="{ 'deliver-project__grid--list': look === 'list' }" :style="cardsStyle">
+				<ul class="deliver-project__grid" :class="gridClasses" :style="cardsStyle">
 					<AssetCard
 						v-for="asset in group.assets"
 						:key="asset.id"
@@ -951,7 +948,8 @@ function dropped(event) {
 						:offLinks="offLinks > 0 && asset.offLinks"
 						:list="look === 'list'"
 						:fit="stillFit"
-						:showInfo="gridOptions.info"
+						:titleLines="gridOptions.titleLines"
+						:hideInfo="!gridOptions.info"
 						@select="toggle(asset, $event)"
 						@pick="pick(asset, $event)"
 						@stack="accept"
@@ -965,7 +963,7 @@ function dropped(event) {
 					<NcIconSvgWrapper :svg="notUpIcon" :size="20" />
 					{{ t('deliver', 'Not up for review') }}
 				</h3>
-				<ul class="deliver-project__grid" :class="{ 'deliver-project__grid--list': look === 'list' }" :style="cardsStyle">
+				<ul class="deliver-project__grid" :class="gridClasses" :style="cardsStyle">
 					<NotUpForReviewCard
 						v-for="file in notUpForReview"
 						:key="file.fileId"
@@ -974,7 +972,8 @@ function dropped(event) {
 						:canAdd="file.canAdd"
 						:adding="adding.has(file.fileId)"
 						:list="look === 'list'"
-						:showInfo="gridOptions.info"
+						:titleLines="gridOptions.titleLines"
+						:hideInfo="!gridOptions.info"
 						@add="add(file)"
 						@contextmenu.prevent="openFileMenu($event, file)"
 						@menu="openFileMenu($event, file)" />
@@ -1197,7 +1196,7 @@ function dropped(event) {
 	font-size: var(--font-size-small, 13px);
 }
 
-.deliver-project__folders-collapsed {
+.deliver-project__folders {
 	display: flex;
 	flex-direction: column;
 	gap: calc(2 * var(--default-grid-baseline));
@@ -1231,9 +1230,18 @@ function dropped(event) {
 }
 
 .deliver-project__grid {
+	--gap: calc(2 * var(--default-grid-baseline));
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(min(var(--deliver-grid-min, 220px), 100%), 1fr));
-	gap: calc(2 * var(--default-grid-baseline));
+	grid-template-columns: repeat(auto-fill, minmax(min(220px, calc(50% - var(--gap) / 2)), 1fr));
+	gap: var(--gap);
+}
+
+.deliver-project__grid--s {
+	grid-template-columns: repeat(auto-fill, minmax(min(160px, calc((100% - 2 * var(--gap) - 1px) / 3)), 1fr));
+}
+
+.deliver-project__grid--l {
+	grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
 }
 
 .deliver-project__grid--list {

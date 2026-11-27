@@ -37,9 +37,7 @@ const panel = ref(null)
 			:label="t('deliver', 'Display options')"
 			@close="open = false">
 			<template #header>
-				<div class="deliver-layout-switch__title">
-					{{ t('deliver', 'Display options') }}
-				</div>
+				{{ t('deliver', 'Display options') }}
 			</template>
 			<DisplayOptions
 				v-model:layout="layout"
@@ -60,7 +58,6 @@ const panel = ref(null)
 		<NcPopover
 			v-model:shown="open"
 			placement="bottom-end"
-			popupRole="dialog"
 			@afterHide="panel?.reset()">
 			<template #trigger="{ attrs }">
 				<NcButton
@@ -87,13 +84,6 @@ const panel = ref(null)
 </template>
 
 <style scoped>
-.deliver-layout-switch__title {
-	padding-bottom: calc(3 * var(--default-grid-baseline));
-	font-size: 16px;
-	font-weight: bold;
-	text-align: center;
-}
-
 .deliver-layout-switch__popover {
 	width: 300px;
 	max-width: calc(100vw - 24px);

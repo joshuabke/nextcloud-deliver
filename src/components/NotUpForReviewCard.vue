@@ -4,6 +4,7 @@ import videoIcon from '@mdi/svg/svg/filmstrip.svg?raw'
 import audioIcon from '@mdi/svg/svg/waveform.svg?raw'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import NameText from './NameText.vue'
 import { useLongPress } from '../composables/longpress.js'
 import { t } from '../lib/l10n.js'
 
@@ -17,8 +18,10 @@ defineProps({
 	adding: { type: Boolean, default: false },
 	/** One compact row instead of a card */
 	list: { type: Boolean, default: false },
-	/** Whether the folder line under the name shows on a card in grid mode */
-	showInfo: { type: Boolean, default: true },
+	/** How many lines the name takes on a card in grid mode (1 or 2) */
+	titleLines: { type: Number, default: 2 },
+	/** Whether to hide the folder line under the name on a card in grid mode */
+	hideInfo: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['add', 'menu'])
@@ -33,10 +36,12 @@ const { press, fromButton } = useLongPress((where) => emit('menu', where))
 			<div class="deliver-card__still">
 				<NcIconSvgWrapper :svg="file.mimeType.startsWith('audio/') ? audioIcon : videoIcon" :size="40" />
 			</div>
-			<div class="deliver-card__name" :title="file.name">
-				{{ file.name }}
-			</div>
-			<div v-if="list || showInfo" class="deliver-card__meta">
+			<NameText
+				class="deliver-card__name"
+				:name="file.name"
+				:lines="list ? 2 : titleLines"
+				:title="file.name" />
+			<div v-if="list || !hideInfo" class="deliver-card__meta">
 				{{ where }}
 			</div>
 		</div>

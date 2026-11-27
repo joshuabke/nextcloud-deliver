@@ -42,8 +42,10 @@ const props = defineProps({
 	list: { type: Boolean, default: false },
 	/** How the card's still fits its frame in grid mode: 'contain' or 'cover' */
 	fit: { type: String, default: 'contain' },
-	/** Whether the line(s) under the name show on a card in grid mode */
-	showInfo: { type: Boolean, default: true },
+	/** How many lines the name takes on a card in grid mode (1 or 2) */
+	titleLines: { type: Number, default: 2 },
+	/** Whether to hide the line(s) under the name on a card in grid mode */
+	hideInfo: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['stack', 'menu', 'versions', 'select', 'pick'])
@@ -159,7 +161,7 @@ const status = computed(() => {
 			<NameText
 				class="deliver-card__name"
 				:name="asset.name"
-				:lines="2"
+				:lines="list ? 2 : titleLines"
 				:title="newest.name" />
 			<!-- What the badges on the still say, in the row's own line -->
 			<div v-if="list" class="deliver-card__facts">
@@ -183,10 +185,10 @@ const status = computed(() => {
 				</span>
 				<DueDate v-if="asset.dueDate" :modelValue="asset.dueDate" />
 			</div>
-			<div v-if="!list && showInfo" class="deliver-card__meta">
+			<div v-if="!list && !hideInfo" class="deliver-card__meta">
 				<template v-if="newest.deliveredBy">{{ newest.deliveredBy.name }} · </template><NcDateTime :timestamp="newest.createdAt * 1000" />
 			</div>
-			<DueDate v-if="asset.dueDate && !list && showInfo" class="deliver-card__due" :modelValue="asset.dueDate" />
+			<DueDate v-if="asset.dueDate && !list && !hideInfo" class="deliver-card__due" :modelValue="asset.dueDate" />
 		</a>
 		<!-- Outside the link, so ticking it does not open the Asset -->
 		<input

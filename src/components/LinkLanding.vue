@@ -9,13 +9,13 @@ import folderIcon from '@mdi/svg/svg/folder-outline.svg?raw'
 import audioIcon from '@mdi/svg/svg/music-note-outline.svg?raw'
 import videoIcon from '@mdi/svg/svg/play-box-outline.svg?raw'
 import { loadState } from '@nextcloud/initial-state'
-import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DueDate from './DueDate.vue'
 import LayoutSwitch from './LayoutSwitch.vue'
 import MediaStill from './MediaStill.vue'
+import NameText from './NameText.vue'
 import SortMenu from './SortMenu.vue'
 import { useGridOptions, useLayout } from '../composables/layout.js'
 import { LINK_SORTS, SORT_OPTIONS, sortAssets } from '../lib/filters.js'
@@ -40,11 +40,13 @@ const props = defineProps({
 const emit = defineEmits(['open'])
 
 /** Cards or compact rows, remembered in this browser for this link */
-const isMobile = useIsMobile()
 const scope = () => `link-${loadState('deliver', 'token', '')}`
 const look = useLayout(scope)
 const gridOptions = useGridOptions(scope)
-const cardsStyle = computed(() => look.value === 'grid' ? gridStyle(gridOptions.value, { mobile: isMobile.value, wide: true }) : undefined)
+const cardsStyle = computed(() => look.value === 'grid' ? gridStyle(gridOptions.value) : undefined)
+const gridClasses = computed(() => look.value === 'list'
+	? 'deliver-landing__grid--list'
+	: `deliver-landing__grid--${gridOptions.value.size}`)
 const stillFit = computed(() => mediaFit(gridOptions.value.fit))
 const foldersExpanded = ref(false)
 watch([folder, () => gridOptions.value.collapseFolders], () => {
@@ -199,48 +201,27 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 					</button>
 				</template>
 			</div>
-			<div v-if="foldersCollapsed" class="deliver-landing__folders-collapsed">
-				<button
-					type="button"
-					class="deliver-landing__folders-toggle"
-					:aria-expanded="foldersExpanded"
-					@click="foldersExpanded = !foldersExpanded">
-					<NcIconSvgWrapper :svg="folderIcon" :size="20" />
-					<span class="deliver-landing__folders-label">{{ n('deliver', '%n folder', '%n folders', level.folders.length) }}</span>
-					<NcIconSvgWrapper :svg="foldersExpanded ? chevronDownIcon : chevronRightIcon" :size="20" />
-				</button>
-				<ul
-					v-if="foldersExpanded"
-					class="deliver-landing__grid deliver-landing__folders-grid"
-					:class="{ 'deliver-landing__grid--mobile': isMobile }"
-					:style="cardsStyle">
+			<button
+				v-if="foldersCollapsed"
+				type="button"
+				class="deliver-landing__folders-toggle"
+				:aria-expanded="foldersExpanded"
+				@click="foldersExpanded = !foldersExpanded">
+				<NcIconSvgWrapper :svg="folderIcon" :size="20" />
+				<span class="deliver-landing__folders-label">{{ n('deliver', '%n folder', '%n folders', level.folders.length) }}</span>
+				<NcIconSvgWrapper :svg="foldersExpanded ? chevronDownIcon : chevronRightIcon" :size="20" />
+			</button>
+			<ul class="deliver-landing__grid" :class="gridClasses" :style="cardsStyle">
+				<template v-if="!foldersCollapsed || foldersExpanded">
 					<li v-for="sub in level.folders" :key="'folder:' + sub.path" class="deliver-landing__card deliver-landing__card--folder">
 						<div class="deliver-landing__media">
 							<button type="button" class="deliver-landing__folder" @click="folder = sub.path">
 								<NcIconSvgWrapper :svg="folderIcon" :size="40" />
-								<span class="deliver-landing__folder-name" :title="sub.name">{{ sub.name }}</span>
-								<span class="deliver-landing__count">{{ n('deliver', '%n Asset', '%n Assets', sub.count) }}</span>
-							</button>
-							<input
-								v-if="link.downloadAll"
-								:disabled="!downloadsIn(sub.path)"
-								type="checkbox"
-								class="deliver-landing__pick"
-								:class="{ 'deliver-landing__pick--shown': picked > 0 }"
-								:checked="pickedFolders.has(sub.path)"
-								:aria-label="t('deliver', 'Select {name}', { name: sub.name })"
-								@change="toggle(pickedFolders, sub.path, $event.target.checked)">
-						</div>
-					</li>
-				</ul>
-			</div>
-			<ul class="deliver-landing__grid" :class="{ 'deliver-landing__grid--list': look === 'list', 'deliver-landing__grid--mobile': isMobile }" :style="cardsStyle">
-				<template v-if="!foldersCollapsed">
-					<li v-for="sub in level.folders" :key="'folder:' + sub.path" class="deliver-landing__card deliver-landing__card--folder">
-						<div class="deliver-landing__media">
-							<button type="button" class="deliver-landing__folder" @click="folder = sub.path">
-								<NcIconSvgWrapper :svg="folderIcon" :size="40" />
-								<span class="deliver-landing__folder-name" :title="sub.name">{{ sub.name }}</span>
+								<NameText
+									class="deliver-landing__folder-name"
+									:name="sub.name"
+									:lines="look === 'list' ? 2 : gridOptions.titleLines"
+									:title="sub.name" />
 								<span class="deliver-landing__count">{{ n('deliver', '%n Asset', '%n Assets', sub.count) }}</span>
 							</button>
 							<input
@@ -288,7 +269,10 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 								class="deliver-landing__name"
 								:title="asset.name"
 								@click="emit('open', asset.newestId)">
-								<span class="deliver-landing__name-text">{{ asset.name }}</span>
+								<NameText
+									class="deliver-landing__name-text"
+									:name="asset.name"
+									:lines="look === 'list' ? 2 : gridOptions.titleLines" />
 							</button>
 							<div v-if="look === 'list'" class="deliver-landing__facts">
 								<span class="deliver-landing__fact-version">{{ t('deliver', 'V{number}', { number: asset.number }) }}</span>
@@ -448,25 +432,12 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 	cursor: pointer;
 }
 
-/* Chosen line count (2 by default), smaller, breaking inside a word without spaces; the title holds the name whole */
+/* Up to two lines, smaller, cut shortly before the end (NameText); the title holds the name whole */
 .deliver-landing__folder-name,
 .deliver-landing__name-text {
-	display: -webkit-box;
-	-webkit-box-orient: vertical;
-	-webkit-line-clamp: var(--deliver-title-lines, 2);
-	line-clamp: var(--deliver-title-lines, 2);
 	max-width: 100%;
-	overflow: hidden;
-	overflow-wrap: anywhere;
 	font-size: var(--font-size-small, 13px);
 	font-weight: bold;
-}
-
-.deliver-landing__folders-collapsed {
-	display: flex;
-	flex-direction: column;
-	gap: calc(3 * var(--default-grid-baseline));
-	margin-bottom: calc(4 * var(--default-grid-baseline));
 }
 
 .deliver-landing__folders-toggle,
@@ -476,7 +447,7 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 	gap: calc(2 * var(--default-grid-baseline));
 	width: 100%;
 	min-height: var(--default-clickable-area);
-	margin: 0;
+	margin: 0 0 calc(3 * var(--default-grid-baseline));
 	padding: calc(2 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline));
 	border: 1px solid var(--landing-border);
 	border-radius: var(--border-radius-large);
@@ -497,13 +468,24 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 }
 
 .deliver-landing__grid {
+	--gap: calc(4 * var(--default-grid-baseline));
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(min(var(--deliver-grid-min, 260px), 100%), 1fr));
-	gap: calc(4 * var(--default-grid-baseline));
+	grid-template-columns: repeat(auto-fill, minmax(min(260px, calc(50% - var(--gap) / 2)), 1fr));
+	gap: var(--gap);
 }
 
-.deliver-landing__grid--mobile {
-	gap: calc(2 * var(--default-grid-baseline));
+.deliver-landing__grid--s {
+	grid-template-columns: repeat(auto-fill, minmax(min(180px, calc((100% - 2 * var(--gap) - 1px) / 3)), 1fr));
+}
+
+.deliver-landing__grid--l {
+	grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr));
+}
+
+@media (max-width: 600px) {
+	.deliver-landing__grid {
+		--gap: calc(2 * var(--default-grid-baseline));
+	}
 }
 
 .deliver-landing__card {
@@ -680,12 +662,6 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 
 .deliver-landing__grid--list .deliver-landing__still {
 	aspect-ratio: 16 / 9;
-}
-
-.deliver-landing__grid--list .deliver-landing__folder-name,
-.deliver-landing__grid--list .deliver-landing__name-text {
-	-webkit-line-clamp: 2;
-	line-clamp: 2;
 }
 
 .deliver-landing__grid--list .deliver-landing__foot {

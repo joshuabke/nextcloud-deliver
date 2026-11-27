@@ -40,9 +40,7 @@ const open = ref(false)
 			:label="t('deliver', 'Sort by')"
 			@close="open = false">
 			<template #header>
-				<div class="deliver-sort-sheet__title">
-					{{ t('deliver', 'Sort by') }}
-				</div>
+				{{ t('deliver', 'Sort by') }}
 			</template>
 			<NcFormBox>
 				<NcFormBoxButton
@@ -80,13 +78,6 @@ const open = ref(false)
 </template>
 
 <style scoped>
-.deliver-sort-sheet__title {
-	padding-bottom: calc(3 * var(--default-grid-baseline));
-	font-size: 16px;
-	font-weight: bold;
-	text-align: center;
-}
-
 .deliver-sort-sheet__spacer {
 	display: inline-block;
 	width: 20px;

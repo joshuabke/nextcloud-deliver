@@ -27,6 +27,9 @@ const filterOpen = ref(false)
 const activeFilter = computed(() => filter.value === props.filters[0]?.id
 	? null
 	: props.filters.find((each) => each.id === filter.value) ?? null)
+const filterLabel = computed(() => activeFilter.value
+	? t('deliver', 'Filter: {name}', { name: activeFilter.value.label })
+	: t('deliver', 'Filter'))
 </script>
 
 <template>
@@ -38,14 +41,11 @@ const activeFilter = computed(() => filter.value === props.filters[0]?.id
 			<NcButton
 				variant="tertiary"
 				:pressed="Boolean(activeFilter)"
-				:aria-label="t('deliver', 'Filter')"
-				:title="t('deliver', 'Filter')"
+				:aria-label="filterLabel"
+				:title="filterLabel"
 				@click="filterOpen = true">
 				<template #icon>
 					<NcIconSvgWrapper :svg="filterIcon" />
-				</template>
-				<template v-if="activeFilter">
-					{{ activeFilter.label }}
 				</template>
 			</NcButton>
 			<BottomSheet
@@ -53,9 +53,7 @@ const activeFilter = computed(() => filter.value === props.filters[0]?.id
 				:label="t('deliver', 'Filter')"
 				@close="filterOpen = false">
 				<template #header>
-					<div class="deliver-filter-sheet__title">
-						{{ t('deliver', 'Filter') }}
-					</div>
+					{{ t('deliver', 'Filter') }}
 				</template>
 				<NcFormBox>
 					<NcFormBoxButton
@@ -121,13 +119,6 @@ const activeFilter = computed(() => filter.value === props.filters[0]?.id
 	margin-inline-start: var(--default-grid-baseline);
 	font-weight: normal;
 	opacity: 0.7;
-}
-
-.deliver-filter-sheet__title {
-	padding-bottom: calc(3 * var(--default-grid-baseline));
-	font-size: 16px;
-	font-weight: bold;
-	text-align: center;
 }
 
 .deliver-filter-sheet__row {
