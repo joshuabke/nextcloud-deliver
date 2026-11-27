@@ -105,8 +105,12 @@ function step() {
 				</div>
 				<div class="deliver-layout__end">
 					<slot name="end" />
-					<!-- What does not fit into a phone's bar -->
-					<NcActions v-if="isMobile && $slots.menu" variant="tertiary" :aria-label="t('deliver', 'More')">
+					<!-- What does not fit into a phone's bar upright; sideways the bar is wide enough for all of it as icons -->
+					<NcActions
+						v-if="isMobile && $slots.menu"
+						variant="tertiary"
+						:inline="sideways ? Infinity : 0"
+						:aria-label="t('deliver', 'More')">
 						<slot name="menu" />
 					</NcActions>
 					<!-- Sideways the list beside the picture, from the bar: over the picture the button covered it -->
