@@ -3195,6 +3195,70 @@ test.describe('Audio review', () => {
 		await api.dispose()
 	})
 
+	test('on a phone Reply on the card for a Comment far down the list scrolls only the list, upright and sideways, so the view stays where it is (#297)', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const ids = []
+		// Comments early in the piece fill the list, so the one answered comes last, far down
+		for (let i = 1; i <= 12; i++) {
+			const made = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${versionId}/comments?format=json`, { data: { inFrame: 100 * i, body: `early ${i}, with words enough for two lines in the list` } })
+			ids.push((await made.json()).ocs.data.id)
+		}
+		const made = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${versionId}/comments?format=json`, { data: { inFrame: 22500, body: 'answer me far down' } })
+		ids.push((await made.json()).ocs.data.id)
+		for (const viewport of [PHONE.viewport, { width: 852, height: 393 }]) {
+			// Nextcloud holds an iPhone's zoom at 1, and the zoom below stands in for the keyboard
+			const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport, userAgent: ANDROID })
+			const target = await phone.newPage()
+			await login(target)
+			await target.goto(`/apps/deliver/versions/${versionId}`)
+			const canvas = target.locator('.deliver-wave canvas')
+			await expect(canvas).toBeVisible()
+			await expect(target.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
+			await target.getByRole('button', { name: '1 min', exact: true }).click()
+			const lane = await canvas.boundingBox()
+			await target.touchscreen.tap(lane.x + lane.width * 0.875, lane.y + lane.height - 20)
+			const card = target.getByRole('dialog', { name: /^Comment #/ })
+			await expect(card).toContainText('answer me far down')
+			// About as much of the window as an iPhone's keyboard leaves: zoomed in, the visual viewport
+			// is that much smaller, and the browser pans it, the whole view with it, to a field below it
+			const cdp = await phone.newCDPSession(target)
+			await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1.5 })
+			await expect.poll(() => target.evaluate(() => window.visualViewport.scale)).toBe(1.5)
+			// Zoomed, a click would miss: the press goes to the button itself
+			await card.getByRole('button', { name: 'Reply', exact: true }).dispatchEvent('click')
+			const item = target.locator('.deliver-comments__list > .deliver-comment').filter({ hasText: 'answer me far down' })
+			const field = item.getByPlaceholder('Write a Reply')
+			await expect(field).toBeFocused()
+			// Settled, the smooth scroll of the reveal included
+			await target.waitForTimeout(1000)
+			const seen = await field.evaluate((element) => {
+				const box = element.getBoundingClientRect()
+				const view = window.visualViewport
+				const list = element.closest('.deliver-comments__list')
+				const scrolled = []
+				for (let node = list.parentElement; node; node = node.parentElement) {
+					if (node.scrollTop || node.scrollLeft) {
+						scrolled.push(node.className)
+					}
+				}
+				return {
+					// Up and down only: the zoom narrows the view too, which a keyboard does not, so sideways it pans across to the list
+					pan: [view.offsetTop, document.scrollingElement.scrollTop],
+					scrolled,
+					field: box.top >= 0 && box.top + 24 <= view.height,
+					comment: element.closest('.deliver-comment').getBoundingClientRect().top >= list.getBoundingClientRect().top - 1,
+				}
+			})
+			// The view stays, with its bar; the list alone brought the Comment to its top, the field above the keyboard
+			expect(seen).toEqual({ pan: [0, 0], scrolled: [], field: true, comment: true })
+			await phone.close()
+		}
+		for (const id of ids) {
+			expect((await api.delete(`/ocs/v2.php/apps/deliver/api/v1/comments/${id}?format=json`)).ok()).toBe(true)
+		}
+		await api.dispose()
+	})
+
 	test('on a phone Reply on the card takes the focus from the Comment field, whose list would step aside for it (#284)', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		const made = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${versionId}/comments?format=json`, { data: { inFrame: 22500, body: 'answer me while writing' } })

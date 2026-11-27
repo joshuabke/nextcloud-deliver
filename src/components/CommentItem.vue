@@ -56,6 +56,7 @@ const reply = computed({
 })
 const { busy, error, run } = useBusy()
 const replyField = ref(null)
+const root = ref(null)
 
 const mine = computed(() => store.mine(props.comment))
 const unseen = computed(() => props.comment.createdAt > store.seenUntil && !mine.value)
@@ -72,7 +73,9 @@ const canReact = computed(() => store.canComment === true && store.me?.type !== 
 
 // Reply on a circle's card opens this Comment's Reply field and puts the focus in it (#273),
 // still within the press on Reply, so a phone opens its keyboard. There the focus may scroll:
-// iOS brings a field above its keyboard only as it takes a focus that does (#284)
+// iOS brings a field above its keyboard only as it takes a focus that does (#284). Lower down
+// the list, iOS moved the whole view up for it, so first the list alone brings the Comment
+// to its top, where the field is above the keyboard as on the first Comment (#297)
 watch(() => store.replyTo, async (id) => {
 	if (id !== props.comment.id || props.isReply) {
 		return
@@ -81,7 +84,12 @@ watch(() => store.replyTo, async (id) => {
 	if (canReply.value) {
 		replying.value = true
 		await nextTick()
-		replyField.value?.focus({ preventScroll: !window.matchMedia('(pointer: coarse)').matches })
+		const touch = window.matchMedia('(pointer: coarse)').matches
+		const list = root.value?.parentElement
+		if (touch && list) {
+			list.scrollTop += root.value.getBoundingClientRect().top - list.getBoundingClientRect().top
+		}
+		replyField.value?.focus({ preventScroll: !touch })
 	}
 }, { immediate: true })
 
@@ -130,6 +138,7 @@ function saveReply() {
 
 <template>
 	<li
+		ref="root"
 		:data-comment="comment.id"
 		class="deliver-comment"
 		:class="{
