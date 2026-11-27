@@ -9,6 +9,7 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import ComparePlayer from '../components/ComparePlayer.vue'
+import NameText from '../components/NameText.vue'
 import ReviewLayout from '../components/ReviewLayout.vue'
 import SegmentedControl from '../components/SegmentedControl.vue'
 import VersionPicker from '../components/VersionPicker.vue'
@@ -137,7 +138,7 @@ function jump(comment) {
 				</template>
 			</NcButton>
 			<h2 class="deliver-layout__title">
-				{{ context.asset.name }}
+				<NameText :name="context.asset.name" :title="context.asset.name" />
 			</h2>
 		</template>
 		<template #center>

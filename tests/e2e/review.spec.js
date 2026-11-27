@@ -1474,7 +1474,7 @@ test.describe('Review view', () => {
 	test('a long name is cut shortly before its end, which stays in view, on its card, its row and the bar', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		const dav = `/remote.php/dav/files/${USER}/${folder}`
-		const name = 'Franz Liszt - S.141, Grande Étude de Paganini No.2 in E-flat major, Andantino capriccioso, live at the Konzerthaus mix3'
+		const name = 'Franz Liszt - S.141, Grande Étude de Paganini No.2 in E-flat major, Andantino capriccioso, recorded live at the Wiener Konzerthaus on the twelfth of March in the second season of the cycle, first take, rough mix3'
 		const count = async () => (await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()).ocs.data.assets.length
 		const before = await count()
 		expect((await api.fetch(`${dav}/${name}.webm`, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(201)
@@ -1496,7 +1496,7 @@ test.describe('Review view', () => {
 				cut: element.scrollHeight > element.clientHeight || head.scrollWidth > head.clientWidth,
 			}
 		})
-		const shown = { end: '2 mix3', inside: true, cut: true }
+		const shown = { end: 'h mix3', inside: true, cut: true }
 		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
 		try {
 			const small = await phone.newPage()
@@ -1510,7 +1510,7 @@ test.describe('Review view', () => {
 					await expect(label).toHaveAttribute('title', `${name}.webm`)
 					expect(await shownEnd(label), `${look} at ${at.viewportSize().width} px`).toEqual(shown)
 				}
-				await card(at, name).locator('.deliver-card__link').click()
+				await at.goto(await card(at, name).locator('.deliver-card__link').getAttribute('href'))
 				const title = at.locator('.deliver-layout__bar h2')
 				await expect(title).toHaveAccessibleName(name)
 				expect(await shownEnd(title.locator('.deliver-name')), `the bar at ${at.viewportSize().width} px`).toEqual(shown)

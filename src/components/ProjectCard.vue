@@ -10,6 +10,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDateTime from '@nextcloud/vue/components/NcDateTime'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import DueDate from './DueDate.vue'
+import NameText from './NameText.vue'
 import { useLongPress } from '../composables/longpress.js'
 import { n, t } from '../lib/l10n.js'
 import { previewUrl } from '../lib/preview.js'
@@ -59,9 +60,11 @@ const badges = computed(() => {
 					</span>
 				</div>
 			</div>
-			<div class="deliver-card__name" :title="project.name">
-				{{ project.name }}
-			</div>
+			<NameText
+				class="deliver-card__name"
+				:name="project.name"
+				:lines="2"
+				:title="project.name" />
 			<div class="deliver-card__meta">
 				<NcDateTime :timestamp="project.activity.lastActivity * 1000" />
 				· {{ n('deliver', '%n Asset', '%n Assets', project.activity.assets) }}
