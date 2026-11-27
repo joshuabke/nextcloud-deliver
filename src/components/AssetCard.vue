@@ -74,7 +74,7 @@ function onClick(event) {
 	emit('pick', { range: event.shiftKey, add })
 }
 /** A Version stacked by its name waits here until a Member keeps or undoes it (story 13) */
-const autoStacked = computed(() => props.manages && !isMobile.value && props.asset.versions.some((version) => version.autoStacked))
+const autoStacked = computed(() => props.manages && props.asset.versions.some((version) => version.autoStacked))
 /** Comments by others on any Version of the Stack that I have not had on screen */
 const unseen = computed(() => props.asset.versions.reduce((sum, version) => sum + version.unseen, 0))
 const audio = computed(() => newest.value.mimeType?.startsWith('audio/'))

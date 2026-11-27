@@ -339,6 +339,11 @@ async function claim({ name, email, mail }) {
 	line-height: 1.25;
 }
 
+/* Not wider than the room left: the long name ends in an ellipsis instead of running under the buttons */
+.deliver-public__crumbs .deliver-layout__title {
+	max-width: 100%;
+}
+
 /* Small enough under the name that the bar keeps its slim row sideways */
 .deliver-public__due {
 	font-size: 12px;
