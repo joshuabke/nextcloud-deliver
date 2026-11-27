@@ -216,11 +216,12 @@ function jump(comment) {
 .deliver-compare-view__heading {
 	display: flex;
 	align-items: center;
-	min-height: var(--default-clickable-area);
-	margin: var(--default-grid-baseline) 0 0;
+	/* As high as the Review view's head row, so the grabber sits in it alike, and clear of the first Comment below */
+	min-height: calc(var(--default-clickable-area) + 2 * var(--default-grid-baseline));
+	margin: 0 0 var(--default-grid-baseline);
 	padding: 0 calc(3 * var(--default-grid-baseline));
 	font-size: var(--default-font-size);
-	font-weight: bold;
+	font-weight: normal;
 }
 
 .deliver-compare-view__list {

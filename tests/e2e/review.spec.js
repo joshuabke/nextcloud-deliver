@@ -3550,30 +3550,41 @@ test.describe('Comparing sound', () => {
 		await phone.close()
 	})
 
-	test('on a phone the grabber of Compare\'s sheet sits in the heading\'s row at its middle and top height, as in the Review view, clear of the list', async () => {
+	test('on a phone the grabber of Compare\'s sheet sits in the heading\'s row at its middle and top height, as in the Review view, beside the heading and clear of the list', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const commented = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${cut[0].id}/comments?format=json`, { data: { inFrame: 1, body: 'On V2' } })
+		expect(commented.status(), await commented.text()).toBe(201)
 		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: { width: 375, height: 667 } })
-		const page = await phone.newPage()
-		await login(page)
-		await page.goto(`/apps/deliver/compare/${cut[1].id}/${cut[0].id}`)
-		await expect(page.locator('.deliver-compare video').first()).toHaveJSProperty('readyState', 4)
-		const grabber = page.locator('.deliver-layout__grabber')
-		const heading = page.locator('.deliver-compare-view__heading')
-		for (const level of ['middle', 'up']) {
-			await grabber.tap()
-			await expect(page.locator(`.deliver-layout--${level}`)).toHaveCount(1)
-			const grab = await grabber.boundingBox()
-			const head = await heading.boundingBox()
-			expect(grab.y).toBeLessThanOrEqual(head.y)
-			expect(grab.y + grab.height).toBeLessThanOrEqual((await page.locator('.deliver-compare-view__empty').boundingBox()).y + 12)
-			// Beside the heading's text, not over it
-			const text = await heading.evaluate((element) => {
-				const range = document.createRange()
-				range.selectNodeContents(element)
-				return range.getBoundingClientRect().right
-			})
-			expect(text).toBeLessThan(grab.x)
+		try {
+			const page = await phone.newPage()
+			await login(page)
+			// V2 leads, so its Comment is in the list
+			await page.goto(`/apps/deliver/compare/${cut[0].id}/${cut[1].id}`)
+			await expect(page.locator('.deliver-compare video').first()).toHaveJSProperty('readyState', 4)
+			const grabber = page.locator('.deliver-layout__grabber')
+			const heading = page.locator('.deliver-compare-view__heading')
+			for (const level of ['middle', 'up']) {
+				await grabber.tap()
+				await expect(page.locator(`.deliver-layout--${level}`)).toHaveCount(1)
+				const grab = await grabber.boundingBox()
+				// In the heading's row, not a row of its own above it
+				const head = await heading.boundingBox()
+				expect(grab.y).toBeLessThan(head.y + head.height / 2)
+				expect(grab.y + grab.height).toBeGreaterThan(head.y + head.height)
+				expect(grab.y + grab.height).toBeLessThanOrEqual((await page.locator('.deliver-compare-view__list li').boundingBox()).y)
+				const text = await heading.evaluate((element) => {
+					const range = document.createRange()
+					range.selectNodeContents(element)
+					return range.getBoundingClientRect().right
+				})
+				// The handle drawn in the grabber's middle, 40 px wide, stays off the heading's text
+				expect(text).toBeLessThan(grab.x + grab.width / 2 - 20)
+			}
+		} finally {
+			await phone.close()
+			await api.delete(`/ocs/v2.php/apps/deliver/api/v1/comments/${(await commented.json()).ocs.data.id}?format=json`)
+			await api.dispose()
 		}
-		await phone.close()
 	})
 
 	test('on a phone held sideways, pictures, both lanes and the transport fit without scrolling', async () => {
