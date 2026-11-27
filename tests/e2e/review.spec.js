@@ -1668,6 +1668,242 @@ test.describe('The bar on a phone', () => {
 	})
 })
 
+test.describe('Menus on a phone', () => {
+	let browser
+	let folder
+	let projectId
+	/** Longer than any row or card shows whole */
+	const NAME = 'the-final-mix-of-the-trailer-for-the-festival-in-autumn-with-its-very-long-title.webm'
+	const UPRIGHT = { width: 393, height: 852 }
+	const SIDEWAYS = { width: 852, height: 393 }
+
+	test.beforeAll(async ({ playwright }) => {
+		await testUser(playwright)
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		folder = 'deliver-e2e-' + randomBytes(4).toString('hex')
+		const dav = `/remote.php/dav/files/${USER}/${folder}`
+		expect((await api.fetch(dav, { method: 'MKCOL' })).status()).toBe(201)
+		for (const name of [NAME, 'other.webm']) {
+			expect((await api.fetch(`${dav}/${name}`, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(201)
+		}
+		const created = await api.post('/ocs/v2.php/apps/deliver/api/v1/projects?format=json', { data: { folderId: await fileId(api, dav), autoIntake: true } })
+		projectId = (await created.json()).ocs.data.id
+		const assets = async () => (await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()).ocs.data.assets
+		// Ready, so that the menus offer what they offer for a ready video
+		await expect.poll(async () => (await assets()).filter((asset) => asset.versions[0].state === 'ready' && !asset.versions[0].processing).length, { timeout: 30000 }).toBe(2)
+		const long = (await assets()).find((asset) => asset.versions[0].name === NAME)
+		expect((await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${long.versions[0].id}/comments?format=json`, { data: { inFrame: 1, body: 'one' } })).ok()).toBe(true)
+		await api.dispose()
+		browser = await chromium.connectOverCDP(CDP)
+	})
+
+	test.afterAll(async ({ playwright }) => {
+		await browser?.close()
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		await api.delete(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)
+		await api.fetch(`/remote.php/dav/files/${USER}/${folder}`, { method: 'DELETE' })
+		await api.dispose()
+	})
+
+	/**
+	 * @param {import('@playwright/test').Locator} menu - a menu or a sheet
+	 * @return {Promise<string[]>} the labels of its entries, in their order
+	 */
+	const labels = (menu) => menu.getByRole('menuitem').evaluateAll((items) => items.map((item) => item.textContent.trim()))
+
+	/**
+	 * @param {import('@playwright/test').Page} page - any page
+	 * @return {import('@playwright/test').Locator} the sheet the long name's menu opens in
+	 */
+	const sheetOf = (page) => page.getByRole('dialog', { name: NAME })
+
+	/** The entries of the long name's menu on a desktop, read once */
+	let onDesktop = null
+
+	/**
+	 * @return {Promise<string[]>} what a desktop's menu of the long name offers
+	 */
+	async function desktopLabels() {
+		if (!onDesktop) {
+			const desktop = await browser.newContext({ baseURL: BROWSER_URL, viewport: { width: 1280, height: 800 } })
+			const page = await desktop.newPage()
+			await login(page)
+			await page.goto(`/apps/deliver/projects/${projectId}`)
+			await page.getByRole('button', { name: /^Actions for the-final-mix/ }).click()
+			onDesktop = await labels(page.getByRole('menu'))
+			await desktop.close()
+		}
+		return onDesktop
+	}
+
+	/**
+	 * A finger strokes down from the middle of an element, as Playwright has no swipe
+	 *
+	 * @param {import('@playwright/test').Page} page - the page
+	 * @param {import('@playwright/test').Locator} from - where the finger comes down
+	 * @param {number} by - how far, in pixels
+	 */
+	async function strokeDown(page, from, by) {
+		const box = await from.boundingBox()
+		const [x, y] = [box.x + box.width / 2, box.y + box.height / 2]
+		const touch = await page.context().newCDPSession(page)
+		await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] })
+		for (let step = 1; step <= 5; step++) {
+			await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y + by * step / 5 }] })
+		}
+		await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+		await touch.detach()
+	}
+
+	test('on a desktop the menu stays a menu, and the click outside that closes it only closes it', async () => {
+		const desktop = await browser.newContext({ baseURL: BROWSER_URL, viewport: { width: 1280, height: 800 } })
+		const page = await desktop.newPage()
+		await login(page)
+		await page.goto(`/apps/deliver/projects/${projectId}`)
+		const more = page.getByRole('button', { name: /^Actions for the-final-mix/ })
+		await more.click()
+		const menu = page.getByRole('menu')
+		await expect(menu).toHaveClass(/deliver-context-menu/)
+		await expect(page.getByRole('dialog')).toHaveCount(0)
+		expect(await labels(menu)).toEqual(['Open', 'Upload a new Version', 'Add Captions…', 'Set a Due Date', 'Manage Versions', 'Move to Project…', 'Download', 'Rename…', 'Show in Files', 'Remove from Project', 'Delete'])
+		// A click on the other row closes the menu and neither ticks nor opens the row (#298)
+		await card(page, 'other').locator('.deliver-card__name').click()
+		await expect(menu).toHaveCount(0)
+		await expect(page.locator('.deliver-card--selected')).toHaveCount(0)
+		// A second click on ⋯ closes the menu rather than opening it again
+		await more.click()
+		await expect(menu).toBeVisible()
+		await more.click()
+		await expect(menu).toHaveCount(0)
+		await page.waitForTimeout(300)
+		await expect(menu).toHaveCount(0)
+		await desktop.close()
+	})
+
+	for (const viewport of [UPRIGHT, SIDEWAYS]) {
+		test(`on a phone ${viewport === UPRIGHT ? 'upright' : 'sideways'} the ⋯ menu of a row opens as a sheet, and a tap on the strip or on ⋯ only closes it`, async () => {
+			const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport })
+			const page = await phone.newPage()
+			await login(page)
+			await page.goto(`/apps/deliver/projects/${projectId}`)
+			const url = page.url()
+			const more = page.getByRole('button', { name: /^Actions for the-final-mix/ })
+			await more.tap()
+			const sheet = sheetOf(page)
+			await expect(sheet).toBeVisible()
+			// The whole name, the Comment on the still, and the Version
+			const name = sheet.locator('.deliver-menu-sheet__name')
+			await expect(name).toHaveText(NAME)
+			expect(await name.evaluate((element) => element.scrollWidth <= element.clientWidth && element.scrollHeight <= element.clientHeight)).toBe(true)
+			await expect(sheet.locator('.deliver-menu-sheet__still')).toContainText('1')
+			await expect(sheet.locator('.deliver-menu-sheet__line')).toContainText('V1')
+			// The same entries as on a desktop, in groups, Delete last in red
+			expect(await labels(sheet)).toEqual(await desktopLabels())
+			expect(await sheet.getByRole('group').count()).toBeGreaterThan(2)
+			const remove = sheet.getByRole('menuitem', { name: 'Delete', exact: true })
+			expect(await remove.evaluate((element) => getComputedStyle(element).color)).toBe(await page.evaluate(() => {
+				const probe = document.createElement('span')
+				probe.style.color = 'var(--color-error-text)'
+				document.body.append(probe)
+				const color = getComputedStyle(probe).color
+				probe.remove()
+				return color
+			}))
+			// A strip of the page stays above it; on a phone held sideways the sheet scrolls to its last entry
+			const panel = await sheet.boundingBox()
+			expect(panel.y).toBeGreaterThanOrEqual(40)
+			expect(panel.y + panel.height).toBeCloseTo(viewport.height, 0)
+			await remove.scrollIntoViewIfNeeded()
+			await expect(remove).toBeInViewport()
+
+			// A tap on the strip, over the other row, closes the sheet and opens nothing (#298)
+			const other = await card(page, 'other').boundingBox()
+			const y = Math.min(other.y + other.height / 2, panel.y / 2)
+			await page.touchscreen.tap(viewport.width / 2, y)
+			await expect(sheet).toHaveCount(0)
+			await page.waitForTimeout(300)
+			expect(page.url()).toBe(url)
+
+			// A second tap on ⋯ closes it and does not open it again (#298)
+			await more.tap()
+			await expect(sheet).toBeVisible()
+			const button = await more.boundingBox()
+			await page.touchscreen.tap(button.x + button.width / 2, button.y + button.height / 2)
+			await expect(sheet).toHaveCount(0)
+			await page.waitForTimeout(300)
+			await expect(sheet).toHaveCount(0)
+			expect(page.url()).toBe(url)
+			await phone.close()
+		})
+	}
+
+	test('on a phone the sheet closes by Escape and a stroke down, keeps the focus inside, and its entries work', async () => {
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: UPRIGHT })
+		const page = await phone.newPage()
+		await login(page)
+		await page.goto(`/apps/deliver/projects/${projectId}`)
+		const url = page.url()
+		const more = page.getByRole('button', { name: /^Actions for the-final-mix/ })
+		const sheet = sheetOf(page)
+
+		await more.tap()
+		await expect(sheet).toBeFocused()
+		// Tab walks the entries and stays in the sheet
+		const count = await sheet.getByRole('menuitem').count()
+		for (let step = 0; step <= count; step++) {
+			await page.keyboard.press('Tab')
+		}
+		expect(await sheet.evaluate((element) => element.contains(document.activeElement))).toBe(true)
+		await page.keyboard.press('Escape')
+		await expect(sheet).toHaveCount(0)
+		await expect(more).toBeFocused()
+
+		// A short stroke lets it spring back, a long one closes it
+		await more.tap()
+		await strokeDown(page, sheet.locator('.deliver-menu-sheet__name'), 20)
+		await expect(sheet).toBeVisible()
+		await strokeDown(page, sheet.locator('.deliver-menu-sheet__name'), 200)
+		await expect(sheet).toHaveCount(0)
+		expect(page.url()).toBe(url)
+
+		// An entry does what it does on a desktop
+		await more.tap()
+		await sheet.getByRole('menuitem', { name: 'Rename…' }).tap()
+		await expect(sheet).toHaveCount(0)
+		const rename = page.getByRole('dialog', { name: 'Rename file' })
+		await expect(rename.getByRole('textbox')).toBeFocused()
+		await page.goto(`/apps/deliver/projects/${projectId}`)
+
+		// Cards open the same sheet
+		await page.getByRole('button', { name: 'Show the Assets as a list' }).tap()
+		await expect(page.locator('.deliver-card--row')).toHaveCount(0)
+		await more.tap()
+		await expect(sheet).toBeVisible()
+		await expect(sheet.locator('.deliver-menu-sheet__name')).toHaveText(NAME)
+		await page.keyboard.press('Escape')
+		await page.getByRole('button', { name: 'Show the Assets as a list' }).tap()
+		await phone.close()
+	})
+
+	test('on a phone a Project\'s menu opens as a sheet with its icon and its Assets', async () => {
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: UPRIGHT })
+		const page = await phone.newPage()
+		await login(page)
+		await page.goto('/apps/deliver/')
+		await page.getByRole('button', { name: `Actions for ${folder}` }).tap()
+		const sheet = page.getByRole('dialog', { name: folder })
+		await expect(sheet).toBeVisible()
+		await expect(sheet.locator('.deliver-menu-sheet__still svg')).toBeVisible()
+		await expect(sheet.locator('.deliver-menu-sheet__line')).toContainText('2 Assets')
+		await expect(sheet.getByRole('menuitem', { name: 'Open', exact: true })).toBeVisible()
+		const box = await sheet.boundingBox()
+		await page.touchscreen.tap(UPRIGHT.width / 2, box.y / 2)
+		await expect(sheet).toHaveCount(0)
+		await expect(page).toHaveURL(/\/apps\/deliver\/?$/)
+		await phone.close()
+	})
+})
+
 test.describe('Audio review', () => {
 	let browser
 	let context
