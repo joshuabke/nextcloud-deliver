@@ -7,8 +7,9 @@ import portraitIcon from '@mdi/svg/svg/crop-portrait.svg?raw'
 import squareIcon from '@mdi/svg/svg/crop-square.svg?raw'
 import listIcon from '@mdi/svg/svg/format-list-bulleted.svg?raw'
 import gridIcon from '@mdi/svg/svg/view-grid-outline.svg?raw'
-import { computed, ref } from 'vue'
+import { computed, ref, useId } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcFormBox from '@nextcloud/vue/components/NcFormBox'
 import NcFormBoxButton from '@nextcloud/vue/components/NcFormBoxButton'
 import NcFormBoxSwitch from '@nextcloud/vue/components/NcFormBoxSwitch'
@@ -18,6 +19,11 @@ import NcRadioGroupButton from '@nextcloud/vue/components/NcRadioGroupButton'
 import { n, t } from '../lib/l10n.js'
 import { TITLE_LINES } from '../lib/listView.js'
 
+defineProps({
+	/** Rendered inside a phone BottomSheet: grouped rows with inline controls (#309) */
+	sheet: { type: Boolean, default: false },
+})
+
 /** 'grid' for cards, 'list' for compact rows */
 const layout = defineModel('layout', { type: String, required: true })
 /** Grid display options: { size, aspect, fit, titleLines, info, collapseFolders } */
@@ -25,6 +31,9 @@ const options = defineModel('options', { type: Object, required: true })
 
 /** Which choice row is drilled into ('fit' | 'titleLines' | null) */
 const picking = ref(null)
+const id = useId()
+const infoId = `${id}-info`
+const collapseId = `${id}-collapse`
 
 /**
  * Replaces one or more grid options immutably so watchers and storage stay in sync
@@ -43,6 +52,16 @@ const size = computed({
 const aspect = computed({
 	get: () => options.value.aspect,
 	set: (value) => update({ aspect: value }),
+})
+
+const fit = computed({
+	get: () => options.value.fit,
+	set: (value) => update({ fit: value }),
+})
+
+const titleLines = computed({
+	get: () => options.value.titleLines,
+	set: (value) => update({ titleLines: value }),
 })
 
 const info = computed({
@@ -66,7 +85,116 @@ defineExpose({
 </script>
 
 <template>
-	<div class="deliver-display">
+	<div v-if="sheet" class="deliver-sheet__groups">
+		<div class="deliver-sheet__group">
+			<div class="deliver-sheet__row">
+				<span class="deliver-sheet__label">{{ t('deliver', 'Layout') }}</span>
+				<NcRadioGroup
+					v-model="layout"
+					class="deliver-sheet__control"
+					:label="t('deliver', 'Layout')"
+					hideLabel>
+					<NcRadioGroupButton value="grid" :label="t('deliver', 'Grid')" />
+					<NcRadioGroupButton value="list" :label="t('deliver', 'List')" />
+				</NcRadioGroup>
+			</div>
+		</div>
+		<template v-if="layout === 'grid'">
+			<div class="deliver-sheet__group">
+				<div class="deliver-sheet__row">
+					<span class="deliver-sheet__label">{{ t('deliver', 'Card size') }}</span>
+					<NcRadioGroup
+						v-model="size"
+						class="deliver-sheet__control"
+						:label="t('deliver', 'Card size')"
+						hideLabel>
+						<NcRadioGroupButton value="s" :label="t('deliver', 'S')" />
+						<NcRadioGroupButton value="m" :label="t('deliver', 'M')" />
+						<NcRadioGroupButton value="l" :label="t('deliver', 'L')" />
+					</NcRadioGroup>
+				</div>
+				<div class="deliver-sheet__row">
+					<span class="deliver-sheet__label">{{ t('deliver', 'Aspect ratio') }}</span>
+					<NcRadioGroup
+						v-model="aspect"
+						class="deliver-sheet__control"
+						:label="t('deliver', 'Aspect ratio')"
+						hideLabel>
+						<NcRadioGroupButton
+							value="landscape"
+							:ariaLabel="t('deliver', 'Landscape')"
+							:title="t('deliver', 'Landscape')">
+							<template #icon>
+								<NcIconSvgWrapper :svg="landscapeIcon" :size="20" />
+							</template>
+						</NcRadioGroupButton>
+						<NcRadioGroupButton
+							value="square"
+							:ariaLabel="t('deliver', 'Square')"
+							:title="t('deliver', 'Square')">
+							<template #icon>
+								<NcIconSvgWrapper :svg="squareIcon" :size="20" />
+							</template>
+						</NcRadioGroupButton>
+						<NcRadioGroupButton
+							value="portrait"
+							:ariaLabel="t('deliver', 'Portrait')"
+							:title="t('deliver', 'Portrait')">
+							<template #icon>
+								<NcIconSvgWrapper :svg="portraitIcon" :size="20" />
+							</template>
+						</NcRadioGroupButton>
+					</NcRadioGroup>
+				</div>
+				<div class="deliver-sheet__row">
+					<span class="deliver-sheet__label">{{ t('deliver', 'Thumbnail') }}</span>
+					<NcRadioGroup
+						v-model="fit"
+						class="deliver-sheet__control"
+						:label="t('deliver', 'Thumbnail')"
+						hideLabel>
+						<NcRadioGroupButton value="fit" :label="t('deliver', 'Fit')" />
+						<NcRadioGroupButton value="fill" :label="t('deliver', 'Fill')" />
+					</NcRadioGroup>
+				</div>
+				<div class="deliver-sheet__row">
+					<span class="deliver-sheet__label">{{ t('deliver', 'Title lines') }}</span>
+					<NcRadioGroup
+						v-model="titleLines"
+						class="deliver-sheet__control"
+						:label="t('deliver', 'Title lines')"
+						hideLabel>
+						<NcRadioGroupButton
+							v-for="lines in TITLE_LINES"
+							:key="lines"
+							:value="lines"
+							:label="n('deliver', '%n line', '%n lines', lines)" />
+					</NcRadioGroup>
+				</div>
+			</div>
+			<div class="deliver-sheet__group">
+				<div class="deliver-sheet__row">
+					<label :for="infoId" class="deliver-sheet__label">{{ t('deliver', 'Show card info') }}</label>
+					<NcCheckboxRadioSwitch
+						:id="infoId"
+						v-model="info"
+						class="deliver-sheet__control"
+						type="switch"
+						:aria-label="t('deliver', 'Show card info')" />
+				</div>
+				<div class="deliver-sheet__row">
+					<label :for="collapseId" class="deliver-sheet__label">{{ t('deliver', 'Collapse folders') }}</label>
+					<NcCheckboxRadioSwitch
+						:id="collapseId"
+						v-model="collapseFolders"
+						class="deliver-sheet__control"
+						type="switch"
+						:aria-label="t('deliver', 'Collapse folders')" />
+				</div>
+			</div>
+		</template>
+	</div>
+	<div v-else class="deliver-display">
 		<template v-if="picking === 'fit'">
 			<div class="deliver-display__subhead">
 				<NcButton

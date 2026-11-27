@@ -2177,23 +2177,57 @@ test.describe('Menus on a phone', () => {
 		await desktop.close()
 	})
 
-	test('on a phone a menu row in the ⋯ sheet is touch-sized with larger text, while desktop keeps its size (#309)', async () => {
+	test('on a phone sheet rows are touch-sized with larger text, while desktop keeps its size (#309)', async () => {
 		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: UPRIGHT })
 		const phonePage = watched(await phone.newPage())
 		await login(phonePage)
 		await phonePage.goto(`/apps/deliver/projects/${projectId}`)
-		await phonePage.getByRole('button', { name: /^Actions for the-final-mix/ }).tap()
-		const sheet = sheetOf(phonePage)
-		await expect(sheet).toBeVisible()
-		const phoneRow = await sheet.getByRole('menuitem', { name: 'Open', exact: true }).evaluate((element) => {
+
+		const measureRow = (row) => row.evaluate((element) => {
 			const label = element.querySelector('.deliver-sheet__label') ?? element
 			return {
 				height: element.getBoundingClientRect().height,
 				fontSize: parseFloat(getComputedStyle(label).fontSize),
 			}
 		})
-		expect(phoneRow.height).toBeGreaterThanOrEqual(48)
-		expect(phoneRow.fontSize).toBeGreaterThanOrEqual(16)
+
+		await phonePage.getByRole('button', { name: /^Actions for the-final-mix/ }).tap()
+		const sheet = sheetOf(phonePage)
+		await expect(sheet).toBeVisible()
+		const menuRow = await measureRow(sheet.getByRole('menuitem', { name: 'Open', exact: true }))
+		expect(menuRow.height).toBeGreaterThanOrEqual(52)
+		expect(menuRow.fontSize).toBeGreaterThanOrEqual(16)
+		await phonePage.keyboard.press('Escape')
+		await expect(sheet).toHaveCount(0)
+
+		await phonePage.getByRole('button', { name: 'Sort by' }).tap()
+		const sortSheet = phonePage.getByRole('dialog', { name: 'Sort by' })
+		await expect(sortSheet).toBeVisible()
+		const sortRow = await measureRow(sortSheet.getByRole('button', { name: 'Name' }))
+		expect(sortRow.height).toBeGreaterThanOrEqual(52)
+		expect(sortRow.fontSize).toBeGreaterThanOrEqual(16)
+		await phonePage.keyboard.press('Escape')
+		await expect(sortSheet).toHaveCount(0)
+
+		await phonePage.getByRole('button', { name: 'Display options' }).tap()
+		const display = phonePage.getByRole('dialog', { name: 'Display options' })
+		await expect(display).toBeVisible()
+		await display.getByText('Grid', { exact: true }).tap()
+		await expect(display.getByText('Card size', { exact: true })).toBeVisible()
+		const displayRows = await display.locator('.deliver-sheet__row, .deliver-sheet__item').evaluateAll((rows) => rows.map((row) => {
+			const label = row.querySelector('.deliver-sheet__label') ?? row
+			return {
+				height: row.getBoundingClientRect().height,
+				fontSize: parseFloat(getComputedStyle(label).fontSize),
+			}
+		}))
+		expect(displayRows.length).toBeGreaterThan(1)
+		expect(displayRows[1].height).toBeGreaterThanOrEqual(52)
+		expect(displayRows[1].fontSize).toBeGreaterThanOrEqual(16)
+		for (const row of displayRows) {
+			expect(row.height).toBeGreaterThanOrEqual(52)
+			expect(row.height).toBeLessThanOrEqual(80)
+		}
 		await phone.close()
 
 		const desktop = await browser.newContext({ baseURL: BROWSER_URL, viewport: { width: 1280, height: 800 } })
@@ -2203,7 +2237,7 @@ test.describe('Menus on a phone', () => {
 		await desktopPage.getByRole('button', { name: /^Actions for the-final-mix/ }).click()
 		const menu = desktopPage.getByRole('menu')
 		await expect(menu).toBeVisible()
-		// Today's desktop menu row keeps min-height: var(--default-clickable-area) (44 px) and body font size
+		// Today's desktop menu row keeps min-height: var(--default-clickable-area) (34 px) and body font size
 		const desktopRow = await menu.getByRole('menuitem', { name: 'Open', exact: true }).evaluate((element) => {
 			const probe = document.createElement('div')
 			probe.style.height = 'var(--default-clickable-area)'

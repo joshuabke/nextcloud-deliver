@@ -41,7 +41,8 @@ const panel = ref(null)
 			</template>
 			<DisplayOptions
 				v-model:layout="layout"
-				v-model:options="options" />
+				v-model:options="options"
+				sheet />
 		</BottomSheet>
 	</template>
 	<template v-else>
