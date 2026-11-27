@@ -2942,6 +2942,36 @@ test.describe('Audio review', () => {
 		await api.dispose()
 	})
 
+	test('on a phone Reply on the card takes the focus from the Comment field, whose list would step aside for it (#284)', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const made = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${versionId}/comments?format=json`, { data: { inFrame: 22500, body: 'answer me while writing' } })
+		const id = (await made.json()).ocs.data.id
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		const target = await phone.newPage()
+		await login(target)
+		await target.goto(`/apps/deliver/versions/${versionId}`)
+		const canvas = target.locator('.deliver-wave canvas')
+		await expect(canvas).toBeVisible()
+		await expect(target.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
+		await target.getByRole('button', { name: '1 min', exact: true }).click()
+		// Writing in the Comment field, then a tap on a circle: on touch the field keeps the focus
+		const composer = target.getByPlaceholder('Leave a Comment…')
+		await composer.tap()
+		await expect(composer).toBeFocused()
+		const lane = await canvas.boundingBox()
+		await target.touchscreen.tap(lane.x + lane.width * 0.875, lane.y + lane.height - 20)
+		const card = target.getByRole('dialog', { name: /^Comment #/ })
+		await expect(card).toContainText('answer me while writing')
+		await card.getByRole('button', { name: 'Reply', exact: true }).tap()
+		const field = target.locator('.deliver-comments__list > .deliver-comment').filter({ hasText: 'answer me while writing' }).getByPlaceholder('Write a Reply')
+		await expect(field).toBeFocused()
+		await expect(field).toBeInViewport()
+		await expect(target.locator('.deliver-layout--writing')).toHaveCount(0)
+		await phone.close()
+		expect((await api.delete(`/ocs/v2.php/apps/deliver/api/v1/comments/${id}?format=json`)).ok()).toBe(true)
+		await api.dispose()
+	})
+
 	test('Reply shows its Comment where the list\'s search or filter hides it, and the small card closes as soon as playback starts', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		const made = await api.post(`/ocs/v2.php/apps/deliver/api/v1/versions/${versionId}/comments?format=json`, { data: { inFrame: 22500, body: 'hidden from the list' } })

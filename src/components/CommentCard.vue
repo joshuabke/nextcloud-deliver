@@ -42,6 +42,14 @@ const body = computed(() => splitMentions(props.comment.body, props.comment.ment
 const canReply = computed(() => store.canComment === true && store.me?.type !== 'unnamed')
 /** Where the focus was, to have it back when the card goes */
 const before = document.activeElement
+/** Reply hands the focus on to the Reply field: given back to the Comment field, it would make the list step aside on a phone, the Reply field with it (#284) */
+let handedOn = false
+
+/** Reply on the card: answered in the list */
+function reply() {
+	handedOn = true
+	emit('reply', props.comment)
+}
 
 const place = computed(() => {
 	const { left, width } = cardPlace(props.at.x, window.innerWidth, props.at.line)
@@ -83,7 +91,7 @@ onBeforeUnmount(() => {
 	document.removeEventListener('pointerdown', onOutside, true)
 	// The focus goes back where it was, unless it has moved on elsewhere meanwhile
 	const focus = document.activeElement
-	if ((focus === document.body || root.value.contains(focus)) && before?.isConnected) {
+	if (!handedOn && (focus === document.body || root.value.contains(focus)) && before?.isConnected) {
 		before.focus({ preventScroll: true })
 	}
 })
@@ -150,7 +158,7 @@ onBeforeUnmount(() => {
 				v-if="canReply"
 				variant="secondary"
 				size="small"
-				@click="emit('reply', comment)">
+				@click="reply">
 				{{ t('deliver', 'Reply') }}
 			</NcButton>
 		</div>
