@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import NcDialog from '@nextcloud/vue/components/NcDialog'
+import DeliverDialog from './DeliverDialog.vue'
 import { t } from '../lib/l10n.js'
 
 const props = defineProps({
@@ -24,7 +24,7 @@ function done(value) {
 
 <template>
 	<!-- A visible date field: Safari opens no picker for a hidden one, whatever showPicker() promises -->
-	<NcDialog :name="t('deliver', 'Due Date')" size="small" @closing="emit('close')">
+	<DeliverDialog :name="t('deliver', 'Due Date')" size="small" @closing="emit('close')">
 		<form id="deliver-due-date" class="deliver-due-date" @submit.prevent="day && done(day)">
 			<input
 				v-model="day"
@@ -47,7 +47,7 @@ function done(value) {
 				{{ t('deliver', 'Save') }}
 			</NcButton>
 		</template>
-	</NcDialog>
+	</DeliverDialog>
 </template>
 
 <style scoped>

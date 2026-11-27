@@ -217,6 +217,21 @@ test.describe('Review view', () => {
 		await expect(third.getByRole('checkbox', { name: 'Select third' })).not.toBeChecked()
 	})
 
+	test('Escape closes the rename dialog from the name field without renaming', async () => {
+		await page.goto(`/apps/deliver/projects/${projectId}`)
+		const second = card(page, 'second')
+		await second.getByRole('button', { name: 'Actions for second' }).click()
+		await page.getByRole('menuitem', { name: 'Rename…' }).click()
+		const rename = page.getByRole('dialog', { name: 'Rename file' })
+		const field = rename.getByLabel('Name')
+		await expect(field).toBeFocused()
+		await field.fill('cancelled.webm')
+		await page.keyboard.press('Escape')
+		await expect(rename).toBeHidden()
+		await expect(second).toBeVisible()
+		await expect(card(page, 'cancelled')).toHaveCount(0)
+	})
+
 	test('renames, removes and stacks from the menus of the cards', async () => {
 		// Cards, for the badges only a card shows
 		await page.evaluate((key) => localStorage.setItem(key, 'grid'), `deliver.layout.project-${projectId}`)

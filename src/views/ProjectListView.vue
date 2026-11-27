@@ -16,7 +16,6 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
-import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
@@ -24,6 +23,7 @@ import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import ContextMenu from '../components/ContextMenu.vue'
 import DeletedProjects from '../components/DeletedProjects.vue'
+import DeliverDialog from '../components/DeliverDialog.vue'
 import FilterBar from '../components/FilterBar.vue'
 import ProjectCard from '../components/ProjectCard.vue'
 import ProjectSettingsDialog from '../components/ProjectSettingsDialog.vue'
@@ -245,7 +245,7 @@ async function create() {
 			</li>
 		</ul>
 		<DeletedProjects v-if="store.loaded" ref="deleted" @restored="store.fetchAll()" />
-		<NcDialog
+		<DeliverDialog
 			v-if="naming !== null"
 			:name="t('deliver', 'New Project')"
 			size="small"
@@ -274,7 +274,7 @@ async function create() {
 					{{ t('deliver', 'Create') }}
 				</NcButton>
 			</template>
-		</NcDialog>
+		</DeliverDialog>
 		<ContextMenu
 			v-if="menu"
 			v-bind="menu"

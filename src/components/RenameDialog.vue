@@ -1,8 +1,8 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
+import DeliverDialog from './DeliverDialog.vue'
 import { t } from '../lib/l10n.js'
 import { extensionOf } from '../lib/media.js'
 
@@ -41,7 +41,7 @@ function submit() {
 </script>
 
 <template>
-	<NcDialog
+	<DeliverDialog
 		:name="t('deliver', 'Rename file')"
 		size="small"
 		@closing="emit('close')">
@@ -65,7 +65,7 @@ function submit() {
 				{{ t('deliver', 'Rename') }}
 			</NcButton>
 		</template>
-	</NcDialog>
+	</DeliverDialog>
 </template>
 
 <style scoped>

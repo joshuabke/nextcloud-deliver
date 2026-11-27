@@ -11,7 +11,6 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
@@ -20,6 +19,7 @@ import ApprovalControl from '../components/ApprovalControl.vue'
 import AssetStepper from '../components/AssetStepper.vue'
 import CommentComposer from '../components/CommentComposer.vue'
 import CommentPanel from '../components/CommentPanel.vue'
+import DeliverDialog from '../components/DeliverDialog.vue'
 import DueDate from '../components/DueDate.vue'
 import DueDateDialog from '../components/DueDateDialog.vue'
 import ExportMenu from '../components/ExportMenu.vue'
@@ -379,13 +379,13 @@ function upload(event) {
 		:modelValue="context.asset.dueDate"
 		@update:modelValue="setDue"
 		@close="pickingDue = false" />
-	<NcDialog
+	<DeliverDialog
 		v-if="sharing && version"
 		:name="t('deliver', 'Review Links on {name}', { name: context.asset.name })"
 		size="normal"
 		@closing="sharing = false">
 		<ReviewLinks :projectId="context.project.id" :assetId="context.asset.id" />
-	</NcDialog>
+	</DeliverDialog>
 </template>
 
 <style scoped>
