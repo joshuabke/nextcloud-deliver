@@ -113,15 +113,15 @@ test.describe('Review view', () => {
 		await page.reload()
 		await expect(page.locator('.deliver-card')).not.toHaveClass(/deliver-card--row/)
 		await expect(layout).toHaveAttribute('aria-pressed', 'false')
-		// Picked again, the list is remembered as well; the cards stay for the tests after this one
+		// Picked again, the list is remembered as well
 		await layout.click()
 		await page.reload()
 		await expect(page.locator('.deliver-card').first()).toHaveClass(/deliver-card--row/)
-		await layout.click()
-		await expect(page.locator('.deliver-card')).not.toHaveClass(/deliver-card--row/)
 	})
 
 	test('uploads into the Project, then filters and finds its Assets', async () => {
+		// Cards, for the badges only a card shows
+		await page.evaluate((key) => localStorage.setItem(key, 'grid'), `deliver.layout.project-${projectId}`)
 		await page.goto(`/apps/deliver/projects/${projectId}`)
 		// The upload button opens the Uploads dialog (story 133)
 		await page.getByRole('button', { name: 'Upload', exact: true }).click()
@@ -216,6 +216,8 @@ test.describe('Review view', () => {
 	})
 
 	test('renames, removes and stacks from the menus of the cards', async () => {
+		// Cards, for the badges only a card shows
+		await page.evaluate((key) => localStorage.setItem(key, 'grid'), `deliver.layout.project-${projectId}`)
 		await page.goto(`/apps/deliver/projects/${projectId}`)
 		// The menu has a button on every screen, beside the name
 		const second = card(page, 'second')
