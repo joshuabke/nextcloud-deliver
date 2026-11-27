@@ -148,6 +148,9 @@ onBeforeUnmount(() => {
 }
 
 .deliver-sheet__panel {
+	--deliver-sheet-row-height: calc(var(--default-clickable-area) + 2.5 * var(--default-grid-baseline));
+	--deliver-sheet-font-size: 17px;
+	--deliver-sheet-icon-size: 24px;
 	box-sizing: border-box;
 	display: flex;
 	flex-direction: column;
@@ -172,7 +175,7 @@ onBeforeUnmount(() => {
 .deliver-sheet__header {
 	flex: none;
 	padding-bottom: calc(3 * var(--default-grid-baseline));
-	font-size: 16px;
+	font-size: var(--deliver-sheet-font-size);
 	font-weight: bold;
 	text-align: center;
 }
@@ -183,6 +186,102 @@ onBeforeUnmount(() => {
 	overflow-y: auto;
 	overscroll-behavior: contain;
 	touch-action: pan-y;
+	font-size: var(--deliver-sheet-font-size);
+}
+
+/* Shared sheet blocks and touch-sized rows (#309) */
+.deliver-sheet__body :deep(.deliver-sheet__groups) {
+	display: flex;
+	flex-direction: column;
+	gap: calc(3 * var(--default-grid-baseline));
+}
+
+.deliver-sheet__body :deep(.deliver-sheet__group) {
+	overflow: hidden;
+	border-radius: var(--border-radius-large);
+	background: var(--color-background-hover);
+}
+
+.deliver-sheet__body :deep(.deliver-sheet__item) {
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	gap: calc(4 * var(--default-grid-baseline));
+	width: 100%;
+	min-width: 0;
+	min-height: var(--deliver-sheet-row-height);
+	margin: 0;
+	padding: calc(2 * var(--default-grid-baseline)) calc(4 * var(--default-grid-baseline));
+	border: none;
+	border-radius: 0;
+	background: none;
+	box-shadow: none;
+	color: var(--color-main-text);
+	font: inherit;
+	font-size: var(--deliver-sheet-font-size);
+	font-weight: normal;
+	line-height: 1.3;
+	text-align: start;
+	text-decoration: none;
+	cursor: pointer;
+}
+
+.deliver-sheet__body :deep(.deliver-sheet__item + .deliver-sheet__item) {
+	border-top: 1px solid var(--color-border);
+}
+
+.deliver-sheet__body :deep(.deliver-sheet__item:hover),
+.deliver-sheet__body :deep(.deliver-sheet__item:focus-visible) {
+	background: var(--color-background-darker);
+	outline: none;
+}
+
+.deliver-sheet__body :deep(.deliver-sheet__item--disabled),
+.deliver-sheet__body :deep(.deliver-sheet__item--disabled:hover) {
+	background: none;
+	color: var(--color-text-maxcontrast);
+	cursor: default;
+}
+
+.deliver-sheet__body :deep(.deliver-sheet__item--danger) {
+	color: var(--color-error-text);
+}
+
+.deliver-sheet__body :deep(.deliver-sheet__label) {
+	flex: 1;
+	min-width: 0;
+}
+
+.deliver-sheet__body :deep(.deliver-sheet__item .icon-vue) {
+	flex: none;
+	width: var(--deliver-sheet-icon-size);
+	min-width: var(--deliver-sheet-icon-size);
+	height: var(--deliver-sheet-icon-size);
+	min-height: var(--deliver-sheet-icon-size);
+	opacity: 1;
+}
+
+/* Match @nextcloud/vue controls inside sheets (e.g. DisplayOptions) to the same row height and type scale */
+.deliver-sheet__body :deep([class*='formBoxItem_']) {
+	--nc-form-box-item-min-height: var(--deliver-sheet-row-height);
+	font-size: var(--deliver-sheet-font-size);
+}
+
+.deliver-sheet__body :deep([class*='formBoxItem__description_']) {
+	font-size: var(--default-font-size, 15px);
+}
+
+.deliver-sheet__body :deep([class*='formBoxItem__icon_'] .icon-vue:not([class*='iconToggleSwitch_']) svg),
+.deliver-sheet__body :deep([class*='radioGroupButton__icon_'] .icon-vue svg) {
+	width: var(--deliver-sheet-icon-size);
+	height: var(--deliver-sheet-icon-size);
+	max-width: var(--deliver-sheet-icon-size);
+	max-height: var(--deliver-sheet-icon-size);
+}
+
+.deliver-sheet__body :deep([class*='radioGroupButton_']) {
+	min-height: var(--deliver-sheet-row-height);
+	font-size: var(--deliver-sheet-font-size);
 }
 
 /* The bar to pull at, as the Comment sheet of the Review view has it */

@@ -2176,6 +2176,52 @@ test.describe('Menus on a phone', () => {
 		expect(oneLine.cut).toBe(true)
 		await desktop.close()
 	})
+
+	test('on a phone a menu row in the ⋯ sheet is touch-sized with larger text, while desktop keeps its size (#309)', async () => {
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: UPRIGHT })
+		const phonePage = watched(await phone.newPage())
+		await login(phonePage)
+		await phonePage.goto(`/apps/deliver/projects/${projectId}`)
+		await phonePage.getByRole('button', { name: /^Actions for the-final-mix/ }).tap()
+		const sheet = sheetOf(phonePage)
+		await expect(sheet).toBeVisible()
+		const phoneRow = await sheet.getByRole('menuitem', { name: 'Open', exact: true }).evaluate((element) => {
+			const label = element.querySelector('.deliver-sheet__label') ?? element
+			return {
+				height: element.getBoundingClientRect().height,
+				fontSize: parseFloat(getComputedStyle(label).fontSize),
+			}
+		})
+		expect(phoneRow.height).toBeGreaterThanOrEqual(48)
+		expect(phoneRow.fontSize).toBeGreaterThanOrEqual(16)
+		await phone.close()
+
+		const desktop = await browser.newContext({ baseURL: BROWSER_URL, viewport: { width: 1280, height: 800 } })
+		const desktopPage = watched(await desktop.newPage())
+		await login(desktopPage)
+		await desktopPage.goto(`/apps/deliver/projects/${projectId}`)
+		await desktopPage.getByRole('button', { name: /^Actions for the-final-mix/ }).click()
+		const menu = desktopPage.getByRole('menu')
+		await expect(menu).toBeVisible()
+		// Today's desktop menu row keeps min-height: var(--default-clickable-area) (44 px) and body font size
+		const desktopRow = await menu.getByRole('menuitem', { name: 'Open', exact: true }).evaluate((element) => {
+			const probe = document.createElement('div')
+			probe.style.height = 'var(--default-clickable-area)'
+			document.body.append(probe)
+			const clickable = probe.getBoundingClientRect().height
+			probe.remove()
+			return {
+				height: element.getBoundingClientRect().height,
+				clickable,
+				fontSize: parseFloat(getComputedStyle(element).fontSize),
+				bodyFontSize: parseFloat(getComputedStyle(document.body).fontSize),
+			}
+		})
+		expect(desktopRow.height).toBeCloseTo(desktopRow.clickable, 0)
+		expect(desktopRow.height).toBeLessThan(48)
+		expect(desktopRow.fontSize).toBe(desktopRow.bodyFontSize)
+		await desktop.close()
+	})
 })
 
 test.describe('Audio review', () => {

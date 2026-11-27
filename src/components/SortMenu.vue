@@ -6,8 +6,6 @@ import { ref } from 'vue'
 import NcActionRadio from '@nextcloud/vue/components/NcActionRadio'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import NcFormBox from '@nextcloud/vue/components/NcFormBox'
-import NcFormBoxButton from '@nextcloud/vue/components/NcFormBoxButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import BottomSheet from './BottomSheet.vue'
 import { t } from '../lib/l10n.js'
@@ -42,19 +40,18 @@ const open = ref(false)
 			<template #header>
 				{{ t('deliver', 'Sort by') }}
 			</template>
-			<NcFormBox>
-				<NcFormBoxButton
+			<div class="deliver-sheet__group">
+				<button
 					v-for="each in sorts"
 					:key="each.id"
-					:label="each.label"
+					type="button"
+					class="deliver-sheet__item"
 					:aria-pressed="sort === each.id"
 					@click="sort = each.id; open = false">
-					<template #icon>
-						<NcIconSvgWrapper v-if="sort === each.id" :svg="checkIcon" />
-						<span v-else class="deliver-sort-sheet__spacer" />
-					</template>
-				</NcFormBoxButton>
-			</NcFormBox>
+					<span class="deliver-sheet__label">{{ each.label }}</span>
+					<NcIconSvgWrapper v-if="sort === each.id" :svg="checkIcon" :size="24" />
+				</button>
+			</div>
 		</BottomSheet>
 	</template>
 	<NcActions
@@ -76,11 +73,3 @@ const open = ref(false)
 		</NcActionRadio>
 	</NcActions>
 </template>
-
-<style scoped>
-.deliver-sort-sheet__spacer {
-	display: inline-block;
-	width: 20px;
-	height: 20px;
-}
-</style>
