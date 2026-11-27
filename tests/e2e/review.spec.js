@@ -2983,6 +2983,26 @@ function dividers(on) {
 }
 
 /**
+ * Each divider row's colour near the canvas's left and right edge: drawn once, it is the same on both sides of the playhead
+ *
+ * @param {import('@playwright/test').Page} on - the page
+ * @return {Promise<Array<Array<number[]>>>} per row, the left and the right pixel
+ */
+function dividerEnds(on) {
+	return on.locator('.deliver-compare__lanes canvas').evaluate((element) => {
+		const context = element.getContext('2d')
+		const rows = []
+		for (let y = 0; y < element.height; y++) {
+			const row = context.getImageData(0, y, element.width, 1).data
+			if (row.filter((value, index) => index % 4 === 3 && value > 0).length > element.width * 0.95) {
+				rows.push([[...context.getImageData(2, y, 1, 1).data], [...context.getImageData(element.width - 3, y, 1, 1).data]])
+			}
+		}
+		return rows
+	})
+}
+
+/**
  * A line divides the two lanes, in the gap between them: under the first lane's name, above the second's
  *
  * @param {import('@playwright/test').Page} on - the page
@@ -3089,6 +3109,12 @@ test.describe('Comparing sound', () => {
 		const sought = videos.first().evaluate((video) => new Promise((resolve) => video.addEventListener('seeking', () => resolve(true), { once: true })))
 		await canvas.click({ position: { x: box.width * 0.6, y: box.height * 0.6 } })
 		expect(await sought).toBe(true)
+		// Over the whole piece the played part is laid over the rest: the line keeps its colour left of the playhead
+		const ends = await dividerEnds(page)
+		expect(ends.length).toBeGreaterThan(0)
+		for (const [left, right] of ends) {
+			expect(left).toEqual(right)
+		}
 		// Lanes have no strip: at their foot the mouse shows no place to go to
 		await canvas.hover({ position: { x: box.width * 0.6, y: box.height - 5 } })
 		expect(await page.locator('.deliver-wave').evaluate((element) => element.style.cursor)).toBe('')
