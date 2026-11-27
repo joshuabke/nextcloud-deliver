@@ -2,6 +2,8 @@
 import backIcon from '@mdi/svg/svg/arrow-left.svg?raw'
 import dueIcon from '@mdi/svg/svg/calendar-clock.svg?raw'
 import clearIcon from '@mdi/svg/svg/checkbox-blank-off-outline.svg?raw'
+import chevronDownIcon from '@mdi/svg/svg/chevron-down.svg?raw'
+import chevronRightIcon from '@mdi/svg/svg/chevron-right.svg?raw'
 import captionsIcon from '@mdi/svg/svg/closed-caption-outline.svg?raw'
 import settingsIcon from '@mdi/svg/svg/cog-outline.svg?raw'
 import compareIcon from '@mdi/svg/svg/compare.svg?raw'
@@ -50,12 +52,13 @@ import ProjectSettingsDialog from '../components/ProjectSettingsDialog.vue'
 import RenameDialog from '../components/RenameDialog.vue'
 import VersionStack from '../components/VersionStack.vue'
 import { assignAsset, deleteAsset, disableAsset, enableFile, errorMessage, regenerateVersion, removeProxy, renameFile, stackVersion, updateAsset } from '../api.js'
-import { useLayout } from '../composables/layout.js'
+import { useGridOptions, useLayout } from '../composables/layout.js'
 import { useQuery } from '../composables/query.js'
 import { confirmRemoval } from '../confirm.js'
 import { allMissing, between, FILTER_LABELS, FILTERS, found, passes, selectAll, SORT_OPTIONS, sortAssets, SORTS } from '../lib/filters.js'
 import { folderLevel, groupByFolder, inFolder, projectDavPath, projectDir } from '../lib/folders.js'
 import { n, t } from '../lib/l10n.js'
+import { gridStyle, mediaFit } from '../lib/listView.js'
 import { acceptFor, isStill, mediaKind, stackKind } from '../lib/media.js'
 import { isOriginal } from '../lib/original.js'
 import { cannotConvert, inspect } from '../lib/proxy.js'
@@ -176,7 +179,16 @@ const query = useQuery('q', null, '')
 /** Folders as Files shows them, or every Asset below the folder at once, grouped by folder */
 const layout = useQuery('view', ['folders', 'flat'], 'folders')
 /** Cards or compact rows, remembered in this browser for this Project; not the folders/flat layout above */
-const look = useLayout(() => `project-${props.id}`)
+const scope = () => `project-${props.id}`
+const look = useLayout(scope)
+const gridOptions = useGridOptions(scope)
+const cardsStyle = computed(() => look.value === 'grid' ? gridStyle(gridOptions.value, { mobile: isMobile.value }) : undefined)
+const stillFit = computed(() => mediaFit(gridOptions.value.fit))
+/** Whether the collapsed folders row is currently open */
+const foldersExpanded = ref(false)
+watch([folder, () => gridOptions.value.collapseFolders], () => {
+	foldersExpanded.value = false
+})
 const inView = computed(() => (project.value?.assets ?? []).filter((asset) => inFolder(asset, folder.value)))
 const filters = computed(() => FILTERS.map((id) => ({
 	id,
@@ -866,7 +878,7 @@ function dropped(event) {
 							<NcIconSvgWrapper :svg="flatIcon" />
 						</template>
 					</NcButton>
-					<LayoutSwitch v-model="look" />
+					<LayoutSwitch v-model="look" v-model:options="gridOptions" />
 				</template>
 			</FilterBar>
 			<NcNoteCard v-if="offLinks" type="warning">
@@ -883,7 +895,31 @@ function dropped(event) {
 					: project.path
 						? t('deliver', 'Enable files for review in the Deliver tab of the Files sidebar.')
 						: t('deliver', 'Add files to this Project in the Deliver tab of the Files sidebar, wherever they lie.')" />
-			<ul v-if="browsing && level.folders.length" class="deliver-project__grid deliver-project__group" :class="{ 'deliver-project__grid--list': look === 'list' }">
+			<div v-if="browsing && level.folders.length && look === 'grid' && gridOptions.collapseFolders" class="deliver-project__group deliver-project__folders-collapsed">
+				<button
+					type="button"
+					class="deliver-project__folders-toggle"
+					:aria-expanded="foldersExpanded"
+					@click="foldersExpanded = !foldersExpanded">
+					<NcIconSvgWrapper :svg="folderIcon" :size="20" />
+					<span class="deliver-project__folders-label">{{ n('deliver', '%n folder', '%n folders', level.folders.length) }}</span>
+					<NcIconSvgWrapper :svg="foldersExpanded ? chevronDownIcon : chevronRightIcon" :size="20" />
+				</button>
+				<ul v-if="foldersExpanded" class="deliver-project__grid" :style="cardsStyle">
+					<li v-for="sub in level.folders" :key="sub.path">
+						<button type="button" class="deliver-project__folder-card" @click="folder = sub.path">
+							<NcIconSvgWrapper :svg="folderIcon" :size="32" />
+							<span class="deliver-project__folder-name" :title="sub.name">{{ sub.name }}</span>
+							<span class="deliver-project__folder-count">{{ n('deliver', '%n Asset', '%n Assets', sub.count) }}</span>
+						</button>
+					</li>
+				</ul>
+			</div>
+			<ul
+				v-else-if="browsing && level.folders.length"
+				class="deliver-project__grid deliver-project__group"
+				:class="{ 'deliver-project__grid--list': look === 'list' }"
+				:style="cardsStyle">
 				<li v-for="sub in level.folders" :key="sub.path">
 					<button type="button" class="deliver-project__folder-card" @click="folder = sub.path">
 						<NcIconSvgWrapper :svg="folderIcon" :size="32" />
@@ -897,7 +933,7 @@ function dropped(event) {
 					<NcIconSvgWrapper :svg="folderIcon" :size="20" />
 					{{ group.path }}
 				</h3>
-				<ul class="deliver-project__grid" :class="{ 'deliver-project__grid--list': look === 'list' }">
+				<ul class="deliver-project__grid" :class="{ 'deliver-project__grid--list': look === 'list' }" :style="cardsStyle">
 					<AssetCard
 						v-for="asset in group.assets"
 						:key="asset.id"
@@ -909,6 +945,8 @@ function dropped(event) {
 						:locked="tickedMissing !== null && tickedMissing !== allMissing(asset)"
 						:offLinks="offLinks > 0 && asset.offLinks"
 						:list="look === 'list'"
+						:fit="stillFit"
+						:showInfo="gridOptions.info"
 						@select="toggle(asset, $event)"
 						@pick="pick(asset, $event)"
 						@stack="accept"
@@ -922,7 +960,7 @@ function dropped(event) {
 					<NcIconSvgWrapper :svg="notUpIcon" :size="20" />
 					{{ t('deliver', 'Not up for review') }}
 				</h3>
-				<ul class="deliver-project__grid" :class="{ 'deliver-project__grid--list': look === 'list' }">
+				<ul class="deliver-project__grid" :class="{ 'deliver-project__grid--list': look === 'list' }" :style="cardsStyle">
 					<NotUpForReviewCard
 						v-for="file in notUpForReview"
 						:key="file.fileId"
@@ -931,6 +969,7 @@ function dropped(event) {
 						:canAdd="file.canAdd"
 						:adding="adding.has(file.fileId)"
 						:list="look === 'list'"
+						:showInfo="gridOptions.info"
 						@add="add(file)"
 						@contextmenu.prevent="openFileMenu($event, file)"
 						@menu="openFileMenu($event, file)" />
@@ -1159,9 +1198,42 @@ function dropped(event) {
 	font-size: var(--font-size-small, 13px);
 }
 
+.deliver-project__folders-collapsed {
+	display: flex;
+	flex-direction: column;
+	gap: calc(2 * var(--default-grid-baseline));
+}
+
+.deliver-project__folders-toggle,
+.deliver-project__folders-toggle:hover {
+	display: flex;
+	align-items: center;
+	gap: calc(2 * var(--default-grid-baseline));
+	width: 100%;
+	min-height: var(--default-clickable-area);
+	margin: 0;
+	padding: calc(2 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline));
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font-weight: bold;
+	text-align: start;
+	cursor: pointer;
+}
+
+.deliver-project__folders-toggle:hover,
+.deliver-project__folders-toggle:focus-visible {
+	border-color: var(--color-primary-element);
+}
+
+.deliver-project__folders-label {
+	flex: 1;
+}
+
 .deliver-project__grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(min(var(--deliver-grid-min, 220px), 100%), 1fr));
 	gap: calc(2 * var(--default-grid-baseline));
 }
 

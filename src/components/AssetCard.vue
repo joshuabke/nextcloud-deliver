@@ -39,6 +39,10 @@ const props = defineProps({
 	offLinks: { type: Boolean, default: false },
 	/** One compact row instead of a card; the same actions, the facts beside the name */
 	list: { type: Boolean, default: false },
+	/** How the card's still fits its frame in grid mode: 'contain' or 'cover' */
+	fit: { type: String, default: 'contain' },
+	/** Whether the line(s) under the name show on a card in grid mode */
+	showInfo: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(['stack', 'menu', 'versions', 'select', 'pick'])
@@ -126,7 +130,7 @@ const status = computed(() => {
 					v-if="!audio && newest.state === 'ready'"
 					:fileId="newest.fileId"
 					:scrubUrl="newest.scrubUrl"
-					fit="contain" />
+					:fit="list ? 'contain' : fit" />
 				<span v-if="!list" class="deliver-card__version">{{ t('deliver', 'V{number}', { number: newest.number }) }}</span>
 				<span
 					v-if="unseen && !list"
@@ -176,10 +180,10 @@ const status = computed(() => {
 				</span>
 				<DueDate v-if="asset.dueDate" :modelValue="asset.dueDate" />
 			</div>
-			<div v-if="!list" class="deliver-card__meta">
+			<div v-if="!list && showInfo" class="deliver-card__meta">
 				<template v-if="newest.deliveredBy">{{ newest.deliveredBy.name }} · </template><NcDateTime :timestamp="newest.createdAt * 1000" />
 			</div>
-			<DueDate v-if="asset.dueDate && !list" class="deliver-card__due" :modelValue="asset.dueDate" />
+			<DueDate v-if="asset.dueDate && !list && showInfo" class="deliver-card__due" :modelValue="asset.dueDate" />
 		</a>
 		<!-- Outside the link, so ticking it does not open the Asset -->
 		<input

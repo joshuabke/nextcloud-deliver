@@ -17,6 +17,8 @@ defineProps({
 	adding: { type: Boolean, default: false },
 	/** One compact row instead of a card */
 	list: { type: Boolean, default: false },
+	/** Whether the folder line under the name shows on a card in grid mode */
+	showInfo: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(['add', 'menu'])
@@ -34,7 +36,7 @@ const { press, fromButton } = useLongPress((where) => emit('menu', where))
 			<div class="deliver-card__name" :title="file.name">
 				{{ file.name }}
 			</div>
-			<div class="deliver-card__meta">
+			<div v-if="list || showInfo" class="deliver-card__meta">
 				{{ where }}
 			</div>
 		</div>
