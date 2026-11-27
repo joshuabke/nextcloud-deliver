@@ -236,6 +236,8 @@ body.deliver-review footer {
 :slotted(.deliver-layout__title) {
 	margin: 0;
 	font-size: 16px;
+	/* Nextcloud gives headings more; with a Due Date over or under it the name fits the slim bar sideways */
+	line-height: 1.25;
 	font-weight: bold;
 	overflow: hidden;
 	text-overflow: ellipsis;

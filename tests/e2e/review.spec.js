@@ -1438,6 +1438,8 @@ test.describe('The bar on a phone', () => {
 		const assets = async () => (await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()).ocs.data.assets
 		await expect.poll(async () => (await assets())[0]?.versions.length).toBe(2)
 		versions = (await assets())[0].versions
+		// A Due Date adds its line to the name's block in the bar
+		expect((await api.put(`/ocs/v2.php/apps/deliver/api/v1/assets/${(await assets())[0].id}?format=json`, { data: { dueDate: '2030-02-20' } })).ok()).toBe(true)
 		token = (await (await api.post(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`)).json()).ocs.data.token
 		await api.dispose()
 		browser = await chromium.connectOverCDP(CDP)
@@ -1503,6 +1505,7 @@ test.describe('The bar on a phone', () => {
 		await page.goto(`/apps/deliver/versions/${versions[0].id}`)
 		await expect(page.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
 		const share = page.getByRole('button', { name: 'Share', exact: true })
+		await expect(page.locator('.deliver-layout__bar .deliver-due')).toBeVisible()
 		const buttons = [
 			page.getByRole('link', { name: /^Back to/ }),
 			page.getByRole('button', { name: 'Approve', exact: true }),
@@ -1513,12 +1516,14 @@ test.describe('The bar on a phone', () => {
 		for (const [width, height] of [[393, 852], [375, 667], [852, 393], [932, 430], [640, 360]]) {
 			await page.setViewportSize({ width, height })
 			const sideways = width > height
+			await expect(page.locator(sideways ? '.deliver-layout--sideways' : '.deliver-layout--upright')).toHaveCount(1)
 			// Sideways the list beside the picture opens from the bar, not from a button over the picture
 			await oneRow(page, sideways ? [...buttons, page.getByRole('button', { name: 'Show Comments' })] : buttons, sideways ? 44 : 56)
 			expect(await clearCorner(page.locator('.deliver-player__stage'))).toBe(true)
 		}
 		// Upright on the smallest, the long name gives way to the buttons
 		await page.setViewportSize({ width: 375, height: 667 })
+		await expect(page.locator('.deliver-layout--upright')).toHaveCount(1)
 		expect(await page.locator('.deliver-review__title').evaluate((title) => title.scrollWidth > title.clientWidth)).toBe(true)
 		await share.tap()
 		const links = page.getByRole('dialog', { name: /^Review Links on/ })
@@ -1528,6 +1533,7 @@ test.describe('The bar on a phone', () => {
 
 		// Sideways, Share opens the links as well
 		await page.setViewportSize({ width: 852, height: 393 })
+		await expect(page.locator('.deliver-layout--sideways')).toHaveCount(1)
 		await share.tap()
 		await expect(links).toBeVisible()
 		await page.keyboard.press('Escape')
@@ -1542,9 +1548,10 @@ test.describe('The bar on a phone', () => {
 		await page.getByRole('button', { name: 'Hide Comments' }).tap()
 		await page.getByRole('button', { name: 'Fullscreen', exact: true }).tap()
 		await expect(page.locator('.deliver-player--fullscreen')).toHaveCount(1)
-		expect(await reachable(share)).toBe(false)
+		await expect.poll(() => reachable(share)).toBe(false)
 		await page.getByRole('button', { name: 'Leave fullscreen' }).tap()
-		expect(await reachable(share)).toBe(true)
+		await expect(page.locator('.deliver-player--fullscreen')).toHaveCount(0)
+		await expect.poll(() => reachable(share)).toBe(true)
 		await phone.close()
 	})
 
@@ -1553,6 +1560,7 @@ test.describe('The bar on a phone', () => {
 		const reviewer = await guest.newPage()
 		await reviewer.goto(`/apps/deliver/s/${token}/versions/${versions[0].id}`)
 		await expect(reviewer.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
+		await expect(reviewer.locator('.deliver-layout__bar .deliver-due')).toBeVisible()
 		await oneRow(reviewer, [reviewer.locator('.deliver-layout__bar .deliver-version-picker').first(), reviewer.getByRole('button', { name: 'Show Comments' })], 44)
 		expect(await clearCorner(reviewer.locator('.deliver-player__stage'))).toBe(true)
 		await guest.close()
