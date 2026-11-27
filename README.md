@@ -11,16 +11,18 @@
 
 - 📂 **Multimedia Review** with the files in your nextcloud. Deliver has its own comprehensive interface, but you can also quickly share a Review Link from the files-sidebar!
 - ⚡ **Auto-Transcode**: Even on installations without ffmpeg, deliver will create proxies during upload if needed.
+- 🎧 **Audio Review** on a zoomable Waveform that scrolls under the playhead, with the Comments as circles right on it, and the loudness of every Version (LUFS and true peak)
 - 🎯 **Comment on Frames or timecode** with Range-support, Drawings, Replies, Reactions, Mentions and Attachments
-- 🗂️ **Versions** stack by filename or manually (`…_v1`, `…_v2`) and compare side by side or under a wipe
+- 🗂️ **Versions** stack by filename or manually (`…_v1`, `…_v2`) and compare side by side or under a wipe, sound on an A/B switch with both Waveforms
 - ✅ **Sign-off** with Approvals, Due Dates and reminders
 - 🔗 **Review Links for Clients** password, expiry, Watermark, downloads, and who watched what
 - ⬆️ **Uploads in Deliver** resume after an interruption, run in the background and show the processing until it is done
 - 🎬 **Back into the edit** export comments as markers for:
   - Video: DaVinci Resolve (EDL), Premiere Pro (FCP7 XML), Final Cut Pro (FCPXML), CSV
   - Audio: WAV markers, MIDI, REAPER regions, Ableton Live Set
-- 🌊 **Waveforms, thumbnails and scrubbing** by hovering over a video
-- 📱 **Fully mobile ready**: use it as a web app on iOS and Android, and get notifications through the official Nextcloud app
+- 🌊 **Thumbnails and scrubbing** by hovering over a video
+- 🗃️ **List or cards** in the size and look you choose, with long names cut before their end so the extension stays in sight
+- 📱 **Fully mobile ready**: gestures to play, skip and comment, a zoomed seek bar under your finger, menus and settings as sheets from below; use it as a web app on iOS and Android, and get notifications through the official Nextcloud app
 - 🎞️ **Supported files:** what plays directly, what the browser transcodes on upload and what needs ffmpeg, in [the table below](#supported-files)
 
 ## Supported files
@@ -53,8 +55,7 @@ Without ffmpeg on the server, the browser that uploads a file makes a Proxy of i
 
 ## Roadmap
 
-- **1.1 - Audio Review**: Scrolling Waveform and comments directly on it.
-- **1.2 – Takes**: compare the Takes of a recording session on one timeline, jump between them at the same position and comment on the one that works
+- **1.1 – Takes**: compare the Takes of a recording session on one timeline, jump between them at the same position and comment on the one that works
 
 ## Installation
 
