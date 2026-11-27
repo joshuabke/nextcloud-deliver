@@ -19,15 +19,16 @@ import NcRadioGroupButton from '@nextcloud/vue/components/NcRadioGroupButton'
 import { n, t } from '../lib/l10n.js'
 import { TITLE_LINES } from '../lib/listView.js'
 
+/** 'grid' for cards, 'list' for compact rows */
+const layout = defineModel('layout', { type: String, required: true })
+
+/** Grid display options: { size, aspect, fit, titleLines, info, collapseFolders } */
+const options = defineModel('options', { type: Object, required: true })
+
 defineProps({
 	/** Rendered inside a phone BottomSheet: grouped rows with inline controls (#309) */
 	sheet: { type: Boolean, default: false },
 })
-
-/** 'grid' for cards, 'list' for compact rows */
-const layout = defineModel('layout', { type: String, required: true })
-/** Grid display options: { size, aspect, fit, titleLines, info, collapseFolders } */
-const options = defineModel('options', { type: Object, required: true })
 
 /** Which choice row is drilled into ('fit' | 'titleLines' | null) */
 const picking = ref(null)
@@ -41,7 +42,7 @@ const infoId = `${id}-info`
 const collapseId = `${id}-collapse`
 
 /**
- * NcRadioGroupButton in @nextcloud/vue 9.12 omits `name` on its radio input (breaking
+ * NcRadioGroupButton in `@nextcloud/vue` 9.12 omits `name` on its radio input (breaking
  * browser arrow-key navigation and single Tab stop per group) and drops `ariaLabel` when
  * `label` is set. Apply them on the native radio input directly.
  *
