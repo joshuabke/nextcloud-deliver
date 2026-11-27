@@ -1484,8 +1484,9 @@ test.describe('Review view', () => {
 		/** The end of the name as shown, whether it lies in its box, and whether the rest is cut */
 		const shownEnd = (label) => label.evaluate((element) => {
 			const box = element.getBoundingClientRect()
-			const tail = [...element.querySelectorAll('.deliver-name__tail')].find((part) => getComputedStyle(part).display !== 'none')
-			const head = element.querySelector('.deliver-name__head')
+			const shown = (part) => part.getClientRects().length > 0
+			const tail = [...element.querySelectorAll('.deliver-name__tail')].find(shown)
+			const head = [...element.querySelectorAll('.deliver-name__head')].find(shown)
 			if (!tail || !head) {
 				return { end: null }
 			}
