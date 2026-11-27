@@ -5,6 +5,8 @@
 	-webkit-touch-callout: none;
 	display: flex;
 	flex-direction: column;
+	/* Fills a card made taller by a neighbour's longer name */
+	flex-grow: 1;
 	gap: 2px;
 	padding: calc(2 * var(--default-grid-baseline));
 	border-radius: var(--border-radius-large);
@@ -41,10 +43,15 @@
 	padding-inline-end: var(--default-clickable-area);
 }
 
+/* A long name wraps to a second line, breaking inside a word without spaces, and is cut only after it; its title holds it whole */
 .deliver-card__name {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
 	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	overflow-wrap: anywhere;
+	font-size: var(--font-size-small, 13px);
 	font-weight: bold;
 }
 

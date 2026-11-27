@@ -84,6 +84,8 @@ const badges = computed(() => {
 
 <style scoped>
 .deliver-project-card {
+	display: flex;
+	flex-direction: column;
 	min-width: 0;
 }
 

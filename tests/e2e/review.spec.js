@@ -1426,6 +1426,76 @@ test.describe('Review view', () => {
 		await cleanup.fetch(`${dav}/linklist.webm`, { method: 'DELETE' })
 		await cleanup.dispose()
 	})
+
+	test('a long name takes two smaller lines on its card, breaks where it has no spaces, and shows whole in its title', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const dav = `/remote.php/dav/files/${USER}/${folder}`
+		const name = 'interview_with_the_director_rough_cut_colour_graded_final_final_v12_for_the_client_to_approve_before_friday'
+		const count = async () => (await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()).ocs.data.assets.length
+		const before = await count()
+		expect((await api.fetch(`${dav}/${name}.webm`, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(201)
+		await expect.poll(count).toBe(before + 1)
+		await api.dispose()
+
+		await page.goto(`/apps/deliver/projects/${projectId}`)
+		await page.evaluate((key) => localStorage.setItem(key, 'grid'), `deliver.layout.project-${projectId}`)
+		await page.reload()
+		const long = card(page, name)
+		const label = long.locator('.deliver-card__name')
+		await expect(label).toHaveAttribute('title', `${name}.webm`)
+		const shown = await label.evaluate((element) => {
+			const style = getComputedStyle(element)
+			return {
+				lines: Math.round(element.clientHeight / parseFloat(style.lineHeight)),
+				cut: element.scrollHeight > element.clientHeight,
+				sideways: element.scrollWidth > element.clientWidth,
+				size: parseFloat(style.fontSize),
+				body: parseFloat(getComputedStyle(document.body).fontSize),
+			}
+		})
+		expect(shown).toMatchObject({ lines: 2, cut: true, sideways: false })
+		expect(shown.size).toBeLessThan(shown.body)
+		// What reads it out gets the whole name
+		await expect(long.locator('.deliver-card__link')).toHaveAccessibleName(new RegExp(name))
+		// The cards beside it in its row are as tall as it
+		const row = await page.locator('.deliver-card__link').evaluateAll((links, picked) => {
+			const boxes = links.map((link) => link.getBoundingClientRect())
+			const own = boxes[links.findIndex((link) => link.textContent.includes(picked))]
+			return boxes.filter((box) => Math.abs(box.top - own.top) < 1).map((box) => Math.round(box.height))
+		}, name)
+		expect(row.length).toBeGreaterThan(1)
+		expect(new Set(row).size).toBe(1)
+
+		const cleanup = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth })
+		await cleanup.fetch(`${dav}/${name}.webm`, { method: 'DELETE' })
+		await cleanup.dispose()
+	})
+
+	test('a Review Link named after a long folder without spaces keeps its heading within a phone\'s width', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const dav = `/remote.php/dav/files/${USER}/${folder}_festival_submission_directors_cut_colour_graded_final`
+		expect((await api.fetch(dav, { method: 'MKCOL' })).status()).toBe(201)
+		for (const file of ['one', 'two']) {
+			expect((await api.fetch(`${dav}/${file}.webm`, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(201)
+		}
+		const id = (await (await api.post('/ocs/v2.php/apps/deliver/api/v1/projects?format=json', { data: { folderId: await fileId(api, dav), autoIntake: true } })).json()).ocs.data.id
+		const token = (await (await api.post(`/ocs/v2.php/apps/deliver/api/v1/projects/${id}/links?format=json`)).json()).ocs.data.token
+
+		const guest = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: { width: 375, height: 667 } })
+		try {
+			const reviewer = await guest.newPage()
+			await reviewer.goto(`/apps/deliver/s/${token}`)
+			const heading = reviewer.locator('.deliver-landing__intro h2')
+			await expect(heading).toContainText('festival_submission')
+			expect(await heading.evaluate((element) => element.scrollWidth - element.clientWidth)).toBe(0)
+			expect(await reviewer.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0)
+		} finally {
+			await guest.close()
+			await api.delete(`/ocs/v2.php/apps/deliver/api/v1/projects/${id}?format=json`)
+			await api.fetch(dav, { method: 'DELETE' })
+			await api.dispose()
+		}
+	})
 })
 
 test.describe('The bar on a phone', () => {
