@@ -1661,7 +1661,7 @@ test.describe('The bar on a phone', () => {
 		// Upright on the smallest, the long name gives way to the buttons
 		await page.setViewportSize({ width: 375, height: 667 })
 		await expect(page.locator('.deliver-layout--upright')).toHaveCount(1)
-		expect(await page.locator('.deliver-review__title').evaluate((title) => title.scrollWidth > title.clientWidth)).toBe(true)
+		expect(await page.locator('.deliver-review__title .deliver-name__head').evaluate((head) => head.scrollWidth > head.clientWidth)).toBe(true)
 		await share.tap()
 		const links = page.getByRole('dialog', { name: /^Review Links on/ })
 		await expect(links).toBeVisible()
