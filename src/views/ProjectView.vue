@@ -625,7 +625,7 @@ function assetItems(asset) {
 		asset.manages && newest.proxyHandedIn && !uploads.proxies[newest.id] && { label: t('deliver', 'Remove Proxy'), icon: removeProxyIcon, group: 'media', action: () => dropHandedIn(newest) },
 		asset.manages && asset.filesWrite && newest.url && newest.mimeType?.startsWith('video/') && { label: t('deliver', 'Add Captions…'), icon: captionsIcon, group: 'media', action: () => { captionsFor.value = newest } },
 		asset.manages && { label: asset.dueDate ? t('deliver', 'Change the Due Date') : t('deliver', 'Set a Due Date'), icon: dueIcon, group: 'review', action: () => { dueFor.value = [asset] } },
-		asset.manages && !isMobile.value && { label: t('deliver', 'Manage Versions'), icon: stackIcon, action: () => { managing.value = asset.id } },
+		asset.manages && { label: t('deliver', 'Manage Versions'), icon: stackIcon, action: () => { managing.value = asset.id } },
 		asset.manages && { label: t('deliver', 'Move to Project…'), icon: moveIcon, action: () => openAssign([asset]) },
 		...(newest.url ? fileItems(newest.url, newest.name, newest.fileId, asset.manages && asset.filesWrite) : []),
 		{
