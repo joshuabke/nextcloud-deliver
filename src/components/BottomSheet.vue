@@ -16,7 +16,7 @@ const panel = ref(null)
 const body = ref(null)
 /** Where the focus was before, the button that opened the sheet, so it goes back there */
 const opener = document.activeElement
-/** Whether the finger or the mouse came down on the strip, so the click that follows closes the sheet; the release of a long press that opened it does not */
+/** Whether the press began on the strip, so the click that follows closes the sheet; the release of a long press that opened it does not (#298) */
 let downOnStrip = false
 /** Where a stroke down began, while the sheet is scrolled to its top */
 let strokeFrom = null
@@ -25,10 +25,16 @@ const pulled = ref(0)
 
 /**
  * The strip closes the sheet on the click, not on the press: removed at the
- * press, the sheet would leave the click to whatever lies under the finger (#298)
+ * press, the sheet would leave the click to whatever lies under the finger (#298).
+ * Captured on the backdrop so a press on the strip while the panel still slides in,
+ * whose click lands on the panel, still closes the sheet and never clicks an item (#315).
+ *
+ * @param {MouseEvent} event - the click following the press
  */
-function stripClick() {
-	if (downOnStrip) {
+function stripClick(event) {
+	if (downOnStrip && (event.target === event.currentTarget || event.detail !== 0)) {
+		event.preventDefault()
+		event.stopPropagation()
 		emit('close')
 	}
 	downOnStrip = false
@@ -105,8 +111,8 @@ onBeforeUnmount(() => {
 	<Teleport to="body">
 		<div
 			class="deliver-sheet"
-			@pointerdown.self="downOnStrip = true"
-			@click.self="stripClick"
+			@pointerdown.capture="downOnStrip = $event.target === $event.currentTarget"
+			@click.capture="stripClick"
 			@contextmenu.prevent>
 			<div
 				ref="panel"
