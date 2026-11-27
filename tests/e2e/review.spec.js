@@ -2215,8 +2215,8 @@ test.describe('Menus on a phone', () => {
 		await display.getByText('Grid', { exact: true }).tap()
 		await expect(display.locator('.deliver-sheet__label', { hasText: /^Card size$/ })).toBeVisible()
 		// Grid and List stand at the top of the display sheet as two full-width segments (#302, #309)
-		const gridSegment = display.getByRole('radio', { name: 'Grid', exact: true })
-		const listSegment = display.getByRole('radio', { name: 'List', exact: true })
+		const gridSegment = display.locator('.deliver-display-sheet__layout-option', { hasText: /^Grid$/ })
+		const listSegment = display.locator('.deliver-display-sheet__layout-option', { hasText: /^List$/ })
 		const sheetBox = await display.boundingBox()
 		const gridBox = await gridSegment.boundingBox()
 		const listBox = await listSegment.boundingBox()
@@ -2228,10 +2228,10 @@ test.describe('Menus on a phone', () => {
 		expect(gridBox.width + listBox.width).toBeGreaterThanOrEqual(sheetBox.width * 0.9)
 		// Aspect ratio shows visible labels, and every segment button is touch-sized on a single line
 		for (const name of ['Landscape', 'Square', 'Portrait']) {
-			await expect(display.getByRole('radio', { name, exact: true })).toBeVisible()
+			await expect(display.locator('.deliver-display-sheet__segment', { hasText: new RegExp(`^${name}$`) })).toBeVisible()
 		}
-		const segments = await display.getByRole('radio').evaluateAll((buttons) => buttons.map((button) => {
-			const text = button.querySelector('.deliver-display-sheet__segment-label') ?? button
+		const segments = await display.locator('.deliver-display-sheet__segment').evaluateAll((buttons) => buttons.map((button) => {
+			const text = button.querySelector(':scope > div:last-of-type') ?? button
 			const style = getComputedStyle(text)
 			const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.3
 			return {
@@ -2258,6 +2258,14 @@ test.describe('Menus on a phone', () => {
 			expect(row.height).toBeGreaterThanOrEqual(52)
 			expect(row.height).toBeLessThanOrEqual(80)
 		}
+		// Radio groups support native arrow-key navigation
+		const cardSize = display.getByRole('group', { name: 'Card size' })
+		const mediumSize = cardSize.getByRole('radio', { name: 'M', exact: true })
+		const largeSize = cardSize.getByRole('radio', { name: 'L', exact: true })
+		await expect(mediumSize).toBeChecked()
+		await mediumSize.focus()
+		await phonePage.keyboard.press('ArrowRight')
+		await expect(largeSize).toBeChecked()
 		await phone.close()
 
 		const desktop = await browser.newContext({ baseURL: BROWSER_URL, viewport: { width: 1280, height: 800 } })

@@ -32,12 +32,39 @@ const options = defineModel('options', { type: Object, required: true })
 /** Which choice row is drilled into ('fit' | 'titleLines' | null) */
 const picking = ref(null)
 const id = useId()
+const layoutId = `${id}-layout`
 const sizeId = `${id}-size`
 const aspectId = `${id}-aspect`
 const fitId = `${id}-fit`
 const titleLinesId = `${id}-title-lines`
 const infoId = `${id}-info`
 const collapseId = `${id}-collapse`
+
+/**
+ * NcRadioGroupButton in @nextcloud/vue 9.12 omits `name` on its radio input (breaking
+ * browser arrow-key navigation and single Tab stop per group) and drops `ariaLabel` when
+ * `label` is set. Apply them on the native radio input directly.
+ *
+ * @param {HTMLElement} el - NcRadioGroupButton root element
+ * @param {string|{name: string, ariaLabel?: string}} value - group name, or name plus accessible label
+ */
+function syncRadioInput(el, value) {
+	const input = el.querySelector('input[type="radio"]')
+	if (!input) {
+		return
+	}
+	const { name, ariaLabel } = typeof value === 'string' ? { name: value } : value
+	input.name = name
+	if (ariaLabel) {
+		input.setAttribute('aria-label', ariaLabel)
+		input.removeAttribute('aria-labelledby')
+	}
+}
+
+const vRadioInput = {
+	mounted: (el, { value }) => syncRadioInput(el, value),
+	updated: (el, { value }) => syncRadioInput(el, value),
+}
 
 /**
  * Replaces one or more grid options immutably so watchers and storage stay in sync
@@ -90,140 +117,126 @@ defineExpose({
 
 <template>
 	<div v-if="sheet" class="deliver-sheet__groups">
-		<div
+		<NcRadioGroup
+			v-model="layout"
 			class="deliver-display-sheet__layout"
-			role="radiogroup"
-			:aria-label="t('deliver', 'Layout')">
-			<button
-				type="button"
-				role="radio"
-				class="deliver-display-sheet__segment deliver-display-sheet__layout-option"
-				:aria-checked="layout === 'grid'"
-				@click="layout = 'grid'">
-				<NcIconSvgWrapper :svg="gridIcon" :size="24" inline />
-				<span class="deliver-display-sheet__segment-label">{{ t('deliver', 'Grid') }}</span>
-			</button>
-			<button
-				type="button"
-				role="radio"
-				class="deliver-display-sheet__segment deliver-display-sheet__layout-option"
-				:aria-checked="layout === 'list'"
-				@click="layout = 'list'">
-				<NcIconSvgWrapper :svg="listIcon" :size="24" inline />
-				<span class="deliver-display-sheet__segment-label">{{ t('deliver', 'List') }}</span>
-			</button>
-		</div>
+			:label="t('deliver', 'Layout')"
+			hideLabel>
+			<NcRadioGroupButton
+				v-radio-input="layoutId"
+				class="deliver-display-sheet__segment deliver-display-sheet__stacked deliver-display-sheet__layout-option"
+				value="grid"
+				:label="t('deliver', 'Grid')">
+				<template #icon>
+					<NcIconSvgWrapper :svg="gridIcon" :size="24" inline />
+				</template>
+			</NcRadioGroupButton>
+			<NcRadioGroupButton
+				v-radio-input="layoutId"
+				class="deliver-display-sheet__segment deliver-display-sheet__stacked deliver-display-sheet__layout-option"
+				value="list"
+				:label="t('deliver', 'List')">
+				<template #icon>
+					<NcIconSvgWrapper :svg="listIcon" :size="24" inline />
+				</template>
+			</NcRadioGroupButton>
+		</NcRadioGroup>
 		<template v-if="layout === 'grid'">
 			<div class="deliver-sheet__group">
 				<div class="deliver-sheet__row">
-					<span :id="sizeId" class="deliver-sheet__label">{{ t('deliver', 'Card size') }}</span>
-					<div
-						class="deliver-sheet__control deliver-display-sheet__segments"
-						role="radiogroup"
-						:aria-labelledby="sizeId">
-						<button
-							type="button"
-							role="radio"
+					<span class="deliver-sheet__label">{{ t('deliver', 'Card size') }}</span>
+					<NcRadioGroup
+						v-model="size"
+						class="deliver-sheet__control"
+						:label="t('deliver', 'Card size')"
+						hideLabel>
+						<NcRadioGroupButton
+							v-radio-input="sizeId"
 							class="deliver-display-sheet__segment"
-							:aria-checked="size === 's'"
-							@click="size = 's'">
-							<span class="deliver-display-sheet__segment-label">{{ t('deliver', 'S') }}</span>
-						</button>
-						<button
-							type="button"
-							role="radio"
+							value="s"
+							:label="t('deliver', 'S')" />
+						<NcRadioGroupButton
+							v-radio-input="sizeId"
 							class="deliver-display-sheet__segment"
-							:aria-checked="size === 'm'"
-							@click="size = 'm'">
-							<span class="deliver-display-sheet__segment-label">{{ t('deliver', 'M') }}</span>
-						</button>
-						<button
-							type="button"
-							role="radio"
+							value="m"
+							:label="t('deliver', 'M')" />
+						<NcRadioGroupButton
+							v-radio-input="sizeId"
 							class="deliver-display-sheet__segment"
-							:aria-checked="size === 'l'"
-							@click="size = 'l'">
-							<span class="deliver-display-sheet__segment-label">{{ t('deliver', 'L') }}</span>
-						</button>
-					</div>
+							value="l"
+							:label="t('deliver', 'L')" />
+					</NcRadioGroup>
 				</div>
 				<div class="deliver-sheet__row">
-					<span :id="aspectId" class="deliver-sheet__label">{{ t('deliver', 'Aspect ratio') }}</span>
-					<div
-						class="deliver-sheet__control deliver-display-sheet__segments"
-						role="radiogroup"
-						:aria-labelledby="aspectId">
-						<button
-							type="button"
-							role="radio"
-							class="deliver-display-sheet__segment deliver-display-sheet__aspect"
-							:aria-checked="aspect === 'landscape'"
-							@click="aspect = 'landscape'">
-							<NcIconSvgWrapper :svg="landscapeIcon" :size="18" inline />
-							<span class="deliver-display-sheet__segment-label">{{ t('deliver', 'Landscape') }}</span>
-						</button>
-						<button
-							type="button"
-							role="radio"
-							class="deliver-display-sheet__segment deliver-display-sheet__aspect"
-							:aria-checked="aspect === 'square'"
-							@click="aspect = 'square'">
-							<NcIconSvgWrapper :svg="squareIcon" :size="18" inline />
-							<span class="deliver-display-sheet__segment-label">{{ t('deliver', 'Square') }}</span>
-						</button>
-						<button
-							type="button"
-							role="radio"
-							class="deliver-display-sheet__segment deliver-display-sheet__aspect"
-							:aria-checked="aspect === 'portrait'"
-							@click="aspect = 'portrait'">
-							<NcIconSvgWrapper :svg="portraitIcon" :size="18" inline />
-							<span class="deliver-display-sheet__segment-label">{{ t('deliver', 'Portrait') }}</span>
-						</button>
-					</div>
+					<span class="deliver-sheet__label">{{ t('deliver', 'Aspect ratio') }}</span>
+					<NcRadioGroup
+						v-model="aspect"
+						class="deliver-sheet__control"
+						:label="t('deliver', 'Aspect ratio')"
+						hideLabel>
+						<NcRadioGroupButton
+							v-radio-input="aspectId"
+							class="deliver-display-sheet__segment deliver-display-sheet__stacked deliver-display-sheet__aspect"
+							value="landscape"
+							:label="t('deliver', 'Landscape')">
+							<template #icon>
+								<NcIconSvgWrapper :svg="landscapeIcon" :size="18" inline />
+							</template>
+						</NcRadioGroupButton>
+						<NcRadioGroupButton
+							v-radio-input="aspectId"
+							class="deliver-display-sheet__segment deliver-display-sheet__stacked deliver-display-sheet__aspect"
+							value="square"
+							:label="t('deliver', 'Square')">
+							<template #icon>
+								<NcIconSvgWrapper :svg="squareIcon" :size="18" inline />
+							</template>
+						</NcRadioGroupButton>
+						<NcRadioGroupButton
+							v-radio-input="aspectId"
+							class="deliver-display-sheet__segment deliver-display-sheet__stacked deliver-display-sheet__aspect"
+							value="portrait"
+							:label="t('deliver', 'Portrait')">
+							<template #icon>
+								<NcIconSvgWrapper :svg="portraitIcon" :size="18" inline />
+							</template>
+						</NcRadioGroupButton>
+					</NcRadioGroup>
 				</div>
 				<div class="deliver-sheet__row">
-					<span :id="fitId" class="deliver-sheet__label">{{ t('deliver', 'Thumbnail') }}</span>
-					<div
-						class="deliver-sheet__control deliver-display-sheet__segments"
-						role="radiogroup"
-						:aria-labelledby="fitId">
-						<button
-							type="button"
-							role="radio"
+					<span class="deliver-sheet__label">{{ t('deliver', 'Thumbnail') }}</span>
+					<NcRadioGroup
+						v-model="fit"
+						class="deliver-sheet__control"
+						:label="t('deliver', 'Thumbnail')"
+						hideLabel>
+						<NcRadioGroupButton
+							v-radio-input="fitId"
 							class="deliver-display-sheet__segment"
-							:aria-checked="fit === 'fit'"
-							@click="fit = 'fit'">
-							<span class="deliver-display-sheet__segment-label">{{ t('deliver', 'Fit') }}</span>
-						</button>
-						<button
-							type="button"
-							role="radio"
+							value="fit"
+							:label="t('deliver', 'Fit')" />
+						<NcRadioGroupButton
+							v-radio-input="fitId"
 							class="deliver-display-sheet__segment"
-							:aria-checked="fit === 'fill'"
-							@click="fit = 'fill'">
-							<span class="deliver-display-sheet__segment-label">{{ t('deliver', 'Fill') }}</span>
-						</button>
-					</div>
+							value="fill"
+							:label="t('deliver', 'Fill')" />
+					</NcRadioGroup>
 				</div>
 				<div class="deliver-sheet__row">
-					<span :id="titleLinesId" class="deliver-sheet__label">{{ t('deliver', 'Title lines') }}</span>
-					<div
-						class="deliver-sheet__control deliver-display-sheet__segments"
-						role="radiogroup"
-						:aria-labelledby="titleLinesId">
-						<button
+					<span class="deliver-sheet__label">{{ t('deliver', 'Title lines') }}</span>
+					<NcRadioGroup
+						v-model="titleLines"
+						class="deliver-sheet__control"
+						:label="t('deliver', 'Title lines')"
+						hideLabel>
+						<NcRadioGroupButton
 							v-for="lines in TITLE_LINES"
 							:key="lines"
-							type="button"
-							role="radio"
+							v-radio-input="{ name: titleLinesId, ariaLabel: n('deliver', '%n line', '%n lines', lines) }"
 							class="deliver-display-sheet__segment"
-							:aria-checked="titleLines === lines"
-							:aria-label="n('deliver', '%n line', '%n lines', lines)"
-							@click="titleLines = lines">
-							<span class="deliver-display-sheet__segment-label">{{ lines }}</span>
-						</button>
-					</div>
+							:value="lines"
+							:label="String(lines)" />
+					</NcRadioGroup>
 				</div>
 			</div>
 			<div class="deliver-sheet__group">
@@ -419,95 +432,48 @@ defineExpose({
 }
 
 /* Phone display sheet: full-width Grid/List segments above touch-sized inline controls (#302, #309) */
-.deliver-display-sheet__layout,
-.deliver-display-sheet__segments {
-	display: flex;
-	gap: var(--default-grid-baseline);
-}
-
 .deliver-display-sheet__layout {
 	width: 100%;
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
 }
 
-.deliver-display-sheet__segments {
-	max-width: 100%;
-}
-
-.deliver-display-sheet__segment {
+.deliver-sheet__groups .deliver-display-sheet__segment {
 	box-sizing: border-box;
-	display: flex;
-	align-items: center;
-	justify-content: center;
 	min-width: 44px;
 	min-height: 44px;
-	margin: 0;
 	padding: calc(2 * var(--default-grid-baseline)) calc(3 * var(--default-grid-baseline));
-	border: 1px solid var(--color-primary-element-light-hover);
-	border-bottom-width: 2px;
-	border-radius: var(--border-radius-small);
-	background: var(--color-primary-element-light);
-	color: var(--color-primary-element-light-text);
-	font: inherit;
 	font-size: var(--default-font-size);
-	font-weight: var(--font-weight-element, bold);
 	line-height: 1.2;
 	white-space: nowrap;
-	cursor: pointer;
 }
 
-.deliver-display-sheet__segment:first-child {
-	border-start-start-radius: var(--border-radius-element);
-	border-end-start-radius: var(--border-radius-element);
-}
-
-.deliver-display-sheet__segment:last-child {
-	border-start-end-radius: var(--border-radius-element);
-	border-end-end-radius: var(--border-radius-element);
-}
-
-.deliver-display-sheet__segment:hover {
-	background: var(--color-primary-element-light-hover);
-}
-
-.deliver-display-sheet__segment:focus-visible {
-	outline: 2px solid var(--color-main-text);
-	outline-offset: -2px;
-}
-
-.deliver-display-sheet__segment[aria-checked='true'] {
-	border-color: var(--color-primary-element-hover);
-	background: var(--color-primary-element);
-	color: var(--color-primary-element-text);
-}
-
-.deliver-display-sheet__segment[aria-checked='true']:hover {
-	background: var(--color-primary-element-hover);
-}
-
-.deliver-display-sheet__layout-option {
-	flex: 1 1 0;
+.deliver-sheet__groups .deliver-display-sheet__stacked {
 	flex-direction: column;
 	gap: var(--default-grid-baseline);
+}
+
+.deliver-sheet__groups .deliver-display-sheet__stacked :deep(> div:first-child) {
+	width: auto;
+	height: auto;
+}
+
+.deliver-sheet__groups .deliver-display-sheet__layout-option {
 	min-height: 68px;
 	padding: calc(2.5 * var(--default-grid-baseline)) calc(2 * var(--default-grid-baseline));
 }
 
-.deliver-display-sheet__layout-option:first-child {
-	border-start-start-radius: var(--border-radius-large);
-	border-end-start-radius: var(--border-radius-large);
-}
-
-.deliver-display-sheet__layout-option:last-child {
-	border-start-end-radius: var(--border-radius-large);
-	border-end-end-radius: var(--border-radius-large);
-}
-
-.deliver-display-sheet__aspect {
-	flex-direction: column;
+.deliver-sheet__groups .deliver-display-sheet__aspect {
+	flex: 0 1 auto;
 	gap: 2px;
-	padding: var(--default-grid-baseline) 6px;
-	font-size: 12px;
-	font-weight: 500;
+	padding: var(--default-grid-baseline) 5px;
+	font-size: var(--font-size-small, 13px);
 	line-height: 1.15;
+}
+
+.deliver-sheet__groups .deliver-display-sheet__aspect :deep(> div:last-of-type) {
+	font-weight: 500;
 }
 </style>
