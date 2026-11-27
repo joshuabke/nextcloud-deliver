@@ -424,7 +424,7 @@ CI runs php-cs-fixer, psalm, PHPUnit (unit and integration), Vitest and Playwrig
 - PDFs as Assets.
 - Watermarks burned into the picture (the Watermark is an overlay in the player, and the link's settings say so).
 - Adaptive streaming, multiple Proxy renditions, 4K Proxies.
-- On phones: Exports, managing Version Stacks and upload by drag and drop; they stay on larger screens.
+- On phones: Exports and upload by drag and drop; they stay on larger screens.
 - External or GPU-farm transcoding workers over HTTP (job table is ready for it).
 - Direct push of markers into DaVinci Resolve.
 - Ranges, ratings and favourites on Takes; assembling Takes into a cut in the browser.
