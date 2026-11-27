@@ -40,6 +40,12 @@ const props = defineProps({
 	offLinks: { type: Boolean, default: false },
 	/** One compact row instead of a card; the same actions, the facts beside the name */
 	list: { type: Boolean, default: false },
+	/** How the card's still fits its frame in grid mode: 'contain' or 'cover' */
+	fit: { type: String, default: 'contain' },
+	/** How many lines the name takes on a card in grid mode (1 or 2) */
+	titleLines: { type: Number, default: 2 },
+	/** Whether to hide the line(s) under the name on a card in grid mode */
+	hideInfo: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['stack', 'menu', 'versions', 'select', 'pick'])
@@ -127,7 +133,7 @@ const status = computed(() => {
 					v-if="!audio && newest.state === 'ready'"
 					:fileId="newest.fileId"
 					:scrubUrl="newest.scrubUrl"
-					fit="contain" />
+					:fit="list ? 'contain' : fit" />
 				<span v-if="!list" class="deliver-card__version">{{ t('deliver', 'V{number}', { number: newest.number }) }}</span>
 				<span
 					v-if="unseen && !list"
@@ -155,7 +161,7 @@ const status = computed(() => {
 			<NameText
 				class="deliver-card__name"
 				:name="asset.name"
-				:lines="2"
+				:lines="list ? 2 : titleLines"
 				:title="newest.name" />
 			<!-- What the badges on the still say, in the row's own line -->
 			<div v-if="list" class="deliver-card__facts">
@@ -179,10 +185,10 @@ const status = computed(() => {
 				</span>
 				<DueDate v-if="asset.dueDate" :modelValue="asset.dueDate" />
 			</div>
-			<div v-if="!list" class="deliver-card__meta">
+			<div v-if="!list && !hideInfo" class="deliver-card__meta">
 				<template v-if="newest.deliveredBy">{{ newest.deliveredBy.name }} · </template><NcDateTime :timestamp="newest.createdAt * 1000" />
 			</div>
-			<DueDate v-if="asset.dueDate && !list" class="deliver-card__due" :modelValue="asset.dueDate" />
+			<DueDate v-if="asset.dueDate && !list && !hideInfo" class="deliver-card__due" :modelValue="asset.dueDate" />
 		</a>
 		<!-- Outside the link, so ticking it does not open the Asset -->
 		<input

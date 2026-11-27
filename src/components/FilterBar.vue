@@ -1,29 +1,83 @@
 <script setup>
+import checkIcon from '@mdi/svg/svg/check.svg?raw'
+import filterIcon from '@mdi/svg/svg/filter-variant.svg?raw'
 import { useIsMobile } from '@nextcloud/vue/composables/useIsMobile'
+import { computed, ref } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcFormBox from '@nextcloud/vue/components/NcFormBox'
+import NcFormBoxButton from '@nextcloud/vue/components/NcFormBoxButton'
+import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import BottomSheet from './BottomSheet.vue'
 import SortMenu from './SortMenu.vue'
 import { t } from '../lib/l10n.js'
 
 const filter = defineModel('filter', { type: String, required: true })
 const sort = defineModel('sort', { type: String, required: true })
 
-defineProps({
+const props = defineProps({
 	/** [{ id, label, count }]; the first one shows everything and has no count */
 	filters: { type: Array, required: true },
 	/** [{ id, label }] */
 	sorts: { type: Array, required: true },
 })
 
-/** On a phone the filters are one row to swipe, and the order is an icon at its end */
+/** On a phone the filters and sort open as sheets from below (#302) */
 const isMobile = useIsMobile()
-
+const filterOpen = ref(false)
+const activeFilter = computed(() => filter.value === props.filters[0]?.id
+	? null
+	: props.filters.find((each) => each.id === filter.value) ?? null)
+const filterLabel = computed(() => activeFilter.value
+	? t('deliver', 'Filter: {name}', { name: activeFilter.value.label })
+	: t('deliver', 'Filter'))
 </script>
 
 <template>
 	<div class="deliver-filter-bar" :class="{ 'deliver-filter-bar--mobile': isMobile }">
 		<!-- What acts on the cards as a whole, such as ticking them all -->
 		<slot name="start" />
-		<div class="deliver-filter-bar__filters" role="group" :aria-label="t('deliver', 'Show')">
+		<template v-if="isMobile">
+			<span class="deliver-filter-bar__spacer" />
+			<NcButton
+				variant="tertiary"
+				:pressed="Boolean(activeFilter)"
+				:aria-label="filterLabel"
+				:title="filterLabel"
+				@click="filterOpen = true">
+				<template #icon>
+					<NcIconSvgWrapper :svg="filterIcon" />
+				</template>
+			</NcButton>
+			<BottomSheet
+				v-if="filterOpen"
+				:label="t('deliver', 'Filter')"
+				@close="filterOpen = false">
+				<template #header>
+					{{ t('deliver', 'Filter') }}
+				</template>
+				<NcFormBox>
+					<NcFormBoxButton
+						v-for="(each, index) in filters"
+						:key="each.id"
+						:aria-pressed="filter === each.id"
+						@click="filter = each.id; filterOpen = false">
+						<span class="deliver-filter-sheet__row">
+							<span>{{ each.label }}</span>
+							<span v-if="index > 0" class="deliver-filter-bar__count">{{ each.count }}</span>
+						</span>
+						<template #icon>
+							<NcIconSvgWrapper v-if="filter === each.id" :svg="checkIcon" />
+							<span v-else class="deliver-filter-sheet__spacer" />
+						</template>
+					</NcFormBoxButton>
+				</NcFormBox>
+			</BottomSheet>
+		</template>
+		<div
+			v-else
+			class="deliver-filter-bar__filters"
+			role="group"
+			:aria-label="t('deliver', 'Show')">
 			<NcButton
 				v-for="(each, index) in filters"
 				:key="each.id"
@@ -57,20 +111,25 @@ const isMobile = useIsMobile()
 	flex-wrap: nowrap;
 }
 
-.deliver-filter-bar--mobile .deliver-filter-bar__filters {
-	flex-wrap: nowrap;
-	min-width: 0;
-	overflow-x: auto;
-	scrollbar-width: none;
-}
-
-.deliver-filter-bar--mobile .deliver-filter-bar__filters > * {
-	flex: none;
+.deliver-filter-bar__spacer {
+	flex: 1;
 }
 
 .deliver-filter-bar__count {
 	margin-inline-start: var(--default-grid-baseline);
 	font-weight: normal;
 	opacity: 0.7;
+}
+
+.deliver-filter-sheet__row {
+	display: flex;
+	align-items: center;
+	gap: var(--default-grid-baseline);
+}
+
+.deliver-filter-sheet__spacer {
+	display: inline-block;
+	width: 20px;
+	height: 20px;
 }
 </style>

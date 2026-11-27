@@ -2039,13 +2039,18 @@ test.describe('Menus on a phone', () => {
 		await page.goto(`/apps/deliver/projects/${projectId}`)
 
 		// Cards open the same sheet
-		await page.getByRole('button', { name: 'Show the Assets as a list' }).tap()
+		await page.getByRole('button', { name: 'Display options' }).tap()
+		const display = page.getByRole('dialog', { name: 'Display options' })
+		await display.getByText('Grid', { exact: true }).tap()
+		await page.keyboard.press('Escape')
 		await expect(page.locator('.deliver-card--row')).toHaveCount(0)
 		await more.tap()
 		await expect(sheet).toBeVisible()
 		await expect(sheet.locator('.deliver-menu-sheet__name')).toHaveText(NAME)
 		await page.keyboard.press('Escape')
-		await page.getByRole('button', { name: 'Show the Assets as a list' }).tap()
+		await page.getByRole('button', { name: 'Display options' }).tap()
+		await display.getByText('List', { exact: true }).tap()
+		await page.keyboard.press('Escape')
 		await phone.close()
 	})
 
@@ -2065,6 +2070,111 @@ test.describe('Menus on a phone', () => {
 		await expect(sheet).toHaveCount(0)
 		await expect(page).toHaveURL(/\/apps\/deliver\/?$/)
 		await phone.close()
+	})
+
+	test('on a phone cards stand in two columns by default, and display, sort and filter open as sheets; desktop keeps its toolbar (#302)', async () => {
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: UPRIGHT })
+		const page = watched(await phone.newPage())
+		await login(page)
+		await page.goto(`/apps/deliver/projects/${projectId}`)
+
+		const grid = page.locator('.deliver-project__grid').first()
+		const columns = () => grid.evaluate((element) => getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).length)
+
+		// Open the display sheet, switch to cards (two columns at default M on 393 px), then switch S / M / L
+		await page.getByRole('button', { name: 'Display options' }).tap()
+		const display = page.getByRole('dialog', { name: 'Display options' })
+		await expect(display).toBeVisible()
+		await display.getByText('Grid', { exact: true }).tap()
+		await expect(page.locator('.deliver-card--row')).toHaveCount(0)
+		await expect.poll(columns).toBe(2)
+
+		await display.getByText('S', { exact: true }).tap()
+		await expect.poll(columns).toBe(3)
+		await display.getByText('M', { exact: true }).tap()
+		await expect.poll(columns).toBe(2)
+		await display.getByText('L', { exact: true }).tap()
+		await expect.poll(columns).toBe(1)
+		await page.keyboard.press('Escape')
+		await expect(display).toHaveCount(0)
+
+		// The chosen layout and card size stay after a reload
+		await page.reload()
+		await expect(page.locator('.deliver-card').first()).toBeVisible()
+		await expect(page.locator('.deliver-card--row')).toHaveCount(0)
+		await expect.poll(columns).toBe(1)
+
+		// Sort opens as a sheet and applies
+		await page.getByRole('button', { name: 'Sort by' }).tap()
+		const sortSheet = page.getByRole('dialog', { name: 'Sort by' })
+		await expect(sortSheet).toBeVisible()
+		await sortSheet.getByRole('button', { name: 'Name' }).tap()
+		await expect(sortSheet).toHaveCount(0)
+		await expect(page).toHaveURL(/sort=name/)
+		await expect(page.locator('.deliver-card__name').first()).toHaveText('other')
+
+		// Filter opens as a sheet and applies; the button stays icon-only and names the active filter
+		await page.getByRole('button', { name: 'Filter' }).tap()
+		const filterSheet = page.getByRole('dialog', { name: 'Filter' })
+		await expect(filterSheet).toBeVisible()
+		await filterSheet.getByRole('button', { name: /^Changes requested/ }).tap()
+		await expect(filterSheet).toHaveCount(0)
+		await expect(page).toHaveURL(/filter=changes/)
+		await expect(page.locator('.deliver-card')).toHaveCount(0)
+		const activeFilterButton = page.getByRole('button', { name: 'Filter: Changes requested' })
+		await expect(activeFilterButton).toHaveAttribute('aria-pressed', 'true')
+		await activeFilterButton.tap()
+		await filterSheet.getByRole('button', { name: /^All/ }).tap()
+		await expect(page.locator('.deliver-card')).toHaveCount(2)
+		await phone.close()
+
+		// Desktop keeps its toolbar (inline filters, sort menu, list toggle) with the grid options in a popover beside it
+		const desktop = await browser.newContext({ baseURL: BROWSER_URL, viewport: { width: 1280, height: 800 } })
+		const desktopPage = watched(await desktop.newPage())
+		await login(desktopPage)
+		await desktopPage.goto(`/apps/deliver/projects/${projectId}`)
+		await expect(desktopPage.getByRole('group', { name: 'Show' })).toBeVisible()
+		await expect(desktopPage.getByRole('button', { name: 'Latest activity' })).toBeVisible()
+		const listToggle = desktopPage.getByRole('button', { name: 'Show the Assets as a list' })
+		await expect(listToggle).toBeVisible()
+		await listToggle.click()
+		await expect(desktopPage.locator('.deliver-card--row')).toHaveCount(0)
+		const longName = card(desktopPage, NAME.replace(/\.webm$/, '')).locator('.deliver-card__name')
+		const twoLineHeight = (await longName.boundingBox()).height
+		await desktopPage.getByRole('button', { name: 'Display options' }).click()
+		const popover = desktopPage.getByRole('dialog', { name: 'Display options' })
+		await expect(popover).toBeVisible()
+		await expect(popover.getByText('Card size')).toBeVisible()
+		await expect(popover.getByText('Aspect ratio')).toBeVisible()
+		await popover.getByText('Show card info').click()
+		await expect(desktopPage.locator('.deliver-card__meta')).toHaveCount(0)
+		await expect(desktopPage.locator('.deliver-card__version').first()).toBeVisible()
+
+		// Title lines reach NameText on a long name: 1 line is one line high with the tail visible
+		await popover.getByRole('button', { name: /^Title lines/ }).click()
+		await popover.getByRole('button', { name: '1 line' }).click()
+		await expect(longName).toHaveClass(/deliver-name--one/)
+		const oneLine = await longName.evaluate((element) => {
+			const box = element.getBoundingClientRect()
+			const style = getComputedStyle(element)
+			const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.5
+			const tail = element.querySelector('.deliver-name__tail')
+			const head = element.querySelector('.deliver-name__head')
+			const own = tail.getBoundingClientRect()
+			return {
+				height: box.height,
+				lineHeight,
+				end: tail.dataset.text,
+				inside: own.width > 0 && own.left >= box.left - 0.5 && own.right <= box.right + 0.5 && own.top >= box.top - 0.5 && own.bottom <= box.bottom + 0.5,
+				cut: head.scrollWidth > head.clientWidth,
+			}
+		})
+		expect(oneLine.height).toBeLessThan(twoLineHeight)
+		expect(oneLine.height).toBeLessThanOrEqual(oneLine.lineHeight * 1.5)
+		expect(oneLine.end).toBe('-title')
+		expect(oneLine.inside).toBe(true)
+		expect(oneLine.cut).toBe(true)
+		await desktop.close()
 	})
 })
 

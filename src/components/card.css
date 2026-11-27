@@ -23,7 +23,7 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	aspect-ratio: 16 / 9;
+	aspect-ratio: var(--deliver-still-ratio, 16 / 9);
 	margin-bottom: var(--default-grid-baseline);
 	border-radius: var(--border-radius);
 	background: #111;
@@ -43,7 +43,7 @@
 	padding-inline-end: var(--default-clickable-area);
 }
 
-/* A long name wraps to a second line and is cut shortly before its end (NameText); its title holds it whole */
+/* A long name wraps to up to two lines and is cut shortly before its end (NameText); its title holds it whole */
 .deliver-card__name {
 	font-size: var(--font-size-small, 13px);
 	font-weight: bold;
@@ -59,7 +59,7 @@
 	margin-top: 4px;
 }
 
-/* The menu button places itself by the card's width, under the 16:9 still */
+/* The menu button places itself by the card's width, under the still at its chosen aspect ratio */
 .deliver-card__menu-host {
 	position: relative;
 	container-type: inline-size;
@@ -68,7 +68,7 @@
 /* Beside the name and the line below it, outside the link so the card stays one link */
 .deliver-card__more {
 	position: absolute !important;
-	top: calc(8px + (100cqw - 16px) * 9 / 16 + 6px);
+	top: calc(8px + (100cqw - 16px) * var(--deliver-still-h, 0.5625) + 6px);
 	inset-inline-end: 0;
 }
 
@@ -95,6 +95,7 @@
 
 .deliver-card--row .deliver-card__still {
 	grid-row: 1 / span 2;
+	aspect-ratio: 16 / 9;
 	margin-bottom: 0;
 }
 

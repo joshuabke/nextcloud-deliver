@@ -171,6 +171,10 @@ onBeforeUnmount(() => {
 
 .deliver-sheet__header {
 	flex: none;
+	padding-bottom: calc(3 * var(--default-grid-baseline));
+	font-size: 16px;
+	font-weight: bold;
+	text-align: center;
 }
 
 .deliver-sheet__body {

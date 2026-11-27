@@ -697,6 +697,33 @@
 		"_%n Comment at {time}_::_%n Comments at {time}_": [
 			"%n Kommentar bei {time}",
 			"%n Kommentare bei {time}"
-		]
+		],
+		"Display options": "Ansichtsoptionen",
+		"Grid": "Kacheln",
+		"List": "Liste",
+		"Card size": "Kartengröße",
+		"S": "K",
+		"M": "M",
+		"L": "G",
+		"Aspect ratio": "Seitenverhältnis",
+		"Landscape": "Querformat",
+		"Square": "Quadrat",
+		"Portrait": "Hochformat",
+		"Thumbnail": "Vorschaubild",
+		"Fit": "Einpassen",
+		"Fill": "Ausfüllen",
+		"Title lines": "Titelzeilen",
+		"Back": "Zurück",
+		"Show card info": "Karteninfos anzeigen",
+		"Collapse folders": "Ordner einklappen",
+		"_%n line_::_%n lines_": [
+			"%n Zeile",
+			"%n Zeilen"
+		],
+		"_%n folder_::_%n folders_": [
+			"%n Ordner",
+			"%n Ordner"
+		],
+		"Filter: {name}": "Filter: {name}"
 	}
 }

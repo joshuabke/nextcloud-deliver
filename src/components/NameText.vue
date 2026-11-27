@@ -42,7 +42,8 @@ function secondLine(name, probe) {
  * @param {HTMLElement[]} names - roots of two-line names
  */
 function measure(names) {
-	const probes = names.map((name) => {
+	const twoLine = names.filter((name) => name.querySelector('.deliver-name__first'))
+	const probes = twoLine.map((name) => {
 		name.classList.remove(CUT)
 		const tail = document.createElement('span')
 		tail.textContent = name.dataset.tail
@@ -53,8 +54,8 @@ function measure(names) {
 		probe.append(name.dataset.head, tail)
 		return name.appendChild(probe)
 	})
-	const breaks = names.map((name, index) => secondLine(name, probes[index]))
-	names.forEach((name, index) => {
+	const breaks = twoLine.map((name, index) => secondLine(name, probes[index]))
+	twoLine.forEach((name, index) => {
 		probes[index].remove()
 		const at = breaks[index]
 		if (at !== null) {
@@ -70,7 +71,7 @@ const observer = new ResizeObserver((entries) => measure(entries.map((entry) => 
 </script>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, onUpdated, useTemplateRef } from 'vue'
+import { computed, onBeforeUnmount, onMounted, onUpdated, useTemplateRef, watch } from 'vue'
 import { nameParts } from '../lib/nameParts.js'
 
 const props = defineProps({
@@ -85,6 +86,18 @@ const root = useTemplateRef('root')
 onMounted(() => props.lines === 2 && observer.observe(root.value))
 onUpdated(() => props.lines === 2 && measure([root.value]))
 onBeforeUnmount(() => observer.unobserve(root.value))
+watch(() => props.lines, (lines) => {
+	if (!root.value) {
+		return
+	}
+	if (lines === 2) {
+		observer.observe(root.value)
+		measure([root.value])
+	} else {
+		observer.unobserve(root.value)
+		root.value.classList.remove(CUT)
+	}
+}, { flush: 'post' })
 </script>
 
 <template>

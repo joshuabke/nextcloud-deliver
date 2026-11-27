@@ -18,6 +18,10 @@ defineProps({
 	adding: { type: Boolean, default: false },
 	/** One compact row instead of a card */
 	list: { type: Boolean, default: false },
+	/** How many lines the name takes on a card in grid mode (1 or 2) */
+	titleLines: { type: Number, default: 2 },
+	/** Whether to hide the folder line under the name on a card in grid mode */
+	hideInfo: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['add', 'menu'])
@@ -35,9 +39,9 @@ const { press, fromButton } = useLongPress((where) => emit('menu', where))
 			<NameText
 				class="deliver-card__name"
 				:name="file.name"
-				:lines="2"
+				:lines="list ? 2 : titleLines"
 				:title="file.name" />
-			<div class="deliver-card__meta">
+			<div v-if="list || !hideInfo" class="deliver-card__meta">
 				{{ where }}
 			</div>
 		</div>
