@@ -1,6 +1,5 @@
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { sheetTap } from '../lib/sheetTap.js'
 
 // A sheet from below on a phone, as high as what it holds and at most up to a strip of the page:
 // a tap on that strip, a stroke down and Escape close it, and nothing under it gets the tap.
@@ -17,35 +16,28 @@ const panel = ref(null)
 const body = ref(null)
 /** Where the focus was before, the button that opened the sheet, so it goes back there */
 const opener = document.activeElement
-/** Tracks whether a press began on the strip so a long press that opened the sheet never closes it (#298) while a tap caught by the sliding panel still does (#315) */
-const stripTap = sheetTap()
+/** Whether the press began on the strip, so the click that follows closes the sheet; the release of a long press that opened it does not (#298) */
+let downOnStrip = false
 /** Where a stroke down began, while the sheet is scrolled to its top */
 let strokeFrom = null
 /** How far the sheet follows the finger down, in pixels */
 const pulled = ref(0)
 
 /**
- * @param {PointerEvent} event - a press anywhere on the sheet or its strip
- */
-function onPointerDown(event) {
-	stripTap.press(event.target === event.currentTarget)
-}
-
-/**
  * The strip closes the sheet on the click, not on the press: removed at the
  * press, the sheet would leave the click to whatever lies under the finger (#298).
- * Captured on the backdrop so a tap that began on the strip still closes the
- * sheet—and never triggers an item—if the panel slides under the finger during
- * the 0.2 s open animation (#315).
+ * Captured on the backdrop so a press on the strip while the panel still slides in,
+ * whose click lands on the panel, still closes the sheet and never clicks an item (#315).
  *
  * @param {MouseEvent} event - the click following the press
  */
-function onClickCapture(event) {
-	if (stripTap.click({ onStrip: event.target === event.currentTarget, detail: event.detail })) {
+function stripClick(event) {
+	if (downOnStrip && (event.target === event.currentTarget || event.detail !== 0)) {
 		event.preventDefault()
 		event.stopPropagation()
 		emit('close')
 	}
+	downOnStrip = false
 }
 
 /**
@@ -119,9 +111,8 @@ onBeforeUnmount(() => {
 	<Teleport to="body">
 		<div
 			class="deliver-sheet"
-			@pointerdown.capture="onPointerDown"
-			@pointercancel.capture="stripTap.cancel"
-			@click.capture="onClickCapture"
+			@pointerdown.capture="downOnStrip = $event.target === $event.currentTarget"
+			@click.capture="stripClick"
 			@contextmenu.prevent>
 			<div
 				ref="panel"
