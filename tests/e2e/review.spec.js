@@ -597,9 +597,9 @@ test.describe('Review view', () => {
 		await page.getByRole('button', { name: 'Leave fullscreen' }).tap()
 		await expect(page.locator('.deliver-player--fullscreen')).toHaveCount(0)
 
-		// Sideways, the picture fills the window and the list opens beside it
+		// Sideways, the picture fills the window under a slim bar and the list opens beside it
 		await page.setViewportSize({ width: PHONE.viewport.height, height: PHONE.viewport.width })
-		await expect(page.locator('.deliver-layout__bar')).toHaveCount(0)
+		await expect(page.locator('.deliver-layout__bar')).toBeVisible()
 		await expect(page.locator('.deliver-layout__panel')).toBeHidden()
 		await page.getByRole('button', { name: 'Show Comments' }).tap()
 		await expect(page.locator('.deliver-comments__head')).toBeVisible()
@@ -1410,6 +1410,150 @@ test.describe('Review view', () => {
 		const cleanup = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth })
 		await cleanup.fetch(`${dav}/linklist.webm`, { method: 'DELETE' })
 		await cleanup.dispose()
+	})
+})
+
+test.describe('The bar on a phone', () => {
+	let browser
+	let folder
+	let projectId
+	/** The Asset's Versions, newest first */
+	let versions
+	let token
+	/** Too long for a phone's bar beside its buttons */
+	const NAME = 'final-mix-of-the-trailer-for-the-festival-with-the-long-title'
+
+	test.beforeAll(async ({ playwright }) => {
+		await testUser(playwright)
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		folder = 'deliver-e2e-' + randomBytes(4).toString('hex')
+		const dav = `/remote.php/dav/files/${USER}/${folder}`
+		expect((await api.fetch(dav, { method: 'MKCOL' })).status()).toBe(201)
+		const created = await api.post('/ocs/v2.php/apps/deliver/api/v1/projects?format=json', { data: { folderId: await fileId(api, dav), autoIntake: true } })
+		projectId = (await created.json()).ocs.data.id
+		// One after the other, so the second stacks on the first as its V2
+		for (const name of [`${NAME}.webm`, `${NAME}_v2.webm`]) {
+			expect((await api.fetch(`${dav}/${name}`, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(201)
+		}
+		const assets = async () => (await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()).ocs.data.assets
+		await expect.poll(async () => (await assets())[0]?.versions.length).toBe(2)
+		versions = (await assets())[0].versions
+		token = (await (await api.post(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}/links?format=json`)).json()).ocs.data.token
+		await api.dispose()
+		browser = await chromium.connectOverCDP(CDP)
+	})
+
+	test.afterAll(async ({ playwright }) => {
+		await browser?.close()
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		await api.delete(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)
+		await api.fetch(`/remote.php/dav/files/${USER}/${folder}`, { method: 'DELETE' })
+		await api.dispose()
+	})
+
+	/**
+	 * Whether a finger on the middle of it reaches it, not whatever covers it
+	 *
+	 * @param {import('@playwright/test').Locator} locator - a button
+	 * @return {Promise<boolean>}
+	 */
+	const reachable = (locator) => locator.evaluate((element) => {
+		const box = element.getBoundingClientRect()
+		const x = box.left + box.width / 2
+		const y = box.top + box.height / 2
+		return box.width > 0 && x > 0 && x < window.innerWidth && y > 0 && y < window.innerHeight && element.contains(document.elementFromPoint(x, y))
+	})
+
+	/**
+	 * @param {import('@playwright/test').Page} page - a Review view or Compare
+	 * @param {import('@playwright/test').Locator[]} buttons - what the bar has to offer
+	 * @param {number} height - the bar's most, one row
+	 */
+	async function oneRow(page, buttons, height) {
+		const bar = page.locator('.deliver-layout__bar')
+		await expect(bar).toBeVisible()
+		const box = await bar.boundingBox()
+		expect(box.height).toBeLessThanOrEqual(height)
+		for (const button of buttons) {
+			const each = await button.boundingBox()
+			expect(each.y).toBeGreaterThanOrEqual(box.y)
+			expect(each.y + each.height).toBeLessThanOrEqual(box.y + box.height)
+			expect(await reachable(button)).toBe(true)
+		}
+		// What plays starts under the bar
+		const below = await page.locator('.deliver-layout__body').boundingBox()
+		expect(below.y).toBeGreaterThanOrEqual(box.y + box.height - 0.5)
+	}
+
+	test('back, name, Version, Approval and Share stand in one row upright and sideways, and fullscreen or writing sideways hide it (#285)', async () => {
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: { width: 393, height: 852 } })
+		const page = await phone.newPage()
+		await login(page)
+		await page.goto(`/apps/deliver/versions/${versions[0].id}`)
+		await expect(page.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
+		const share = page.getByRole('button', { name: 'Share', exact: true })
+		const buttons = [
+			page.getByRole('link', { name: /^Back to/ }),
+			page.getByRole('button', { name: 'Approve', exact: true }),
+			page.locator('.deliver-layout__bar .deliver-version-picker button'),
+			share,
+			page.getByRole('button', { name: 'More', exact: true }),
+		]
+		for (const [width, height] of [[393, 852], [375, 667], [852, 393], [932, 430], [640, 360]]) {
+			await page.setViewportSize({ width, height })
+			await oneRow(page, buttons, width > height ? 44 : 56)
+		}
+		// Upright on the smallest, the long name gives way to the buttons
+		await page.setViewportSize({ width: 375, height: 667 })
+		expect(await page.locator('.deliver-review__title').evaluate((title) => title.scrollWidth > title.clientWidth)).toBe(true)
+		await share.tap()
+		const links = page.getByRole('dialog', { name: /^Review Links on/ })
+		await expect(links).toBeVisible()
+		await page.keyboard.press('Escape')
+		await expect(links).toBeHidden()
+
+		// Sideways, Share opens the links as well
+		await page.setViewportSize({ width: 852, height: 393 })
+		await share.tap()
+		await expect(links).toBeVisible()
+		await page.keyboard.press('Escape')
+		await expect(links).toBeHidden()
+		// Writing, the keyboard takes the room: the bar steps aside with the list, and comes back after
+		await page.getByRole('button', { name: 'Show Comments' }).tap()
+		await page.locator('#deliver-comment-body').tap()
+		await expect(page.locator('.deliver-layout__bar')).toBeHidden()
+		await page.locator('#deliver-comment-body').blur()
+		await expect(page.locator('.deliver-layout__bar')).toBeVisible()
+		// Fullscreen covers it
+		await page.getByRole('button', { name: 'Hide Comments' }).tap()
+		await page.getByRole('button', { name: 'Fullscreen', exact: true }).tap()
+		await expect(page.locator('.deliver-player--fullscreen')).toHaveCount(1)
+		expect(await reachable(share)).toBe(false)
+		await page.getByRole('button', { name: 'Leave fullscreen' }).tap()
+		expect(await reachable(share)).toBe(true)
+		await phone.close()
+	})
+
+	test('a Reviewer\'s link and Compare keep their bar sideways (#285)', async () => {
+		const guest = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: { width: 852, height: 393 } })
+		const reviewer = await guest.newPage()
+		await reviewer.goto(`/apps/deliver/s/${token}/versions/${versions[0].id}`)
+		await expect(reviewer.locator('video.deliver-player__video')).toHaveJSProperty('readyState', 4)
+		await oneRow(reviewer, [reviewer.locator('.deliver-layout__bar .deliver-version-picker').first()], 44)
+		await guest.close()
+
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: { width: 852, height: 393 } })
+		const page = await phone.newPage()
+		await login(page)
+		await page.goto(`/apps/deliver/compare/${versions[1].id}/${versions[0].id}`)
+		await expect(page.locator('.deliver-compare video').first()).toHaveJSProperty('readyState', 4)
+		for (const [width, height] of [[852, 393], [932, 430], [640, 360]]) {
+			await page.setViewportSize({ width, height })
+			await oneRow(page, [page.getByRole('link', { name: 'Back to the Review' }), page.getByRole('radio').first()], 44)
+		}
+		await page.getByRole('link', { name: 'Back to the Review' }).tap()
+		await expect(page).toHaveURL(new RegExp(`/versions/${versions[0].id}$`))
+		await phone.close()
 	})
 })
 

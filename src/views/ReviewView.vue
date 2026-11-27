@@ -257,11 +257,18 @@ function upload(event) {
 					hidden
 					@change="upload">
 			</template>
-			<NcButton v-if="context.access.share && version?.url && !isMobile" @click="sharing = true">
+			<!-- On a phone too, as an icon: the name gives way to it -->
+			<NcButton
+				v-if="context.access.share && version?.url"
+				:variant="isMobile ? 'tertiary' : undefined"
+				:aria-label="t('deliver', 'Share')"
+				@click="sharing = true">
 				<template #icon>
 					<NcIconSvgWrapper :svg="shareIcon" />
 				</template>
-				{{ t('deliver', 'Share') }}
+				<template v-if="!isMobile">
+					{{ t('deliver', 'Share') }}
+				</template>
 			</NcButton>
 		</template>
 
@@ -292,12 +299,6 @@ function upload(event) {
 					<NcIconSvgWrapper :svg="dueIcon" />
 				</template>
 				{{ t('deliver', 'Set a Due Date') }}
-			</NcActionButton>
-			<NcActionButton v-if="context.access.share && version?.url" closeAfterClick @click="sharing = true">
-				<template #icon>
-					<NcIconSvgWrapper :svg="shareIcon" />
-				</template>
-				{{ t('deliver', 'Share') }}
 			</NcActionButton>
 		</template>
 

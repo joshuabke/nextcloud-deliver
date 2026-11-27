@@ -15,7 +15,7 @@ const panelOpen = defineModel('panelOpen', { type: Boolean, default: true })
 /**
  * Below 1024 px a phone: upright, the picture takes the room and only the
  * field to write in sits below it, the Comment list comes up in its place;
- * sideways, the picture fills the window and the list opens beside it
+ * sideways, the picture fills the window under a slim bar and the list opens beside it
  */
 const isMobile = useIsMobile()
 const sideways = computed(() => isMobile.value && landscape.value)
@@ -95,7 +95,8 @@ function step() {
 				'deliver-layout--up': upright && level === 2 && !writing,
 				'deliver-layout--writing': isMobile && writing,
 			}">
-			<div v-if="!sideways" class="deliver-layout__bar">
+			<!-- Sideways a slim one; while writing there the keyboard leaves no room for it -->
+			<div v-show="!(sideways && writing)" class="deliver-layout__bar">
 				<div class="deliver-layout__start">
 					<slot name="start" />
 				</div>
@@ -279,6 +280,12 @@ body.deliver-review footer {
 	gap: var(--default-grid-baseline);
 }
 
+/* Sideways the picture has little height to give: the bar takes no more than its buttons */
+.deliver-layout--sideways .deliver-layout__bar {
+	box-sizing: border-box;
+	min-height: 44px;
+}
+
 .deliver-layout--mobile .deliver-layout__start {
 	flex: 1;
 	gap: var(--default-grid-baseline);
@@ -413,7 +420,7 @@ body.deliver-review footer {
 	border-top: 1px solid var(--color-border);
 }
 
-/* Sideways: the picture fills the window, the list opens beside it, as a live chat does */
+/* Sideways: the picture fills the room under the bar, the list opens beside it, as a live chat does */
 .deliver-layout--sideways .deliver-layout__body {
 	flex-direction: row;
 }
