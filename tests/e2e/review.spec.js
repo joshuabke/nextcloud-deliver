@@ -3377,7 +3377,7 @@ test.describe('Comparing sound', () => {
 		await expect(page.getByRole('radio', { name: now })).toHaveAttribute('aria-checked', 'true')
 	})
 
-	test('the Comments shown follow the side someone switches the sound to, a tab picked by hand holds until the next switch, and an alternating loop leaves the list alone', async ({ playwright }) => {
+	test('the Comments shown follow the side someone switches the sound to, named by its Version, and an alternating loop leaves the list alone', async ({ playwright }) => {
 		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
 		const made = []
 		// Only the newest Version takes Comments: V1's list stays empty
@@ -3386,13 +3386,15 @@ test.describe('Comparing sound', () => {
 			expect(commented.status(), await commented.text()).toBe(201)
 			made.push((await commented.json()).ocs.data.id)
 		}
+		const heading = page.locator('.deliver-compare-view__heading')
 		try {
 			for (const pair of [cut, mix]) {
 				await page.goto(`/apps/deliver/compare/${pair[1].id}/${pair[0].id}`)
 				await expect(page.locator('.deliver-compare video').first()).toHaveJSProperty('readyState', 4)
-				// The tab, and on the mix, whose Comments the list holds
+				// No tabs: the heading, and on the mix, whose Comments the list holds
+				await expect(page.getByRole('radio', { name: /^Comments on/ })).toHaveCount(0)
 				const shows = async (number) => {
-					await expect(page.getByRole('radio', { name: `Comments on V${number}` })).toHaveAttribute('aria-checked', 'true')
+					await expect(heading).toHaveText(`Comments on V${number}`)
 					if (pair === mix) {
 						await expect(page.locator('.deliver-layout__panel')).toContainText(number === 2 ? 'Heard on V2' : 'No Comments yet.')
 					}
@@ -3404,23 +3406,20 @@ test.describe('Comparing sound', () => {
 				// The halves of the A/B switch
 				await page.getByRole('radio', { name: /^V1/ }).click()
 				await shows(1)
-				// The other side's Comments by hand, while V1 is heard
-				await page.getByRole('radio', { name: 'Comments on V2' }).click()
-				await shows(2)
-				await expect(page.getByRole('radio', { name: /^V1/ })).toHaveAttribute('aria-checked', 'true')
 				await page.locator('.deliver-layout__bar h2').click()
 				await page.keyboard.press('2')
+				await shows(2)
 				await page.keyboard.press('1')
 				await shows(1)
 			}
 			// Tab, after a click into the player, and a lane's name
 			await page.locator('.deliver-compare__lanes canvas').click()
 			await page.keyboard.press('Tab')
-			await expect(page.getByRole('radio', { name: 'Comments on V2' })).toHaveAttribute('aria-checked', 'true')
+			await expect(heading).toHaveText('Comments on V2')
 			await page.locator('.deliver-wave__lane').first().click()
-			await expect(page.getByRole('radio', { name: 'Comments on V1' })).toHaveAttribute('aria-checked', 'true')
+			await expect(heading).toHaveText('Comments on V1')
 
-			// Alternating, the passes switch the sound but not the list: V2's Comments, picked by hand, stay with the focus on one
+			// Alternating, the passes switch the sound but not the list: V2's Comments stay with the focus on one
 			const bar = await page.locator('.deliver-compare__timeline').boundingBox()
 			const at = (share) => page.mouse.click(bar.x + bar.width * share, bar.y + bar.height / 2)
 			await at(0.25)
@@ -3428,8 +3427,9 @@ test.describe('Comparing sound', () => {
 			await at(0.3)
 			await page.keyboard.press('o')
 			await at(0.25)
+			await page.keyboard.press('2')
 			await page.getByRole('button', { name: 'Alternate A/B' }).click()
-			await page.getByRole('radio', { name: 'Comments on V2' }).click()
+			await expect(heading).toHaveText('Comments on V2')
 			const anchor = page.locator('.deliver-compare-view__anchor')
 			await anchor.focus()
 			await page.evaluate(() => {
@@ -3441,7 +3441,7 @@ test.describe('Comparing sound', () => {
 			// A pass of each side
 			await expect.poll(() => page.evaluate(() => window.passes.size), { timeout: 15_000 }).toBe(2)
 			await page.locator('.deliver-compare__controls button[aria-label="Pause (Space)"]').evaluate((button) => button.click())
-			await expect(page.getByRole('radio', { name: 'Comments on V2' })).toHaveAttribute('aria-checked', 'true')
+			await expect(heading).toHaveText('Comments on V2')
 			await expect(page.locator('.deliver-compare-view__list')).toHaveText(/Heard on V2/)
 			await expect(anchor).toBeFocused()
 		} finally {
@@ -3550,27 +3550,28 @@ test.describe('Comparing sound', () => {
 		await phone.close()
 	})
 
-	test('on a phone the tabs of the Comments in Compare stand clear of the sheet\'s grabber at its middle and top height', async () => {
+	test('on a phone the grabber of Compare\'s sheet sits in the heading\'s row at its middle and top height, as in the Review view, clear of the list', async () => {
 		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: { width: 375, height: 667 } })
 		const page = await phone.newPage()
 		await login(page)
 		await page.goto(`/apps/deliver/compare/${cut[1].id}/${cut[0].id}`)
 		await expect(page.locator('.deliver-compare video').first()).toHaveJSProperty('readyState', 4)
 		const grabber = page.locator('.deliver-layout__grabber')
-		const tabs = page.locator('.deliver-compare-view__tabs')
+		const heading = page.locator('.deliver-compare-view__heading')
 		for (const level of ['middle', 'up']) {
 			await grabber.tap()
 			await expect(page.locator(`.deliver-layout--${level}`)).toHaveCount(1)
 			const grab = await grabber.boundingBox()
-			expect(grab.y + grab.height).toBeLessThanOrEqual((await tabs.boundingBox()).y)
-			// A finger on the inner half of either tab picks that tab, not a step of the sheet
-			for (const name of [/^Comments on V2/, /^Comments on V1/]) {
-				const tab = page.getByRole('radio', { name })
-				const box = await tab.boundingBox()
-				await page.touchscreen.tap(name.source.includes('V2') ? box.x + 8 : box.x + box.width - 8, box.y + box.height / 2)
-				await expect(tab).toHaveAttribute('aria-checked', 'true')
-				await expect(page.locator(`.deliver-layout--${level}`)).toHaveCount(1)
-			}
+			const head = await heading.boundingBox()
+			expect(grab.y).toBeLessThanOrEqual(head.y)
+			expect(grab.y + grab.height).toBeLessThanOrEqual((await page.locator('.deliver-compare-view__empty').boundingBox()).y + 12)
+			// Beside the heading's text, not over it
+			const text = await heading.evaluate((element) => {
+				const range = document.createRange()
+				range.selectNodeContents(element)
+				return range.getBoundingClientRect().right
+			})
+			expect(text).toBeLessThan(grab.x)
 		}
 		await phone.close()
 	})
