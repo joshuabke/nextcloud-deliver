@@ -519,6 +519,18 @@ test.describe('Review view', () => {
 		await due.getByRole('button', { name: 'Save' }).tap()
 		await expect(clip.locator('.deliver-due')).toContainText('20')
 
+		// The Version Stack is managed from the same menu, upright and sideways (#299)
+		for (const viewport of [PHONE.viewport, { width: PHONE.viewport.height, height: PHONE.viewport.width }]) {
+			await page.setViewportSize(viewport)
+			await clip.locator('.deliver-card__more').tap()
+			await page.getByRole('menuitem', { name: 'Manage Versions' }).tap()
+			const stack = page.getByRole('dialog', { name: 'Versions of clip' })
+			await expect(stack).toContainText('Version 1')
+			await page.keyboard.press('Escape')
+			await expect(stack).toBeHidden()
+		}
+		await page.setViewportSize(PHONE.viewport)
+
 		await page.locator('.deliver-card__more').first().tap()
 		await page.getByRole('menuitem', { name: 'Open', exact: true }).tap()
 		await expect(page).toHaveURL(/\/versions\/\d+$/)
