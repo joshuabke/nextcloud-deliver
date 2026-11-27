@@ -18,6 +18,7 @@ import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import NameText from './NameText.vue'
 import WaveformStage from './WaveformStage.vue'
 import { useRange } from '../composables/range.js'
 import { useSoundMix } from '../composables/soundMix.js'
@@ -645,7 +646,7 @@ onBeforeUnmount(() => {
 						<span v-if="side.loudness[1]" class="deliver-compare__loudness">{{ side.loudness[1] }}</span>
 					</span>
 					<span v-else class="deliver-compare__sound-text">
-						<span class="deliver-compare__sound-name"><strong>{{ side.label }}</strong> {{ side.name }}</span>
+						<span class="deliver-compare__sound-name deliver-compare__sound-name--file"><strong>{{ side.label }}</strong><NameText :name="side.name" :title="side.name" /></span>
 						<span v-if="side.loudness.length" class="deliver-compare__loudness">{{ side.loudness.join(' · ') }}</span>
 					</span>
 					<kbd v-if="!isMobile" class="deliver-compare__key">{{ side.key }}</kbd>
@@ -1073,6 +1074,12 @@ onBeforeUnmount(() => {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+/* Beside the Version, the file's name gives way before its end */
+.deliver-compare__sound-name--file {
+	display: flex;
+	align-items: baseline;
 }
 
 .deliver-compare__sound-name strong {

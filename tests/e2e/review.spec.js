@@ -1461,7 +1461,8 @@ test.describe('Review view', () => {
 			const style = getComputedStyle(element)
 			return {
 				lines: Math.round(element.clientHeight / parseFloat(style.lineHeight)),
-				cut: element.scrollHeight > element.clientHeight,
+				// Past its two lines, or on the second one before its end
+				cut: element.scrollHeight > element.clientHeight || [...element.querySelectorAll('.deliver-name__head')].some((head) => head.checkVisibility({ visibilityProperty: true }) && head.scrollWidth > head.clientWidth),
 				sideways: element.scrollWidth > element.clientWidth,
 				size: parseFloat(style.fontSize),
 				body: parseFloat(getComputedStyle(document.body).fontSize),
@@ -1483,6 +1484,59 @@ test.describe('Review view', () => {
 		const cleanup = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth })
 		await cleanup.fetch(`${dav}/${name}.webm`, { method: 'DELETE' })
 		await cleanup.dispose()
+	})
+
+	test('a long name is cut shortly before its end, which stays in view, on its card, its row and the bar', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const dav = `/remote.php/dav/files/${USER}/${folder}`
+		const name = 'Franz Liszt - S.141, Grande Étude de Paganini No.2 in E-flat major, Andantino capriccioso, recorded live at the Wiener Konzerthaus on the twelfth of March in the second season of the cycle, first take, rough mix3'
+		const count = async () => (await (await api.get(`/ocs/v2.php/apps/deliver/api/v1/projects/${projectId}?format=json`)).json()).ocs.data.assets.length
+		const before = await count()
+		expect((await api.fetch(`${dav}/${name}.webm`, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(201)
+		await expect.poll(count).toBe(before + 1)
+		await api.dispose()
+
+		/** The end of the name as shown, whether it lies in its box, and whether the rest is cut */
+		const shownEnd = (label) => label.evaluate((element) => {
+			const box = element.getBoundingClientRect()
+			const shown = (part) => part.checkVisibility({ visibilityProperty: true })
+			const tail = [...element.querySelectorAll('.deliver-name__tail')].find(shown)
+			const head = [...element.querySelectorAll('.deliver-name__head')].find(shown)
+			if (!tail || !head) {
+				return { end: null }
+			}
+			const own = tail.getBoundingClientRect()
+			return {
+				end: tail.dataset.text,
+				inside: own.width > 0 && own.left >= box.left - 0.5 && own.right <= box.right + 0.5 && own.top >= box.top - 0.5 && own.bottom <= box.bottom + 0.5,
+				cut: element.scrollHeight > element.clientHeight || head.scrollWidth > head.clientWidth,
+			}
+		})
+		const shown = { end: 'h mix3', inside: true, cut: true }
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE })
+		try {
+			const small = await phone.newPage()
+			await login(small)
+			for (const at of [page, small]) {
+				for (const look of ['grid', 'list']) {
+					await at.goto(`/apps/deliver/projects/${projectId}`)
+					await at.evaluate(([key, value]) => localStorage.setItem(key, value), [`deliver.layout.project-${projectId}`, look])
+					await at.reload()
+					const label = card(at, name).locator('.deliver-card__name')
+					await expect(label).toHaveAttribute('title', `${name}.webm`)
+					expect(await shownEnd(label), `${look} at ${at.viewportSize().width} px`).toEqual(shown)
+				}
+				await at.goto(await card(at, name).locator('.deliver-card__link').getAttribute('href'))
+				const title = at.locator('.deliver-layout__bar h2')
+				await expect(title).toHaveAccessibleName(name)
+				expect(await shownEnd(title.locator('.deliver-name')), `the bar at ${at.viewportSize().width} px`).toEqual(shown)
+			}
+		} finally {
+			await phone.close()
+			const cleanup = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth })
+			await cleanup.fetch(`${dav}/${name}.webm`, { method: 'DELETE' })
+			await cleanup.dispose()
+		}
 	})
 
 	test('a Review Link named after a long folder without spaces keeps its heading within a phone\'s width', async ({ playwright }) => {
@@ -1630,14 +1684,14 @@ test.describe('The bar on a phone', () => {
 			expect(await clearCorner(page.locator('.deliver-player__stage'))).toBe(true)
 		}
 		// Even on the narrowest sideways the name gives way, not a button; New Version still picks a file
-		expect(await page.locator('.deliver-review__title').evaluate((title) => title.scrollWidth > title.clientWidth)).toBe(true)
+		expect(await page.locator('.deliver-review__title .deliver-name__head').evaluate((head) => head.scrollWidth > head.clientWidth)).toBe(true)
 		const chooser = page.waitForEvent('filechooser')
 		await menu[2].tap()
 		await chooser
 		// Upright on the smallest, the long name gives way to the buttons
 		await page.setViewportSize({ width: 375, height: 667 })
 		await expect(page.locator('.deliver-layout--upright')).toHaveCount(1)
-		expect(await page.locator('.deliver-review__title').evaluate((title) => title.scrollWidth > title.clientWidth)).toBe(true)
+		expect(await page.locator('.deliver-review__title .deliver-name__head').evaluate((head) => head.scrollWidth > head.clientWidth)).toBe(true)
 		await share.tap()
 		const links = page.getByRole('dialog', { name: /^Review Links on/ })
 		await expect(links).toBeVisible()

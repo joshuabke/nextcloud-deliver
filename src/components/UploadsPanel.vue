@@ -10,6 +10,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcProgressBar from '@nextcloud/vue/components/NcProgressBar'
+import NameText from './NameText.vue'
 import UploadRename from './UploadRename.vue'
 import { n, t } from '../lib/l10n.js'
 import { processingFailed, processingOf, settled, statusOf, timeLeft } from '../lib/uploadStatus.js'
@@ -168,7 +169,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 					class="deliver-uploads__item"
 					tabindex="-1">
 					<div class="deliver-uploads__row">
-						<span class="deliver-uploads__name" :title="item.renamed ?? item.name">{{ item.renamed ?? item.name }}</span>
+						<NameText class="deliver-uploads__name" :name="item.renamed ?? item.name" :title="item.renamed ?? item.name" />
 						<span class="deliver-uploads__size">{{ formatFileSize(item.size) }}</span>
 						<NcButton
 							v-if="item.status === 'interrupted'"
@@ -292,7 +293,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warn))
 		</NcButton>
 		<!-- A refused name is settled right here too, one upload after the other -->
 		<div v-if="refused" :key="refused.id" class="deliver-uploads-card__refused">
-			<span class="deliver-uploads-card__text" :title="refused.renamed ?? refused.name">{{ refused.renamed ?? refused.name }}</span>
+			<NameText class="deliver-uploads-card__text" :name="refused.renamed ?? refused.name" :title="refused.renamed ?? refused.name" />
 			<span :id="`deliver-upload-reason-${refused.id}`" class="deliver-uploads__status--error">{{ refused.error }}</span>
 			<UploadRename :item="refused" />
 		</div>

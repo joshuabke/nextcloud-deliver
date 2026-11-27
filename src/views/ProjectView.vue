@@ -47,6 +47,7 @@ import ContextMenu from '../components/ContextMenu.vue'
 import DueDateDialog from '../components/DueDateDialog.vue'
 import FilterBar from '../components/FilterBar.vue'
 import LayoutSwitch from '../components/LayoutSwitch.vue'
+import NameText from '../components/NameText.vue'
 import NotUpForReviewCard from '../components/NotUpForReviewCard.vue'
 import ProjectSettingsDialog from '../components/ProjectSettingsDialog.vue'
 import RenameDialog from '../components/RenameDialog.vue'
@@ -923,7 +924,11 @@ function dropped(event) {
 				<li v-for="sub in level.folders" :key="sub.path">
 					<button type="button" class="deliver-project__folder-card" @click="folder = sub.path">
 						<NcIconSvgWrapper :svg="folderIcon" :size="32" />
-						<span class="deliver-project__folder-name" :title="sub.name">{{ sub.name }}</span>
+						<NameText
+							class="deliver-project__folder-name"
+							:name="sub.name"
+							:lines="2"
+							:title="sub.name" />
 						<span class="deliver-project__folder-count">{{ n('deliver', '%n Asset', '%n Assets', sub.count) }}</span>
 					</button>
 				</li>
@@ -1179,16 +1184,10 @@ function dropped(event) {
 	border-color: var(--color-primary-element);
 }
 
-/* As an Asset's name: two lines, smaller, breaking inside a word without spaces */
+/* As an Asset's name: two lines, smaller */
 .deliver-project__folder-name {
-	display: -webkit-box;
-	-webkit-box-orient: vertical;
-	-webkit-line-clamp: 2;
-	line-clamp: 2;
 	flex: 1;
 	min-width: 0;
-	overflow: hidden;
-	overflow-wrap: anywhere;
 	font-size: var(--font-size-small, 13px);
 	font-weight: bold;
 }
