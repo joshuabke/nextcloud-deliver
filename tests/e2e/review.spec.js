@@ -1794,8 +1794,9 @@ test.describe('Menus on a phone', () => {
 		await desktop.close()
 	})
 
+	// Sideways, where the rows' ends lie beside the sheet as beside a small menu, so the taps land where they would without one
 	test('on a phone a tap on another row or on ⋯ while the menu is open only closes it (#298)', async () => {
-		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: UPRIGHT })
+		const phone = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: SIDEWAYS })
 		const page = await phone.newPage()
 		await login(page)
 		await page.goto(`/apps/deliver/projects/${projectId}`)
@@ -1804,7 +1805,9 @@ test.describe('Menus on a phone', () => {
 		const menu = page.getByRole('menu')
 		await more.tap()
 		await expect(menu).toBeVisible()
-		await card(page, 'other').locator('.deliver-card__name').tap({ force: true })
+		// On the other row's still, at the left end
+		const other = await card(page, 'other').boundingBox()
+		await page.touchscreen.tap(other.x + 40, other.y + other.height / 2)
 		await expect(menu).toHaveCount(0)
 		await page.waitForTimeout(300)
 		expect(page.url()).toBe(url)
@@ -1852,22 +1855,28 @@ test.describe('Menus on a phone', () => {
 			await remove.scrollIntoViewIfNeeded()
 			await expect(remove).toBeInViewport()
 
-			// A tap on the strip, over the other row, closes the sheet and opens nothing (#298)
+			// A tap on the strip closes the sheet and opens nothing under it (#298): sideways beside the sheet on the other row, upright above it
 			const other = await card(page, 'other').boundingBox()
-			const y = Math.min(other.y + other.height / 2, panel.y / 2)
-			await page.touchscreen.tap(viewport.width / 2, y)
+			const strip = viewport === SIDEWAYS ? { x: other.x + 40, y: other.y + other.height / 2 } : { x: viewport.width / 2, y: panel.y / 2 }
+			expect(await page.evaluate(({ x, y }) => document.elementFromPoint(x, y).classList.contains('deliver-sheet'), strip)).toBe(true)
+			await page.touchscreen.tap(strip.x, strip.y)
 			await expect(sheet).toHaveCount(0)
 			await page.waitForTimeout(300)
 			expect(page.url()).toBe(url)
 
-			// A second tap on ⋯ closes it and does not open it again (#298)
+			// A second tap on ⋯ closes it and does not open it again (#298); upright the sheet covers the button
 			await more.tap()
 			await expect(sheet).toBeVisible()
 			const button = await more.boundingBox()
-			await page.touchscreen.tap(button.x + button.width / 2, button.y + button.height / 2)
-			await expect(sheet).toHaveCount(0)
-			await page.waitForTimeout(300)
-			await expect(sheet).toHaveCount(0)
+			const [x, y] = [button.x + button.width / 2, button.y + button.height / 2]
+			if (viewport === SIDEWAYS) {
+				await page.touchscreen.tap(x, y)
+				await expect(sheet).toHaveCount(0)
+				await page.waitForTimeout(300)
+				await expect(sheet).toHaveCount(0)
+			} else {
+				expect(await page.evaluate(({ x, y }) => document.querySelector('.deliver-sheet__panel').contains(document.elementFromPoint(x, y)), { x, y })).toBe(true)
+			}
 			expect(page.url()).toBe(url)
 			await phone.close()
 		})
