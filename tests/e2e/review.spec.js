@@ -1832,6 +1832,18 @@ test.describe('Menus on a phone', () => {
 	 */
 	const sheetOf = (page) => page.getByRole('dialog', { name: NAME })
 
+	/**
+	 * Waits until a BottomSheet's 0.2 s slide-in animation (`deliver-sheet-in`)
+	 * has finished so `boundingBox()`, `elementFromPoint()` and strip taps see
+	 * the resting sheet instead of a panel still moving up across the screen (#315).
+	 *
+	 * @param {import('@playwright/test').Locator} sheet - the sheet's dialog panel
+	 */
+	async function sheetReady(sheet) {
+		await expect(sheet).toBeVisible()
+		await expect(sheet).toHaveCSS('transform', 'none')
+	}
+
 	/** The entries of the long name's menu on a desktop, read once */
 	let onDesktop = null
 
@@ -1905,6 +1917,7 @@ test.describe('Menus on a phone', () => {
 		const more = page.getByRole('button', { name: /^Actions for the-final-mix/ })
 		const menu = page.getByRole('menu')
 		await more.tap()
+		await sheetReady(sheetOf(page))
 		await expect(menu).toBeVisible()
 		// On the other row's still, at the left end
 		const other = await card(page, 'other').boundingBox()
@@ -1913,6 +1926,7 @@ test.describe('Menus on a phone', () => {
 		await page.waitForTimeout(300)
 		expect(page.url()).toBe(url)
 		await more.tap()
+		await sheetReady(sheetOf(page))
 		await expect(menu).toBeVisible()
 		await more.tap({ force: true })
 		await page.waitForTimeout(300)
@@ -1930,7 +1944,7 @@ test.describe('Menus on a phone', () => {
 			const more = page.getByRole('button', { name: /^Actions for the-final-mix/ })
 			await more.tap()
 			const sheet = sheetOf(page)
-			await expect(sheet).toBeVisible()
+			await sheetReady(sheet)
 			// The whole name, the Comment on the still, and the Version
 			const name = sheet.locator('.deliver-menu-sheet__name')
 			await expect(name).toHaveText(NAME)
@@ -1974,7 +1988,7 @@ test.describe('Menus on a phone', () => {
 
 			// A second tap on ⋯ closes it and does not open it again (#298), where the sheet leaves the button in sight
 			await more.tap()
-			await expect(sheet).toBeVisible()
+			await sheetReady(sheet)
 			const button = await more.boundingBox()
 			const [x, y] = [button.x + button.width / 2, button.y + button.height / 2]
 			// On the strip, or under the sheet itself where it is high enough to cover the button
@@ -2024,6 +2038,7 @@ test.describe('Menus on a phone', () => {
 
 		// A short stroke lets it spring back, a long one closes it
 		await more.tap()
+		await sheetReady(sheet)
 		await strokeDown(page, sheet.locator('.deliver-menu-sheet__name'), 20)
 		await expect(sheet).toBeVisible()
 		await strokeDown(page, sheet.locator('.deliver-menu-sheet__name'), 200)
@@ -2061,7 +2076,7 @@ test.describe('Menus on a phone', () => {
 		await page.goto('/apps/deliver/')
 		await page.getByRole('button', { name: `Actions for ${folder}` }).tap()
 		const sheet = page.getByRole('dialog', { name: folder })
-		await expect(sheet).toBeVisible()
+		await sheetReady(sheet)
 		await expect(sheet.locator('.deliver-menu-sheet__still svg')).toBeVisible()
 		await expect(sheet.locator('.deliver-menu-sheet__line')).toContainText('2 Assets')
 		await expect(sheet.getByRole('menuitem', { name: 'Open', exact: true })).toBeVisible()
@@ -2211,7 +2226,7 @@ test.describe('Menus on a phone', () => {
 
 		await phonePage.getByRole('button', { name: 'Display options' }).tap()
 		const display = phonePage.getByRole('dialog', { name: 'Display options' })
-		await expect(display).toBeVisible()
+		await sheetReady(display)
 		await display.getByText('Grid', { exact: true }).tap()
 		await expect(display.locator('.deliver-sheet__label', { hasText: /^Card size$/ })).toBeVisible()
 		// Grid and List stand at the top of the display sheet as two full-width segments (#302, #309)
