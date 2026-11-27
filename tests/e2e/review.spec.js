@@ -2962,6 +2962,8 @@ test.describe('Audio review', () => {
 		await target.touchscreen.tap(lane.x + lane.width * 0.875, lane.y + lane.height - 20)
 		const card = target.getByRole('dialog', { name: /^Comment #/ })
 		await expect(card).toContainText('answer me while writing')
+		// The card took the focus, so the list is back once the Comment field has let go of writing
+		await expect(target.locator('.deliver-layout--writing')).toHaveCount(0)
 		await card.getByRole('button', { name: 'Reply', exact: true }).tap()
 		const field = target.locator('.deliver-comments__list > .deliver-comment').filter({ hasText: 'answer me while writing' }).getByPlaceholder('Write a Reply')
 		await expect(field).toBeFocused()
