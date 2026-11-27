@@ -48,6 +48,8 @@ function onKeydown(event) {
 	if (closesDialog(event)) {
 		event.preventDefault()
 		event.stopPropagation()
+		// Leave the field first, so a field that saves on blur saves in every browser, as with the close button
+		event.target.blur()
 		emit('close')
 	}
 }
