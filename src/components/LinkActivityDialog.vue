@@ -1,9 +1,9 @@
 <script setup>
 import { ref } from 'vue'
 import NcDateTime from '@nextcloud/vue/components/NcDateTime'
-import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
+import DeliverDialog from './DeliverDialog.vue'
 import { linkApi } from '../api.js'
 import { t } from '../lib/l10n.js'
 
@@ -30,7 +30,7 @@ const DOINGS = {
 </script>
 
 <template>
-	<NcDialog :name="t('deliver', 'Activity')" size="normal" @closing="emit('close')">
+	<DeliverDialog :name="t('deliver', 'Activity')" size="normal" @closing="emit('close')">
 		<NcEmptyContent v-if="!activity" :name="t('deliver', 'Loading…')">
 			<template #icon>
 				<NcLoadingIcon />
@@ -55,7 +55,7 @@ const DOINGS = {
 				</td>
 			</tr>
 		</table>
-	</NcDialog>
+	</DeliverDialog>
 </template>
 
 <style scoped>

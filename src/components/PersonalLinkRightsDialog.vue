@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
-import NcDialog from '@nextcloud/vue/components/NcDialog'
+import DeliverDialog from './DeliverDialog.vue'
 import { setReviewerRights } from '../api.js'
 import { useBusy } from '../composables/busy.js'
 import { t } from '../lib/l10n.js'
@@ -65,7 +65,7 @@ function set(right, value) {
 </script>
 
 <template>
-	<NcDialog
+	<DeliverDialog
 		:name="t('deliver', '{name} on “{link}”', { name: reviewer.name, link: link.title })"
 		size="normal"
 		@closing="emit('close')">
@@ -96,7 +96,7 @@ function set(right, value) {
 				{{ error }}
 			</p>
 		</div>
-	</NcDialog>
+	</DeliverDialog>
 </template>
 
 <style scoped>

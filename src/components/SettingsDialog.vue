@@ -5,6 +5,7 @@ import NcAppSettingsDialog from '@nextcloud/vue/components/NcAppSettingsDialog'
 import NcAppSettingsSection from '@nextcloud/vue/components/NcAppSettingsSection'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import { errorMessage, getSettings, setBrowserPassMail, updateSettings } from '../api.js'
+import { closesDialog } from '../lib/hotkeys.js'
 import { t } from '../lib/l10n.js'
 
 /** The Member's own Deliver settings (story 144) */
@@ -38,13 +39,26 @@ async function pick(addressBook) {
 		showError(errorMessage(e))
 	}
 }
+/**
+ * NcModal ignores Escape from radio and checkbox inputs (#306)
+ *
+ * @param {KeyboardEvent} event - a keydown bubbling to the dialog
+ */
+function onKeydown(event) {
+	if (closesDialog(event)) {
+		event.preventDefault()
+		event.stopPropagation()
+		emit('close')
+	}
+}
 </script>
 
 <template>
 	<NcAppSettingsDialog
 		open
 		:name="t('deliver', 'Deliver settings')"
-		@update:open="(open) => open || emit('close')">
+		@update:open="(open) => open || emit('close')"
+		@keydown="onKeydown">
 		<NcAppSettingsSection id="deliver-contacts" :name="t('deliver', 'Contacts')">
 			<p class="deliver-settings__hint">
 				{{ t('deliver', 'Reviewers you save to Contacts go to this address book.') }}
