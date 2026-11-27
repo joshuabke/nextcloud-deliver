@@ -327,10 +327,17 @@ onBeforeUnmount(() => document.body.classList.remove('deliver-review'))
 .deliver-landing__intro h2 {
 	margin: 0;
 	color: var(--color-main-text);
+	/* A Project's folder name without spaces breaks rather than running out sideways */
+	overflow-wrap: anywhere;
 }
 
 .deliver-landing__count {
 	color: var(--color-text-maxcontrast);
+}
+
+/* No larger than the folder's name above it */
+.deliver-landing__folder .deliver-landing__count {
+	font-size: var(--font-size-small, 13px);
 }
 
 .deliver-landing__description {

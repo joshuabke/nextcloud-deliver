@@ -1455,6 +1455,32 @@ test.describe('Review view', () => {
 		await cleanup.fetch(`${dav}/${name}.webm`, { method: 'DELETE' })
 		await cleanup.dispose()
 	})
+
+	test('a Review Link named after a long folder without spaces keeps its heading within a phone\'s width', async ({ playwright }) => {
+		const api = await playwright.request.newContext({ baseURL: URL, httpCredentials: auth, extraHTTPHeaders: ocsHeaders })
+		const dav = `/remote.php/dav/files/${USER}/${folder}_festival_submission_directors_cut_colour_graded_final`
+		expect((await api.fetch(dav, { method: 'MKCOL' })).status()).toBe(201)
+		for (const file of ['one', 'two']) {
+			expect((await api.fetch(`${dav}/${file}.webm`, { method: 'PUT', data: readFileSync(CLIP) })).status()).toBe(201)
+		}
+		const id = (await (await api.post('/ocs/v2.php/apps/deliver/api/v1/projects?format=json', { data: { folderId: await fileId(api, dav), autoIntake: true } })).json()).ocs.data.id
+		const token = (await (await api.post(`/ocs/v2.php/apps/deliver/api/v1/projects/${id}/links?format=json`)).json()).ocs.data.token
+
+		const guest = await browser.newContext({ baseURL: BROWSER_URL, ...PHONE, viewport: { width: 375, height: 667 } })
+		try {
+			const reviewer = await guest.newPage()
+			await reviewer.goto(`/apps/deliver/s/${token}`)
+			const heading = reviewer.locator('.deliver-landing__intro h2')
+			await expect(heading).toContainText('festival_submission')
+			expect(await heading.evaluate((element) => element.scrollWidth - element.clientWidth)).toBe(0)
+			expect(await reviewer.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0)
+		} finally {
+			await guest.close()
+			await api.delete(`/ocs/v2.php/apps/deliver/api/v1/projects/${id}?format=json`)
+			await api.fetch(dav, { method: 'DELETE' })
+			await api.dispose()
+		}
+	})
 })
 
 test.describe('Audio review', () => {

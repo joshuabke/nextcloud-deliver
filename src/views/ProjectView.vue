@@ -1131,6 +1131,7 @@ function dropped(event) {
 
 .deliver-project__folder-count {
 	color: var(--color-text-maxcontrast);
+	font-size: var(--font-size-small, 13px);
 }
 
 .deliver-project__grid {
